@@ -1,28 +1,32 @@
-use jsonrpc_v2::{Error, Params, Server};
+use jsonrpc_v2::{Data, Error, Params, Server};
+use config::Cli;
+use clap::Parser;
+mod config;
 
 
 async fn proxy_block(
+    data: Data<Cli>,
     Params(params): Params<serde_json::Value>
 ) -> Result<serde_json::Value, Error> {
-    let  mut data = serde_json::json!(
+    let mut post_data = serde_json::json!(
         {
             "jsonrpc": "2.0",
             "id": "dontcare",
             "method": "block",
         }
     );
-    data["params"] = params;
+    post_data["params"] = params;
     let client = reqwest::Client::new();
-    let resp = client.post(
-        "https://rpc.mainnet.near.org"
-    ).json(&data).send().await.unwrap();
+    let resp = client.post(&data.rpc_url.to_string()).json(&post_data).send().await.unwrap();
     let resp_json: serde_json::Value = resp.json().await.unwrap();
     return Ok(resp_json["result"].clone());
 }
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
+    let cli_args = Cli::parse();
     let rpc = Server::new()
+        .with_data(Data::new(cli_args))
         .with_method("block", proxy_block)
         .finish();
 
