@@ -5,5 +5,5 @@ use clap::Parser;
 pub struct Cli {
     /// rpc_url for near network
     #[clap(long, value_parser)]
-    pub rpc_url: http::Uri
+    pub rpc_url: http::Uri,
 }

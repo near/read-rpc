@@ -15,3 +15,4 @@ actix-rt = "1.1.1"
 actix-web = "4.1.0"
 http = "0.2"
 clap = { version = "3.1.6", features = ["color", "derive", "env"] }
+near-jsonrpc-primitives = { git = "https://github.com/near/nearcore.git", features = ["full"] }
