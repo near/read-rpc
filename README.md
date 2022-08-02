@@ -9,7 +9,7 @@ $ cargo build --release
 ### Run
 
 ```bash
-$ ./target/release/test_rpc_server --rpc-url https://rpc.testnet.near.org
+$ ./target/release/test_rpc_server
 ```
 
 * mainnet https://rpc.mainnet.near.org
