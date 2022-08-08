@@ -6,13 +6,21 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+actix-rt = "2.7.0"
+actix-web = "4.1.0"
+aws-sdk-s3 = "0.16.0"
+aws-types = "0.46.0"
+bigdecimal = { version = "0.3.0", features = ["serde"] }
+clap = { version = "3.1.6", features = ["color", "derive", "env"] }
+dotenv = "0.15.0"
+erased-serde = "0.3.22"
+http = "0.2"
+jsonrpc-v2 = "0.11.0"
+near-indexer-primitives = { git = "https://github.com/near/nearcore.git" }
+near-jsonrpc-primitives = { git = "https://github.com/near/nearcore.git", features = ["full"] }
+near-primitives = { git = "https://github.com/near/nearcore.git" }
+reqwest = { version = "0.11.11", features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.82"
-reqwest = { version = "0.11.11", features = ["json"] }
+sqlx = { version = "0.6.0", features = ["runtime-tokio-native-tls", "postgres", "bigdecimal"]}
 tokio = { version = "1.20.1", features = ["full"] }
-jsonrpc-v2 = "0.11.0"
-actix-rt = "1.1.1"
-actix-web = "4.1.0"
-http = "0.2"
-clap = { version = "3.1.6", features = ["color", "derive", "env"] }
-near-jsonrpc-primitives = { git = "https://github.com/near/nearcore.git", features = ["full"] }

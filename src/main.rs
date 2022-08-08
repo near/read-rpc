@@ -1,165 +1,47 @@
 use clap::Parser;
-use config::Cli;
-use jsonrpc_v2::{Data, Error, Params, Server};
-use serde_json::Value;
+use config::{Opts, ServerContext};
+use dotenv::dotenv;
+use jsonrpc_v2::{Data, Server};
+use utils::{prepare_db_client, prepare_s3_client};
+
 mod config;
-
-async fn block(
-    Params(params): Params<near_jsonrpc_primitives::types::blocks::RpcBlockRequest>,
-) -> Result<
-    near_jsonrpc_primitives::types::blocks::RpcBlockResponse,
-    Error, // near_jsonrpc_primitives::types::blocks::RpcBlockError,
-> {
-    unreachable!("This method is not implemented yet")
-}
-
-async fn send_tx_async(
-    // Params(params): Params<near_jsonrpc_primitives::types::transactions::RpcBroadcastTransactionRequest>
-    Params(params): Params<Value>,
-) -> Result<
-    Value,
-    // CryptoHash,
-    Error,
-> {
-    unreachable!("This method is not implemented yet")
-}
-
-async fn send_tx_commit(
-    // Params(params): Params<near_jsonrpc_primitives::types::transactions::RpcBroadcastTransactionRequest>
-    Params(params): Params<Value>,
-) -> Result<
-    near_jsonrpc_primitives::types::transactions::RpcTransactionResponse,
-    // near_jsonrpc_primitives::types::transactions::RpcTransactionError,
-    Error,
-> {
-    unreachable!("This method is not implemented yet")
-}
-
-async fn chunk(
-    Params(params): Params<near_jsonrpc_primitives::types::chunks::RpcChunkRequest>,
-) -> Result<
-    near_jsonrpc_primitives::types::chunks::RpcChunkResponse,
-    // near_jsonrpc_primitives::types::chunks::RpcChunkError,
-    Error,
-> {
-    unreachable!("This method is not implemented yet")
-}
-
-async fn gas_price(
-    Params(params): Params<near_jsonrpc_primitives::types::gas_price::RpcGasPriceRequest>,
-) -> Result<
-    near_jsonrpc_primitives::types::gas_price::RpcGasPriceResponse,
-    // near_jsonrpc_primitives::types::gas_price::RpcGasPriceError,
-    Error,
-> {
-    unreachable!("This method is not implemented yet")
-}
-
-async fn health(
-    Params(params): Params<Value>,
-) -> Result<
-    near_jsonrpc_primitives::types::status::RpcHealthResponse,
-    // near_jsonrpc_primitives::types::status::RpcStatusError,
-    Error,
-> {
-    unreachable!("This method is not implemented yet")
-}
-
-async fn light_client_execution_outcome_proof(
-    Params(params): Params<
-        near_jsonrpc_primitives::types::light_client::RpcLightClientExecutionProofRequest,
-    >,
-) -> Result<
-    near_jsonrpc_primitives::types::light_client::RpcLightClientExecutionProofResponse,
-    // near_jsonrpc_primitives::types::light_client::RpcLightClientProofError,
-    Error,
-> {
-    unreachable!("This method is not implemented yet")
-}
-
-async fn next_light_client_block(
-    Params(params): Params<
-        near_jsonrpc_primitives::types::light_client::RpcLightClientNextBlockRequest,
-    >,
-) -> Result<
-    near_jsonrpc_primitives::types::light_client::RpcLightClientNextBlockResponse,
-    // near_jsonrpc_primitives::types::light_client::RpcLightClientNextBlockError,
-    Error,
-> {
-    unreachable!("This method is not implemented yet")
-}
-
-async fn network_info(
-    Params(params): Params<Value>,
-) -> Result<
-    near_jsonrpc_primitives::types::network_info::RpcNetworkInfoResponse,
-    // near_jsonrpc_primitives::types::network_info::RpcNetworkInfoError,
-    Error,
-> {
-    unreachable!("This method is not implemented yet")
-}
-
-async fn query(
-    Params(params): Params<near_jsonrpc_primitives::types::query::RpcQueryRequest>,
-) -> Result<
-    near_jsonrpc_primitives::types::query::RpcQueryResponse,
-    // near_jsonrpc_primitives::types::query::RpcQueryError,
-    Error,
-> {
-    unreachable!("This method is not implemented yet")
-}
-
-async fn status(
-    Params(params): Params<Value>,
-) -> Result<
-    near_jsonrpc_primitives::types::status::RpcStatusResponse,
-    // near_jsonrpc_primitives::types::status::RpcStatusError,
-    Error,
-> {
-    unreachable!("This method is not implemented yet")
-}
-
-async fn tx_status_common(
-    Params(params): Params<
-        // near_jsonrpc_primitives::types::transactions::RpcTransactionStatusCommonRequest,
-        Value,
-    >,
-) -> Result<
-    near_jsonrpc_primitives::types::transactions::RpcTransactionResponse,
-    // near_jsonrpc_primitives::types::transactions::RpcTransactionError,
-    Error,
-> {
-    unreachable!("This method is not implemented yet")
-}
-
-async fn validators(
-    Params(params): Params<near_jsonrpc_primitives::types::validator::RpcValidatorRequest>,
-) -> Result<
-    near_jsonrpc_primitives::types::validator::RpcValidatorResponse,
-    // near_jsonrpc_primitives::types::validator::RpcValidatorError,
-    Error,
-> {
-    unreachable!("This method is not implemented yet")
-}
+mod errors;
+mod modules;
+mod utils;
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
-    let cli_args = Cli::parse();
+    dotenv().ok();
+    let opts: Opts = Opts::parse();
+    let state = ServerContext {
+        s3_client: prepare_s3_client(
+            &opts.access_key_id,
+            &opts.secret_access_key,
+            opts.region.clone(),
+        )
+        .await,
+        db_client: prepare_db_client(&opts.database_url).await,
+        s3_bucket_name: opts.s3_bucket_name,
+    };
+
     let rpc = Server::new()
-        .with_data(Data::new(cli_args))
-        .with_method("block", block)
-        .with_method("broadcast_tx_async", send_tx_async)
-        .with_method("broadcast_tx_commit", send_tx_commit)
-        .with_method("chunk", chunk)
-        .with_method("gas_price", gas_price)
-        .with_method("health", health)
-        .with_method("light_client_proof", light_client_execution_outcome_proof)
-        .with_method("next_light_client_block", next_light_client_block)
-        .with_method("network_info", network_info)
-        .with_method("query", query)
-        .with_method("status", status)
-        .with_method("tx", tx_status_common)
-        .with_method("validators", validators)
+        .with_data(Data::new(state))
+        .with_method("query", modules::queries::methods::query)
+        .with_method("block", modules::blocks::methods::block)
+        .with_method("chunk", modules::blocks::methods::chunk)
+        .with_method("tx", modules::transactions::methods::tx_status_common)
+        .with_method(
+            "broadcast_tx_async",
+            modules::transactions::methods::send_tx_async,
+        )
+        .with_method(
+            "broadcast_tx_commit",
+            modules::transactions::methods::send_tx_commit,
+        )
+        .with_method("gas_price", modules::gas::methods::gas_price)
+        .with_method("status", modules::network::methods::status)
+        .with_method("network_info", modules::network::methods::network_info)
+        .with_method("validators", modules::network::methods::validators)
         .finish();
 
     actix_web::HttpServer::new(move || {
