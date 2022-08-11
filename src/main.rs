@@ -2,7 +2,7 @@ use clap::Parser;
 use config::{Opts, ServerContext};
 use dotenv::dotenv;
 use jsonrpc_v2::{Data, Server};
-use utils::{prepare_db_client, prepare_s3_client};
+use utils::{prepare_db_client, prepare_redis_client, prepare_s3_client};
 
 mod config;
 mod errors;
@@ -21,6 +21,8 @@ async fn main() -> std::io::Result<()> {
         )
         .await,
         db_client: prepare_db_client(&opts.database_url).await,
+        redis_client: prepare_redis_client(&opts.redis_url).await,
+        near_rpc_client: near_jsonrpc_client::JsonRpcClient::connect(opts.rpc_url.to_string()),
         s3_bucket_name: opts.s3_bucket_name,
     };
 

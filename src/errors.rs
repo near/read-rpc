@@ -49,7 +49,6 @@ impl jsonrpc_v2::ErrorLike for RPCError {
     fn code(&self) -> i64 {
         self.code
     }
-
     fn message(&self) -> String {
         self.message.to_string()
     }
