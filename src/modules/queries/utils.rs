@@ -3,16 +3,11 @@ use borsh::BorshDeserialize;
 
 pub async fn fetch_latest_block_height_from_redis(
     redis_client: redis::aio::ConnectionManager,
-) -> Option<near_indexer_primitives::types::BlockHeight> {
-    if let Ok(block_height) = redis::cmd("GET")
+) -> anyhow::Result<near_indexer_primitives::types::BlockHeight> {
+    Ok(redis::cmd("GET")
         .arg("latest_block_height")
         .query_async(&mut redis_client.clone())
-        .await
-    {
-        Some(block_height)
-    } else {
-        None
-    }
+        .await?)
 }
 
 pub async fn fetch_block_hash_from_redis(
@@ -44,7 +39,7 @@ pub async fn fetch_account_from_redis(
     redis_client: redis::aio::ConnectionManager,
     account_id: &near_indexer_primitives::types::AccountId,
     block_height: near_indexer_primitives::types::BlockHeight,
-) -> Option<near_primitives_core::account::Account> {
+) -> anyhow::Result<near_primitives_core::account::Account> {
     let account_from_redis = if let Some(block_hash) =
         fetch_block_hash_from_redis(redis_client.clone(), account_id, block_height).await
     {
@@ -56,23 +51,13 @@ pub async fn fetch_account_from_redis(
         {
             account_from_redis
         } else {
-            let result: Vec<u8> = Vec::new();
-            result
+            Vec::<u8>::new()
         }
     } else {
-        let result: Vec<u8> = Vec::new();
-        result
+        Vec::<u8>::new()
     };
 
-    return if account_from_redis.is_empty() {
-        None
-    } else {
-        if let Ok(account) =
-            near_primitives_core::account::Account::try_from_slice(&account_from_redis)
-        {
-            Some(account)
-        } else {
-            None
-        }
-    };
+    Ok(near_primitives_core::account::Account::try_from_slice(
+        &account_from_redis,
+    )?)
 }

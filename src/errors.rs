@@ -1,3 +1,4 @@
+use near_jsonrpc_client::errors::JsonRpcError;
 use std::ops::{Deref, DerefMut};
 type BoxedSerialize = Box<dyn erased_serde::Serialize + Send>;
 
@@ -66,5 +67,28 @@ impl From<near_jsonrpc_primitives::errors::RpcError> for RPCError {
 impl From<near_jsonrpc_primitives::types::blocks::RpcBlockError> for RPCError {
     fn from(err: near_jsonrpc_primitives::types::blocks::RpcBlockError) -> Self {
         near_jsonrpc_primitives::errors::RpcError::from(err).into()
+    }
+}
+
+impl From<near_jsonrpc_primitives::types::query::RpcQueryError> for RPCError {
+    fn from(err: near_jsonrpc_primitives::types::query::RpcQueryError) -> Self {
+        near_jsonrpc_primitives::errors::RpcError::from(err).into()
+    }
+}
+
+impl<E> From<JsonRpcError<E>> for RPCError
+where
+    near_jsonrpc_primitives::errors::RpcError: std::convert::From<E>,
+{
+    fn from(err: JsonRpcError<E>) -> Self {
+        if let Some(error) = err.handler_error() {
+            near_jsonrpc_primitives::errors::RpcError::from(error).into()
+        } else {
+            Self {
+                0: near_jsonrpc_primitives::errors::RpcError::serialization_error(
+                    "Failed to serialize JsonRpcError".to_string(),
+                ),
+            }
+        }
     }
 }

@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 actix-rt = "2.7.0"
 actix-web = "4.1.0"
+anyhow = "1.0.61"
 aws-sdk-s3 = "0.17.0"
 aws-types = "0.47.0"
 bigdecimal = { version = "0.3.0", features = ["serde"] }
@@ -26,5 +27,5 @@ redis = { version = "0.21.5", features = ["tokio-comp", "connection-manager"] }
 reqwest = { version = "0.11.11", features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.82"
-sqlx = { version = "0.6.0", features = ["runtime-tokio-native-tls", "postgres", "bigdecimal"]}
+sqlx = { version = "0.6.0", features = ["runtime-tokio-native-tls", "postgres", "bigdecimal", "offline"]}
 tokio = { version = "1.20.1", features = ["full"] }
