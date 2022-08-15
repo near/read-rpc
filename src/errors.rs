@@ -1,4 +1,4 @@
-use near_jsonrpc_client::errors::JsonRpcError;
+use near_jsonrpc_client::errors::{JsonRpcError, JsonRpcServerError};
 use std::ops::{Deref, DerefMut};
 type BoxedSerialize = Box<dyn erased_serde::Serialize + Send>;
 
@@ -47,14 +47,21 @@ impl std::fmt::Display for RPCError {
 }
 
 impl jsonrpc_v2::ErrorLike for RPCError {
+
     fn code(&self) -> i64 {
         self.code
     }
+
     fn message(&self) -> String {
         self.message.to_string()
     }
+
     fn data(&self) -> Option<BoxedSerialize> {
         Some(Box::new(self.data.clone()))
+    }
+
+    fn error_struct(&self) -> Option<BoxedSerialize> {
+        Some(Box::new(self.error_struct.clone()))
     }
 }
 
@@ -70,18 +77,12 @@ impl From<near_jsonrpc_primitives::types::blocks::RpcBlockError> for RPCError {
     }
 }
 
-impl From<near_jsonrpc_primitives::types::query::RpcQueryError> for RPCError {
-    fn from(err: near_jsonrpc_primitives::types::query::RpcQueryError) -> Self {
-        near_jsonrpc_primitives::errors::RpcError::from(err).into()
-    }
-}
-
 impl<E> From<JsonRpcError<E>> for RPCError
-where
-    near_jsonrpc_primitives::errors::RpcError: std::convert::From<E>,
+    where
+        near_jsonrpc_primitives::errors::RpcError: std::convert::From<E>,
 {
     fn from(err: JsonRpcError<E>) -> Self {
-        if let Some(error) = err.handler_error() {
+        if let JsonRpcError::ServerError(JsonRpcServerError::HandlerError(error)) = err {
             near_jsonrpc_primitives::errors::RpcError::from(error).into()
         } else {
             Self {
