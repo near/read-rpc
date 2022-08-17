@@ -14,3 +14,11 @@ pub async fn prepare_s3_client(
 pub async fn prepare_db_client(database_url: &str) -> sqlx::PgPool {
     sqlx::PgPool::connect(database_url).await.unwrap()
 }
+
+pub async fn prepare_redis_client(redis_url: &str) -> redis::aio::ConnectionManager {
+    redis::Client::open(redis_url)
+        .expect("can create Redis client")
+        .get_tokio_connection_manager()
+        .await
+        .unwrap()
+}

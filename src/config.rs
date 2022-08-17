@@ -12,8 +12,12 @@ pub struct Opts {
     pub s3_bucket_name: String,
 
     // Indexer database url
-    #[clap(long, env = "DATABASE_URL")]
+    #[clap(long, env)]
     pub database_url: String,
+
+    // State indexer redis url
+    #[clap(long, env)]
+    pub redis_url: String,
 
     // AWS access key id
     #[clap(long, env = "AWS_ACCESS_KEY_ID")]
@@ -31,5 +35,7 @@ pub struct Opts {
 pub struct ServerContext {
     pub s3_client: aws_sdk_s3::Client,
     pub db_client: sqlx::PgPool,
+    pub redis_client: redis::aio::ConnectionManager,
+    pub near_rpc_client: near_jsonrpc_client::JsonRpcClient,
     pub s3_bucket_name: String,
 }

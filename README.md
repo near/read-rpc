@@ -1,4 +1,4 @@
-# test-near-proxy-rpc
+# json-rpc-100x
 
 ### Compile
 
@@ -9,7 +9,7 @@ $ cargo build --release
 ### Run
 
 ```bash
-$ ./target/release/test_rpc_server
+$ ./target/release/json-rpc-100x
 ```
 
 * mainnet https://rpc.mainnet.near.org
