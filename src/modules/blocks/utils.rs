@@ -71,3 +71,12 @@ pub async fn fetch_latest_block_height_from_db(
         ),
     }
 }
+
+pub async fn fetch_latest_block_height_from_redis(
+    redis_client: redis::aio::ConnectionManager,
+) -> anyhow::Result<near_indexer_primitives::types::BlockHeight> {
+    Ok(redis::cmd("GET")
+        .arg("latest_block_height")
+        .query_async(&mut redis_client.clone())
+        .await?)
+}
