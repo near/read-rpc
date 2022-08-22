@@ -5,27 +5,6 @@ type BoxedSerialize = Box<dyn erased_serde::Serialize + Send>;
 #[derive(Debug)]
 pub struct RPCError(pub(crate) near_jsonrpc_primitives::errors::RpcError);
 
-impl RPCError {
-    pub fn invalid_request() -> Self {
-        Self {
-            0: near_jsonrpc_primitives::errors::RpcError::new(
-                -32600,
-                String::from("Invalid Request"),
-                None,
-            ),
-        }
-    }
-    pub fn invalid_params() -> Self {
-        Self {
-            0: near_jsonrpc_primitives::errors::RpcError::new(
-                -32602,
-                String::from("Invalid params"),
-                None,
-            ),
-        }
-    }
-}
-
 impl Deref for RPCError {
     type Target = near_jsonrpc_primitives::errors::RpcError;
 
@@ -47,7 +26,6 @@ impl std::fmt::Display for RPCError {
 }
 
 impl jsonrpc_v2::ErrorLike for RPCError {
-
     fn code(&self) -> i64 {
         self.code
     }
@@ -71,15 +49,9 @@ impl From<near_jsonrpc_primitives::errors::RpcError> for RPCError {
     }
 }
 
-impl From<near_jsonrpc_primitives::types::blocks::RpcBlockError> for RPCError {
-    fn from(err: near_jsonrpc_primitives::types::blocks::RpcBlockError) -> Self {
-        near_jsonrpc_primitives::errors::RpcError::from(err).into()
-    }
-}
-
 impl<E> From<JsonRpcError<E>> for RPCError
-    where
-        near_jsonrpc_primitives::errors::RpcError: std::convert::From<E>,
+where
+    near_jsonrpc_primitives::errors::RpcError: std::convert::From<E>,
 {
     fn from(err: JsonRpcError<E>) -> Self {
         if let JsonRpcError::ServerError(JsonRpcServerError::HandlerError(error)) = err {
