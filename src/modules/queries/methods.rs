@@ -3,6 +3,7 @@ use crate::errors::RPCError;
 use crate::modules::blocks::methods::fetch_block;
 use crate::modules::queries::utils::{
     fetch_access_key_from_redis, fetch_account_from_redis, fetch_code_from_redis,
+    fetch_state_from_redis,
 };
 use borsh::BorshSerialize;
 use jsonrpc_v2::{Data, Params};
@@ -41,6 +42,29 @@ async fn view_code(
         kind: near_jsonrpc_primitives::types::query::QueryResponseKind::ViewCode(
             near_primitives::views::ContractCodeView::from(contract_code),
         ),
+        block_height: block.header.height,
+        block_hash: block.header.hash,
+    })
+}
+
+async fn view_state(
+    data: &Data<ServerContext>,
+    block_reference: near_primitives::types::BlockReference,
+    account_id: &near_indexer_primitives::types::AccountId,
+    prefix: &[u8],
+) -> anyhow::Result<near_jsonrpc_primitives::types::query::RpcQueryResponse> {
+    let block = fetch_block(&data, block_reference.clone()).await?;
+
+    let contract_state = fetch_state_from_redis(
+        data.redis_client.clone(),
+        account_id,
+        block.header.height,
+        prefix,
+    )
+    .await?;
+
+    Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
+        kind: near_jsonrpc_primitives::types::query::QueryResponseKind::ViewState(contract_state),
         block_height: block.header.height,
         block_hash: block.header.hash,
     })
@@ -104,12 +128,17 @@ pub async fn query(
                 Err(_) => Ok(data.near_rpc_client.call(params).await?),
             }
         }
-        near_primitives::views::QueryRequest::ViewState {
-            account_id: _,
-            prefix: _,
-        } => {
-            unimplemented!("ViewState - Unimplemented")
-        }
+        near_primitives::views::QueryRequest::ViewState { account_id, prefix } => match view_state(
+            &data,
+            params.block_reference.clone(),
+            &account_id,
+            prefix.as_ref(),
+        )
+        .await
+        {
+            Ok(result) => Ok(result),
+            Err(_) => Ok(data.near_rpc_client.call(params).await?),
+        },
         near_primitives::views::QueryRequest::ViewAccessKeyList { account_id: _ } => {
             unimplemented!("ViewAccessKeyList - Unimplemented")
         }

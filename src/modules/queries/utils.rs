@@ -1,7 +1,9 @@
 use crate::modules::queries::{
-    build_redis_block_hash_key, build_redis_data_key, ACCESS_KEY_SCOPE, ACCOUNT_SCOPE, CODE_SCOPE,
+    build_redis_block_hash_key, build_redis_data_key, build_redis_state_key, ACCESS_KEY_SCOPE,
+    ACCOUNT_SCOPE, CODE_SCOPE, DATA_SCOPE, MAX_LIMIT,
 };
 use borsh::BorshDeserialize;
+use std::collections::HashMap;
 
 pub async fn fetch_block_hash_from_redis(
     scope: &[u8],
@@ -61,6 +63,55 @@ async fn fetch_data_from_redis(
     }
 }
 
+async fn get_redis_stata_keys(
+    scope: &[u8],
+    redis_client: redis::aio::ConnectionManager,
+    account_id: &near_indexer_primitives::types::AccountId,
+    block_height: near_indexer_primitives::types::BlockHeight,
+    prefix: &[u8],
+) -> HashMap<Vec<u8>, Vec<u8>> {
+    let data_redis_key = build_redis_state_key(scope, account_id);
+    let mut cursor = 0;
+    let mut step = 0;
+    let mut data: HashMap<Vec<u8>, Vec<u8>> = HashMap::new();
+
+    loop {
+        let mut redis_cmd = redis::cmd("HSCAN");
+        redis_cmd.arg(&data_redis_key).cursor_arg(cursor);
+        if !prefix.is_empty() {
+            redis_cmd.arg(&[b"MATCH", prefix]);
+        };
+        redis_cmd.arg(&["COUNT", "1000"]);
+
+        let data_from_redis: (u64, Vec<Vec<u8>>) = redis_cmd
+            .query_async(&mut redis_client.clone())
+            .await
+            .unwrap();
+        cursor = data_from_redis.0;
+        step += 1;
+
+        for key in data_from_redis.1 {
+            let redis_data = fetch_data_from_redis(
+                DATA_SCOPE,
+                redis_client.clone(),
+                account_id,
+                block_height,
+                Some(&key),
+            )
+            .await;
+            if !redis_data.is_empty() {
+                data.insert(key, redis_data);
+            }
+        }
+        let keys_count = data.keys().len() as u8;
+        if step > 10 || keys_count > MAX_LIMIT || cursor == 0 {
+            break;
+        }
+    }
+
+    data
+}
+
 pub async fn fetch_access_key_from_redis(
     redis_client: redis::aio::ConnectionManager,
     account_id: &near_indexer_primitives::types::AccountId,
@@ -107,4 +158,31 @@ pub async fn fetch_account_from_redis(
     Ok(near_primitives_core::account::Account::try_from_slice(
         &account_from_redis,
     )?)
+}
+
+pub async fn fetch_state_from_redis(
+    redis_client: redis::aio::ConnectionManager,
+    account_id: &near_indexer_primitives::types::AccountId,
+    block_height: near_indexer_primitives::types::BlockHeight,
+    prefix: &[u8],
+) -> anyhow::Result<near_primitives::views::ViewStateResult> {
+    let state_from_redis =
+        get_redis_stata_keys(DATA_SCOPE, redis_client, account_id, block_height, prefix).await;
+    if state_from_redis.is_empty() {
+        anyhow::bail!("Data not found in redis")
+    } else {
+        let mut values = Vec::new();
+        for (key, value) in state_from_redis.iter() {
+            let state_item = near_primitives::views::StateItem {
+                key: base64::encode(key),
+                value: base64::encode(value),
+                proof: vec![],
+            };
+            values.push(state_item)
+        }
+        Ok(near_primitives::views::ViewStateResult {
+            values,
+            proof: vec![],
+        })
+    }
 }

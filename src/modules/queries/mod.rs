@@ -4,7 +4,9 @@ pub mod utils;
 pub const ACCOUNT_SCOPE: &[u8] = b"a";
 const CODE_SCOPE: &[u8] = b"c";
 const ACCESS_KEY_SCOPE: &[u8] = b"k";
-// const DATA_SCOPE: &[u8] = b"d";
+const DATA_SCOPE: &[u8] = b"d";
+
+const MAX_LIMIT: u8 = 100;
 
 fn build_redis_block_hash_key(
     scope: &[u8],
@@ -45,4 +47,11 @@ fn build_redis_data_key(
         ]
         .concat(),
     }
+}
+
+fn build_redis_state_key(
+    scope: &[u8],
+    account_id: &near_indexer_primitives::types::AccountId,
+) -> Vec<u8> {
+    [b"k:", scope, b":", account_id.as_bytes()].concat()
 }
