@@ -11,6 +11,7 @@ actix-web = "4.1.0"
 anyhow = "1.0.61"
 aws-sdk-s3 = "0.17.0"
 aws-types = "0.47.0"
+base64 = "0.10.1"
 bigdecimal = { version = "0.3.0", features = ["serde"] }
 borsh = "0.9.3"
 clap = { version = "3.1.6", features = ["color", "derive", "env"] }
