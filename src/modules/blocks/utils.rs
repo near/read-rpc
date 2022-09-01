@@ -8,6 +8,7 @@ pub async fn fetch_block_from_s3(
     near_indexer_primitives::views::BlockView,
     near_jsonrpc_primitives::types::blocks::RpcBlockError,
 > {
+    tracing::debug!(target: "jsonrpc - block", "call fetch_block_from_s3");
     match s3_client
         .get_object()
         .bucket(s3_bucket_name)
@@ -40,6 +41,7 @@ pub async fn fetch_block_height_from_db(
     db_client: &sqlx::PgPool,
     block_hash: near_primitives::hash::CryptoHash,
 ) -> Result<u64, near_jsonrpc_primitives::types::blocks::RpcBlockError> {
+    tracing::debug!(target: "jsonrpc - block", "call fetch_block_height_from_db");
     match sqlx::query!(
         "SELECT block_height FROM blocks WHERE block_hash = $1 LIMIT 1",
         block_hash.to_string()
@@ -59,6 +61,7 @@ pub async fn fetch_block_height_from_db(
 pub async fn fetch_latest_block_height_from_db(
     db_client: &sqlx::PgPool,
 ) -> Result<u64, near_jsonrpc_primitives::types::blocks::RpcBlockError> {
+    tracing::debug!(target: "jsonrpc - block", "call fetch_latest_block_height_from_db");
     match sqlx::query!("SELECT block_height FROM blocks ORDER BY block_height DESC LIMIT 1",)
         .fetch_one(db_client)
         .await
@@ -75,6 +78,7 @@ pub async fn fetch_latest_block_height_from_db(
 pub async fn fetch_latest_block_height_from_redis(
     redis_client: redis::aio::ConnectionManager,
 ) -> anyhow::Result<near_indexer_primitives::types::BlockHeight> {
+    tracing::debug!(target: "jsonrpc - block", "call fetch_latest_block_height_from_redis");
     Ok(redis::cmd("GET")
         .arg("latest_block_height")
         .query_async(&mut redis_client.clone())

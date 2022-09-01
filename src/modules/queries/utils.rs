@@ -12,6 +12,7 @@ pub async fn fetch_block_hash_from_redis(
     key_data: Option<&[u8]>,
     block_height: near_indexer_primitives::types::BlockHeight,
 ) -> Option<Vec<u8>> {
+    tracing::debug!(target: "jsonrpc - query", "call fetch_block_hash_from_redis");
     let block_redis_key = build_redis_block_hash_key(scope, account_id, key_data);
     let blocks_hashes = if let Ok(blocks_hashes) = redis::cmd("ZREVRANGEBYSCORE")
         .arg(&block_redis_key)
@@ -39,6 +40,7 @@ async fn fetch_data_from_redis(
     block_height: near_indexer_primitives::types::BlockHeight,
     key_data: Option<&[u8]>,
 ) -> Vec<u8> {
+    tracing::debug!(target: "jsonrpc - query", "call fetch_data_from_redis");
     if let Some(block_hash) = fetch_block_hash_from_redis(
         scope,
         redis_client.clone(),
@@ -70,6 +72,7 @@ async fn get_redis_stata_keys(
     block_height: near_indexer_primitives::types::BlockHeight,
     prefix: &[u8],
 ) -> HashMap<Vec<u8>, Vec<u8>> {
+    tracing::debug!(target: "jsonrpc - query", "call get_redis_stata_keys");
     let data_redis_key = build_redis_state_key(scope, account_id);
     let mut cursor = 0;
     let mut step = 0;
@@ -118,6 +121,7 @@ pub async fn fetch_access_key_from_redis(
     block_height: near_indexer_primitives::types::BlockHeight,
     key_data: Vec<u8>,
 ) -> anyhow::Result<near_primitives_core::account::AccessKey> {
+    tracing::debug!(target: "jsonrpc - query", "call fetch_access_key_from_redis");
     let access_key_from_redis = fetch_data_from_redis(
         ACCESS_KEY_SCOPE,
         redis_client,
@@ -136,6 +140,7 @@ pub async fn fetch_code_from_redis(
     account_id: &near_indexer_primitives::types::AccountId,
     block_height: near_indexer_primitives::types::BlockHeight,
 ) -> anyhow::Result<near_primitives_core::contract::ContractCode> {
+    tracing::debug!(target: "jsonrpc - query", "call fetch_code_from_redis");
     let code_data_from_redis =
         fetch_data_from_redis(CODE_SCOPE, redis_client, account_id, block_height, None).await;
     if code_data_from_redis.is_empty() {
@@ -153,6 +158,7 @@ pub async fn fetch_account_from_redis(
     account_id: &near_indexer_primitives::types::AccountId,
     block_height: near_indexer_primitives::types::BlockHeight,
 ) -> anyhow::Result<near_primitives_core::account::Account> {
+    tracing::debug!(target: "jsonrpc - query", "call fetch_account_from_redis");
     let account_from_redis =
         fetch_data_from_redis(ACCOUNT_SCOPE, redis_client, account_id, block_height, None).await;
     Ok(near_primitives_core::account::Account::try_from_slice(
@@ -166,6 +172,7 @@ pub async fn fetch_state_from_redis(
     block_height: near_indexer_primitives::types::BlockHeight,
     prefix: &[u8],
 ) -> anyhow::Result<near_primitives::views::ViewStateResult> {
+    tracing::debug!(target: "jsonrpc - query", "call fetch_state_from_redis");
     let state_from_redis =
         get_redis_stata_keys(DATA_SCOPE, redis_client, account_id, block_height, prefix).await;
     if state_from_redis.is_empty() {

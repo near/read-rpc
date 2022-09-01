@@ -10,6 +10,7 @@ pub async fn fetch_block(
     data: &Data<ServerContext>,
     block_reference: near_primitives::types::BlockReference,
 ) -> anyhow::Result<near_indexer_primitives::views::BlockView> {
+    tracing::debug!(target: "jsonrpc - block - fetch_block", "call fetch_block");
     let block_height = match block_reference {
         near_primitives::types::BlockReference::BlockId(block_id) => match block_id {
             near_primitives::types::BlockId::Height(block_height) => block_height,
@@ -38,11 +39,13 @@ pub async fn block(
     data: Data<ServerContext>,
     Params(params): Params<near_jsonrpc_primitives::types::blocks::RpcBlockRequest>,
 ) -> Result<near_jsonrpc_primitives::types::blocks::RpcBlockResponse, RPCError> {
+    tracing::debug!(target: "jsonrpc - block", "Params: {:?}", params);
     match fetch_block(&data, params.block_reference.clone()).await {
         Ok(block_view) => {
             Ok(near_jsonrpc_primitives::types::blocks::RpcBlockResponse { block_view })
         }
         Err(_) => {
+            tracing::debug!(target: "jsonrpc - block", "Block not found. Proxy to near rpc");
             let block_view = data.near_rpc_client.call(params).await?;
             Ok(near_jsonrpc_primitives::types::blocks::RpcBlockResponse { block_view })
         }
