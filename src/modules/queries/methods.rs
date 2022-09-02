@@ -13,6 +13,7 @@ async fn view_account(
     block_reference: near_primitives::types::BlockReference,
     account_id: &near_indexer_primitives::types::AccountId,
 ) -> anyhow::Result<near_jsonrpc_primitives::types::query::RpcQueryResponse> {
+    tracing::debug!(target: "jsonrpc - query - view_account", "call view_account");
     let block = fetch_block(&data, block_reference.clone()).await?;
 
     let account =
@@ -33,6 +34,7 @@ async fn view_code(
     block_reference: near_primitives::types::BlockReference,
     account_id: &near_indexer_primitives::types::AccountId,
 ) -> anyhow::Result<near_jsonrpc_primitives::types::query::RpcQueryResponse> {
+    tracing::debug!(target: "jsonrpc - query - view_code", "call view_code");
     let block = fetch_block(&data, block_reference.clone()).await?;
 
     let contract_code =
@@ -53,6 +55,7 @@ async fn view_state(
     account_id: &near_indexer_primitives::types::AccountId,
     prefix: &[u8],
 ) -> anyhow::Result<near_jsonrpc_primitives::types::query::RpcQueryResponse> {
+    tracing::debug!(target: "jsonrpc - query - view_state", "call view_state");
     let block = fetch_block(&data, block_reference.clone()).await?;
 
     let contract_state = fetch_state_from_redis(
@@ -76,6 +79,7 @@ async fn view_access_key(
     account_id: &near_indexer_primitives::types::AccountId,
     key_data: Vec<u8>,
 ) -> anyhow::Result<near_jsonrpc_primitives::types::query::RpcQueryResponse> {
+    tracing::debug!(target: "jsonrpc - query - view_access_key", "call view_access_key");
     let block = fetch_block(&data, block_reference.clone()).await?;
 
     let access_key = fetch_access_key_from_redis(
@@ -99,17 +103,24 @@ pub async fn query(
     data: Data<ServerContext>,
     Params(params): Params<near_jsonrpc_primitives::types::query::RpcQueryRequest>,
 ) -> Result<near_jsonrpc_primitives::types::query::RpcQueryResponse, RPCError> {
+    tracing::debug!(target: "jsonrpc - query", "Params: {:?}", params);
     match params.request.clone() {
         near_primitives::views::QueryRequest::ViewAccount { account_id } => {
             match view_account(&data, params.block_reference.clone(), &account_id).await {
                 Ok(result) => Ok(result),
-                Err(_) => Ok(data.near_rpc_client.call(params).await?),
+                Err(_) => {
+                    tracing::debug!(target: "jsonrpc - query - view_account", "Account not found. Proxy to near rpc");
+                    Ok(data.near_rpc_client.call(params).await?)
+                }
             }
         }
         near_primitives::views::QueryRequest::ViewCode { account_id } => {
             match view_code(&data, params.block_reference.clone(), &account_id).await {
                 Ok(result) => Ok(result),
-                Err(_) => Ok(data.near_rpc_client.call(params).await?),
+                Err(_) => {
+                    tracing::debug!(target: "jsonrpc - query - view_code", "Code not found. Proxy to near rpc");
+                    Ok(data.near_rpc_client.call(params).await?)
+                }
             }
         }
         near_primitives::views::QueryRequest::ViewAccessKey {
@@ -125,7 +136,10 @@ pub async fn query(
             .await
             {
                 Ok(result) => Ok(result),
-                Err(_) => Ok(data.near_rpc_client.call(params).await?),
+                Err(_) => {
+                    tracing::debug!(target: "jsonrpc - query - view_access_key", "Access Key not found. Proxy to near rpc");
+                    Ok(data.near_rpc_client.call(params).await?)
+                }
             }
         }
         near_primitives::views::QueryRequest::ViewState { account_id, prefix } => match view_state(
@@ -137,7 +151,10 @@ pub async fn query(
         .await
         {
             Ok(result) => Ok(result),
-            Err(_) => Ok(data.near_rpc_client.call(params).await?),
+            Err(_) => {
+                tracing::debug!(target: "jsonrpc - query - view_state", "State not found. Proxy to near rpc");
+                Ok(data.near_rpc_client.call(params).await?)
+            }
         },
         near_primitives::views::QueryRequest::ViewAccessKeyList { account_id: _ } => {
             unimplemented!("ViewAccessKeyList - Unimplemented")
