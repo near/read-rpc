@@ -17,6 +17,7 @@ borsh = "0.9.3"
 clap = { version = "3.2.22", features = ["color", "derive", "env"] }
 dotenv = "0.15.0"
 erased-serde = "0.3.23"
+futures = "0.3.24"
 http = "0.2.8"
 jsonrpc-v2 = { git  = "https://github.com/kobayurii/jsonrpc-v2", rev = "95e7b1d2567ae841163af212a3f25abb6862becb" }
 near-jsonrpc-client = { git = "https://github.com/kobayurii/near-jsonrpc-client-rs", rev = "16415cbf8bd7465683141fe65d18b1e4dea05360"}

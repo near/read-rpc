@@ -4,6 +4,7 @@ use crate::modules::queries::{
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use std::collections::HashMap;
+use tokio::task;
 
 pub async fn fetch_block_hash_from_redis(
     scope: &[u8],
@@ -65,7 +66,7 @@ async fn fetch_data_from_redis(
     }
 }
 
-async fn get_redis_stata_keys(
+pub async fn get_redis_stata_keys(
     scope: &[u8],
     redis_client: redis::aio::ConnectionManager,
     account_id: &near_primitives::types::AccountId,
@@ -214,7 +215,7 @@ pub async fn run_contract(
         input: args.try_to_vec().unwrap(),
         block_index: block_height,
         block_timestamp: timestamp,
-        epoch_height: 0,
+        epoch_height: 0, // TODO: implement indexing of epoch_height and pass it here
         account_balance: contract.amount(),
         account_locked_balance: contract.locked(),
         storage_usage: contract.storage_usage(),
@@ -222,30 +223,26 @@ pub async fn run_contract(
         prepaid_gas: 0,
         random_seed: vec![],
         view_config: Some(near_primitives_core::config::ViewConfig {
-            max_gas_burnt: 300_000_000_000_000,
+            max_gas_burnt: 300_000_000_000_000, // TODO: extract it into a configuration option
         }),
         output_data_receivers: vec![],
     };
-    let state_from_redis = get_redis_stata_keys(
-        DATA_SCOPE,
-        redis_client.clone(),
-        &account_id,
-        block_height,
-        &[],
-    )
-    .await;
-    let mut external = CodeStorage::init(state_from_redis);
-    let results = near_vm_runner::run(
-        &contract_code,
-        method_name,
-        &mut external,
-        context,
-        &near_vm_logic::VMConfig::test(),
-        &near_primitives_core::runtime::fees::RuntimeFeesConfig::test(),
-        &[],
-        55,
-        None,
-    );
+    let contract_method_name = String::from(method_name);
+    let mut external = CodeStorage::init(redis_client.clone(), account_id, block_height);
+    let results = task::spawn_blocking(move || {
+        near_vm_runner::run(
+            &contract_code,
+            &contract_method_name,
+            &mut external,
+            context,
+            &near_vm_logic::VMConfig::test(),
+            &near_primitives_core::runtime::fees::RuntimeFeesConfig::test(),
+            &[],
+            55,
+            None,
+        )
+    })
+    .await?;
     match results {
         near_vm_runner::VMResult::Ok(result) => Ok(result),
         near_vm_runner::VMResult::Aborted(_, _) => anyhow::bail!("Run contract abort!"),
