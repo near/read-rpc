@@ -9,7 +9,7 @@ use jsonrpc_v2::{Data, Params};
 pub async fn fetch_block(
     data: &Data<ServerContext>,
     block_reference: near_primitives::types::BlockReference,
-) -> anyhow::Result<near_indexer_primitives::views::BlockView> {
+) -> anyhow::Result<near_primitives::views::BlockView> {
     tracing::debug!(target: "jsonrpc - block - fetch_block", "call fetch_block");
     let block_height = match block_reference {
         near_primitives::types::BlockReference::BlockId(block_id) => match block_id {

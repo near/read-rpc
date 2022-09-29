@@ -4,10 +4,8 @@ pub async fn fetch_block_from_s3(
     s3_client: &aws_sdk_s3::Client,
     s3_bucket_name: &str,
     block_height: near_primitives::types::BlockHeight,
-) -> Result<
-    near_indexer_primitives::views::BlockView,
-    near_jsonrpc_primitives::types::blocks::RpcBlockError,
-> {
+) -> Result<near_primitives::views::BlockView, near_jsonrpc_primitives::types::blocks::RpcBlockError>
+{
     tracing::debug!(target: "jsonrpc - block", "call fetch_block_from_s3");
     match s3_client
         .get_object()
@@ -18,9 +16,7 @@ pub async fn fetch_block_from_s3(
     {
         Ok(response) => {
             let body_bytes = response.body.collect().await.unwrap().into_bytes();
-            match serde_json::from_slice::<near_indexer_primitives::views::BlockView>(
-                body_bytes.as_ref(),
-            ) {
+            match serde_json::from_slice::<near_primitives::views::BlockView>(body_bytes.as_ref()) {
                 Ok(block) => Ok(block),
                 Err(err) => Err(
                     near_jsonrpc_primitives::types::blocks::RpcBlockError::UnknownBlock {
@@ -77,7 +73,7 @@ pub async fn fetch_latest_block_height_from_db(
 
 pub async fn fetch_latest_block_height_from_redis(
     redis_client: redis::aio::ConnectionManager,
-) -> anyhow::Result<near_indexer_primitives::types::BlockHeight> {
+) -> anyhow::Result<near_primitives::types::BlockHeight> {
     tracing::debug!(target: "jsonrpc - block", "call fetch_latest_block_height_from_redis");
     Ok(redis::cmd("GET")
         .arg("latest_block_height")

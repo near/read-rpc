@@ -1,16 +1,17 @@
 use crate::modules::queries::{
-    build_redis_block_hash_key, build_redis_data_key, build_redis_state_key, ACCESS_KEY_SCOPE,
-    ACCOUNT_SCOPE, CODE_SCOPE, DATA_SCOPE, MAX_LIMIT,
+    build_redis_block_hash_key, build_redis_data_key, build_redis_state_key, CodeStorage,
+    ACCESS_KEY_SCOPE, ACCOUNT_SCOPE, CODE_SCOPE, DATA_SCOPE, MAX_LIMIT,
 };
-use borsh::BorshDeserialize;
+use borsh::{BorshDeserialize, BorshSerialize};
 use std::collections::HashMap;
+use tokio::task;
 
 pub async fn fetch_block_hash_from_redis(
     scope: &[u8],
     redis_client: redis::aio::ConnectionManager,
-    account_id: &near_indexer_primitives::types::AccountId,
+    account_id: &near_primitives::types::AccountId,
     key_data: Option<&[u8]>,
-    block_height: near_indexer_primitives::types::BlockHeight,
+    block_height: near_primitives::types::BlockHeight,
 ) -> Option<Vec<u8>> {
     tracing::debug!(target: "jsonrpc - query", "call fetch_block_hash_from_redis");
     let block_redis_key = build_redis_block_hash_key(scope, account_id, key_data);
@@ -36,8 +37,8 @@ pub async fn fetch_block_hash_from_redis(
 async fn fetch_data_from_redis(
     scope: &[u8],
     redis_client: redis::aio::ConnectionManager,
-    account_id: &near_indexer_primitives::types::AccountId,
-    block_height: near_indexer_primitives::types::BlockHeight,
+    account_id: &near_primitives::types::AccountId,
+    block_height: near_primitives::types::BlockHeight,
     key_data: Option<&[u8]>,
 ) -> Vec<u8> {
     tracing::debug!(target: "jsonrpc - query", "call fetch_data_from_redis");
@@ -65,11 +66,11 @@ async fn fetch_data_from_redis(
     }
 }
 
-async fn get_redis_stata_keys(
+pub async fn get_redis_stata_keys(
     scope: &[u8],
     redis_client: redis::aio::ConnectionManager,
-    account_id: &near_indexer_primitives::types::AccountId,
-    block_height: near_indexer_primitives::types::BlockHeight,
+    account_id: &near_primitives::types::AccountId,
+    block_height: near_primitives::types::BlockHeight,
     prefix: &[u8],
 ) -> HashMap<Vec<u8>, Vec<u8>> {
     tracing::debug!(target: "jsonrpc - query", "call get_redis_stata_keys");
@@ -117,8 +118,8 @@ async fn get_redis_stata_keys(
 
 pub async fn fetch_access_key_from_redis(
     redis_client: redis::aio::ConnectionManager,
-    account_id: &near_indexer_primitives::types::AccountId,
-    block_height: near_indexer_primitives::types::BlockHeight,
+    account_id: &near_primitives::types::AccountId,
+    block_height: near_primitives::types::BlockHeight,
     key_data: Vec<u8>,
 ) -> anyhow::Result<near_primitives_core::account::AccessKey> {
     tracing::debug!(target: "jsonrpc - query", "call fetch_access_key_from_redis");
@@ -137,16 +138,16 @@ pub async fn fetch_access_key_from_redis(
 
 pub async fn fetch_code_from_redis(
     redis_client: redis::aio::ConnectionManager,
-    account_id: &near_indexer_primitives::types::AccountId,
-    block_height: near_indexer_primitives::types::BlockHeight,
-) -> anyhow::Result<near_primitives_core::contract::ContractCode> {
+    account_id: &near_primitives::types::AccountId,
+    block_height: near_primitives::types::BlockHeight,
+) -> anyhow::Result<near_primitives::contract::ContractCode> {
     tracing::debug!(target: "jsonrpc - query", "call fetch_code_from_redis");
     let code_data_from_redis =
         fetch_data_from_redis(CODE_SCOPE, redis_client, account_id, block_height, None).await;
     if code_data_from_redis.is_empty() {
         anyhow::bail!("Data not found in redis")
     } else {
-        Ok(near_primitives_core::contract::ContractCode::new(
+        Ok(near_primitives::contract::ContractCode::new(
             code_data_from_redis,
             None,
         ))
@@ -155,8 +156,8 @@ pub async fn fetch_code_from_redis(
 
 pub async fn fetch_account_from_redis(
     redis_client: redis::aio::ConnectionManager,
-    account_id: &near_indexer_primitives::types::AccountId,
-    block_height: near_indexer_primitives::types::BlockHeight,
+    account_id: &near_primitives::types::AccountId,
+    block_height: near_primitives::types::BlockHeight,
 ) -> anyhow::Result<near_primitives_core::account::Account> {
     tracing::debug!(target: "jsonrpc - query", "call fetch_account_from_redis");
     let account_from_redis =
@@ -168,8 +169,8 @@ pub async fn fetch_account_from_redis(
 
 pub async fn fetch_state_from_redis(
     redis_client: redis::aio::ConnectionManager,
-    account_id: &near_indexer_primitives::types::AccountId,
-    block_height: near_indexer_primitives::types::BlockHeight,
+    account_id: &near_primitives::types::AccountId,
+    block_height: near_primitives::types::BlockHeight,
     prefix: &[u8],
 ) -> anyhow::Result<near_primitives::views::ViewStateResult> {
     tracing::debug!(target: "jsonrpc - query", "call fetch_state_from_redis");
@@ -181,8 +182,8 @@ pub async fn fetch_state_from_redis(
         let mut values = Vec::new();
         for (key, value) in state_from_redis.iter() {
             let state_item = near_primitives::views::StateItem {
-                key: base64::encode(key),
-                value: base64::encode(value),
+                key: key.to_vec(),
+                value: value.to_vec(),
                 proof: vec![],
             };
             values.push(state_item)
@@ -191,5 +192,59 @@ pub async fn fetch_state_from_redis(
             values,
             proof: vec![],
         })
+    }
+}
+
+pub async fn run_contract(
+    account_id: near_primitives::types::AccountId,
+    method_name: &str,
+    args: near_primitives::types::FunctionArgs,
+    redis_client: redis::aio::ConnectionManager,
+    block_height: near_primitives::types::BlockHeight,
+    timestamp: u64,
+) -> anyhow::Result<near_vm_logic::VMOutcome> {
+    let contract =
+        fetch_account_from_redis(redis_client.clone(), &account_id, block_height).await?;
+    let contract_code =
+        fetch_code_from_redis(redis_client.clone(), &account_id, block_height).await?;
+    let context = near_vm_logic::VMContext {
+        current_account_id: account_id.parse().unwrap(),
+        signer_account_id: account_id.parse().unwrap(),
+        signer_account_pk: vec![],
+        predecessor_account_id: account_id.parse().unwrap(),
+        input: args.try_to_vec().unwrap(),
+        block_index: block_height,
+        block_timestamp: timestamp,
+        epoch_height: 0, // TODO: implement indexing of epoch_height and pass it here
+        account_balance: contract.amount(),
+        account_locked_balance: contract.locked(),
+        storage_usage: contract.storage_usage(),
+        attached_deposit: 0,
+        prepaid_gas: 0,
+        random_seed: vec![],
+        view_config: Some(near_primitives_core::config::ViewConfig {
+            max_gas_burnt: 300_000_000_000_000, // TODO: extract it into a configuration option
+        }),
+        output_data_receivers: vec![],
+    };
+    let contract_method_name = String::from(method_name);
+    let mut external = CodeStorage::init(redis_client.clone(), account_id, block_height);
+    let results = task::spawn_blocking(move || {
+        near_vm_runner::run(
+            &contract_code,
+            &contract_method_name,
+            &mut external,
+            context,
+            &near_vm_logic::VMConfig::test(),
+            &near_primitives_core::runtime::fees::RuntimeFeesConfig::test(),
+            &[],
+            55,
+            None,
+        )
+    })
+    .await?;
+    match results {
+        near_vm_runner::VMResult::Ok(result) => Ok(result),
+        near_vm_runner::VMResult::Aborted(_, _) => anyhow::bail!("Run contract abort!"),
     }
 }
