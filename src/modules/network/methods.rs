@@ -1,4 +1,5 @@
-use jsonrpc_v2::{Error, Params};
+use crate::errors::RPCError;
+use jsonrpc_v2::Params;
 use serde_json::Value;
 
 pub async fn status(
@@ -6,9 +7,11 @@ pub async fn status(
 ) -> Result<
     near_jsonrpc_primitives::types::status::RpcStatusResponse,
     // near_jsonrpc_primitives::types::status::RpcStatusError,
-    Error,
+    RPCError,
 > {
-    unreachable!("This method is not implemented yet")
+    Err(RPCError::unimplemented_error(
+        "This method is not implemented yet",
+    ))
 }
 
 pub async fn network_info(
@@ -16,9 +19,11 @@ pub async fn network_info(
 ) -> Result<
     near_jsonrpc_primitives::types::network_info::RpcNetworkInfoResponse,
     // near_jsonrpc_primitives::types::network_info::RpcNetworkInfoError,
-    Error,
+    RPCError,
 > {
-    unreachable!("This method is not implemented yet")
+    Err(RPCError::unimplemented_error(
+        "This method is not implemented yet",
+    ))
 }
 
 pub async fn validators(
@@ -26,7 +31,9 @@ pub async fn validators(
 ) -> Result<
     near_jsonrpc_primitives::types::validator::RpcValidatorResponse,
     // near_jsonrpc_primitives::types::validator::RpcValidatorError,
-    Error,
+    RPCError,
 > {
-    unreachable!("This method is not implemented yet")
+    Err(RPCError::unimplemented_error(
+        "This method is not implemented yet",
+    ))
 }

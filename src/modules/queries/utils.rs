@@ -202,6 +202,7 @@ pub async fn run_contract(
     redis_client: redis::aio::ConnectionManager,
     block_height: near_primitives::types::BlockHeight,
     timestamp: u64,
+    latest_protocol_version: near_primitives::types::ProtocolVersion,
 ) -> anyhow::Result<near_vm_logic::VMOutcome> {
     let contract =
         fetch_account_from_redis(redis_client.clone(), &account_id, block_height).await?;
@@ -221,7 +222,7 @@ pub async fn run_contract(
         storage_usage: contract.storage_usage(),
         attached_deposit: 0,
         prepaid_gas: 0,
-        random_seed: vec![],
+        random_seed: vec![], // TODO: test the contracts where random is used.
         view_config: Some(near_primitives_core::config::ViewConfig {
             max_gas_burnt: 300_000_000_000_000, // TODO: extract it into a configuration option
         }),
@@ -238,7 +239,7 @@ pub async fn run_contract(
             &near_vm_logic::VMConfig::test(),
             &near_primitives_core::runtime::fees::RuntimeFeesConfig::test(),
             &[],
-            55,
+            latest_protocol_version,
             None,
         )
     })

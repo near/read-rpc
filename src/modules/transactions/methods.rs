@@ -1,4 +1,5 @@
-use jsonrpc_v2::{Error, Params};
+use crate::errors::RPCError;
+use jsonrpc_v2::Params;
 use serde_json::Value;
 
 pub async fn send_tx_async(
@@ -7,9 +8,11 @@ pub async fn send_tx_async(
 ) -> Result<
     Value,
     // CryptoHash,
-    Error,
+    RPCError,
 > {
-    unreachable!("This method is not implemented yet")
+    Err(RPCError::unimplemented_error(
+        "This method is not implemented yet",
+    ))
 }
 
 pub async fn send_tx_commit(
@@ -18,9 +21,11 @@ pub async fn send_tx_commit(
 ) -> Result<
     near_jsonrpc_primitives::types::transactions::RpcTransactionResponse,
     // near_jsonrpc_primitives::types::transactions::RpcTransactionError,
-    Error,
+    RPCError,
 > {
-    unreachable!("This method is not implemented yet")
+    Err(RPCError::unimplemented_error(
+        "This method is not implemented yet",
+    ))
 }
 
 pub async fn tx_status_common(
@@ -31,7 +36,9 @@ pub async fn tx_status_common(
 ) -> Result<
     near_jsonrpc_primitives::types::transactions::RpcTransactionResponse,
     // near_jsonrpc_primitives::types::transactions::RpcTransactionError,
-    Error,
+    RPCError,
 > {
-    unreachable!("This method is not implemented yet")
+    Err(RPCError::unimplemented_error(
+        "This method is not implemented yet",
+    ))
 }

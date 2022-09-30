@@ -64,6 +64,7 @@ pub struct CodeStorage {
     block_height: near_primitives::types::BlockHeight,
     validators:
         HashMap<near_primitives_core::types::AccountId, near_primitives_core::types::Balance>,
+    data_count: u64,
 }
 
 pub struct StorageValuePtr {
@@ -91,13 +92,18 @@ impl CodeStorage {
             account_id,
             block_height,
             validators: Default::default(), // TODO: Should be store list of validators in the current epoch.
+            data_count: Default::default(), // TODO: Using for generate_data_id
         }
     }
 }
 
 impl near_vm_logic::External for CodeStorage {
     fn storage_set(&mut self, _key: &[u8], _value: &[u8]) -> Result<()> {
-        unimplemented!("Method not available for view calls")
+        Err(near_vm_logic::VMLogicError::HostError(
+            near_vm_logic::HostError::ProhibitedInView {
+                method_name: String::from("storage_set"),
+            },
+        ))
     }
 
     fn storage_get(&self, key: &[u8]) -> Result<Option<Box<dyn near_vm_logic::ValuePtr>>> {
@@ -117,11 +123,19 @@ impl near_vm_logic::External for CodeStorage {
     }
 
     fn storage_remove(&mut self, _key: &[u8]) -> Result<()> {
-        unimplemented!("Method not available for view calls")
+        Err(near_vm_logic::VMLogicError::HostError(
+            near_vm_logic::HostError::ProhibitedInView {
+                method_name: String::from("storage_remove"),
+            },
+        ))
     }
 
     fn storage_remove_subtree(&mut self, _prefix: &[u8]) -> Result<()> {
-        unimplemented!("Method not available for view calls")
+        Err(near_vm_logic::VMLogicError::HostError(
+            near_vm_logic::HostError::ProhibitedInView {
+                method_name: String::from("storage_remove_subtree"),
+            },
+        ))
     }
 
     fn storage_has_key(&mut self, key: &[u8]) -> Result<bool> {
@@ -137,7 +151,12 @@ impl near_vm_logic::External for CodeStorage {
     }
 
     fn generate_data_id(&mut self) -> near_primitives::hash::CryptoHash {
-        unimplemented!("Method not available for view calls")
+        // TODO: Should be improvement in future
+        // Generates some hash for the data ID to receive data.
+        // This hash should not be functionality
+        let data_id = near_primitives::hash::hash(&self.data_count.to_le_bytes());
+        self.data_count += 1;
+        data_id
     }
 
     fn get_trie_nodes_count(&self) -> near_primitives::types::TrieNodesCount {
@@ -155,6 +174,12 @@ impl near_vm_logic::External for CodeStorage {
     }
 
     fn validator_total_stake(&self) -> Result<near_primitives::types::Balance> {
-        Ok(self.validators.values().sum())
+        // TODO: Should be works after implementing validators. See comment above.
+        // Ok(self.validators.values().sum())
+        Err(near_vm_logic::VMLogicError::HostError(
+            near_vm_logic::HostError::ProhibitedInView {
+                method_name: String::from("validator_total_stake"),
+            },
+        ))
     }
 }
