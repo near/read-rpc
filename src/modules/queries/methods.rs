@@ -64,6 +64,7 @@ async fn function_call(
         data.redis_client.clone(),
         block.header.height,
         block.header.timestamp,
+        block.header.latest_protocol_version,
     )
     .await?;
     match call_results.return_data.as_value() {
@@ -213,8 +214,8 @@ pub async fn query(
                 }
             }
         }
-        near_primitives::views::QueryRequest::ViewAccessKeyList { account_id: _ } => {
-            unimplemented!("ViewAccessKeyList - Unimplemented")
-        }
+        near_primitives::views::QueryRequest::ViewAccessKeyList { account_id: _ } => Err(
+            RPCError::unimplemented_error("ViewAccessKeyList - Unimplemented"),
+        ),
     }
 }
