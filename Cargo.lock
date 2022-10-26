@@ -1648,16 +1648,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gethostname"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1ebd34e35c46e00bb73e81363248d627782724609fe1b6396f553f68fe3862e"
-dependencies = [
- "libc",
- "winapi",
-]
-
-[[package]]
 name = "getrandom"
 version = "0.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1984,7 +1974,6 @@ dependencies = [
  "anyhow",
  "aws-sdk-s3",
  "aws-types",
- "base64",
  "bigdecimal",
  "borsh",
  "clap",
@@ -1996,20 +1985,17 @@ dependencies = [
  "near-jsonrpc-client",
  "near-jsonrpc-primitives",
  "near-primitives",
- "near-primitives-core",
  "near-vm-logic",
  "near-vm-runner",
  "opentelemetry",
  "opentelemetry-jaeger",
  "redis",
- "reqwest",
  "serde",
  "serde_json",
  "sqlx",
  "tokio",
  "tracing",
  "tracing-actix-web",
- "tracing-bunyan-formatter",
  "tracing-opentelemetry",
  "tracing-subscriber",
 ]
@@ -4187,6 +4173,7 @@ dependencies = [
  "signal-hook-registry",
  "socket2",
  "tokio-macros",
+ "tracing",
  "winapi",
 ]
 
@@ -4411,23 +4398,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "tracing-bunyan-formatter"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a788f2119fde477cd33823330c14004fa8cdac6892fd6f12181bbda9dbf14fc9"
-dependencies = [
- "gethostname",
- "log",
- "serde",
- "serde_json",
- "time 0.3.11",
- "tracing",
- "tracing-core",
- "tracing-log",
- "tracing-subscriber",
 ]
 
 [[package]]
