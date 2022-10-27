@@ -19,6 +19,7 @@ erased-serde = "0.3.23"
 futures = "0.3.24"
 http = "0.2.8"
 jsonrpc-v2 = { git  = "https://github.com/kobayurii/jsonrpc-v2", rev = "95e7b1d2567ae841163af212a3f25abb6862becb" }
+shared_lru = "0.1.5"
 near-jsonrpc-client = { git = "https://github.com/kobayurii/near-jsonrpc-client-rs", rev = "16415cbf8bd7465683141fe65d18b1e4dea05360"}
 near-jsonrpc-primitives = { git = "https://github.com/near/nearcore", rev = "a33205ad1059cbbba94778ce09e729c58532c7e2" }
 near-primitives = { git = "https://github.com/near/nearcore", rev = "a33205ad1059cbbba94778ce09e729c58532c7e2" }

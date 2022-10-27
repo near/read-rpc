@@ -1,4 +1,8 @@
+use crate::config::ServerContext;
+use crate::modules::blocks::methods::fetch_block;
+use crate::modules::blocks::CacheBlock;
 use bigdecimal::ToPrimitive;
+use std::ops::Deref;
 
 #[tracing::instrument(skip(s3_client))]
 pub async fn fetch_block_from_s3(
@@ -83,4 +87,33 @@ pub async fn fetch_latest_block_height_from_redis(
         .arg("latest_block_height")
         .query_async(&mut redis_client.clone())
         .await?)
+}
+
+#[tracing::instrument(skip(data))]
+pub async fn fetch_block_from_cache_or_get(
+    data: &jsonrpc_v2::Data<ServerContext>,
+    block_reference: near_primitives::types::BlockReference,
+) -> CacheBlock {
+    let block = match block_reference.clone() {
+        near_primitives::types::BlockReference::BlockId(block_id) => match block_id {
+            near_primitives::types::BlockId::Height(block_height) => data.cache.get(&block_height),
+            _ => None,
+        },
+        _ => None,
+    };
+    match block {
+        Some(block) => *block.deref(),
+        None => {
+            let block_from_s3 = fetch_block(data, block_reference).await.unwrap();
+            let block = CacheBlock {
+                block_hash: block_from_s3.header.hash,
+                block_height: block_from_s3.header.height,
+                block_timestamp: block_from_s3.header.timestamp,
+                latest_protocol_version: block_from_s3.header.latest_protocol_version,
+            };
+
+            data.cache.insert(block_from_s3.header.height, block);
+            block
+        }
+    }
 }

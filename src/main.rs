@@ -46,6 +46,8 @@ async fn main() -> std::io::Result<()> {
     dotenv().ok();
     init_logging();
     let opts: Opts = Opts::parse();
+    let shared_cache = shared_lru::SharedLru::with_byte_limit(1024 * 1024 + 512);
+    let cache = shared_cache.make_cache();
     let state = ServerContext {
         s3_client: prepare_s3_client(
             &opts.access_key_id,
@@ -57,6 +59,7 @@ async fn main() -> std::io::Result<()> {
         redis_client: prepare_redis_client(&opts.redis_url).await,
         near_rpc_client: near_jsonrpc_client::JsonRpcClient::connect(opts.rpc_url.to_string()),
         s3_bucket_name: opts.s3_bucket_name,
+        cache,
     };
 
     let rpc = Server::new()
