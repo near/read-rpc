@@ -3,6 +3,7 @@ use config::{Opts, ServerContext};
 use dotenv::dotenv;
 use jsonrpc_v2::{Data, Server};
 use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 use utils::{prepare_db_client, prepare_redis_client, prepare_s3_client};
 
 mod config;
@@ -20,8 +21,8 @@ fn init_logging() {
     );
     let tracer = opentelemetry_jaeger::new_pipeline()
         .with_service_name(app_name)
-        .install_batch(opentelemetry::runtime::TokioCurrentThread)
-        .expect("Failed to install OpenTelemetry tracer.");
+        .install_simple()
+        .unwrap();
 
     // Filter based on level - trace, debug, info, warn, error
     // Tunable via `RUST_LOG` env variable
@@ -29,17 +30,15 @@ fn init_logging() {
         .unwrap_or(tracing_subscriber::EnvFilter::new("info"));
     // Create a `tracing` layer using the Jaeger tracer
     let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
-    // Create a `tracing` layer to emit spans as structured logs to stdout
-    let formatting_layer =
-        tracing_bunyan_formatter::BunyanFormattingLayer::new(app_name.into(), std::io::stdout);
+
     // Combined them all together in a `tracing` subscriber
-    let subscriber = tracing_subscriber::Registry::default()
+    // let subscriber = tracing_subscriber::Registry::default()
+    tracing_subscriber::Registry::default()
         .with(env_filter)
         .with(telemetry)
-        .with(tracing_bunyan_formatter::JsonStorageLayer)
-        .with(formatting_layer);
-    tracing::subscriber::set_global_default(subscriber)
-        .expect("Failed to install `tracing` subscriber.")
+        .with(tracing_subscriber::fmt::Layer::default())
+        .try_init()
+        .expect("Failed to install `tracing` subscriber.");
 }
 
 #[tokio::main]

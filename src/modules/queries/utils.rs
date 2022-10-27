@@ -6,6 +6,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use std::collections::HashMap;
 use tokio::task;
 
+#[tracing::instrument(skip(redis_client))]
 pub async fn fetch_block_hash_from_redis(
     scope: &[u8],
     redis_client: redis::aio::ConnectionManager,
@@ -34,6 +35,7 @@ pub async fn fetch_block_hash_from_redis(
     }
 }
 
+#[tracing::instrument(skip(redis_client))]
 async fn fetch_data_from_redis(
     scope: &[u8],
     redis_client: redis::aio::ConnectionManager,
@@ -66,6 +68,7 @@ async fn fetch_data_from_redis(
     }
 }
 
+#[tracing::instrument(skip(redis_client))]
 pub async fn get_redis_stata_keys(
     scope: &[u8],
     redis_client: redis::aio::ConnectionManager,
@@ -116,12 +119,13 @@ pub async fn get_redis_stata_keys(
     data
 }
 
+#[tracing::instrument(skip(redis_client))]
 pub async fn fetch_access_key_from_redis(
     redis_client: redis::aio::ConnectionManager,
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
     key_data: Vec<u8>,
-) -> anyhow::Result<near_primitives_core::account::AccessKey> {
+) -> anyhow::Result<near_primitives::account::AccessKey> {
     tracing::debug!(target: "jsonrpc - query", "call fetch_access_key_from_redis");
     let access_key_from_redis = fetch_data_from_redis(
         ACCESS_KEY_SCOPE,
@@ -131,11 +135,12 @@ pub async fn fetch_access_key_from_redis(
         Some(&key_data),
     )
     .await;
-    Ok(near_primitives_core::account::AccessKey::try_from_slice(
+    Ok(near_primitives::account::AccessKey::try_from_slice(
         &access_key_from_redis,
     )?)
 }
 
+#[tracing::instrument(skip(redis_client))]
 pub async fn fetch_code_from_redis(
     redis_client: redis::aio::ConnectionManager,
     account_id: &near_primitives::types::AccountId,
@@ -149,24 +154,26 @@ pub async fn fetch_code_from_redis(
     } else {
         Ok(near_primitives::contract::ContractCode::new(
             code_data_from_redis,
-            None,
+            None, // TODO: there is an opportunity for optimization when the hash is passed as it won’t need to be calculated.
         ))
     }
 }
 
+#[tracing::instrument(skip(redis_client))]
 pub async fn fetch_account_from_redis(
     redis_client: redis::aio::ConnectionManager,
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
-) -> anyhow::Result<near_primitives_core::account::Account> {
+) -> anyhow::Result<near_primitives::account::Account> {
     tracing::debug!(target: "jsonrpc - query", "call fetch_account_from_redis");
     let account_from_redis =
         fetch_data_from_redis(ACCOUNT_SCOPE, redis_client, account_id, block_height, None).await;
-    Ok(near_primitives_core::account::Account::try_from_slice(
+    Ok(near_primitives::account::Account::try_from_slice(
         &account_from_redis,
     )?)
 }
 
+#[tracing::instrument(skip(redis_client))]
 pub async fn fetch_state_from_redis(
     redis_client: redis::aio::ConnectionManager,
     account_id: &near_primitives::types::AccountId,
@@ -195,6 +202,40 @@ pub async fn fetch_state_from_redis(
     }
 }
 
+#[tracing::instrument(skip(redis_client, context, contract_code))]
+async fn run_code_in_vm_runner(
+    contract_code: near_primitives::contract::ContractCode,
+    method_name: &str,
+    context: near_vm_logic::VMContext,
+    account_id: near_primitives::types::AccountId,
+    block_height: near_primitives::types::BlockHeight,
+    redis_client: redis::aio::ConnectionManager,
+    latest_protocol_version: near_primitives::types::ProtocolVersion,
+) -> anyhow::Result<near_vm_logic::VMOutcome> {
+    let contract_method_name = String::from(method_name);
+    let mut external = CodeStorage::init(redis_client.clone(), account_id, block_height);
+
+    let results = task::spawn_blocking(move || {
+        near_vm_runner::run(
+            &contract_code,
+            &contract_method_name,
+            &mut external,
+            context,
+            &near_vm_logic::VMConfig::test(),
+            &near_primitives::runtime::fees::RuntimeFeesConfig::test(),
+            &[],
+            latest_protocol_version,
+            None,
+        )
+    })
+    .await?;
+    match results {
+        near_vm_runner::VMResult::Ok(result) => Ok(result),
+        near_vm_runner::VMResult::Aborted(_, _) => anyhow::bail!("Run contract abort!"),
+    }
+}
+
+#[tracing::instrument(skip(redis_client))]
 pub async fn run_contract(
     account_id: near_primitives::types::AccountId,
     method_name: &str,
@@ -223,29 +264,19 @@ pub async fn run_contract(
         attached_deposit: 0,
         prepaid_gas: 0,
         random_seed: vec![], // TODO: test the contracts where random is used.
-        view_config: Some(near_primitives_core::config::ViewConfig {
+        view_config: Some(near_primitives::config::ViewConfig {
             max_gas_burnt: 300_000_000_000_000, // TODO: extract it into a configuration option
         }),
         output_data_receivers: vec![],
     };
-    let contract_method_name = String::from(method_name);
-    let mut external = CodeStorage::init(redis_client.clone(), account_id, block_height);
-    let results = task::spawn_blocking(move || {
-        near_vm_runner::run(
-            &contract_code,
-            &contract_method_name,
-            &mut external,
-            context,
-            &near_vm_logic::VMConfig::test(),
-            &near_primitives_core::runtime::fees::RuntimeFeesConfig::test(),
-            &[],
-            latest_protocol_version,
-            None,
-        )
-    })
-    .await?;
-    match results {
-        near_vm_runner::VMResult::Ok(result) => Ok(result),
-        near_vm_runner::VMResult::Aborted(_, _) => anyhow::bail!("Run contract abort!"),
-    }
+    run_code_in_vm_runner(
+        contract_code,
+        method_name,
+        context,
+        account_id,
+        block_height,
+        redis_client,
+        latest_protocol_version,
+    )
+    .await
 }
