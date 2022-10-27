@@ -96,15 +96,27 @@ pub async fn fetch_block_from_cache_or_get(
 ) -> CacheBlock {
     let block = match block_reference.clone() {
         near_primitives::types::BlockReference::BlockId(block_id) => match block_id {
-            near_primitives::types::BlockId::Height(block_height) => data.cache.get(&block_height),
-            _ => None,
+            near_primitives::types::BlockId::Height(block_height) => {
+                data.blocks_cache.get(&block_height)
+            }
+            near_primitives::types::BlockId::Hash(_) => None,
         },
-        _ => None,
+        near_primitives::types::BlockReference::Finality(_) => {
+            // Returns the final_block_height for all the finalities.
+            let block_height = &data
+                .final_block_height
+                .load(std::sync::atomic::Ordering::SeqCst);
+            data.blocks_cache.get(block_height)
+        }
+        // TODO: return the height of the first block height from S3 (cache it once on the start)
+        near_primitives::types::BlockReference::SyncCheckpoint(_) => None,
     };
     match block {
         Some(block) => *block.deref(),
         None => {
-            let block_from_s3 = fetch_block(data, block_reference).await.unwrap();
+            let block_from_s3 = fetch_block(data, block_reference)
+                .await
+                .expect("Error to fetch block");
             let block = CacheBlock {
                 block_hash: block_from_s3.header.hash,
                 block_height: block_from_s3.header.height,
@@ -112,7 +124,7 @@ pub async fn fetch_block_from_cache_or_get(
                 latest_protocol_version: block_from_s3.header.latest_protocol_version,
             };
 
-            data.cache.insert(block_from_s3.header.height, block);
+            data.blocks_cache.insert(block_from_s3.header.height, block);
             block
         }
     }
