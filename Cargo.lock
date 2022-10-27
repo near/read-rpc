@@ -1227,6 +1227,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "dashmap"
+version = "4.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e77a43b28d0668df09411cb0bc9a8c2adc40f9a048afe863e05fd43251e8e39c"
+dependencies = [
+ "cfg-if 1.0.0",
+ "num_cpus",
+]
+
+[[package]]
 name = "derive_more"
 version = "0.99.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1992,6 +2002,7 @@ dependencies = [
  "redis",
  "serde",
  "serde_json",
+ "shared_lru",
  "sqlx",
  "tokio",
  "tracing",
@@ -3766,6 +3777,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "900fba806f70c630b0a382d0d825e17a0f19fcd059a2ade1ff237bcddf446b31"
 dependencies = [
  "lazy_static",
+]
+
+[[package]]
+name = "shared_lru"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "02c432c86231fb888eeb80234fbffcb089055bca591cd98f7fae4078e490e19b"
+dependencies = [
+ "dashmap",
+ "log",
+ "lru",
+ "rand 0.8.5",
 ]
 
 [[package]]

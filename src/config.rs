@@ -1,3 +1,4 @@
+use crate::modules::blocks::CacheBlock;
 use clap::Parser;
 
 #[derive(Parser)]
@@ -42,4 +43,5 @@ pub struct ServerContext {
     pub redis_client: redis::aio::ConnectionManager,
     pub near_rpc_client: near_jsonrpc_client::JsonRpcClient,
     pub s3_bucket_name: String,
+    pub cache: shared_lru::LruCache<u64, CacheBlock>,
 }
