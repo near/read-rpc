@@ -54,6 +54,7 @@ pub async fn update_final_block_height_regularly(
     final_block_height: std::sync::Arc<std::sync::atomic::AtomicU64>,
     blocks_cache: std::sync::Arc<shared_lru::LruCache<u64, CacheBlock>>,
     near_rpc_client: near_jsonrpc_client::JsonRpcClient,
+    shutdown: std::sync::Arc<std::sync::atomic::AtomicBool>,
 ) {
     tracing::info!("Task to get and store final block in the cache started");
     loop {
@@ -65,10 +66,8 @@ pub async fn update_final_block_height_regularly(
             None => tracing::warn!("Error to get final block!"),
         };
         std::thread::sleep(std::time::Duration::from_secs(1));
-
-        match tokio::signal::ctrl_c().await {
-            Ok(()) => break,
-            Err(err) => tracing::warn!("Unable to listen for shutdown signal: {}", err)
+        if shutdown.load(std::sync::atomic::Ordering::Relaxed) {
+            break;
         }
     }
 }
