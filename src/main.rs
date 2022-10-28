@@ -1,10 +1,13 @@
+use crate::utils::get_final_cache_block;
 use clap::Parser;
 use config::{Opts, ServerContext};
 use dotenv::dotenv;
 use jsonrpc_v2::{Data, Server};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use utils::{prepare_db_client, prepare_redis_client, prepare_s3_client};
+use utils::{
+    prepare_db_client, prepare_redis_client, prepare_s3_client, update_final_block_height_regularly,
+};
 
 mod config;
 mod errors;
@@ -46,8 +49,18 @@ async fn main() -> std::io::Result<()> {
     dotenv().ok();
     init_logging();
     let opts: Opts = Opts::parse();
+
+    let near_rpc_client = near_jsonrpc_client::JsonRpcClient::connect(opts.rpc_url.to_string());
+
+    let final_block = get_final_cache_block(&near_rpc_client)
+        .await
+        .expect("Error to get final block");
+    let final_block_height =
+        std::sync::Arc::new(std::sync::atomic::AtomicU64::new(final_block.block_height));
     let shared_cache = shared_lru::SharedLru::with_byte_limit(1024 * 1024 + 512);
-    let cache = shared_cache.make_cache();
+    let blocks_cache = std::sync::Arc::new(shared_cache.make_cache());
+    blocks_cache.insert(final_block.block_height, final_block);
+
     let state = ServerContext {
         s3_client: prepare_s3_client(
             &opts.access_key_id,
@@ -57,10 +70,20 @@ async fn main() -> std::io::Result<()> {
         .await,
         db_client: prepare_db_client(&opts.database_url).await,
         redis_client: prepare_redis_client(&opts.redis_url).await,
-        near_rpc_client: near_jsonrpc_client::JsonRpcClient::connect(opts.rpc_url.to_string()),
+        near_rpc_client: near_rpc_client.clone(),
         s3_bucket_name: opts.s3_bucket_name,
-        cache,
+        blocks_cache: std::sync::Arc::clone(&blocks_cache),
+        final_block_height: std::sync::Arc::clone(&final_block_height),
     };
+
+    tokio::spawn(async move {
+        update_final_block_height_regularly(
+            final_block_height.clone(),
+            std::sync::Arc::clone(&blocks_cache),
+            near_rpc_client,
+        )
+        .await
+    });
 
     let rpc = Server::new()
         .with_data(Data::new(state))

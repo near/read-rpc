@@ -43,5 +43,6 @@ pub struct ServerContext {
     pub redis_client: redis::aio::ConnectionManager,
     pub near_rpc_client: near_jsonrpc_client::JsonRpcClient,
     pub s3_bucket_name: String,
-    pub cache: shared_lru::LruCache<u64, CacheBlock>,
+    pub blocks_cache: std::sync::Arc<shared_lru::LruCache<u64, CacheBlock>>,
+    pub final_block_height: std::sync::Arc<std::sync::atomic::AtomicU64>,
 }
