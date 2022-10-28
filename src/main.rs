@@ -76,11 +76,15 @@ async fn main() -> std::io::Result<()> {
         final_block_height: std::sync::Arc::clone(&final_block_height),
     };
 
+    let shutdown = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let shutdown_task = std::sync::Arc::clone(&shutdown);
+
     tokio::spawn(async move {
         update_final_block_height_regularly(
             final_block_height.clone(),
             std::sync::Arc::clone(&blocks_cache),
             near_rpc_client,
+            shutdown_task,
         )
         .await
     });
@@ -117,5 +121,9 @@ async fn main() -> std::io::Result<()> {
     })
     .bind(format!("0.0.0.0:{:0>5}", opts.server_port))?
     .run()
-    .await
+    .await?;
+
+    shutdown.store(true, std::sync::atomic::Ordering::Relaxed);
+
+    Ok(())
 }
