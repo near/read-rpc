@@ -47,7 +47,7 @@ fn init_logging() {
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     dotenv().ok();
-    init_logging();
+    // init_logging();
     let opts: Opts = Opts::parse();
 
     let near_rpc_client = near_jsonrpc_client::JsonRpcClient::connect(opts.rpc_url.to_string());
@@ -120,6 +120,7 @@ async fn main() -> std::io::Result<()> {
             )
     })
     .bind(format!("0.0.0.0:{:0>5}", opts.server_port))?
+    .workers(12)
     .run()
     .await?;
 

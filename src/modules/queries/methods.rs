@@ -10,7 +10,7 @@ use crate::utils::proxy_rpc_call;
 use borsh::BorshSerialize;
 use jsonrpc_v2::{Data, Params};
 
-#[tracing::instrument(skip(data))]
+// #[tracing::instrument(skip(data))]
 async fn view_account(
     data: &Data<ServerContext>,
     block: CacheBlock,
@@ -30,7 +30,7 @@ async fn view_account(
     })
 }
 
-#[tracing::instrument(skip(data))]
+// #[tracing::instrument(skip(data))]
 async fn view_code(
     data: &Data<ServerContext>,
     block: CacheBlock,
@@ -50,7 +50,7 @@ async fn view_code(
     })
 }
 
-#[tracing::instrument(skip(data))]
+// #[tracing::instrument(skip(data))]
 async fn function_call(
     data: &Data<ServerContext>,
     block: CacheBlock,
@@ -83,7 +83,7 @@ async fn function_call(
     }
 }
 
-#[tracing::instrument(skip(data))]
+// #[tracing::instrument(skip(data))]
 async fn view_state(
     data: &Data<ServerContext>,
     block: CacheBlock,
@@ -107,7 +107,7 @@ async fn view_state(
     })
 }
 
-#[tracing::instrument(skip(data))]
+// #[tracing::instrument(skip(data))]
 async fn view_access_key(
     data: &Data<ServerContext>,
     block: CacheBlock,
@@ -133,7 +133,7 @@ async fn view_access_key(
     })
 }
 
-#[tracing::instrument(skip(data))]
+// #[tracing::instrument(skip(data))]
 pub async fn query(
     data: Data<ServerContext>,
     Params(params): Params<near_jsonrpc_primitives::types::query::RpcQueryRequest>,

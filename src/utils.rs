@@ -25,7 +25,7 @@ pub async fn prepare_redis_client(redis_url: &str) -> redis::aio::ConnectionMana
         .unwrap()
 }
 
-#[tracing::instrument(skip(params))]
+// #[tracing::instrument(skip(params))]
 pub async fn proxy_rpc_call<M>(
     client: &near_jsonrpc_client::JsonRpcClient,
     params: M,

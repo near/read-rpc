@@ -6,7 +6,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use std::collections::HashMap;
 use tokio::task;
 
-#[tracing::instrument(skip(redis_client))]
+// #[tracing::instrument(skip(redis_client))]
 pub async fn fetch_block_hash_from_redis(
     scope: &[u8],
     redis_client: redis::aio::ConnectionManager,
@@ -35,7 +35,7 @@ pub async fn fetch_block_hash_from_redis(
     }
 }
 
-#[tracing::instrument(skip(redis_client))]
+// #[tracing::instrument(skip(redis_client))]
 async fn fetch_data_from_redis(
     scope: &[u8],
     redis_client: redis::aio::ConnectionManager,
@@ -68,7 +68,7 @@ async fn fetch_data_from_redis(
     }
 }
 
-#[tracing::instrument(skip(redis_client))]
+// #[tracing::instrument(skip(redis_client))]
 pub async fn get_redis_stata_keys(
     scope: &[u8],
     redis_client: redis::aio::ConnectionManager,
@@ -119,7 +119,7 @@ pub async fn get_redis_stata_keys(
     data
 }
 
-#[tracing::instrument(skip(redis_client))]
+// #[tracing::instrument(skip(redis_client))]
 pub async fn fetch_access_key_from_redis(
     redis_client: redis::aio::ConnectionManager,
     account_id: &near_primitives::types::AccountId,
@@ -140,7 +140,7 @@ pub async fn fetch_access_key_from_redis(
     )?)
 }
 
-#[tracing::instrument(skip(redis_client))]
+// #[tracing::instrument(skip(redis_client))]
 pub async fn fetch_code_from_redis(
     redis_client: redis::aio::ConnectionManager,
     account_id: &near_primitives::types::AccountId,
@@ -159,7 +159,7 @@ pub async fn fetch_code_from_redis(
     }
 }
 
-#[tracing::instrument(skip(redis_client))]
+// #[tracing::instrument(skip(redis_client))]
 pub async fn fetch_account_from_redis(
     redis_client: redis::aio::ConnectionManager,
     account_id: &near_primitives::types::AccountId,
@@ -173,7 +173,7 @@ pub async fn fetch_account_from_redis(
     )?)
 }
 
-#[tracing::instrument(skip(redis_client))]
+// #[tracing::instrument(skip(redis_client))]
 pub async fn fetch_state_from_redis(
     redis_client: redis::aio::ConnectionManager,
     account_id: &near_primitives::types::AccountId,
@@ -202,7 +202,7 @@ pub async fn fetch_state_from_redis(
     }
 }
 
-#[tracing::instrument(skip(redis_client, context, contract_code))]
+// #[tracing::instrument(skip(redis_client, context, contract_code))]
 async fn run_code_in_vm_runner(
     contract_code: near_primitives::contract::ContractCode,
     method_name: &str,
@@ -235,7 +235,7 @@ async fn run_code_in_vm_runner(
     }
 }
 
-#[tracing::instrument(skip(redis_client))]
+// #[tracing::instrument(skip(redis_client))]
 pub async fn run_contract(
     account_id: near_primitives::types::AccountId,
     method_name: &str,
@@ -245,10 +245,11 @@ pub async fn run_contract(
     timestamp: u64,
     latest_protocol_version: near_primitives::types::ProtocolVersion,
 ) -> anyhow::Result<near_vm_logic::VMOutcome> {
-    let contract =
-        fetch_account_from_redis(redis_client.clone(), &account_id, block_height).await?;
-    let contract_code =
-        fetch_code_from_redis(redis_client.clone(), &account_id, block_height).await?;
+    let contract_future =
+        fetch_account_from_redis(redis_client.clone(), &account_id, block_height);
+    let contract_code_future =
+        fetch_code_from_redis(redis_client.clone(), &account_id, block_height);
+    let (contract, contract_code) = tokio::try_join!(contract_future, contract_code_future)?;
     let context = near_vm_logic::VMContext {
         current_account_id: account_id.parse().unwrap(),
         signer_account_id: account_id.parse().unwrap(),
