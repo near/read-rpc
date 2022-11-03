@@ -4,6 +4,7 @@ use crate::modules::blocks::utils::{
     fetch_block_from_s3, fetch_block_height_from_db, fetch_latest_block_height_from_db,
     fetch_latest_block_height_from_redis,
 };
+use crate::utils::proxy_rpc_call;
 use jsonrpc_v2::{Data, Params};
 
 #[tracing::instrument(skip(data))]
@@ -48,7 +49,7 @@ pub async fn block(
         }
         Err(_) => {
             tracing::debug!(target: "jsonrpc - block", "Block not found. Proxy to near rpc");
-            let block_view = data.near_rpc_client.call(params).await?;
+            let block_view = proxy_rpc_call(&data.near_rpc_client, params).await?;
             Ok(near_jsonrpc_primitives::types::blocks::RpcBlockResponse { block_view })
         }
     }
