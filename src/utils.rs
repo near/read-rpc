@@ -25,6 +25,17 @@ pub async fn prepare_redis_client(redis_url: &str) -> redis::aio::ConnectionMana
         .unwrap()
 }
 
+#[tracing::instrument(skip(params))]
+pub async fn proxy_rpc_call<M>(
+    client: &near_jsonrpc_client::JsonRpcClient,
+    params: M,
+) -> near_jsonrpc_client::MethodCallResult<M::Response, M::Error>
+where
+    M: near_jsonrpc_client::methods::RpcMethod,
+{
+    client.call(params).await
+}
+
 async fn get_final_block(
     near_rpc_client: &near_jsonrpc_client::JsonRpcClient,
 ) -> anyhow::Result<near_jsonrpc_client::methods::block::RpcBlockResponse> {

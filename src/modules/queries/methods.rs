@@ -6,6 +6,7 @@ use crate::modules::queries::utils::{
     fetch_access_key_from_redis, fetch_account_from_redis, fetch_code_from_redis,
     fetch_state_from_redis, run_contract,
 };
+use crate::utils::proxy_rpc_call;
 use borsh::BorshSerialize;
 use jsonrpc_v2::{Data, Params};
 
@@ -145,7 +146,7 @@ pub async fn query(
                 Ok(result) => Ok(result),
                 Err(e) => {
                     tracing::debug!(target: "jsonrpc - query - view_account", "Account not found. Proxy to near rpc: {:?}", e);
-                    Ok(data.near_rpc_client.call(params).await?)
+                    Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
                 }
             }
         }
@@ -154,7 +155,7 @@ pub async fn query(
                 Ok(result) => Ok(result),
                 Err(e) => {
                     tracing::debug!(target: "jsonrpc - query - view_code", "Code not found. Proxy to near rpc: {:?}", e);
-                    Ok(data.near_rpc_client.call(params).await?)
+                    Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
                 }
             }
         }
@@ -167,7 +168,7 @@ pub async fn query(
                 Ok(result) => Ok(result),
                 Err(e) => {
                     tracing::debug!(target: "jsonrpc - query - view_access_key", "Access Key not found. Proxy to near rpc: {:?}", e);
-                    Ok(data.near_rpc_client.call(params).await?)
+                    Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
                 }
             }
         }
@@ -179,7 +180,7 @@ pub async fn query(
             Ok(result) => Ok(result),
             Err(e) => {
                 tracing::debug!(target: "jsonrpc - query - view_state", "State not found. Proxy to near rpc: {:?}", e);
-                Ok(data.near_rpc_client.call(params).await?)
+                Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
             }
         },
         near_primitives::views::QueryRequest::CallFunction {
@@ -190,7 +191,7 @@ pub async fn query(
             Ok(result) => Ok(result),
             Err(e) => {
                 tracing::debug!(target: "jsonrpc - query - function_call", "Result not found. Proxy to near rpc: {:?}", e);
-                Ok(data.near_rpc_client.call(params).await?)
+                Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
             }
         },
         near_primitives::views::QueryRequest::ViewAccessKeyList { account_id: _ } => Err(
