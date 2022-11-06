@@ -48,9 +48,15 @@ pub struct ServerContext {
     pub compiled_contract_code_cache: std::sync::Arc<CompiledCodeCache>,
 }
 
-
 pub struct CompiledCodeCache {
-    pub local_cache: std::sync::Arc<std::sync::Mutex<lru::LruCache<near_primitives::hash::CryptoHash, near_primitives::types::CompiledContract>>>,
+    pub local_cache: std::sync::Arc<
+        std::sync::Mutex<
+            lru::LruCache<
+                near_primitives::hash::CryptoHash,
+                near_primitives::types::CompiledContract,
+            >,
+        >,
+    >,
 }
 
 impl near_primitives::types::CompiledContractCache for CompiledCodeCache {

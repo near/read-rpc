@@ -1,12 +1,12 @@
+use crate::config::CompiledCodeCache;
 use crate::modules::queries::{
     build_redis_block_hash_key, build_redis_data_key, build_redis_state_key, CodeStorage,
     ACCESS_KEY_SCOPE, ACCOUNT_SCOPE, CODE_SCOPE, DATA_SCOPE, MAX_LIMIT,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use std::collections::HashMap;
-use tokio::task;
-use crate::config::CompiledCodeCache;
 use std::ops::Deref;
+use tokio::task;
 
 // #[tracing::instrument(skip(redis_client))]
 pub async fn fetch_block_hash_from_redis(
@@ -221,7 +221,7 @@ async fn run_code_in_vm_runner(
             &contract_code,
             &near_vm_logic::VMConfig::test(),
             latest_protocol_version,
-            Some(code_cache.deref())
+            Some(code_cache.deref()),
         );
         near_vm_runner::run(
             &contract_code,

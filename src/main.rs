@@ -53,17 +53,24 @@ async fn main() -> std::io::Result<()> {
     let opts: Opts = Opts::parse();
 
     let near_rpc_client = near_jsonrpc_client::JsonRpcClient::connect(opts.rpc_url.to_string());
-    let blocks_cache = std::sync::Arc::new(std::sync::Mutex::new(lru::LruCache::new(std::num::NonZeroUsize::new(100000).unwrap())));
+    let blocks_cache = std::sync::Arc::new(std::sync::Mutex::new(lru::LruCache::new(
+        std::num::NonZeroUsize::new(100000).unwrap(),
+    )));
 
     let final_block = get_final_cache_block(&near_rpc_client)
         .await
         .expect("Error to get final block");
     let final_block_height =
         std::sync::Arc::new(std::sync::atomic::AtomicU64::new(final_block.block_height));
-    blocks_cache.lock().unwrap().put(final_block.block_height, final_block);
+    blocks_cache
+        .lock()
+        .unwrap()
+        .put(final_block.block_height, final_block);
 
     let compiled_contract_code_cache = std::sync::Arc::new(CompiledCodeCache {
-        local_cache: std::sync::Arc::new(std::sync::Mutex::new(lru::LruCache::new(std::num::NonZeroUsize::new(128).unwrap()))),
+        local_cache: std::sync::Arc::new(std::sync::Mutex::new(lru::LruCache::new(
+            std::num::NonZeroUsize::new(128).unwrap(),
+        ))),
     });
     let state = ServerContext {
         s3_client: prepare_s3_client(
