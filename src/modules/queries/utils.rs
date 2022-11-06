@@ -5,6 +5,8 @@ use crate::modules::queries::{
 use borsh::{BorshDeserialize, BorshSerialize};
 use std::collections::HashMap;
 use tokio::task;
+use crate::config::CompiledCodeCache;
+use std::ops::Deref;
 
 // #[tracing::instrument(skip(redis_client))]
 pub async fn fetch_block_hash_from_redis(
@@ -141,21 +143,18 @@ pub async fn fetch_access_key_from_redis(
 }
 
 // #[tracing::instrument(skip(redis_client))]
-pub async fn fetch_code_from_redis(
+pub async fn fetch_contract_code_from_redis(
     redis_client: redis::aio::ConnectionManager,
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
-) -> anyhow::Result<near_primitives::contract::ContractCode> {
+) -> anyhow::Result<Vec<u8>> {
     tracing::debug!(target: "jsonrpc - query", "call fetch_code_from_redis");
     let code_data_from_redis =
         fetch_data_from_redis(CODE_SCOPE, redis_client, account_id, block_height, None).await;
     if code_data_from_redis.is_empty() {
         anyhow::bail!("Data not found in redis")
     } else {
-        Ok(near_primitives::contract::ContractCode::new(
-            code_data_from_redis,
-            None, // TODO: there is an opportunity for optimization when the hash is passed as it won’t need to be calculated.
-        ))
+        Ok(code_data_from_redis)
     }
 }
 
@@ -202,7 +201,7 @@ pub async fn fetch_state_from_redis(
     }
 }
 
-// #[tracing::instrument(skip(redis_client, context, contract_code))]
+// #[tracing::instrument(skip(redis_client, context, contract_code, compiled_contract_code_cache))]
 async fn run_code_in_vm_runner(
     contract_code: near_primitives::contract::ContractCode,
     method_name: &str,
@@ -211,11 +210,19 @@ async fn run_code_in_vm_runner(
     block_height: near_primitives::types::BlockHeight,
     redis_client: redis::aio::ConnectionManager,
     latest_protocol_version: near_primitives::types::ProtocolVersion,
+    compiled_contract_code_cache: &std::sync::Arc<CompiledCodeCache>,
 ) -> anyhow::Result<near_vm_logic::VMOutcome> {
     let contract_method_name = String::from(method_name);
     let mut external = CodeStorage::init(redis_client.clone(), account_id, block_height);
+    let code_cache = std::sync::Arc::clone(compiled_contract_code_cache);
 
     let results = task::spawn_blocking(move || {
+        near_vm_runner::precompile_contract(
+            &contract_code,
+            &near_vm_logic::VMConfig::test(),
+            latest_protocol_version,
+            Some(code_cache.deref())
+        );
         near_vm_runner::run(
             &contract_code,
             &contract_method_name,
@@ -225,7 +232,7 @@ async fn run_code_in_vm_runner(
             &near_primitives::runtime::fees::RuntimeFeesConfig::test(),
             &[],
             latest_protocol_version,
-            None,
+            Some(code_cache.deref()),
         )
     })
     .await?;
@@ -235,28 +242,30 @@ async fn run_code_in_vm_runner(
     }
 }
 
-// #[tracing::instrument(skip(redis_client))]
+// #[tracing::instrument(skip(redis_client, compiled_contract_code_cache))]
 pub async fn run_contract(
     account_id: near_primitives::types::AccountId,
     method_name: &str,
     args: near_primitives::types::FunctionArgs,
     redis_client: redis::aio::ConnectionManager,
+    compiled_contract_code_cache: &std::sync::Arc<CompiledCodeCache>,
     block_height: near_primitives::types::BlockHeight,
     timestamp: u64,
     latest_protocol_version: near_primitives::types::ProtocolVersion,
 ) -> anyhow::Result<near_vm_logic::VMOutcome> {
-    let contract_future =
-        fetch_account_from_redis(redis_client.clone(), &account_id, block_height);
-    let contract_code_future =
-        fetch_code_from_redis(redis_client.clone(), &account_id, block_height);
-    let (contract, contract_code) = tokio::try_join!(contract_future, contract_code_future)?;
+    let contract_future = fetch_account_from_redis(redis_client.clone(), &account_id, block_height);
+    let code_future =
+        fetch_contract_code_from_redis(redis_client.clone(), &account_id, block_height);
+    let (contract, code) = tokio::try_join!(contract_future, code_future)?;
+    let contract_code =
+        near_primitives::contract::ContractCode::new(code, Some(contract.code_hash()));
     let context = near_vm_logic::VMContext {
         current_account_id: account_id.parse().unwrap(),
         signer_account_id: account_id.parse().unwrap(),
         signer_account_pk: vec![],
         predecessor_account_id: account_id.parse().unwrap(),
         input: args.try_to_vec().unwrap(),
-        block_index: block_height,
+        block_height,
         block_timestamp: timestamp,
         epoch_height: 0, // TODO: implement indexing of epoch_height and pass it here
         account_balance: contract.amount(),
@@ -278,6 +287,7 @@ pub async fn run_contract(
         block_height,
         redis_client,
         latest_protocol_version,
+        compiled_contract_code_cache,
     )
     .await
 }

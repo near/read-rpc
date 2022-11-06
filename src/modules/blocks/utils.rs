@@ -2,7 +2,6 @@ use crate::config::ServerContext;
 use crate::modules::blocks::methods::fetch_block;
 use crate::modules::blocks::CacheBlock;
 use bigdecimal::ToPrimitive;
-use std::ops::Deref;
 
 // #[tracing::instrument(skip(s3_client))]
 pub async fn fetch_block_from_s3(
@@ -97,7 +96,7 @@ pub async fn fetch_block_from_cache_or_get(
     let block = match block_reference.clone() {
         near_primitives::types::BlockReference::BlockId(block_id) => match block_id {
             near_primitives::types::BlockId::Height(block_height) => {
-                data.blocks_cache.get(&block_height)
+                data.blocks_cache.lock().unwrap().get(&block_height).map(Clone::clone)
             }
             near_primitives::types::BlockId::Hash(_) => None,
         },
@@ -106,13 +105,13 @@ pub async fn fetch_block_from_cache_or_get(
             let block_height = &data
                 .final_block_height
                 .load(std::sync::atomic::Ordering::SeqCst);
-            data.blocks_cache.get(block_height)
+            data.blocks_cache.lock().unwrap().get(block_height).map(Clone::clone)
         }
         // TODO: return the height of the first block height from S3 (cache it once on the start)
         near_primitives::types::BlockReference::SyncCheckpoint(_) => None,
     };
     match block {
-        Some(block) => *block.deref(),
+        Some(block) => block,
         None => {
             let block_from_s3 = fetch_block(data, block_reference)
                 .await
@@ -124,7 +123,7 @@ pub async fn fetch_block_from_cache_or_get(
                 latest_protocol_version: block_from_s3.header.latest_protocol_version,
             };
 
-            data.blocks_cache.insert(block_from_s3.header.height, block);
+            data.blocks_cache.lock().unwrap().put(block_from_s3.header.height, block);
             block
         }
     }

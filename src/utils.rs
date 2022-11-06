@@ -63,7 +63,7 @@ pub async fn get_final_cache_block(
 
 pub async fn update_final_block_height_regularly(
     final_block_height: std::sync::Arc<std::sync::atomic::AtomicU64>,
-    blocks_cache: std::sync::Arc<shared_lru::LruCache<u64, CacheBlock>>,
+    blocks_cache: std::sync::Arc<std::sync::Mutex<lru::LruCache<u64, CacheBlock>>>,
     near_rpc_client: near_jsonrpc_client::JsonRpcClient,
     shutdown: std::sync::Arc<std::sync::atomic::AtomicBool>,
 ) {
@@ -72,7 +72,7 @@ pub async fn update_final_block_height_regularly(
         match get_final_cache_block(&near_rpc_client).await {
             Some(block) => {
                 final_block_height.store(block.block_height, std::sync::atomic::Ordering::SeqCst);
-                blocks_cache.insert(block.block_height, block);
+                blocks_cache.lock().unwrap().put(block.block_height, block);
             }
             None => tracing::warn!("Error to get final block!"),
         };

@@ -8,5 +8,3 @@ pub struct CacheBlock {
     pub block_timestamp: u64,
     pub latest_protocol_version: near_primitives::types::ProtocolVersion,
 }
-
-impl shared_lru::JustStack for CacheBlock {}

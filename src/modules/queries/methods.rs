@@ -3,7 +3,7 @@ use crate::errors::RPCError;
 use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
 use crate::modules::blocks::CacheBlock;
 use crate::modules::queries::utils::{
-    fetch_access_key_from_redis, fetch_account_from_redis, fetch_code_from_redis,
+    fetch_access_key_from_redis, fetch_account_from_redis, fetch_contract_code_from_redis,
     fetch_state_from_redis, run_contract,
 };
 use crate::utils::proxy_rpc_call;
@@ -37,13 +37,14 @@ async fn view_code(
     account_id: &near_primitives::types::AccountId,
 ) -> anyhow::Result<near_jsonrpc_primitives::types::query::RpcQueryResponse> {
     tracing::debug!(target: "jsonrpc - query - view_code", "call view_code");
-
-    let contract_code =
-        fetch_code_from_redis(data.redis_client.clone(), account_id, block.block_height).await?;
-
+    let code_data_from_redis =
+        fetch_contract_code_from_redis(data.redis_client.clone(), account_id, block.block_height)
+            .await?;
     Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc_primitives::types::query::QueryResponseKind::ViewCode(
-            near_primitives::views::ContractCodeView::from(contract_code),
+            near_primitives::views::ContractCodeView::from(
+                near_primitives::contract::ContractCode::new(code_data_from_redis, None),
+            ),
         ),
         block_height: block.block_height,
         block_hash: block.block_hash,
@@ -63,6 +64,7 @@ async fn function_call(
         method_name,
         args,
         data.redis_client.clone(),
+        &data.compiled_contract_code_cache,
         block.block_height,
         block.block_timestamp,
         block.latest_protocol_version,
