@@ -19,12 +19,12 @@ erased-serde = "0.3.23"
 futures = "0.3.24"
 http = "0.2.8"
 jsonrpc-v2 = { git  = "https://github.com/kobayurii/jsonrpc-v2", rev = "95e7b1d2567ae841163af212a3f25abb6862becb" }
-shared_lru = "0.1.5"
-near-jsonrpc-client = { git = "https://github.com/kobayurii/near-jsonrpc-client-rs", rev = "16415cbf8bd7465683141fe65d18b1e4dea05360"}
-near-jsonrpc-primitives = { git = "https://github.com/near/nearcore", rev = "a33205ad1059cbbba94778ce09e729c58532c7e2" }
-near-primitives = { git = "https://github.com/near/nearcore", rev = "a33205ad1059cbbba94778ce09e729c58532c7e2" }
-near-vm-runner = { git = "https://github.com/near/nearcore", rev = "a33205ad1059cbbba94778ce09e729c58532c7e2" }
-near-vm-logic = { git = "https://github.com/near/nearcore", rev = "a33205ad1059cbbba94778ce09e729c58532c7e2" }
+lru = "0.8.1"
+near-jsonrpc-client = { git = "https://github.com/kobayurii/near-jsonrpc-client-rs", rev = "819326b86c6a49ff4a45405b0746165c392cf0a3"}
+near-jsonrpc-primitives = { git = "https://github.com/near/nearcore", rev = "7d9c73cf5cebdbe738175a769d44e5906c48eca7" }
+near-primitives = { git = "https://github.com/near/nearcore", rev = "7d9c73cf5cebdbe738175a769d44e5906c48eca7" }
+near-vm-runner = { git = "https://github.com/near/nearcore", rev = "7d9c73cf5cebdbe738175a769d44e5906c48eca7" }
+near-vm-logic = { git = "https://github.com/near/nearcore", rev = "7d9c73cf5cebdbe738175a769d44e5906c48eca7" }
 redis = { version = "0.21.5", features = ["tokio-comp", "connection-manager"] }
 serde = { version = "1.0.145", features = ["derive"] }
 serde_json = "1.0.85"
@@ -36,3 +36,7 @@ tracing-subscriber = { version = "0.3.15", features = ["fmt", "env-filter", "std
 opentelemetry = { version = "0.17", features = ["rt-tokio-current-thread"] }
 opentelemetry-jaeger = { version = "0.16", features = ["rt-tokio-current-thread"] }
 tracing-opentelemetry = { version = "0.17" }
+
+
+[features]
+tracing-instrumentation = []

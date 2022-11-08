@@ -7,7 +7,7 @@ use crate::modules::blocks::utils::{
 use crate::utils::proxy_rpc_call;
 use jsonrpc_v2::{Data, Params};
 
-#[tracing::instrument(skip(data))]
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn fetch_block(
     data: &Data<ServerContext>,
     block_reference: near_primitives::types::BlockReference,
@@ -37,7 +37,7 @@ pub async fn fetch_block(
     Ok(fetch_block_from_s3(&data.s3_client, &data.s3_bucket_name, block_height).await?)
 }
 
-#[tracing::instrument(skip(data))]
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn block(
     data: Data<ServerContext>,
     Params(params): Params<near_jsonrpc_primitives::types::blocks::RpcBlockRequest>,

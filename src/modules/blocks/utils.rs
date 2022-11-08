@@ -2,9 +2,11 @@ use crate::config::ServerContext;
 use crate::modules::blocks::methods::fetch_block;
 use crate::modules::blocks::CacheBlock;
 use bigdecimal::ToPrimitive;
-use std::ops::Deref;
 
-#[tracing::instrument(skip(s3_client))]
+#[cfg_attr(
+    feature = "tracing-instrumentation",
+    tracing::instrument(skip(s3_client))
+)]
 pub async fn fetch_block_from_s3(
     s3_client: &aws_sdk_s3::Client,
     s3_bucket_name: &str,
@@ -38,7 +40,10 @@ pub async fn fetch_block_from_s3(
     }
 }
 
-#[tracing::instrument(skip(db_client))]
+#[cfg_attr(
+    feature = "tracing-instrumentation",
+    tracing::instrument(skip(db_client))
+)]
 pub async fn fetch_block_height_from_db(
     db_client: &sqlx::PgPool,
     block_hash: near_primitives::hash::CryptoHash,
@@ -60,7 +65,10 @@ pub async fn fetch_block_height_from_db(
     }
 }
 
-#[tracing::instrument(skip(db_client))]
+#[cfg_attr(
+    feature = "tracing-instrumentation",
+    tracing::instrument(skip(db_client))
+)]
 pub async fn fetch_latest_block_height_from_db(
     db_client: &sqlx::PgPool,
 ) -> Result<u64, near_jsonrpc_primitives::types::blocks::RpcBlockError> {
@@ -78,7 +86,10 @@ pub async fn fetch_latest_block_height_from_db(
     }
 }
 
-#[tracing::instrument(skip(redis_client))]
+#[cfg_attr(
+    feature = "tracing-instrumentation",
+    tracing::instrument(skip(redis_client))
+)]
 pub async fn fetch_latest_block_height_from_redis(
     redis_client: redis::aio::ConnectionManager,
 ) -> anyhow::Result<near_primitives::types::BlockHeight> {
@@ -89,16 +100,19 @@ pub async fn fetch_latest_block_height_from_redis(
         .await?)
 }
 
-#[tracing::instrument(skip(data))]
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn fetch_block_from_cache_or_get(
     data: &jsonrpc_v2::Data<ServerContext>,
     block_reference: near_primitives::types::BlockReference,
 ) -> CacheBlock {
     let block = match block_reference.clone() {
         near_primitives::types::BlockReference::BlockId(block_id) => match block_id {
-            near_primitives::types::BlockId::Height(block_height) => {
-                data.blocks_cache.get(&block_height)
-            }
+            near_primitives::types::BlockId::Height(block_height) => data
+                .blocks_cache
+                .write()
+                .unwrap()
+                .get(&block_height)
+                .cloned(),
             near_primitives::types::BlockId::Hash(_) => None,
         },
         near_primitives::types::BlockReference::Finality(_) => {
@@ -106,13 +120,17 @@ pub async fn fetch_block_from_cache_or_get(
             let block_height = &data
                 .final_block_height
                 .load(std::sync::atomic::Ordering::SeqCst);
-            data.blocks_cache.get(block_height)
+            data.blocks_cache
+                .write()
+                .unwrap()
+                .get(block_height)
+                .cloned()
         }
         // TODO: return the height of the first block height from S3 (cache it once on the start)
         near_primitives::types::BlockReference::SyncCheckpoint(_) => None,
     };
     match block {
-        Some(block) => *block.deref(),
+        Some(block) => block,
         None => {
             let block_from_s3 = fetch_block(data, block_reference)
                 .await
@@ -124,7 +142,10 @@ pub async fn fetch_block_from_cache_or_get(
                 latest_protocol_version: block_from_s3.header.latest_protocol_version,
             };
 
-            data.blocks_cache.insert(block_from_s3.header.height, block);
+            data.blocks_cache
+                .write()
+                .unwrap()
+                .put(block_from_s3.header.height, block);
             block
         }
     }

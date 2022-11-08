@@ -3,14 +3,14 @@ use crate::errors::RPCError;
 use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
 use crate::modules::blocks::CacheBlock;
 use crate::modules::queries::utils::{
-    fetch_access_key_from_redis, fetch_account_from_redis, fetch_code_from_redis,
+    fetch_access_key_from_redis, fetch_account_from_redis, fetch_contract_code_from_redis,
     fetch_state_from_redis, run_contract,
 };
 use crate::utils::proxy_rpc_call;
 use borsh::BorshSerialize;
 use jsonrpc_v2::{Data, Params};
 
-#[tracing::instrument(skip(data))]
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 async fn view_account(
     data: &Data<ServerContext>,
     block: CacheBlock,
@@ -30,27 +30,28 @@ async fn view_account(
     })
 }
 
-#[tracing::instrument(skip(data))]
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 async fn view_code(
     data: &Data<ServerContext>,
     block: CacheBlock,
     account_id: &near_primitives::types::AccountId,
 ) -> anyhow::Result<near_jsonrpc_primitives::types::query::RpcQueryResponse> {
     tracing::debug!(target: "jsonrpc - query - view_code", "call view_code");
-
-    let contract_code =
-        fetch_code_from_redis(data.redis_client.clone(), account_id, block.block_height).await?;
-
+    let code_data_from_redis =
+        fetch_contract_code_from_redis(data.redis_client.clone(), account_id, block.block_height)
+            .await?;
     Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc_primitives::types::query::QueryResponseKind::ViewCode(
-            near_primitives::views::ContractCodeView::from(contract_code),
+            near_primitives::views::ContractCodeView::from(
+                near_primitives::contract::ContractCode::new(code_data_from_redis, None),
+            ),
         ),
         block_height: block.block_height,
         block_hash: block.block_hash,
     })
 }
 
-#[tracing::instrument(skip(data))]
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 async fn function_call(
     data: &Data<ServerContext>,
     block: CacheBlock,
@@ -63,6 +64,8 @@ async fn function_call(
         method_name,
         args,
         data.redis_client.clone(),
+        &data.compiled_contract_code_cache,
+        &data.contract_code_cache,
         block.block_height,
         block.block_timestamp,
         block.latest_protocol_version,
@@ -83,7 +86,7 @@ async fn function_call(
     }
 }
 
-#[tracing::instrument(skip(data))]
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 async fn view_state(
     data: &Data<ServerContext>,
     block: CacheBlock,
@@ -107,7 +110,7 @@ async fn view_state(
     })
 }
 
-#[tracing::instrument(skip(data))]
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 async fn view_access_key(
     data: &Data<ServerContext>,
     block: CacheBlock,
@@ -133,7 +136,7 @@ async fn view_access_key(
     })
 }
 
-#[tracing::instrument(skip(data))]
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn query(
     data: Data<ServerContext>,
     Params(params): Params<near_jsonrpc_primitives::types::query::RpcQueryRequest>,
