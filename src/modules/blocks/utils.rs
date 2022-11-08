@@ -3,7 +3,10 @@ use crate::modules::blocks::methods::fetch_block;
 use crate::modules::blocks::CacheBlock;
 use bigdecimal::ToPrimitive;
 
-// #[tracing::instrument(skip(s3_client))]
+#[cfg_attr(
+    feature = "tracing-instrumentation",
+    tracing::instrument(skip(s3_client))
+)]
 pub async fn fetch_block_from_s3(
     s3_client: &aws_sdk_s3::Client,
     s3_bucket_name: &str,
@@ -37,7 +40,10 @@ pub async fn fetch_block_from_s3(
     }
 }
 
-// #[tracing::instrument(skip(db_client))]
+#[cfg_attr(
+    feature = "tracing-instrumentation",
+    tracing::instrument(skip(db_client))
+)]
 pub async fn fetch_block_height_from_db(
     db_client: &sqlx::PgPool,
     block_hash: near_primitives::hash::CryptoHash,
@@ -59,7 +65,10 @@ pub async fn fetch_block_height_from_db(
     }
 }
 
-// #[tracing::instrument(skip(db_client))]
+#[cfg_attr(
+    feature = "tracing-instrumentation",
+    tracing::instrument(skip(db_client))
+)]
 pub async fn fetch_latest_block_height_from_db(
     db_client: &sqlx::PgPool,
 ) -> Result<u64, near_jsonrpc_primitives::types::blocks::RpcBlockError> {
@@ -77,7 +86,10 @@ pub async fn fetch_latest_block_height_from_db(
     }
 }
 
-// #[tracing::instrument(skip(redis_client))]
+#[cfg_attr(
+    feature = "tracing-instrumentation",
+    tracing::instrument(skip(redis_client))
+)]
 pub async fn fetch_latest_block_height_from_redis(
     redis_client: redis::aio::ConnectionManager,
 ) -> anyhow::Result<near_primitives::types::BlockHeight> {
@@ -88,7 +100,7 @@ pub async fn fetch_latest_block_height_from_redis(
         .await?)
 }
 
-// #[tracing::instrument(skip(data))]
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn fetch_block_from_cache_or_get(
     data: &jsonrpc_v2::Data<ServerContext>,
     block_reference: near_primitives::types::BlockReference,

@@ -46,6 +46,8 @@ pub struct ServerContext {
     pub blocks_cache: std::sync::Arc<std::sync::Mutex<lru::LruCache<u64, CacheBlock>>>,
     pub final_block_height: std::sync::Arc<std::sync::atomic::AtomicU64>,
     pub compiled_contract_code_cache: std::sync::Arc<CompiledCodeCache>,
+    pub contract_code_cache:
+        std::sync::Arc<std::sync::Mutex<lru::LruCache<near_primitives::hash::CryptoHash, Vec<u8>>>>,
 }
 
 pub struct CompiledCodeCache {

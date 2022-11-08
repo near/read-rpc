@@ -8,7 +8,10 @@ use std::collections::HashMap;
 use std::ops::Deref;
 use tokio::task;
 
-// #[tracing::instrument(skip(redis_client))]
+#[cfg_attr(
+    feature = "tracing-instrumentation",
+    tracing::instrument(skip(redis_client))
+)]
 pub async fn fetch_block_hash_from_redis(
     scope: &[u8],
     redis_client: redis::aio::ConnectionManager,
@@ -37,7 +40,10 @@ pub async fn fetch_block_hash_from_redis(
     }
 }
 
-// #[tracing::instrument(skip(redis_client))]
+#[cfg_attr(
+    feature = "tracing-instrumentation",
+    tracing::instrument(skip(redis_client))
+)]
 async fn fetch_data_from_redis(
     scope: &[u8],
     redis_client: redis::aio::ConnectionManager,
@@ -70,7 +76,10 @@ async fn fetch_data_from_redis(
     }
 }
 
-// #[tracing::instrument(skip(redis_client))]
+#[cfg_attr(
+    feature = "tracing-instrumentation",
+    tracing::instrument(skip(redis_client))
+)]
 pub async fn get_redis_stata_keys(
     scope: &[u8],
     redis_client: redis::aio::ConnectionManager,
@@ -121,7 +130,10 @@ pub async fn get_redis_stata_keys(
     data
 }
 
-// #[tracing::instrument(skip(redis_client))]
+#[cfg_attr(
+    feature = "tracing-instrumentation",
+    tracing::instrument(skip(redis_client))
+)]
 pub async fn fetch_access_key_from_redis(
     redis_client: redis::aio::ConnectionManager,
     account_id: &near_primitives::types::AccountId,
@@ -142,7 +154,10 @@ pub async fn fetch_access_key_from_redis(
     )?)
 }
 
-// #[tracing::instrument(skip(redis_client))]
+#[cfg_attr(
+    feature = "tracing-instrumentation",
+    tracing::instrument(skip(redis_client))
+)]
 pub async fn fetch_contract_code_from_redis(
     redis_client: redis::aio::ConnectionManager,
     account_id: &near_primitives::types::AccountId,
@@ -158,7 +173,10 @@ pub async fn fetch_contract_code_from_redis(
     }
 }
 
-// #[tracing::instrument(skip(redis_client))]
+#[cfg_attr(
+    feature = "tracing-instrumentation",
+    tracing::instrument(skip(redis_client))
+)]
 pub async fn fetch_account_from_redis(
     redis_client: redis::aio::ConnectionManager,
     account_id: &near_primitives::types::AccountId,
@@ -172,7 +190,10 @@ pub async fn fetch_account_from_redis(
     )?)
 }
 
-// #[tracing::instrument(skip(redis_client))]
+#[cfg_attr(
+    feature = "tracing-instrumentation",
+    tracing::instrument(skip(redis_client))
+)]
 pub async fn fetch_state_from_redis(
     redis_client: redis::aio::ConnectionManager,
     account_id: &near_primitives::types::AccountId,
@@ -201,7 +222,10 @@ pub async fn fetch_state_from_redis(
     }
 }
 
-// #[tracing::instrument(skip(redis_client, context, contract_code, compiled_contract_code_cache))]
+#[cfg_attr(
+    feature = "tracing-instrumentation",
+    tracing::instrument(skip(redis_client, context, contract_code, compiled_contract_code_cache))
+)]
 async fn run_code_in_vm_runner(
     contract_code: near_primitives::contract::ContractCode,
     method_name: &str,
@@ -242,23 +266,46 @@ async fn run_code_in_vm_runner(
     }
 }
 
-// #[tracing::instrument(skip(redis_client, compiled_contract_code_cache))]
+#[cfg_attr(
+    feature = "tracing-instrumentation",
+    tracing::instrument(skip(redis_client, compiled_contract_code_cache))
+)]
 pub async fn run_contract(
     account_id: near_primitives::types::AccountId,
     method_name: &str,
     args: near_primitives::types::FunctionArgs,
     redis_client: redis::aio::ConnectionManager,
     compiled_contract_code_cache: &std::sync::Arc<CompiledCodeCache>,
+    contract_code_cache: &std::sync::Arc<
+        std::sync::Mutex<lru::LruCache<near_primitives::hash::CryptoHash, Vec<u8>>>,
+    >,
     block_height: near_primitives::types::BlockHeight,
     timestamp: u64,
     latest_protocol_version: near_primitives::types::ProtocolVersion,
 ) -> anyhow::Result<near_vm_logic::VMOutcome> {
-    let contract_future = fetch_account_from_redis(redis_client.clone(), &account_id, block_height);
-    let code_future =
-        fetch_contract_code_from_redis(redis_client.clone(), &account_id, block_height);
-    let (contract, code) = tokio::try_join!(contract_future, code_future)?;
-    let contract_code =
-        near_primitives::contract::ContractCode::new(code, Some(contract.code_hash()));
+    let contract =
+        fetch_account_from_redis(redis_client.clone(), &account_id, block_height).await?;
+
+    let code: Option<Vec<u8>> = contract_code_cache
+        .lock()
+        .unwrap()
+        .get(&contract.code_hash())
+        .map(Clone::clone);
+    let contract_code = match code {
+        Some(code) => {
+            near_primitives::contract::ContractCode::new(code, Some(contract.code_hash()))
+        }
+        None => {
+            let code =
+                fetch_contract_code_from_redis(redis_client.clone(), &account_id, block_height)
+                    .await?;
+            contract_code_cache
+                .lock()
+                .unwrap()
+                .put(contract.code_hash(), code.clone());
+            near_primitives::contract::ContractCode::new(code, Some(contract.code_hash()))
+        }
+    };
     let context = near_vm_logic::VMContext {
         current_account_id: account_id.parse().unwrap(),
         signer_account_id: account_id.parse().unwrap(),

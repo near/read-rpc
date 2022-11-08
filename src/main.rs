@@ -16,8 +16,19 @@ mod modules;
 mod utils;
 
 fn init_logging() {
-    let app_name = "json-rpc-100x";
-    if std::env::var("RUST_LOG").unwrap().to_lowercase() == "debug" {
+    // Filter based on level - trace, debug, info, warn, error
+    // Tunable via `RUST_LOG` env variable
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or(tracing_subscriber::EnvFilter::new("info"));
+
+    // Combined them all together in a `tracing` subscriber
+    let subscriber = tracing_subscriber::Registry::default()
+        .with(env_filter)
+        .with(tracing_subscriber::fmt::Layer::default());
+
+    let rust_log = std::env::var("RUST_LOG").unwrap().to_lowercase();
+    if ["debug", "tracing"].contains(&&**&rust_log) {
+        let app_name = "json-rpc-100x";
         // Start a new Jaeger trace pipeline.
         // Spans are exported in batch - recommended setup for a production application.
         opentelemetry::global::set_text_map_propagator(
@@ -27,20 +38,14 @@ fn init_logging() {
             .with_service_name(app_name)
             .install_simple()
             .unwrap();
-
-        // Filter based on level - trace, debug, info, warn, error
-        // Tunable via `RUST_LOG` env variable
-        let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
-            .unwrap_or(tracing_subscriber::EnvFilter::new("info"));
         // Create a `tracing` layer using the Jaeger tracer
         let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
-
-        // Combined them all together in a `tracing` subscriber
-        // let subscriber = tracing_subscriber::Registry::default()
-        tracing_subscriber::Registry::default()
-            .with(env_filter)
+        subscriber
             .with(telemetry)
-            .with(tracing_subscriber::fmt::Layer::default())
+            .try_init()
+            .expect("Failed to install `tracing` subscriber.");
+    } else {
+        subscriber
             .try_init()
             .expect("Failed to install `tracing` subscriber.");
     }
@@ -72,6 +77,9 @@ async fn main() -> std::io::Result<()> {
             std::num::NonZeroUsize::new(128).unwrap(),
         ))),
     });
+    let contract_code_cache = std::sync::Arc::new(std::sync::Mutex::new(lru::LruCache::new(
+        std::num::NonZeroUsize::new(128).unwrap(),
+    )));
     let state = ServerContext {
         s3_client: prepare_s3_client(
             &opts.access_key_id,
@@ -86,6 +94,7 @@ async fn main() -> std::io::Result<()> {
         blocks_cache: std::sync::Arc::clone(&blocks_cache),
         final_block_height: std::sync::Arc::clone(&final_block_height),
         compiled_contract_code_cache,
+        contract_code_cache,
     };
 
     let shutdown = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
