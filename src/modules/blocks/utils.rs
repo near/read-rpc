@@ -109,10 +109,10 @@ pub async fn fetch_block_from_cache_or_get(
         near_primitives::types::BlockReference::BlockId(block_id) => match block_id {
             near_primitives::types::BlockId::Height(block_height) => data
                 .blocks_cache
-                .lock()
+                .write()
                 .unwrap()
                 .get(&block_height)
-                .map(Clone::clone),
+                .cloned(),
             near_primitives::types::BlockId::Hash(_) => None,
         },
         near_primitives::types::BlockReference::Finality(_) => {
@@ -121,10 +121,10 @@ pub async fn fetch_block_from_cache_or_get(
                 .final_block_height
                 .load(std::sync::atomic::Ordering::SeqCst);
             data.blocks_cache
-                .lock()
+                .write()
                 .unwrap()
                 .get(block_height)
-                .map(Clone::clone)
+                .cloned()
         }
         // TODO: return the height of the first block height from S3 (cache it once on the start)
         near_primitives::types::BlockReference::SyncCheckpoint(_) => None,
@@ -143,7 +143,7 @@ pub async fn fetch_block_from_cache_or_get(
             };
 
             data.blocks_cache
-                .lock()
+                .write()
                 .unwrap()
                 .put(block_from_s3.header.height, block);
             block

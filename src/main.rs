@@ -27,7 +27,7 @@ fn init_logging() {
         .with(tracing_subscriber::fmt::Layer::default());
 
     let rust_log = std::env::var("RUST_LOG").unwrap().to_lowercase();
-    if ["debug", "tracing"].contains(&&**&rust_log) {
+    if rust_log == "debug" || rust_log == "tracing" {
         let app_name = "json-rpc-100x";
         // Start a new Jaeger trace pipeline.
         // Spans are exported in batch - recommended setup for a production application.
@@ -58,7 +58,7 @@ async fn main() -> std::io::Result<()> {
     let opts: Opts = Opts::parse();
 
     let near_rpc_client = near_jsonrpc_client::JsonRpcClient::connect(opts.rpc_url.to_string());
-    let blocks_cache = std::sync::Arc::new(std::sync::Mutex::new(lru::LruCache::new(
+    let blocks_cache = std::sync::Arc::new(std::sync::RwLock::new(lru::LruCache::new(
         std::num::NonZeroUsize::new(100000).unwrap(),
     )));
 
@@ -68,16 +68,16 @@ async fn main() -> std::io::Result<()> {
     let final_block_height =
         std::sync::Arc::new(std::sync::atomic::AtomicU64::new(final_block.block_height));
     blocks_cache
-        .lock()
+        .write()
         .unwrap()
         .put(final_block.block_height, final_block);
 
     let compiled_contract_code_cache = std::sync::Arc::new(CompiledCodeCache {
-        local_cache: std::sync::Arc::new(std::sync::Mutex::new(lru::LruCache::new(
+        local_cache: std::sync::Arc::new(std::sync::RwLock::new(lru::LruCache::new(
             std::num::NonZeroUsize::new(128).unwrap(),
         ))),
     });
-    let contract_code_cache = std::sync::Arc::new(std::sync::Mutex::new(lru::LruCache::new(
+    let contract_code_cache = std::sync::Arc::new(std::sync::RwLock::new(lru::LruCache::new(
         std::num::NonZeroUsize::new(128).unwrap(),
     )));
     let state = ServerContext {

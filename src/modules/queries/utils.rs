@@ -241,12 +241,18 @@ async fn run_code_in_vm_runner(
     let code_cache = std::sync::Arc::clone(compiled_contract_code_cache);
 
     let results = task::spawn_blocking(move || {
+        // We use our own cache to store the precompiled codes,
+        // so we need to call the precompilation function manually.
+        //
+        // Precompiles contract for the current default VM, and stores result to the cache.
+        // Returns `Ok(true)` if compiled code was added to the cache, and `Ok(false)` if element
+        // is already in the cache, or if cache is `None`.
         near_vm_runner::precompile_contract(
             &contract_code,
             &near_vm_logic::VMConfig::test(),
             latest_protocol_version,
             Some(code_cache.deref()),
-        );
+        ).ok();
         near_vm_runner::run(
             &contract_code,
             &contract_method_name,
@@ -277,7 +283,7 @@ pub async fn run_contract(
     redis_client: redis::aio::ConnectionManager,
     compiled_contract_code_cache: &std::sync::Arc<CompiledCodeCache>,
     contract_code_cache: &std::sync::Arc<
-        std::sync::Mutex<lru::LruCache<near_primitives::hash::CryptoHash, Vec<u8>>>,
+        std::sync::RwLock<lru::LruCache<near_primitives::hash::CryptoHash, Vec<u8>>>,
     >,
     block_height: near_primitives::types::BlockHeight,
     timestamp: u64,
@@ -287,10 +293,10 @@ pub async fn run_contract(
         fetch_account_from_redis(redis_client.clone(), &account_id, block_height).await?;
 
     let code: Option<Vec<u8>> = contract_code_cache
-        .lock()
+        .write()
         .unwrap()
         .get(&contract.code_hash())
-        .map(Clone::clone);
+        .cloned();
     let contract_code = match code {
         Some(code) => {
             near_primitives::contract::ContractCode::new(code, Some(contract.code_hash()))
@@ -300,7 +306,7 @@ pub async fn run_contract(
                 fetch_contract_code_from_redis(redis_client.clone(), &account_id, block_height)
                     .await?;
             contract_code_cache
-                .lock()
+                .write()
                 .unwrap()
                 .put(contract.code_hash(), code.clone());
             near_primitives::contract::ContractCode::new(code, Some(contract.code_hash()))

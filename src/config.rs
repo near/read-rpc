@@ -43,16 +43,16 @@ pub struct ServerContext {
     pub redis_client: redis::aio::ConnectionManager,
     pub near_rpc_client: near_jsonrpc_client::JsonRpcClient,
     pub s3_bucket_name: String,
-    pub blocks_cache: std::sync::Arc<std::sync::Mutex<lru::LruCache<u64, CacheBlock>>>,
+    pub blocks_cache: std::sync::Arc<std::sync::RwLock<lru::LruCache<u64, CacheBlock>>>,
     pub final_block_height: std::sync::Arc<std::sync::atomic::AtomicU64>,
     pub compiled_contract_code_cache: std::sync::Arc<CompiledCodeCache>,
     pub contract_code_cache:
-        std::sync::Arc<std::sync::Mutex<lru::LruCache<near_primitives::hash::CryptoHash, Vec<u8>>>>,
+        std::sync::Arc<std::sync::RwLock<lru::LruCache<near_primitives::hash::CryptoHash, Vec<u8>>>>,
 }
 
 pub struct CompiledCodeCache {
     pub local_cache: std::sync::Arc<
-        std::sync::Mutex<
+        std::sync::RwLock<
             lru::LruCache<
                 near_primitives::hash::CryptoHash,
                 near_primitives::types::CompiledContract,
@@ -67,7 +67,7 @@ impl near_primitives::types::CompiledContractCache for CompiledCodeCache {
         key: &near_primitives::hash::CryptoHash,
         value: near_primitives::types::CompiledContract,
     ) -> std::io::Result<()> {
-        self.local_cache.lock().unwrap().put(*key, value);
+        self.local_cache.write().unwrap().put(*key, value);
         Ok(())
     }
 
@@ -75,10 +75,10 @@ impl near_primitives::types::CompiledContractCache for CompiledCodeCache {
         &self,
         key: &near_primitives::hash::CryptoHash,
     ) -> std::io::Result<Option<near_primitives::types::CompiledContract>> {
-        Ok(self.local_cache.lock().unwrap().get(key).map(Clone::clone))
+        Ok(self.local_cache.write().unwrap().get(key).cloned())
     }
 
     fn has(&self, key: &near_primitives::hash::CryptoHash) -> std::io::Result<bool> {
-        Ok(self.local_cache.lock().unwrap().get(key).is_some())
+        Ok(self.local_cache.write().unwrap().get(key).is_some())
     }
 }
