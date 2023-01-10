@@ -13,16 +13,16 @@ pub async fn prepare_s3_client(
     aws_sdk_s3::Client::from_conf(s3_config)
 }
 
-pub async fn prepare_db_client(database_url: &str) -> sqlx::PgPool {
-    sqlx::PgPool::connect(database_url).await.unwrap()
-}
-
-pub async fn prepare_redis_client(redis_url: &str) -> redis::aio::ConnectionManager {
-    redis::Client::open(redis_url)
-        .expect("can create Redis client")
-        .get_tokio_connection_manager()
-        .await
-        .unwrap()
+pub async fn prepare_scylla_db_session(
+    scylla_url: &str,
+    scylla_keyspace: &str,
+) -> anyhow::Result<scylla::Session> {
+    let session: scylla::Session = scylla::SessionBuilder::new()
+        .known_node(scylla_url)
+        .use_keyspace(scylla_keyspace, false)
+        .build()
+        .await?;
+    Ok(session)
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(params)))]
