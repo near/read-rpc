@@ -4,6 +4,7 @@ use crate::modules::queries::{
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use scylla::IntoTypedRows;
+use std::collections::HashMap;
 use std::ops::Deref;
 use tokio::task;
 
@@ -35,10 +36,10 @@ pub async fn fetch_data_from_scylla_db(
                     ),
                 )
                 .await?
-                .rows
+                .single_row()
         }
         None => {
-            query_str.push_str("LIMIT 1 ALLOW FILTERING");
+            query_str.push_str("LIMIT 1");
             scylla_db_client
                 .query(
                     query_str,
@@ -49,71 +50,78 @@ pub async fn fetch_data_from_scylla_db(
                     ),
                 )
                 .await?
+                .single_row()
+        }
+    };
+    if let Ok(row) = result {
+        let (data_value,): (Vec<u8>,) = row.into_typed::<(Vec<u8>,)>()?;
+        Ok(data_value)
+    } else {
+        Ok(vec![])
+    }
+}
+
+#[cfg_attr(
+    feature = "tracing-instrumentation",
+    tracing::instrument(skip(scylla_db_client))
+)]
+pub async fn get_stata_keys_from_scylla(
+    scope: &str,
+    scylla_db_client: std::sync::Arc<scylla::Session>,
+    account_id: &near_primitives::types::AccountId,
+    block_height: near_primitives::types::BlockHeight,
+    prefix: &[u8],
+) -> HashMap<Vec<u8>, Vec<u8>> {
+    tracing::debug!(target: "jsonrpc - query", "call get_stata_keys_from_scylla");
+    let mut data: HashMap<Vec<u8>, Vec<u8>> = HashMap::new();
+    let result = {
+        if !prefix.is_empty() {
+            scylla_db_client
+                .query(
+                    "SELECT data_key FROM account_state WHERE account_id = ? AND data_key = ?",
+                    (account_id.to_string(), prefix.to_vec()),
+                )
+                .await
+                .expect("Invalid query into `account_state` table")
+                .rows
+        } else {
+            scylla_db_client
+                .query(
+                    "SELECT data_key FROM account_state WHERE account_id = ?",
+                    (account_id.to_string(),),
+                )
+                .await
+                .expect("Invalid query into `account_state` table")
                 .rows
         }
     };
-    if let Some(rows) = result {
-        for row in rows.into_typed::<(Vec<u8>,)>() {
-            let (data_value,): (Vec<u8>,) = row?;
-            return Ok(data_value);
-        }
-    }
-    Ok(vec![])
-}
+    match result {
+        Some(rows) => {
+            for row in rows.into_typed::<(Vec<u8>,)>() {
+                let (data_key,): (Vec<u8>,) = row.expect("Invalid data");
+                let data_value = fetch_data_from_scylla_db(
+                    scope,
+                    scylla_db_client.clone(),
+                    account_id,
+                    block_height,
+                    Some(data_key.clone()),
+                )
+                .await
+                .expect("Invalid data");
+                if !data_value.is_empty() {
+                    data.insert(data_key, data_value);
+                }
 
-// #[cfg_attr(
-//     feature = "tracing-instrumentation",
-//     tracing::instrument(skip(redis_client))
-// )]
-// pub async fn get_redis_stata_keys(
-//     scope: &[u8],
-//     redis_client: redis::aio::ConnectionManager,
-//     account_id: &near_primitives::types::AccountId,
-//     block_height: near_primitives::types::BlockHeight,
-//     prefix: &[u8],
-// ) -> HashMap<Vec<u8>, Vec<u8>> {
-//     tracing::debug!(target: "jsonrpc - query", "call get_redis_stata_keys");
-//     let data_redis_key = build_redis_state_key(scope, account_id);
-//     let mut cursor = 0;
-//     let mut step = 0;
-//     let mut data: HashMap<Vec<u8>, Vec<u8>> = HashMap::new();
-//
-//     loop {
-//         let mut redis_cmd = redis::cmd("HSCAN");
-//         redis_cmd.arg(&data_redis_key).cursor_arg(cursor);
-//         if !prefix.is_empty() {
-//             redis_cmd.arg(&[b"MATCH", prefix]);
-//         };
-//         redis_cmd.arg(&["COUNT", "1000"]);
-//
-//         let data_from_redis: (u64, Vec<Vec<u8>>) = redis_cmd
-//             .query_async(&mut redis_client.clone())
-//             .await
-//             .unwrap();
-//         cursor = data_from_redis.0;
-//         step += 1;
-//
-//         for key in data_from_redis.1 {
-//             let redis_data = fetch_data_from_redis(
-//                 DATA_SCOPE,
-//                 redis_client.clone(),
-//                 account_id,
-//                 block_height,
-//                 Some(&key),
-//             )
-//             .await;
-//             if !redis_data.is_empty() {
-//                 data.insert(key, redis_data);
-//             }
-//         }
-//         let keys_count = data.keys().len() as u8;
-//         if step > 10 || keys_count > MAX_LIMIT || cursor == 0 {
-//             break;
-//         }
-//     }
-//
-//     data
-// }
+                let keys_count = data.keys().len() as u8;
+                if keys_count > MAX_LIMIT {
+                    return data;
+                }
+            }
+            data
+        }
+        None => data,
+    }
+}
 
 #[cfg_attr(
     feature = "tracing-instrumentation",
@@ -126,7 +134,7 @@ pub async fn fetch_account_from_scylla_db(
 ) -> anyhow::Result<near_primitives::account::Account> {
     tracing::debug!(target: "jsonrpc - query", "call fetch_account_from_scylla_db");
 
-    let account_from_redis = fetch_data_from_scylla_db(
+    let account_from_db = fetch_data_from_scylla_db(
         ACCOUNT_SCOPE,
         scylla_db_client,
         account_id,
@@ -135,7 +143,7 @@ pub async fn fetch_account_from_scylla_db(
     )
     .await?;
     Ok(near_primitives::account::Account::try_from_slice(
-        &account_from_redis,
+        &account_from_db,
     )?)
 }
 
@@ -148,14 +156,14 @@ pub async fn fetch_contract_code_from_scylla_db(
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
 ) -> anyhow::Result<Vec<u8>> {
-    tracing::debug!(target: "jsonrpc - query", "call fetch_code_from_redis");
-    let code_data_from_redis =
+    tracing::debug!(target: "jsonrpc - query", "call fetch_code_from_scylla_db");
+    let code_data_from_scylla_db =
         fetch_data_from_scylla_db(CODE_SCOPE, scylla_db_client, account_id, block_height, None)
             .await?;
-    if code_data_from_redis.is_empty() {
-        anyhow::bail!("Data not found in redis")
+    if code_data_from_scylla_db.is_empty() {
+        anyhow::bail!("Data not found in scylla db")
     } else {
-        Ok(code_data_from_redis)
+        Ok(code_data_from_scylla_db)
     }
 }
 
@@ -169,8 +177,8 @@ pub async fn fetch_access_key_from_scylla_db(
     block_height: near_primitives::types::BlockHeight,
     key_data: Vec<u8>,
 ) -> anyhow::Result<near_primitives::account::AccessKey> {
-    tracing::debug!(target: "jsonrpc - query", "call fetch_access_key_from_redis");
-    let access_key_from_redis = fetch_data_from_scylla_db(
+    tracing::debug!(target: "jsonrpc - query", "call fetch_access_key_from_scylla_db");
+    let access_key_from_scylla_db = fetch_data_from_scylla_db(
         ACCESS_KEY_SCOPE,
         scylla_db_client,
         account_id,
@@ -179,41 +187,47 @@ pub async fn fetch_access_key_from_scylla_db(
     )
     .await?;
     Ok(near_primitives::account::AccessKey::try_from_slice(
-        &access_key_from_redis,
+        &access_key_from_scylla_db,
     )?)
 }
 
-// #[cfg_attr(
-//     feature = "tracing-instrumentation",
-//     tracing::instrument(skip(redis_client))
-// )]
-// pub async fn fetch_state_from_redis(
-//     redis_client: redis::aio::ConnectionManager,
-//     account_id: &near_primitives::types::AccountId,
-//     block_height: near_primitives::types::BlockHeight,
-//     prefix: &[u8],
-// ) -> anyhow::Result<near_primitives::views::ViewStateResult> {
-//     tracing::debug!(target: "jsonrpc - query", "call fetch_state_from_redis");
-//     let state_from_redis =
-//         get_redis_stata_keys(DATA_SCOPE, redis_client, account_id, block_height, prefix).await;
-//     if state_from_redis.is_empty() {
-//         anyhow::bail!("Data not found in redis")
-//     } else {
-//         let mut values = Vec::new();
-//         for (key, value) in state_from_redis.iter() {
-//             let state_item = near_primitives::views::StateItem {
-//                 key: key.to_vec(),
-//                 value: value.to_vec(),
-//                 proof: vec![],
-//             };
-//             values.push(state_item)
-//         }
-//         Ok(near_primitives::views::ViewStateResult {
-//             values,
-//             proof: vec![],
-//         })
-//     }
-// }
+#[cfg_attr(
+    feature = "tracing-instrumentation",
+    tracing::instrument(skip(scylla_db_client))
+)]
+pub async fn fetch_state_from_scylla_db(
+    scylla_db_client: std::sync::Arc<scylla::Session>,
+    account_id: &near_primitives::types::AccountId,
+    block_height: near_primitives::types::BlockHeight,
+    prefix: &[u8],
+) -> anyhow::Result<near_primitives::views::ViewStateResult> {
+    tracing::debug!(target: "jsonrpc - query", "call fetch_state_from_scylla_db");
+    let state_from_db = get_stata_keys_from_scylla(
+        DATA_SCOPE,
+        scylla_db_client,
+        account_id,
+        block_height,
+        prefix,
+    )
+    .await;
+    if state_from_db.is_empty() {
+        anyhow::bail!("Data not found in db")
+    } else {
+        let mut values = Vec::new();
+        for (key, value) in state_from_db.iter() {
+            let state_item = near_primitives::views::StateItem {
+                key: key.to_vec(),
+                value: value.to_vec(),
+                proof: vec![],
+            };
+            values.push(state_item)
+        }
+        Ok(near_primitives::views::ViewStateResult {
+            values,
+            proof: vec![],
+        })
+    }
+}
 
 #[cfg_attr(
     feature = "tracing-instrumentation",
@@ -290,7 +304,6 @@ pub async fn run_contract(
 ) -> anyhow::Result<near_vm_logic::VMOutcome> {
     let contract =
         fetch_account_from_scylla_db(scylla_db_client.clone(), &account_id, block_height).await?;
-
     let code: Option<Vec<u8>> = contract_code_cache
         .write()
         .unwrap()

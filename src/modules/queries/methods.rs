@@ -4,7 +4,7 @@ use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
 use crate::modules::blocks::CacheBlock;
 use crate::modules::queries::utils::{
     fetch_access_key_from_scylla_db, fetch_account_from_scylla_db,
-    fetch_contract_code_from_scylla_db, run_contract,
+    fetch_contract_code_from_scylla_db, fetch_state_from_scylla_db, run_contract,
 };
 use crate::utils::proxy_rpc_call;
 use borsh::BorshSerialize;
@@ -101,21 +101,19 @@ async fn view_state(
     prefix: &[u8],
 ) -> anyhow::Result<near_jsonrpc_primitives::types::query::RpcQueryResponse> {
     tracing::debug!(target: "jsonrpc - query - view_state", "call view_state");
-    unimplemented!("Unimplemented for scylla")
+    let contract_state = fetch_state_from_scylla_db(
+        data.scylla_db_client.clone(),
+        account_id,
+        block.block_height,
+        prefix,
+    )
+    .await?;
 
-    // let contract_state = fetch_state_from_redis(
-    //     data.redis_client.clone(),
-    //     account_id,
-    //     block.block_height,
-    //     prefix,
-    // )
-    // .await?;
-    //
-    // Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
-    //     kind: near_jsonrpc_primitives::types::query::QueryResponseKind::ViewState(contract_state),
-    //     block_height: block.block_height,
-    //     block_hash: block.block_hash,
-    // })
+    Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
+        kind: near_jsonrpc_primitives::types::query::QueryResponseKind::ViewState(contract_state),
+        block_height: block.block_height,
+        block_hash: block.block_hash,
+    })
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]

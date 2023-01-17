@@ -1,11 +1,11 @@
-// use crate::modules::queries::utils::get_redis_stata_keys;
-// use futures::executor::block_on;
+use crate::modules::queries::utils::get_stata_keys_from_scylla;
+use futures::executor::block_on;
 use std::collections::HashMap;
 
 pub mod methods;
 pub mod utils;
 
-pub const ACCOUNT_SCOPE: &str = "Account";
+const ACCOUNT_SCOPE: &str = "Account";
 const CODE_SCOPE: &str = "Contract";
 const ACCESS_KEY_SCOPE: &str = "AccessKey";
 const DATA_SCOPE: &str = "Data";
@@ -64,16 +64,15 @@ impl near_vm_logic::External for CodeStorage {
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
     fn storage_get(&self, key: &[u8]) -> Result<Option<Box<dyn near_vm_logic::ValuePtr>>> {
-        // let get_redis_stata_keys = get_redis_stata_keys(
-        //     DATA_SCOPE,
-        //     self.redis_client.clone(),
-        //     &self.account_id,
-        //     self.block_height,
-        //     key,
-        // );
-        // let redis_data = block_on(get_redis_stata_keys);
-        let redis_data: HashMap<&[u8], Vec<u8>> = HashMap::new();
-        Ok(redis_data.get(key).map(|value| {
+        let get_db_stata_keys = get_stata_keys_from_scylla(
+            DATA_SCOPE,
+            self.scylla_db_client.clone(),
+            &self.account_id,
+            self.block_height,
+            key,
+        );
+        let db_data = block_on(get_db_stata_keys);
+        Ok(db_data.get(key).map(|value| {
             Box::new(StorageValuePtr {
                 value: value.clone(),
             }) as Box<_>
@@ -100,16 +99,15 @@ impl near_vm_logic::External for CodeStorage {
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
     fn storage_has_key(&mut self, key: &[u8]) -> Result<bool> {
-        // let get_redis_stata_keys = get_redis_stata_keys(
-        //     DATA_SCOPE,
-        //     self.redis_client.clone(),
-        //     &self.account_id,
-        //     self.block_height,
-        //     key,
-        // );
-        // let redis_data = block_on(get_redis_stata_keys);
-        let redis_data: HashMap<&[u8], Vec<u8>> = HashMap::new();
-        Ok(redis_data.contains_key(key))
+        let get_db_stata_keys = get_stata_keys_from_scylla(
+            DATA_SCOPE,
+            self.scylla_db_client.clone(),
+            &self.account_id,
+            self.block_height,
+            key,
+        );
+        let db_data = block_on(get_db_stata_keys);
+        Ok(db_data.contains_key(key))
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]

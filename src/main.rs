@@ -25,6 +25,7 @@ fn init_logging() {
         .with(tracing_subscriber::fmt::Layer::default());
 
     let rust_log = std::env::var("RUST_LOG").unwrap().to_lowercase();
+    // if rust_log == "debug" || rust_log == "tracing" {
     if rust_log == "debug" || rust_log == "tracing" {
         let app_name = "json-rpc-100x";
         // Start a new Jaeger trace pipeline.

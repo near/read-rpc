@@ -2,7 +2,6 @@ use crate::config::ServerContext;
 use crate::modules::blocks::methods::fetch_block;
 use crate::modules::blocks::CacheBlock;
 use num_traits::ToPrimitive;
-use scylla::IntoTypedRows;
 
 #[cfg_attr(
     feature = "tracing-instrumentation",
@@ -52,24 +51,27 @@ pub async fn fetch_block_height_from_scylla_db(
     tracing::debug!(target: "jsonrpc - block", "call fetch_block_height_from_db");
     let result = scylla_db_client
         .query(
-            "SELECT block_height FROM state_changes WHERE block_hash = ? LIMIT 1 ALLOW FILTERING",
+            "SELECT block_height FROM blocks WHERE block_hash = ?",
             (block_hash.to_string(),),
         )
         .await
-        .unwrap()
-        .rows;
+        .expect("Invalid query into `blocks` table")
+        .single_row();
 
-    if let Some(rows) = result {
-        for row in rows.into_typed::<(num_bigint::BigInt,)>() {
-            let (block_height,): (num_bigint::BigInt,) = row.unwrap();
-            return Ok(block_height.to_u64().unwrap());
-        }
+    if let Ok(row) = result {
+        let (block_height,): (num_bigint::BigInt,) = row
+            .into_typed::<(num_bigint::BigInt,)>()
+            .expect("Invalid block `block_height` value from db");
+        Ok(block_height
+            .to_u64()
+            .expect("Error to convert BigInt into u64"))
+    } else {
+        Err(
+            near_jsonrpc_primitives::types::blocks::RpcBlockError::UnknownBlock {
+                error_message: String::from("Unknown block hash"),
+            },
+        )
     }
-    Err(
-        near_jsonrpc_primitives::types::blocks::RpcBlockError::UnknownBlock {
-            error_message: String::from("Unknown block hash"),
-        },
-    )
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
