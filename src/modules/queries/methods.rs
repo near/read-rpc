@@ -19,7 +19,7 @@ async fn view_account(
     tracing::debug!(target: "jsonrpc - query - view_account", "call view_account");
 
     let account = fetch_account_from_scylla_db(
-        data.scylla_db_client.clone(),
+        &data.scylla_db_client,
         account_id,
         block.block_height,
     )
@@ -42,7 +42,7 @@ async fn view_code(
 ) -> anyhow::Result<near_jsonrpc_primitives::types::query::RpcQueryResponse> {
     tracing::debug!(target: "jsonrpc - query - view_code", "call view_code");
     let code_data_from_db = fetch_contract_code_from_scylla_db(
-        data.scylla_db_client.clone(),
+        &data.scylla_db_client,
         account_id,
         block.block_height,
     )
@@ -102,7 +102,7 @@ async fn view_state(
 ) -> anyhow::Result<near_jsonrpc_primitives::types::query::RpcQueryResponse> {
     tracing::debug!(target: "jsonrpc - query - view_state", "call view_state");
     let contract_state = fetch_state_from_scylla_db(
-        data.scylla_db_client.clone(),
+        &data.scylla_db_client,
         account_id,
         block.block_height,
         prefix,
@@ -126,7 +126,7 @@ async fn view_access_key(
     tracing::debug!(target: "jsonrpc - query - view_access_key", "call view_access_key");
 
     let access_key = fetch_access_key_from_scylla_db(
-        data.scylla_db_client.clone(),
+        &data.scylla_db_client,
         account_id,
         block.block_height,
         key_data,

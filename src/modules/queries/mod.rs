@@ -5,10 +5,10 @@ use std::collections::HashMap;
 pub mod methods;
 pub mod utils;
 
-const ACCOUNT_SCOPE: &str = "Account";
-const CODE_SCOPE: &str = "Contract";
-const ACCESS_KEY_SCOPE: &str = "AccessKey";
-const DATA_SCOPE: &str = "Data";
+const ACCOUNT_SCOPE: &str = "account";
+const CODE_SCOPE: &str = "contract";
+const ACCESS_KEY_SCOPE: &str = "access_key";
+const DATA_SCOPE: &str = "data";
 
 const MAX_LIMIT: u8 = 100;
 
@@ -66,7 +66,7 @@ impl near_vm_logic::External for CodeStorage {
     fn storage_get(&self, key: &[u8]) -> Result<Option<Box<dyn near_vm_logic::ValuePtr>>> {
         let get_db_stata_keys = get_stata_keys_from_scylla(
             DATA_SCOPE,
-            self.scylla_db_client.clone(),
+            &self.scylla_db_client,
             &self.account_id,
             self.block_height,
             key,
@@ -101,7 +101,7 @@ impl near_vm_logic::External for CodeStorage {
     fn storage_has_key(&mut self, key: &[u8]) -> Result<bool> {
         let get_db_stata_keys = get_stata_keys_from_scylla(
             DATA_SCOPE,
-            self.scylla_db_client.clone(),
+            &self.scylla_db_client,
             &self.account_id,
             self.block_height,
             key,

@@ -1,5 +1,5 @@
 use crate::config::CompiledCodeCache;
-use crate::utils::{get_final_cache_block, prepare_scylla_db_session};
+use crate::utils::{get_final_cache_block, prepare_scylla_db_client};
 use clap::Parser;
 use config::{Opts, ServerContext};
 use dotenv::dotenv;
@@ -25,7 +25,7 @@ fn init_logging() {
         .with(tracing_subscriber::fmt::Layer::default());
 
     let rust_log = std::env::var("RUST_LOG").unwrap().to_lowercase();
-    // if rust_log == "debug" || rust_log == "tracing" {
+
     if rust_log == "debug" || rust_log == "tracing" {
         let app_name = "json-rpc-100x";
         // Start a new Jaeger trace pipeline.
@@ -80,8 +80,13 @@ async fn main() -> std::io::Result<()> {
         std::num::NonZeroUsize::new(128).unwrap(),
     )));
 
-    let scylla_db_session = std::sync::Arc::new(
-        prepare_scylla_db_session(&opts.scylla_url, &opts.scylla_keyspace)
+    let scylla_db_client = std::sync::Arc::new(
+        prepare_scylla_db_client(
+            &opts.scylla_url,
+            &opts.scylla_keyspace,
+            opts.scylla_user.as_deref(),
+            opts.scylla_password.as_deref(),
+        )
             .await
             .expect("Connection to Scylla db error"),
     );
@@ -92,7 +97,7 @@ async fn main() -> std::io::Result<()> {
             opts.region.clone(),
         )
         .await,
-        scylla_db_client: scylla_db_session,
+        scylla_db_client: scylla_db_client,
         near_rpc_client: near_rpc_client.clone(),
         s3_bucket_name: opts.s3_bucket_name,
         blocks_cache: std::sync::Arc::clone(&blocks_cache),

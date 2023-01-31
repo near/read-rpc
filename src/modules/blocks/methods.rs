@@ -14,7 +14,7 @@ pub async fn fetch_block(
         near_primitives::types::BlockReference::BlockId(block_id) => match block_id {
             near_primitives::types::BlockId::Height(block_height) => block_height,
             near_primitives::types::BlockId::Hash(block_hash) => {
-                fetch_block_height_from_scylla_db(data.scylla_db_client.clone(), block_hash).await?
+                fetch_block_height_from_scylla_db(&data.scylla_db_client, block_hash).await?
             }
         },
         near_primitives::types::BlockReference::Finality(finality) => match finality {

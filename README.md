@@ -1,5 +1,20 @@
 # json-rpc-100x
 
+## Create `.env` file in the project root
+```
+AWS_ACCESS_KEY_ID=ACCESS_KEY
+AWS_SECRET_ACCESS_KEY=SECRET_ACCESS_KEY
+AWS_DEFAULT_REGION=eu-central-1
+AWS_BUCKET_NAME=buket_name
+NEAR_RPC_URL=https://rpc.testnet.near.org
+SCYLLA_URL=127.0.0.1:9042
+SCYLLA_KEYSPACE=key_space_name
+SCYLLA_USER=username
+SCYLLA_PASSWORD=password
+SERVER_PORT=8888
+RUST_LOG=info
+```
+
 ### Compile
 
 ```bash

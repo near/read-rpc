@@ -13,16 +13,20 @@ pub async fn prepare_s3_client(
     aws_sdk_s3::Client::from_conf(s3_config)
 }
 
-pub async fn prepare_scylla_db_session(
+pub async fn prepare_scylla_db_client(
     scylla_url: &str,
     scylla_keyspace: &str,
+    scylla_user: Option<&str>,
+    scylla_password: Option<&str>,
 ) -> anyhow::Result<scylla::Session> {
-    let session: scylla::Session = scylla::SessionBuilder::new()
-        .known_node(scylla_url)
-        .use_keyspace(scylla_keyspace, false)
-        .build()
-        .await?;
-    Ok(session)
+    let mut session: scylla::SessionBuilder = scylla::SessionBuilder::new().known_node(scylla_url);
+    if let Some(user) = scylla_user {
+        if let Some(password) = scylla_password {
+            session = session.user(user, password);
+        }
+    }
+    session = session.use_keyspace(scylla_keyspace, false);
+    Ok(session.build().await?)
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(params)))]

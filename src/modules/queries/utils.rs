@@ -14,25 +14,24 @@ use tokio::task;
 )]
 pub async fn fetch_data_from_scylla_db(
     scope: &str,
-    scylla_db_client: std::sync::Arc<scylla::Session>,
+    scylla_db_client: &std::sync::Arc<scylla::Session>,
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
     key_data: Option<Vec<u8>>,
 ) -> anyhow::Result<Vec<u8>> {
-    let mut query_str = String::from(
-        "SELECT data_value FROM state_changes WHERE account_id = ? AND change_scope = ? AND block_height <= ? "
+    let mut query_str = format!(
+        "SELECT data_value FROM state_changes_{scope} WHERE account_id = ? AND block_height <= ? "
     );
     let result = match key_data {
         Some(data_key) => {
-            query_str.push_str("AND data_key = ? LIMIT 1 ALLOW FILTERING");
+            query_str.push_str("AND data_key = ? LIMIT 1");
             scylla_db_client
                 .query(
                     query_str,
                     (
                         account_id.to_string(),
-                        scope.to_string(),
                         num_bigint::BigInt::from(block_height),
-                        data_key,
+                        hex::encode(&data_key).to_string(),
                     ),
                 )
                 .await?
@@ -45,7 +44,6 @@ pub async fn fetch_data_from_scylla_db(
                     query_str,
                     (
                         account_id.to_string(),
-                        scope.to_string(),
                         num_bigint::BigInt::from(block_height),
                     ),
                 )
@@ -67,7 +65,7 @@ pub async fn fetch_data_from_scylla_db(
 )]
 pub async fn get_stata_keys_from_scylla(
     scope: &str,
-    scylla_db_client: std::sync::Arc<scylla::Session>,
+    scylla_db_client: &std::sync::Arc<scylla::Session>,
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
     prefix: &[u8],
@@ -76,10 +74,14 @@ pub async fn get_stata_keys_from_scylla(
     let mut data: HashMap<Vec<u8>, Vec<u8>> = HashMap::new();
     let result = {
         if !prefix.is_empty() {
+            let hex_str_prefix = hex::encode(prefix);
             scylla_db_client
                 .query(
-                    "SELECT data_key FROM account_state WHERE account_id = ? AND data_key = ?",
-                    (account_id.to_string(), prefix.to_vec()),
+                    "SELECT data_key FROM account_state WHERE account_id = ? AND data_key LIKE ?",
+                    (
+                        account_id.to_string(),
+                        format!("{hex_str_prefix}%").to_string()
+                    ),
                 )
                 .await
                 .expect("Invalid query into `account_state` table")
@@ -97,11 +99,12 @@ pub async fn get_stata_keys_from_scylla(
     };
     match result {
         Some(rows) => {
-            for row in rows.into_typed::<(Vec<u8>,)>() {
-                let (data_key,): (Vec<u8>,) = row.expect("Invalid data");
+            for row in rows.into_typed::<(String,)>() {
+                let (hex_data_key,): (String,) = row.expect("Invalid data");
+                let data_key = hex::decode(hex_data_key).unwrap();
                 let data_value = fetch_data_from_scylla_db(
                     scope,
-                    scylla_db_client.clone(),
+                    scylla_db_client,
                     account_id,
                     block_height,
                     Some(data_key.clone()),
@@ -128,7 +131,7 @@ pub async fn get_stata_keys_from_scylla(
     tracing::instrument(skip(scylla_db_client))
 )]
 pub async fn fetch_account_from_scylla_db(
-    scylla_db_client: std::sync::Arc<scylla::Session>,
+    scylla_db_client: &std::sync::Arc<scylla::Session>,
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
 ) -> anyhow::Result<near_primitives::account::Account> {
@@ -152,7 +155,7 @@ pub async fn fetch_account_from_scylla_db(
     tracing::instrument(skip(scylla_db_client))
 )]
 pub async fn fetch_contract_code_from_scylla_db(
-    scylla_db_client: std::sync::Arc<scylla::Session>,
+    scylla_db_client: &std::sync::Arc<scylla::Session>,
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
 ) -> anyhow::Result<Vec<u8>> {
@@ -172,7 +175,7 @@ pub async fn fetch_contract_code_from_scylla_db(
     tracing::instrument(skip(scylla_db_client))
 )]
 pub async fn fetch_access_key_from_scylla_db(
-    scylla_db_client: std::sync::Arc<scylla::Session>,
+    scylla_db_client: &std::sync::Arc<scylla::Session>,
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
     key_data: Vec<u8>,
@@ -196,7 +199,7 @@ pub async fn fetch_access_key_from_scylla_db(
     tracing::instrument(skip(scylla_db_client))
 )]
 pub async fn fetch_state_from_scylla_db(
-    scylla_db_client: std::sync::Arc<scylla::Session>,
+    scylla_db_client: &std::sync::Arc<scylla::Session>,
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
     prefix: &[u8],
@@ -303,7 +306,7 @@ pub async fn run_contract(
     latest_protocol_version: near_primitives::types::ProtocolVersion,
 ) -> anyhow::Result<near_vm_logic::VMOutcome> {
     let contract =
-        fetch_account_from_scylla_db(scylla_db_client.clone(), &account_id, block_height).await?;
+        fetch_account_from_scylla_db(&scylla_db_client, &account_id, block_height).await?;
     let code: Option<Vec<u8>> = contract_code_cache
         .write()
         .unwrap()
@@ -315,7 +318,7 @@ pub async fn run_contract(
         }
         None => {
             let code = fetch_contract_code_from_scylla_db(
-                scylla_db_client.clone(),
+                &scylla_db_client,
                 &account_id,
                 block_height,
             )

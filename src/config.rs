@@ -20,6 +20,14 @@ pub struct Opts {
     #[clap(long, env, default_value = "state_indexer")]
     pub scylla_keyspace: String,
 
+    /// ScyllaDB user(login)
+    #[clap(long, env)]
+    pub scylla_user: Option<String>,
+
+    /// ScyllaDB password
+    #[clap(long, env)]
+    pub scylla_password: Option<String>,
+
     // AWS access key id
     #[clap(long, env = "AWS_ACCESS_KEY_ID")]
     pub access_key_id: String,

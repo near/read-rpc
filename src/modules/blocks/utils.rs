@@ -45,7 +45,7 @@ pub async fn fetch_block_from_s3(
     tracing::instrument(skip(scylla_db_client))
 )]
 pub async fn fetch_block_height_from_scylla_db(
-    scylla_db_client: std::sync::Arc<scylla::Session>,
+    scylla_db_client: &std::sync::Arc<scylla::Session>,
     block_hash: near_primitives::hash::CryptoHash,
 ) -> Result<u64, near_jsonrpc_primitives::types::blocks::RpcBlockError> {
     tracing::debug!(target: "jsonrpc - block", "call fetch_block_height_from_db");
@@ -68,7 +68,7 @@ pub async fn fetch_block_height_from_scylla_db(
     } else {
         Err(
             near_jsonrpc_primitives::types::blocks::RpcBlockError::UnknownBlock {
-                error_message: String::from("Unknown block hash"),
+                error_message: "Unknown block hash".to_string(),
             },
         )
     }
