@@ -1,7 +1,7 @@
 use crate::config::ServerContext;
 use crate::modules::blocks::methods::fetch_block;
 use crate::modules::blocks::CacheBlock;
-use bigdecimal::ToPrimitive;
+use num_traits::ToPrimitive;
 
 #[cfg_attr(
     feature = "tracing-instrumentation",
@@ -42,62 +42,36 @@ pub async fn fetch_block_from_s3(
 
 #[cfg_attr(
     feature = "tracing-instrumentation",
-    tracing::instrument(skip(db_client))
+    tracing::instrument(skip(scylla_db_client))
 )]
-pub async fn fetch_block_height_from_db(
-    db_client: &sqlx::PgPool,
+pub async fn fetch_block_height_from_scylla_db(
+    scylla_db_client: &std::sync::Arc<scylla::Session>,
     block_hash: near_primitives::hash::CryptoHash,
 ) -> Result<u64, near_jsonrpc_primitives::types::blocks::RpcBlockError> {
     tracing::debug!(target: "jsonrpc - block", "call fetch_block_height_from_db");
-    match sqlx::query!(
-        "SELECT block_height FROM blocks WHERE block_hash = $1 LIMIT 1",
-        block_hash.to_string()
-    )
-    .fetch_one(db_client)
-    .await
-    {
-        Ok(row) => Ok(row.block_height.to_u64().unwrap()),
-        Err(err) => Err(
-            near_jsonrpc_primitives::types::blocks::RpcBlockError::UnknownBlock {
-                error_message: err.to_string(),
-            },
-        ),
-    }
-}
-
-#[cfg_attr(
-    feature = "tracing-instrumentation",
-    tracing::instrument(skip(db_client))
-)]
-pub async fn fetch_latest_block_height_from_db(
-    db_client: &sqlx::PgPool,
-) -> Result<u64, near_jsonrpc_primitives::types::blocks::RpcBlockError> {
-    tracing::debug!(target: "jsonrpc - block", "call fetch_latest_block_height_from_db");
-    match sqlx::query!("SELECT block_height FROM blocks ORDER BY block_height DESC LIMIT 1",)
-        .fetch_one(db_client)
+    let result = scylla_db_client
+        .query(
+            "SELECT block_height FROM blocks WHERE block_hash = ?",
+            (block_hash.to_string(),),
+        )
         .await
-    {
-        Ok(row) => Ok(row.block_height.to_u64().unwrap()),
-        Err(err) => Err(
-            near_jsonrpc_primitives::types::blocks::RpcBlockError::UnknownBlock {
-                error_message: err.to_string(),
-            },
-        ),
-    }
-}
+        .expect("Invalid query into `blocks` table")
+        .single_row();
 
-#[cfg_attr(
-    feature = "tracing-instrumentation",
-    tracing::instrument(skip(redis_client))
-)]
-pub async fn fetch_latest_block_height_from_redis(
-    redis_client: redis::aio::ConnectionManager,
-) -> anyhow::Result<near_primitives::types::BlockHeight> {
-    tracing::debug!(target: "jsonrpc - block", "call fetch_latest_block_height_from_redis");
-    Ok(redis::cmd("GET")
-        .arg("latest_block_height")
-        .query_async(&mut redis_client.clone())
-        .await?)
+    if let Ok(row) = result {
+        let (block_height,): (num_bigint::BigInt,) = row
+            .into_typed::<(num_bigint::BigInt,)>()
+            .expect("Invalid block `block_height` value from db");
+        Ok(block_height
+            .to_u64()
+            .expect("Error to convert BigInt into u64"))
+    } else {
+        Err(
+            near_jsonrpc_primitives::types::blocks::RpcBlockError::UnknownBlock {
+                error_message: "Unknown block hash".to_string(),
+            },
+        )
+    }
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]

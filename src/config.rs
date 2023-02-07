@@ -12,13 +12,21 @@ pub struct Opts {
     #[clap(long, env = "AWS_BUCKET_NAME")]
     pub s3_bucket_name: String,
 
-    // Indexer database url
+    // Scylla db url
     #[clap(long, env)]
-    pub database_url: String,
+    pub scylla_url: String,
 
-    // State indexer redis url
+    // Scylla default keyspace
+    #[clap(long, env, default_value = "state_indexer")]
+    pub scylla_keyspace: String,
+
+    /// ScyllaDB user(login)
     #[clap(long, env)]
-    pub redis_url: String,
+    pub scylla_user: Option<String>,
+
+    /// ScyllaDB password
+    #[clap(long, env)]
+    pub scylla_password: Option<String>,
 
     // AWS access key id
     #[clap(long, env = "AWS_ACCESS_KEY_ID")]
@@ -39,15 +47,15 @@ pub struct Opts {
 
 pub struct ServerContext {
     pub s3_client: aws_sdk_s3::Client,
-    pub db_client: sqlx::PgPool,
-    pub redis_client: redis::aio::ConnectionManager,
+    pub scylla_db_client: std::sync::Arc<scylla::Session>,
     pub near_rpc_client: near_jsonrpc_client::JsonRpcClient,
     pub s3_bucket_name: String,
     pub blocks_cache: std::sync::Arc<std::sync::RwLock<lru::LruCache<u64, CacheBlock>>>,
     pub final_block_height: std::sync::Arc<std::sync::atomic::AtomicU64>,
     pub compiled_contract_code_cache: std::sync::Arc<CompiledCodeCache>,
-    pub contract_code_cache:
-        std::sync::Arc<std::sync::RwLock<lru::LruCache<near_primitives::hash::CryptoHash, Vec<u8>>>>,
+    pub contract_code_cache: std::sync::Arc<
+        std::sync::RwLock<lru::LruCache<near_primitives::hash::CryptoHash, Vec<u8>>>,
+    >,
 }
 
 pub struct CompiledCodeCache {

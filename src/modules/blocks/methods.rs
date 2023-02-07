@@ -1,9 +1,6 @@
 use crate::config::ServerContext;
 use crate::errors::RPCError;
-use crate::modules::blocks::utils::{
-    fetch_block_from_s3, fetch_block_height_from_db, fetch_latest_block_height_from_db,
-    fetch_latest_block_height_from_redis,
-};
+use crate::modules::blocks::utils::{fetch_block_from_s3, fetch_block_height_from_scylla_db};
 use crate::utils::proxy_rpc_call;
 use jsonrpc_v2::{Data, Params};
 
@@ -17,16 +14,13 @@ pub async fn fetch_block(
         near_primitives::types::BlockReference::BlockId(block_id) => match block_id {
             near_primitives::types::BlockId::Height(block_height) => block_height,
             near_primitives::types::BlockId::Hash(block_hash) => {
-                fetch_block_height_from_db(&data.db_client, block_hash).await?
+                fetch_block_height_from_scylla_db(&data.scylla_db_client, block_hash).await?
             }
         },
         near_primitives::types::BlockReference::Finality(finality) => match finality {
-            near_primitives::types::Finality::Final => {
-                match fetch_latest_block_height_from_redis(data.redis_client.clone()).await {
-                    Ok(height) => height,
-                    Err(_) => fetch_latest_block_height_from_db(&data.db_client).await?,
-                }
-            }
+            near_primitives::types::Finality::Final => data
+                .final_block_height
+                .load(std::sync::atomic::Ordering::SeqCst),
             _ => anyhow::bail!("Finality other than final is not supported"),
         },
         near_primitives::types::BlockReference::SyncCheckpoint(_) => {

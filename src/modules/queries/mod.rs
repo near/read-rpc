@@ -1,68 +1,21 @@
-use crate::modules::queries::utils::get_redis_stata_keys;
+use crate::modules::queries::utils::get_stata_keys_from_scylla;
 use futures::executor::block_on;
 use std::collections::HashMap;
+
 pub mod methods;
 pub mod utils;
 
-pub const ACCOUNT_SCOPE: &[u8] = b"a";
-const CODE_SCOPE: &[u8] = b"c";
-const ACCESS_KEY_SCOPE: &[u8] = b"k";
-const DATA_SCOPE: &[u8] = b"d";
+const ACCOUNT_SCOPE: &str = "account";
+const CODE_SCOPE: &str = "contract";
+const ACCESS_KEY_SCOPE: &str = "access_key";
+const DATA_SCOPE: &str = "data";
 
 const MAX_LIMIT: u8 = 100;
-
-#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument)]
-fn build_redis_block_hash_key(
-    scope: &[u8],
-    account_id: &near_primitives::types::AccountId,
-    key_data: Option<&[u8]>,
-) -> Vec<u8> {
-    match key_data {
-        Some(data) => [b"h:", scope, b":", account_id.as_bytes(), b":", data].concat(),
-        None => [b"h:", scope, b":", account_id.as_bytes()].concat(),
-    }
-}
-
-#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument)]
-fn build_redis_data_key(
-    scope: &[u8],
-    account_id: &near_primitives::types::AccountId,
-    block_hash: Vec<u8>,
-    key_data: Option<&[u8]>,
-) -> Vec<u8> {
-    match key_data {
-        Some(data) => [
-            b"d",
-            scope,
-            b":",
-            account_id.as_bytes(),
-            b":",
-            data,
-            b":",
-            block_hash.as_slice(),
-        ]
-        .concat(),
-        None => [
-            b"d",
-            scope,
-            b":",
-            account_id.as_bytes(),
-            b":",
-            block_hash.as_slice(),
-        ]
-        .concat(),
-    }
-}
-
-#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument)]
-fn build_redis_state_key(scope: &[u8], account_id: &near_primitives::types::AccountId) -> Vec<u8> {
-    [b"k:", scope, b":", account_id.as_bytes()].concat()
-}
 
 pub type Result<T> = ::std::result::Result<T, near_vm_logic::VMLogicError>;
 
 pub struct CodeStorage {
-    redis_client: redis::aio::ConnectionManager,
+    scylla_db_client: std::sync::Arc<scylla::Session>,
     account_id: near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
     validators: HashMap<near_primitives::types::AccountId, near_primitives::types::Balance>,
@@ -85,12 +38,12 @@ impl near_vm_logic::ValuePtr for StorageValuePtr {
 
 impl CodeStorage {
     pub fn init(
-        redis_client: redis::aio::ConnectionManager,
+        scylla_db_client: std::sync::Arc<scylla::Session>,
         account_id: near_primitives::types::AccountId,
         block_height: near_primitives::types::BlockHeight,
     ) -> Self {
         Self {
-            redis_client,
+            scylla_db_client,
             account_id,
             block_height,
             validators: Default::default(), // TODO: Should be store list of validators in the current epoch.
@@ -111,15 +64,15 @@ impl near_vm_logic::External for CodeStorage {
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
     fn storage_get(&self, key: &[u8]) -> Result<Option<Box<dyn near_vm_logic::ValuePtr>>> {
-        let get_redis_stata_keys = get_redis_stata_keys(
+        let get_db_stata_keys = get_stata_keys_from_scylla(
             DATA_SCOPE,
-            self.redis_client.clone(),
+            &self.scylla_db_client,
             &self.account_id,
             self.block_height,
             key,
         );
-        let redis_data = block_on(get_redis_stata_keys);
-        Ok(redis_data.get(key).map(|value| {
+        let db_data = block_on(get_db_stata_keys);
+        Ok(db_data.get(key).map(|value| {
             Box::new(StorageValuePtr {
                 value: value.clone(),
             }) as Box<_>
@@ -146,15 +99,15 @@ impl near_vm_logic::External for CodeStorage {
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
     fn storage_has_key(&mut self, key: &[u8]) -> Result<bool> {
-        let get_redis_stata_keys = get_redis_stata_keys(
+        let get_db_stata_keys = get_stata_keys_from_scylla(
             DATA_SCOPE,
-            self.redis_client.clone(),
+            &self.scylla_db_client,
             &self.account_id,
             self.block_height,
             key,
         );
-        let redis_data = block_on(get_redis_stata_keys);
-        Ok(redis_data.contains_key(key))
+        let db_data = block_on(get_db_stata_keys);
+        Ok(db_data.contains_key(key))
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]

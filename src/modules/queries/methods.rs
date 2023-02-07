@@ -3,8 +3,8 @@ use crate::errors::RPCError;
 use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
 use crate::modules::blocks::CacheBlock;
 use crate::modules::queries::utils::{
-    fetch_access_key_from_redis, fetch_account_from_redis, fetch_contract_code_from_redis,
-    fetch_state_from_redis, run_contract,
+    fetch_access_key_from_scylla_db, fetch_account_from_scylla_db,
+    fetch_contract_code_from_scylla_db, fetch_state_from_scylla_db, run_contract,
 };
 use crate::utils::proxy_rpc_call;
 use borsh::BorshSerialize;
@@ -18,8 +18,12 @@ async fn view_account(
 ) -> anyhow::Result<near_jsonrpc_primitives::types::query::RpcQueryResponse> {
     tracing::debug!(target: "jsonrpc - query - view_account", "call view_account");
 
-    let account =
-        fetch_account_from_redis(data.redis_client.clone(), account_id, block.block_height).await?;
+    let account = fetch_account_from_scylla_db(
+        &data.scylla_db_client,
+        account_id,
+        block.block_height,
+    )
+    .await?;
 
     Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc_primitives::types::query::QueryResponseKind::ViewAccount(
@@ -37,13 +41,16 @@ async fn view_code(
     account_id: &near_primitives::types::AccountId,
 ) -> anyhow::Result<near_jsonrpc_primitives::types::query::RpcQueryResponse> {
     tracing::debug!(target: "jsonrpc - query - view_code", "call view_code");
-    let code_data_from_redis =
-        fetch_contract_code_from_redis(data.redis_client.clone(), account_id, block.block_height)
-            .await?;
+    let code_data_from_db = fetch_contract_code_from_scylla_db(
+        &data.scylla_db_client,
+        account_id,
+        block.block_height,
+    )
+    .await?;
     Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc_primitives::types::query::QueryResponseKind::ViewCode(
             near_primitives::views::ContractCodeView::from(
-                near_primitives::contract::ContractCode::new(code_data_from_redis, None),
+                near_primitives::contract::ContractCode::new(code_data_from_db, None),
             ),
         ),
         block_height: block.block_height,
@@ -63,7 +70,7 @@ async fn function_call(
         account_id,
         method_name,
         args,
-        data.redis_client.clone(),
+        data.scylla_db_client.clone(),
         &data.compiled_contract_code_cache,
         &data.contract_code_cache,
         block.block_height,
@@ -94,9 +101,8 @@ async fn view_state(
     prefix: &[u8],
 ) -> anyhow::Result<near_jsonrpc_primitives::types::query::RpcQueryResponse> {
     tracing::debug!(target: "jsonrpc - query - view_state", "call view_state");
-
-    let contract_state = fetch_state_from_redis(
-        data.redis_client.clone(),
+    let contract_state = fetch_state_from_scylla_db(
+        &data.scylla_db_client,
         account_id,
         block.block_height,
         prefix,
@@ -119,8 +125,8 @@ async fn view_access_key(
 ) -> anyhow::Result<near_jsonrpc_primitives::types::query::RpcQueryResponse> {
     tracing::debug!(target: "jsonrpc - query - view_access_key", "call view_access_key");
 
-    let access_key = fetch_access_key_from_redis(
-        data.redis_client.clone(),
+    let access_key = fetch_access_key_from_scylla_db(
+        &data.scylla_db_client,
         account_id,
         block.block_height,
         key_data,
