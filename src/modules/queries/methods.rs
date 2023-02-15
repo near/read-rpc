@@ -16,7 +16,7 @@ async fn view_account(
     block: CacheBlock,
     account_id: &near_primitives::types::AccountId,
 ) -> anyhow::Result<near_jsonrpc_primitives::types::query::RpcQueryResponse> {
-    tracing::debug!(target: "jsonrpc - query - view_account", "call view_account");
+    tracing::debug!("`view_account` call. AccountID {}, Block {}", account_id, block.block_height);
 
     let account = fetch_account_from_scylla_db(
         &data.scylla_db_client,
@@ -40,7 +40,7 @@ async fn view_code(
     block: CacheBlock,
     account_id: &near_primitives::types::AccountId,
 ) -> anyhow::Result<near_jsonrpc_primitives::types::query::RpcQueryResponse> {
-    tracing::debug!(target: "jsonrpc - query - view_code", "call view_code");
+    tracing::debug!("`view_code` call. AccountID {}, Block {}", account_id, block.block_height);
     let code_data_from_db = fetch_contract_code_from_scylla_db(
         &data.scylla_db_client,
         account_id,
@@ -66,6 +66,13 @@ async fn function_call(
     method_name: &str,
     args: near_primitives::types::FunctionArgs,
 ) -> anyhow::Result<near_jsonrpc_primitives::types::query::RpcQueryResponse> {
+    tracing::debug!(
+        "`function_call` call. AccountID {}, block {}, method_name {}, args {:?}",
+        account_id,
+        block.block_height,
+        method_name,
+        args,
+    );
     let call_results = run_contract(
         account_id,
         method_name,
@@ -100,7 +107,12 @@ async fn view_state(
     account_id: &near_primitives::types::AccountId,
     prefix: &[u8],
 ) -> anyhow::Result<near_jsonrpc_primitives::types::query::RpcQueryResponse> {
-    tracing::debug!(target: "jsonrpc - query - view_state", "call view_state");
+    tracing::debug!(
+        "`view_state` call. AccountID {}, block {}, prefix {:?}",
+        account_id,
+        block.block_height,
+        prefix,
+    );
     let contract_state = fetch_state_from_scylla_db(
         &data.scylla_db_client,
         account_id,
@@ -123,7 +135,12 @@ async fn view_access_key(
     account_id: &near_primitives::types::AccountId,
     key_data: Vec<u8>,
 ) -> anyhow::Result<near_jsonrpc_primitives::types::query::RpcQueryResponse> {
-    tracing::debug!(target: "jsonrpc - query - view_access_key", "call view_access_key");
+    tracing::debug!(
+        "`view_access_key` call. AccountID {}, block {}, key_data {:?}",
+        account_id,
+        block.block_height,
+        key_data,
+    );
 
     let access_key = fetch_access_key_from_scylla_db(
         &data.scylla_db_client,
@@ -147,14 +164,17 @@ pub async fn query(
     data: Data<ServerContext>,
     Params(params): Params<near_jsonrpc_primitives::types::query::RpcQueryRequest>,
 ) -> Result<near_jsonrpc_primitives::types::query::RpcQueryResponse, RPCError> {
-    tracing::debug!(target: "jsonrpc - query", "Params: {:?}", params);
+    tracing::debug!(
+        "`query` call. Params: {:?}",
+        params,
+    );
     let block = fetch_block_from_cache_or_get(&data, params.block_reference.clone()).await;
     match params.request.clone() {
         near_primitives::views::QueryRequest::ViewAccount { account_id } => {
             match view_account(&data, block, &account_id).await {
                 Ok(result) => Ok(result),
                 Err(e) => {
-                    tracing::debug!(target: "jsonrpc - query - view_account", "Account not found. Proxy to near rpc: {:?}", e);
+                    tracing::debug!("Account not found: {:?}", e);
                     Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
                 }
             }
@@ -163,7 +183,7 @@ pub async fn query(
             match view_code(&data, block, &account_id).await {
                 Ok(result) => Ok(result),
                 Err(e) => {
-                    tracing::debug!(target: "jsonrpc - query - view_code", "Code not found. Proxy to near rpc: {:?}", e);
+                    tracing::debug!("Code not found: {:?}", e);
                     Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
                 }
             }
@@ -176,7 +196,7 @@ pub async fn query(
             {
                 Ok(result) => Ok(result),
                 Err(e) => {
-                    tracing::debug!(target: "jsonrpc - query - view_access_key", "Access Key not found. Proxy to near rpc: {:?}", e);
+                    tracing::debug!("Access Key not found: {:?}", e);
                     Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
                 }
             }
@@ -188,7 +208,7 @@ pub async fn query(
         } => match view_state(&data, block, &account_id, prefix.as_ref()).await {
             Ok(result) => Ok(result),
             Err(e) => {
-                tracing::debug!(target: "jsonrpc - query - view_state", "State not found. Proxy to near rpc: {:?}", e);
+                tracing::debug!("State not found: {:?}", e);
                 Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
             }
         },
@@ -199,7 +219,7 @@ pub async fn query(
         } => match function_call(&data, block, account_id, &method_name, args.clone()).await {
             Ok(result) => Ok(result),
             Err(e) => {
-                tracing::debug!(target: "jsonrpc - query - function_call", "Result not found. Proxy to near rpc: {:?}", e);
+                tracing::debug!("Result not found: {:?}", e);
                 Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
             }
         },

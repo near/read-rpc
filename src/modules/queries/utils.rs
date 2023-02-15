@@ -135,7 +135,11 @@ pub async fn fetch_account_from_scylla_db(
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
 ) -> anyhow::Result<near_primitives::account::Account> {
-    tracing::debug!(target: "jsonrpc - query", "call fetch_account_from_scylla_db");
+    tracing::debug!(
+        "`fetch_account_from_scylla_db` call. AccountID {}, block {}",
+        account_id,
+        block_height,
+    );
 
     let account_from_db = fetch_data_from_scylla_db(
         ACCOUNT_SCOPE,
@@ -159,12 +163,16 @@ pub async fn fetch_contract_code_from_scylla_db(
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
 ) -> anyhow::Result<Vec<u8>> {
-    tracing::debug!(target: "jsonrpc - query", "call fetch_code_from_scylla_db");
+    tracing::debug!(
+        "`fetch_contract_code_from_scylla_db` call. AccountID {}, block {}",
+        account_id,
+        block_height,
+    );
     let code_data_from_scylla_db =
         fetch_data_from_scylla_db(CODE_SCOPE, scylla_db_client, account_id, block_height, None)
             .await?;
     if code_data_from_scylla_db.is_empty() {
-        anyhow::bail!("Data not found in scylla db")
+        anyhow::bail!("Contract code for {} on block height {} is not found in ScyllaDB", account_id, block_height)
     } else {
         Ok(code_data_from_scylla_db)
     }
@@ -180,7 +188,12 @@ pub async fn fetch_access_key_from_scylla_db(
     block_height: near_primitives::types::BlockHeight,
     key_data: Vec<u8>,
 ) -> anyhow::Result<near_primitives::account::AccessKey> {
-    tracing::debug!(target: "jsonrpc - query", "call fetch_access_key_from_scylla_db");
+    tracing::debug!(
+        "`fetch_access_key_from_scylla_db` call. AccountID {}, block {}, key_data {:?}",
+        account_id,
+        block_height,
+        key_data,
+    );
     let access_key_from_scylla_db = fetch_data_from_scylla_db(
         ACCESS_KEY_SCOPE,
         scylla_db_client,
@@ -204,7 +217,12 @@ pub async fn fetch_state_from_scylla_db(
     block_height: near_primitives::types::BlockHeight,
     prefix: &[u8],
 ) -> anyhow::Result<near_primitives::views::ViewStateResult> {
-    tracing::debug!(target: "jsonrpc - query", "call fetch_state_from_scylla_db");
+    tracing::debug!(
+        "`fetch_state_from_scylla_db` call. AccountID {}, block {}, prefix {:?}",
+        account_id,
+        block_height,
+        prefix,
+    );
     let state_from_db = get_stata_keys_from_scylla(
         DATA_SCOPE,
         scylla_db_client,
@@ -284,7 +302,7 @@ async fn run_code_in_vm_runner(
     .await?;
     match results {
         near_vm_runner::VMResult::Ok(result) => Ok(result),
-        near_vm_runner::VMResult::Aborted(_, _) => anyhow::bail!("Run contract abort!"),
+        near_vm_runner::VMResult::Aborted(output, err) => anyhow::bail!("Run contract abort!\n{:#?}\n{:#?}", output, err),
     }
 }
 
@@ -335,7 +353,7 @@ pub async fn run_contract(
         signer_account_id: account_id.parse().unwrap(),
         signer_account_pk: vec![],
         predecessor_account_id: account_id.parse().unwrap(),
-        input: args.try_to_vec().unwrap(),
+        input: <near_primitives::types::FunctionArgs as AsRef<[u8]>>::as_ref(&args).to_vec(),
         block_height,
         block_timestamp: timestamp,
         epoch_height: 0, // TODO: implement indexing of epoch_height and pass it here
