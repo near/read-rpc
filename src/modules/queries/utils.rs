@@ -70,7 +70,12 @@ pub async fn get_stata_keys_from_scylla(
     block_height: near_primitives::types::BlockHeight,
     prefix: &[u8],
 ) -> HashMap<Vec<u8>, Vec<u8>> {
-    tracing::debug!(target: "jsonrpc - query", "call get_stata_keys_from_scylla");
+    tracing::debug!(
+        "`get_stata_keys_from_scylla` call. AccountId {}, block {}, prefix {:?}",
+        account_id,
+        block_height,
+        prefix,
+    );
     let mut data: HashMap<Vec<u8>, Vec<u8>> = HashMap::new();
     let result = {
         if !prefix.is_empty() {
