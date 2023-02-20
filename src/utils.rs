@@ -35,8 +35,9 @@ pub async fn proxy_rpc_call<M>(
     params: M,
 ) -> near_jsonrpc_client::MethodCallResult<M::Response, M::Error>
 where
-    M: near_jsonrpc_client::methods::RpcMethod,
+    M: near_jsonrpc_client::methods::RpcMethod + std::fmt::Debug,
 {
+    tracing::debug!("PROXY call. {:?}", params);
     client.call(params).await
 }
 

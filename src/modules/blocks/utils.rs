@@ -13,7 +13,7 @@ pub async fn fetch_block_from_s3(
     block_height: near_primitives::types::BlockHeight,
 ) -> Result<near_primitives::views::BlockView, near_jsonrpc_primitives::types::blocks::RpcBlockError>
 {
-    tracing::debug!(target: "jsonrpc - block", "call fetch_block_from_s3");
+    tracing::debug!("`fetch_block_from_s3` call");
     match s3_client
         .get_object()
         .bucket(s3_bucket_name)
@@ -48,13 +48,14 @@ pub async fn fetch_block_height_from_scylla_db(
     scylla_db_client: &std::sync::Arc<scylla::Session>,
     block_hash: near_primitives::hash::CryptoHash,
 ) -> Result<u64, near_jsonrpc_primitives::types::blocks::RpcBlockError> {
-    tracing::debug!(target: "jsonrpc - block", "call fetch_block_height_from_db");
+    tracing::debug!("`fetch_block_height_from_scylla_db` call");
     let result = scylla_db_client
         .query(
             "SELECT block_height FROM blocks WHERE block_hash = ?",
             (block_hash.to_string(),),
         )
         .await
+        // TODO: this will cause panic, do we really want to exit program?
         .expect("Invalid query into `blocks` table")
         .single_row();
 
