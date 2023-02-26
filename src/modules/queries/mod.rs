@@ -1,4 +1,4 @@
-use crate::modules::queries::utils::get_stata_keys_from_scylla;
+use crate::modules::queries::utils::{fetch_data_from_scylla_db, get_stata_keys_from_scylla};
 use futures::executor::block_on;
 use std::collections::HashMap;
 
@@ -64,19 +64,23 @@ impl near_vm_logic::External for CodeStorage {
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
     fn storage_get(&self, key: &[u8]) -> Result<Option<Box<dyn near_vm_logic::ValuePtr>>> {
-        let get_db_stata_keys = get_stata_keys_from_scylla(
+        let get_db_data = fetch_data_from_scylla_db(
             DATA_SCOPE,
             &self.scylla_db_client,
             &self.account_id,
             self.block_height,
-            key,
+            Some(key.to_vec()),
         );
-        let db_data = block_on(get_db_stata_keys);
-        Ok(db_data.get(key).map(|value| {
-            Box::new(StorageValuePtr {
-                value: value.clone(),
-            }) as Box<_>
-        }))
+        let db_data = block_on(get_db_data).unwrap();
+        if db_data.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(
+                Box::new(StorageValuePtr {
+                    value: db_data,
+                }) as Box<_>
+            ))
+        }
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
