@@ -86,6 +86,7 @@ async fn main() -> std::io::Result<()> {
             &opts.scylla_keyspace,
             opts.scylla_user.as_deref(),
             opts.scylla_password.as_deref(),
+            opts.scylla_keepalive_interval,
         )
         .await
         .expect("Connection to Scylla db error"),
