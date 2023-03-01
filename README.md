@@ -29,6 +29,10 @@ To run an instance of Jaeger, you can use Docker:
 ```bash
 $ docker run -d -p6831:6831/udp -p6832:6832/udp -p16686:16686 -p14268:14268 jaegertracing/all-in-one:latest
 ```
+Run project with command to get metrics
+```bash
+cargo run --release --features tracing-instrumentation
+```
 You can visit the Jaeger page by going to http://localhost:16686
 
 #### Run RPC service 

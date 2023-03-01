@@ -47,6 +47,7 @@ pub struct Opts {
     // AWS default region
     #[clap(long, env, default_value = "8000")]
     pub server_port: u16,
+
 }
 
 pub struct ServerContext {
