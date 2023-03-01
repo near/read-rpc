@@ -2,7 +2,7 @@ use crate::config::CompiledCodeCache;
 use crate::modules::queries::{
     CodeStorage, ACCESS_KEY_SCOPE, ACCOUNT_SCOPE, CODE_SCOPE, DATA_SCOPE, MAX_LIMIT,
 };
-use borsh::{BorshDeserialize, BorshSerialize};
+use borsh::BorshDeserialize;
 use scylla::IntoTypedRows;
 use std::collections::HashMap;
 use std::ops::Deref;
@@ -85,7 +85,7 @@ pub async fn get_stata_keys_from_scylla(
                     "SELECT data_key FROM account_state WHERE account_id = ? AND data_key LIKE ?",
                     (
                         account_id.to_string(),
-                        format!("{hex_str_prefix}%").to_string()
+                        format!("{hex_str_prefix}%").to_string(),
                     ),
                 )
                 .await
@@ -177,7 +177,11 @@ pub async fn fetch_contract_code_from_scylla_db(
         fetch_data_from_scylla_db(CODE_SCOPE, scylla_db_client, account_id, block_height, None)
             .await?;
     if code_data_from_scylla_db.is_empty() {
-        anyhow::bail!("Contract code for {} on block height {} is not found in ScyllaDB", account_id, block_height)
+        anyhow::bail!(
+            "Contract code for {} on block height {} is not found in ScyllaDB",
+            account_id,
+            block_height
+        )
     } else {
         Ok(code_data_from_scylla_db)
     }
@@ -307,7 +311,9 @@ async fn run_code_in_vm_runner(
     .await?;
     match results {
         near_vm_runner::VMResult::Ok(result) => Ok(result),
-        near_vm_runner::VMResult::Aborted(output, err) => anyhow::bail!("Run contract abort!\n{:#?}\n{:#?}", output, err),
+        near_vm_runner::VMResult::Aborted(output, err) => {
+            anyhow::bail!("Run contract abort!\n{:#?}\n{:#?}", output, err)
+        }
     }
 }
 
@@ -340,12 +346,9 @@ pub async fn run_contract(
             near_primitives::contract::ContractCode::new(code, Some(contract.code_hash()))
         }
         None => {
-            let code = fetch_contract_code_from_scylla_db(
-                &scylla_db_client,
-                &account_id,
-                block_height,
-            )
-            .await?;
+            let code =
+                fetch_contract_code_from_scylla_db(&scylla_db_client, &account_id, block_height)
+                    .await?;
             contract_code_cache
                 .write()
                 .unwrap()

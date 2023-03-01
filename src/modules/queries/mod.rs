@@ -75,11 +75,7 @@ impl near_vm_logic::External for CodeStorage {
         if db_data.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(
-                Box::new(StorageValuePtr {
-                    value: db_data,
-                }) as Box<_>
-            ))
+            Ok(Some(Box::new(StorageValuePtr { value: db_data }) as Box<_>))
         }
     }
 

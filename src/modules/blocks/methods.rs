@@ -1,6 +1,9 @@
 use crate::config::ServerContext;
 use crate::errors::RPCError;
-use crate::modules::blocks::utils::{fetch_block_from_s3, fetch_block_height_from_scylla_db};
+use crate::modules::blocks::utils::{
+    fetch_block_from_s3, fetch_chunk_from_s3, scylla_db_convert_block_hash_to_block_height,
+    scylla_db_convert_chunk_hash_to_block_height_and_shard_id,
+};
 use crate::utils::proxy_rpc_call;
 use jsonrpc_v2::{Data, Params};
 
@@ -14,7 +17,8 @@ pub async fn fetch_block(
         near_primitives::types::BlockReference::BlockId(block_id) => match block_id {
             near_primitives::types::BlockId::Height(block_height) => block_height,
             near_primitives::types::BlockId::Hash(block_hash) => {
-                fetch_block_height_from_scylla_db(&data.scylla_db_client, block_hash).await?
+                scylla_db_convert_block_hash_to_block_height(&data.scylla_db_client, block_hash)
+                    .await?
             }
         },
         near_primitives::types::BlockReference::Finality(finality) => match finality {
@@ -29,6 +33,43 @@ pub async fn fetch_block(
     };
 
     Ok(fetch_block_from_s3(&data.s3_client, &data.s3_bucket_name, block_height).await?)
+}
+
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
+pub async fn fetch_chunk(
+    data: &Data<ServerContext>,
+    chunk_reference: near_jsonrpc_primitives::types::chunks::ChunkReference,
+) -> anyhow::Result<near_primitives::views::ChunkView> {
+    let (block_height, shard_id) = match chunk_reference {
+        near_jsonrpc_primitives::types::chunks::ChunkReference::BlockShardId {
+            block_id,
+            shard_id,
+        } => match block_id {
+            near_primitives::types::BlockId::Height(block_height) => (block_height, shard_id),
+            near_primitives::types::BlockId::Hash(block_hash) => {
+                let block_height = scylla_db_convert_block_hash_to_block_height(
+                    &data.scylla_db_client,
+                    block_hash,
+                )
+                .await?;
+                (block_height, shard_id)
+            }
+        },
+        near_jsonrpc_primitives::types::chunks::ChunkReference::ChunkHash { chunk_id } => {
+            scylla_db_convert_chunk_hash_to_block_height_and_shard_id(
+                &data.scylla_db_client,
+                chunk_id,
+            )
+            .await?
+        }
+    };
+    Ok(fetch_chunk_from_s3(
+        &data.s3_client,
+        &data.s3_bucket_name,
+        block_height,
+        shard_id,
+    )
+    .await?)
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
@@ -49,8 +90,21 @@ pub async fn block(
     }
 }
 
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn chunk(
-    Params(_params): Params<near_jsonrpc_primitives::types::chunks::RpcChunkRequest>,
+    data: Data<ServerContext>,
+    Params(params): Params<near_jsonrpc_primitives::types::chunks::RpcChunkRequest>,
 ) -> Result<near_jsonrpc_primitives::types::chunks::RpcChunkResponse, RPCError> {
-    unimplemented!("chunk - Unimplemented")
+    tracing::debug!("`chunk` called with parameters: {:?}", params);
+
+    match fetch_chunk(&data, params.chunk_reference.clone()).await {
+        Ok(chunk_view) => {
+            Ok(near_jsonrpc_primitives::types::chunks::RpcChunkResponse { chunk_view })
+        }
+        Err(err) => {
+            tracing::warn!("`chunk` error: {:?}", err);
+            let chunk_view = proxy_rpc_call(&data.near_rpc_client, params).await?;
+            Ok(near_jsonrpc_primitives::types::chunks::RpcChunkResponse { chunk_view })
+        }
+    }
 }
