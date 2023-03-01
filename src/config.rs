@@ -28,6 +28,10 @@ pub struct Opts {
     #[clap(long, env)]
     pub scylla_password: Option<String>,
 
+    /// ScyllaDB keepalive interval
+    #[clap(long, env, default_value = "60")]
+    pub scylla_keepalive_interval: u64,
+
     // AWS access key id
     #[clap(long, env = "AWS_ACCESS_KEY_ID")]
     pub access_key_id: String,

@@ -18,8 +18,11 @@ pub async fn prepare_scylla_db_client(
     scylla_keyspace: &str,
     scylla_user: Option<&str>,
     scylla_password: Option<&str>,
+    keepalive_interval: u64,
 ) -> anyhow::Result<scylla::Session> {
-    let mut session: scylla::SessionBuilder = scylla::SessionBuilder::new().known_node(scylla_url);
+    let mut session: scylla::SessionBuilder = scylla::SessionBuilder::new()
+        .known_node(scylla_url)
+        .keepalive_interval(std::time::Duration::from_secs(keepalive_interval));
     if let Some(user) = scylla_user {
         if let Some(password) = scylla_password {
             session = session.user(user, password);
