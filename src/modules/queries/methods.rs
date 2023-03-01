@@ -16,14 +16,15 @@ async fn view_account(
     block: CacheBlock,
     account_id: &near_primitives::types::AccountId,
 ) -> anyhow::Result<near_jsonrpc_primitives::types::query::RpcQueryResponse> {
-    tracing::debug!("`view_account` call. AccountID {}, Block {}", account_id, block.block_height);
-
-    let account = fetch_account_from_scylla_db(
-        &data.scylla_db_client,
+    tracing::debug!(
+        "`view_account` call. AccountID {}, Block {}",
         account_id,
-        block.block_height,
-    )
-    .await?;
+        block.block_height
+    );
+
+    let account =
+        fetch_account_from_scylla_db(&data.scylla_db_client, account_id, block.block_height)
+            .await?;
 
     Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc_primitives::types::query::QueryResponseKind::ViewAccount(
@@ -40,13 +41,14 @@ async fn view_code(
     block: CacheBlock,
     account_id: &near_primitives::types::AccountId,
 ) -> anyhow::Result<near_jsonrpc_primitives::types::query::RpcQueryResponse> {
-    tracing::debug!("`view_code` call. AccountID {}, Block {}", account_id, block.block_height);
-    let code_data_from_db = fetch_contract_code_from_scylla_db(
-        &data.scylla_db_client,
+    tracing::debug!(
+        "`view_code` call. AccountID {}, Block {}",
         account_id,
-        block.block_height,
-    )
-    .await?;
+        block.block_height
+    );
+    let code_data_from_db =
+        fetch_contract_code_from_scylla_db(&data.scylla_db_client, account_id, block.block_height)
+            .await?;
     Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc_primitives::types::query::QueryResponseKind::ViewCode(
             near_primitives::views::ContractCodeView::from(
@@ -164,10 +166,7 @@ pub async fn query(
     data: Data<ServerContext>,
     Params(params): Params<near_jsonrpc_primitives::types::query::RpcQueryRequest>,
 ) -> Result<near_jsonrpc_primitives::types::query::RpcQueryResponse, RPCError> {
-    tracing::debug!(
-        "`query` call. Params: {:?}",
-        params,
-    );
+    tracing::debug!("`query` call. Params: {:?}", params,);
     let block = fetch_block_from_cache_or_get(&data, params.block_reference.clone()).await;
     match params.request.clone() {
         near_primitives::views::QueryRequest::ViewAccount { account_id } => {

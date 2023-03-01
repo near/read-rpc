@@ -87,8 +87,8 @@ async fn main() -> std::io::Result<()> {
             opts.scylla_user.as_deref(),
             opts.scylla_password.as_deref(),
         )
-            .await
-            .expect("Connection to Scylla db error"),
+        .await
+        .expect("Connection to Scylla db error"),
     );
     let state = ServerContext {
         s3_client: prepare_s3_client(
