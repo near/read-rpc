@@ -283,28 +283,37 @@ async fn run_code_in_vm_runner(
     let code_cache = std::sync::Arc::clone(compiled_contract_code_cache);
 
     let results = task::spawn_blocking(move || {
+        // We use our own cache to store the precompiled codes,
+        // so we need to call the precompilation function manually.
+        //
+        // Precompiles contract for the current default VM, and stores result to the cache.
+        // Returns `Ok(true)` if compiled code was added to the cache, and `Ok(false)` if element
+        // is already in the cache, or if cache is `None`.
+        near_vm_runner::precompile_contract(
+            &contract_code,
+            &near_vm_logic::VMConfig::test(),
+            latest_protocol_version,
+            Some(code_cache.deref()),
+        )
+            .ok();
         near_vm_runner::run(
-            contract_code.hash().as_bytes().to_vec(),
-            contract_code.code(),
+            &contract_code,
             &contract_method_name,
             &mut external,
             context,
-            &Default::default(),
-            &Default::default(),
+            &near_vm_logic::VMConfig::test(),
+            &near_primitives::runtime::fees::RuntimeFeesConfig::test(),
             &[],
             latest_protocol_version,
             Some(code_cache.deref()),
-            &Default::default(),
         )
     })
     .await?;
-    let (outcome, error) = results;
-    match outcome {
-        Some(out) => Ok(out),
-        None => match error {
-            Some(err) => anyhow::bail!("Run contract error! \n{:#?}", err),
-            None => anyhow::bail!("Run contract abort! Unexpected error!"),
-        },
+    match results {
+        near_vm_runner::VMResult::Ok(result) => Ok(result),
+        near_vm_runner::VMResult::Aborted(output, err) => {
+            anyhow::bail!("Run contract abort!\n{:#?}\n{:#?}", output, err)
+        }
     }
 }
 
@@ -353,7 +362,7 @@ pub async fn run_contract(
         signer_account_pk: vec![],
         predecessor_account_id: account_id.parse().unwrap(),
         input: <near_primitives::types::FunctionArgs as AsRef<[u8]>>::as_ref(&args).to_vec(),
-        block_index: block_height,
+        block_height,
         block_timestamp: timestamp,
         epoch_height: 0, // TODO: implement indexing of epoch_height and pass it here
         account_balance: contract.amount(),
@@ -362,7 +371,9 @@ pub async fn run_contract(
         attached_deposit: 0,
         prepaid_gas: 0,
         random_seed: vec![], // TODO: test the contracts where random is used.
-        is_view: true,
+        view_config: Some(near_primitives::config::ViewConfig {
+            max_gas_burnt: 300_000_000_000_000, // TODO: extract it into a configuration option
+        }),
         output_data_receivers: vec![],
     };
     run_code_in_vm_runner(
