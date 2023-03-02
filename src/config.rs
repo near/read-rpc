@@ -63,34 +63,19 @@ pub struct ServerContext {
 }
 
 pub struct CompiledCodeCache {
-    pub local_cache: std::sync::Arc<
-        std::sync::RwLock<
-            lru::LruCache<
-                near_primitives::hash::CryptoHash,
-                near_primitives::types::CompiledContract,
-            >,
-        >,
-    >,
+    pub local_cache: std::sync::Arc<std::sync::RwLock<lru::LruCache<Vec<u8>, Vec<u8>>>>,
 }
 
-impl near_primitives::types::CompiledContractCache for CompiledCodeCache {
-    fn put(
-        &self,
-        key: &near_primitives::hash::CryptoHash,
-        value: near_primitives::types::CompiledContract,
-    ) -> std::io::Result<()> {
-        self.local_cache.write().unwrap().put(*key, value);
+impl near_primitives_vm::types::CompiledContractCache for CompiledCodeCache {
+    fn put(&self, key: &[u8], value: &[u8]) -> Result<(), std::io::Error> {
+        self.local_cache
+            .write()
+            .unwrap()
+            .put((*key).to_owned(), Vec::from(value));
         Ok(())
     }
 
-    fn get(
-        &self,
-        key: &near_primitives::hash::CryptoHash,
-    ) -> std::io::Result<Option<near_primitives::types::CompiledContract>> {
+    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, std::io::Error> {
         Ok(self.local_cache.write().unwrap().get(key).cloned())
-    }
-
-    fn has(&self, key: &near_primitives::hash::CryptoHash) -> std::io::Result<bool> {
-        Ok(self.local_cache.write().unwrap().get(key).is_some())
     }
 }
