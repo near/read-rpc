@@ -13,7 +13,7 @@ mod errors;
 mod modules;
 mod utils;
 
-fn init_logging() {
+fn init_logging(use_tracer: bool) {
     // Filter based on level - trace, debug, info, warn, error
     // Tunable via `RUST_LOG` env variable
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
@@ -24,9 +24,7 @@ fn init_logging() {
         .with(env_filter)
         .with(tracing_subscriber::fmt::Layer::default());
 
-    let rust_log = std::env::var("RUST_LOG").unwrap().to_lowercase();
-
-    if rust_log == "debug" || rust_log == "tracing" {
+    if use_tracer {
         let app_name = "json-rpc-100x";
         // Start a new Jaeger trace pipeline.
         // Spans are exported in batch - recommended setup for a production application.
@@ -53,8 +51,14 @@ fn init_logging() {
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     dotenv().ok();
-    init_logging();
+
     let opts: Opts = Opts::parse();
+
+    #[cfg(feature = "tracing-instrumentation")]
+    init_logging(true);
+
+    #[cfg(not(feature = "tracing-instrumentation"))]
+    init_logging(false);
 
     let near_rpc_client = near_jsonrpc_client::JsonRpcClient::connect(opts.rpc_url.to_string());
     let blocks_cache = std::sync::Arc::new(std::sync::RwLock::new(lru::LruCache::new(
