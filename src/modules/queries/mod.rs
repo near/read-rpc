@@ -1,6 +1,5 @@
 use crate::modules::queries::utils::{fetch_data_from_scylla_db, get_stata_keys_from_scylla};
 use futures::executor::block_on;
-use near_vm_logic::types::{AccountId, Balance, Gas, PublicKey, ReceiptIndex};
 use std::collections::HashMap;
 
 pub mod methods;
@@ -20,6 +19,7 @@ pub struct CodeStorage {
     account_id: near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
     validators: HashMap<near_primitives::types::AccountId, near_primitives::types::Balance>,
+    data_count: u64,
 }
 
 pub struct StorageValuePtr {
@@ -47,6 +47,7 @@ impl CodeStorage {
             account_id,
             block_height,
             validators: Default::default(), // TODO: Should be store list of validators in the current epoch.
+            data_count: Default::default(), // TODO: Using for generate_data_id
         }
     }
 }
@@ -109,144 +110,30 @@ impl near_vm_logic::External for CodeStorage {
         Ok(db_data.contains_key(key))
     }
 
-    fn create_receipt(
-        &mut self,
-        _receipt_indices: Vec<ReceiptIndex>,
-        _receiver_id: AccountId,
-    ) -> Result<ReceiptIndex> {
-        Err(near_vm_logic::VMLogicError::HostError(
-            near_vm_logic::HostError::ProhibitedInView {
-                method_name: String::from("create_receipt"),
-            },
-        ))
-    }
-
-    fn append_action_create_account(&mut self, _receipt_index: ReceiptIndex) -> Result<()> {
-        Err(near_vm_logic::VMLogicError::HostError(
-            near_vm_logic::HostError::ProhibitedInView {
-                method_name: String::from("append_action_create_account"),
-            },
-        ))
-    }
-
-    fn append_action_deploy_contract(
-        &mut self,
-        _receipt_index: ReceiptIndex,
-        _code: Vec<u8>,
-    ) -> Result<()> {
-        Err(near_vm_logic::VMLogicError::HostError(
-            near_vm_logic::HostError::ProhibitedInView {
-                method_name: String::from("append_action_deploy_contract"),
-            },
-        ))
-    }
-
-    fn append_action_function_call(
-        &mut self,
-        _receipt_index: ReceiptIndex,
-        _method_name: Vec<u8>,
-        _arguments: Vec<u8>,
-        _attached_deposit: Balance,
-        _prepaid_gas: Gas,
-    ) -> Result<()> {
-        Err(near_vm_logic::VMLogicError::HostError(
-            near_vm_logic::HostError::ProhibitedInView {
-                method_name: String::from("append_action_function_call"),
-            },
-        ))
-    }
-
-    fn append_action_transfer(
-        &mut self,
-        _receipt_index: ReceiptIndex,
-        _amount: Balance,
-    ) -> Result<()> {
-        Err(near_vm_logic::VMLogicError::HostError(
-            near_vm_logic::HostError::ProhibitedInView {
-                method_name: String::from("append_action_transfer"),
-            },
-        ))
-    }
-
-    fn append_action_stake(
-        &mut self,
-        _receipt_index: ReceiptIndex,
-        _stake: Balance,
-        _public_key: PublicKey,
-    ) -> Result<()> {
-        Err(near_vm_logic::VMLogicError::HostError(
-            near_vm_logic::HostError::ProhibitedInView {
-                method_name: String::from("append_action_stake"),
-            },
-        ))
-    }
-
-    fn append_action_add_key_with_full_access(
-        &mut self,
-        _receipt_index: ReceiptIndex,
-        _public_key: PublicKey,
-        _nonce: u64,
-    ) -> Result<()> {
-        Err(near_vm_logic::VMLogicError::HostError(
-            near_vm_logic::HostError::ProhibitedInView {
-                method_name: String::from("append_action_add_key_with_full_access"),
-            },
-        ))
-    }
-
-    fn append_action_add_key_with_function_call(
-        &mut self,
-        _receipt_index: ReceiptIndex,
-        _public_key: PublicKey,
-        _nonce: u64,
-        _allowance: Option<Balance>,
-        _receiver_id: AccountId,
-        _method_names: Vec<Vec<u8>>,
-    ) -> Result<()> {
-        Err(near_vm_logic::VMLogicError::HostError(
-            near_vm_logic::HostError::ProhibitedInView {
-                method_name: String::from("append_action_add_key_with_function_call"),
-            },
-        ))
-    }
-
-    fn append_action_delete_key(
-        &mut self,
-        _receipt_index: ReceiptIndex,
-        _public_key: PublicKey,
-    ) -> Result<()> {
-        Err(near_vm_logic::VMLogicError::HostError(
-            near_vm_logic::HostError::ProhibitedInView {
-                method_name: String::from("append_action_delete_key"),
-            },
-        ))
-    }
-
-    fn append_action_delete_account(
-        &mut self,
-        _receipt_index: ReceiptIndex,
-        _beneficiary_id: AccountId,
-    ) -> Result<()> {
-        Err(near_vm_logic::VMLogicError::HostError(
-            near_vm_logic::HostError::ProhibitedInView {
-                method_name: String::from("append_action_delete_account"),
-            },
-        ))
+    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
+    fn generate_data_id(&mut self) -> near_primitives::hash::CryptoHash {
+        // TODO: Should be improvement in future
+        // Generates some hash for the data ID to receive data.
+        // This hash should not be functionality
+        let data_id = near_primitives::hash::hash(&self.data_count.to_le_bytes());
+        self.data_count += 1;
+        data_id
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
-    fn get_touched_nodes_count(&self) -> u64 {
-        0
+    fn get_trie_nodes_count(&self) -> near_primitives::types::TrieNodesCount {
+        near_primitives::types::TrieNodesCount {
+            db_reads: 0,
+            mem_reads: 0,
+        }
     }
-
-    fn reset_touched_nodes_counter(&mut self) {}
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
     fn validator_stake(
         &self,
-        account_id: &String,
+        account_id: &near_primitives::types::AccountId,
     ) -> Result<Option<near_primitives::types::Balance>> {
-        Ok(self.validators.get(account_id.as_str()).cloned())
+        Ok(self.validators.get(account_id).cloned())
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
