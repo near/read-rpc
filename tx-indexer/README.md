@@ -21,15 +21,15 @@ The `tx-indexer` works like any other Lake-based indexer watching the network.
 In order to collect a `Transactions` with all related entities it does the following:
 
 1. Converts `Transaction` into a `tx-indexer`-defined structure `TransactionDetails`
-1. Stores the data into cache (Redis)
-1. Watched for `ExecutionOutcomes` and its statuses. Depending on the status:
+2. Stores the data into cache (Redis)
+3. Watched for `ExecutionOutcomes` and its statuses. Depending on the status:
     - `SuccessValue` means the `Receipt` "branch" has finished successfully
     - `SuccessReceiptId` means a new `Receipt` branch has started and we need to follow it
     - Other error/failure statuses means the `Receipt` branch has finished with an error
-1. Whenever we observe a new `Receipt` branch we increment the `Transaction`'s anticipated `ExecutionOutcomes`
-1. Whenever a `Receipt` branch is finishes we decrement the `Transaction`'s anticipated `ExecutionOutcomes`
-1. We add related `Receipts` and `ExecutionOutcomes` to the corresponding fields of the `TransactionDetails` during the indexing
-1. Once the anticipated `ExecutionOutcomes` counter becomes zero we consider the `TransactionDetails` collecting as over and can serialize and store in in the Storage (ScyllaDB)
+4. Whenever we observe a new `Receipt` branch we increment the `Transaction`'s anticipated `ExecutionOutcomes`
+5. Whenever a `Receipt` branch is finishes we decrement the `Transaction`'s anticipated `ExecutionOutcomes`
+6. We add related `Receipts` and `ExecutionOutcomes` to the corresponding fields of the `TransactionDetails` during the indexing
+7. Once the anticipated `ExecutionOutcomes` counter becomes zero we consider the `TransactionDetails` collecting as over and can serialize and store in in the Storage (ScyllaDB)
 
 ## How to run
 

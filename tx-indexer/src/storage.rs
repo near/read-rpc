@@ -1,7 +1,6 @@
 use crate::types::TransactionDetails;
 use borsh::{BorshDeserialize, BorshSerialize};
 use near_indexer_primitives::IndexerExecutionOutcomeWithReceipt;
-pub use redis::{self, aio::ConnectionManager, FromRedisValue, ToRedisArgs};
 
 const STORAGE: &str = "storage_tx";
 const TX_TO_SEND_LIST_KEY: &str = "transactions_to_send";
@@ -10,7 +9,7 @@ pub async fn get_redis_client(redis_connection_str: &str) -> redis::Client {
     redis::Client::open(redis_connection_str).expect("can create redis client")
 }
 
-pub async fn connect(redis_connection_str: &str) -> anyhow::Result<ConnectionManager> {
+pub async fn connect(redis_connection_str: &str) -> anyhow::Result<redis::aio::ConnectionManager> {
     Ok(get_redis_client(redis_connection_str)
         .await
         .get_tokio_connection_manager()
@@ -18,8 +17,8 @@ pub async fn connect(redis_connection_str: &str) -> anyhow::Result<ConnectionMan
 }
 
 pub async fn del(
-    redis_connection_manager: &ConnectionManager,
-    key: impl ToRedisArgs + std::fmt::Debug,
+    redis_connection_manager: &redis::aio::ConnectionManager,
+    key: impl redis::ToRedisArgs + std::fmt::Debug,
 ) -> anyhow::Result<()> {
     redis::cmd("DEL")
         .arg(&key)
@@ -30,9 +29,9 @@ pub async fn del(
 }
 
 pub async fn set(
-    redis_connection_manager: &ConnectionManager,
-    key: impl ToRedisArgs + std::fmt::Debug,
-    value: impl ToRedisArgs + std::fmt::Debug,
+    redis_connection_manager: &redis::aio::ConnectionManager,
+    key: impl redis::ToRedisArgs + std::fmt::Debug,
+    value: impl redis::ToRedisArgs + std::fmt::Debug,
 ) -> anyhow::Result<()> {
     redis::cmd("SET")
         .arg(&key)
@@ -43,9 +42,9 @@ pub async fn set(
     Ok(())
 }
 
-pub async fn get<V: FromRedisValue + std::fmt::Debug>(
-    redis_connection_manager: &ConnectionManager,
-    key: impl ToRedisArgs + std::fmt::Debug,
+pub async fn get<V: redis::FromRedisValue + std::fmt::Debug>(
+    redis_connection_manager: &redis::aio::ConnectionManager,
+    key: impl redis::ToRedisArgs + std::fmt::Debug,
 ) -> anyhow::Result<V> {
     let value: V = redis::cmd("GET")
         .arg(&key)
@@ -59,7 +58,7 @@ pub async fn get<V: FromRedisValue + std::fmt::Debug>(
 /// Increments the counter `receipts_{transaction_hash}` by one.
 /// The counter holds how many Receipts related to the Transaction are in watching list
 pub async fn push_receipt_to_watching_list(
-    redis_connection_manager: &ConnectionManager,
+    redis_connection_manager: &redis::aio::ConnectionManager,
     receipt_id: &str,
     cache_value: &str,
 ) -> anyhow::Result<()> {
@@ -74,7 +73,7 @@ pub async fn push_receipt_to_watching_list(
 /// Removes key `receipt_id: &str` from Redis storage.
 /// If the key exists in the storage decreases the `receipts_{transaction_hash}` counter.
 pub async fn remove_receipt_from_watching_list(
-    redis_connection_manager: &ConnectionManager,
+    redis_connection_manager: &redis::aio::ConnectionManager,
     receipt_id: &str,
 ) -> anyhow::Result<Option<String>> {
     match get::<Option<String>>(redis_connection_manager, receipt_id).await {
@@ -97,7 +96,7 @@ pub async fn remove_receipt_from_watching_list(
 
 /// Returns the value of the `receipts_{transaction_hash}` counter
 pub async fn receipts_transaction_hash_count(
-    redis_connection_manager: &ConnectionManager,
+    redis_connection_manager: &redis::aio::ConnectionManager,
     transaction_hash: &str,
 ) -> anyhow::Result<u64> {
     get::<u64>(
@@ -108,7 +107,7 @@ pub async fn receipts_transaction_hash_count(
 }
 
 pub async fn get_last_indexed_block(
-    redis_connection_manager: &ConnectionManager,
+    redis_connection_manager: &redis::aio::ConnectionManager,
 ) -> anyhow::Result<u64> {
     Ok(redis::cmd("GET")
         .arg("last_indexed_block")
@@ -117,7 +116,7 @@ pub async fn get_last_indexed_block(
 }
 
 pub async fn set_tx(
-    redis_connection_manager: &ConnectionManager,
+    redis_connection_manager: &redis::aio::ConnectionManager,
     transaction_details: TransactionDetails,
 ) -> anyhow::Result<()> {
     let transaction_hash_string = transaction_details.transaction.hash.to_string();
@@ -139,7 +138,7 @@ pub async fn set_tx(
 }
 
 pub async fn get_tx(
-    redis_connection_manager: &ConnectionManager,
+    redis_connection_manager: &redis::aio::ConnectionManager,
     transaction_hash: &str,
 ) -> anyhow::Result<Option<TransactionDetails>> {
     let value: Vec<u8> = get(redis_connection_manager, transaction_hash).await?;
@@ -148,7 +147,7 @@ pub async fn get_tx(
 }
 
 pub async fn push_tx_to_send(
-    redis_connection_manager: &ConnectionManager,
+    redis_connection_manager: &redis::aio::ConnectionManager,
     transaction_details: TransactionDetails,
 ) -> anyhow::Result<()> {
     let encoded_tx_details = transaction_details.try_to_vec()?;
@@ -163,7 +162,7 @@ pub async fn push_tx_to_send(
 }
 
 pub async fn transactions_to_send(
-    redis_connection_manager: &ConnectionManager,
+    redis_connection_manager: &redis::aio::ConnectionManager,
 ) -> anyhow::Result<Vec<TransactionDetails>> {
     let length: usize = redis::cmd("LLEN")
         .arg(TX_TO_SEND_LIST_KEY)
@@ -185,7 +184,7 @@ pub async fn transactions_to_send(
 }
 
 pub async fn push_outcome_and_receipt(
-    redis_connection_manager: &ConnectionManager,
+    redis_connection_manager: &redis::aio::ConnectionManager,
     transaction_hash: &str,
     indexer_execution_outcome_with_receipt: IndexerExecutionOutcomeWithReceipt,
 ) -> anyhow::Result<()> {

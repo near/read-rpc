@@ -2,6 +2,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use near_indexer_primitives::{views, IndexerTransactionWithOutcome};
 use serde::{Deserialize, Serialize};
 
+// TODO: Make struct more closer to Transaction object from near rpc
 #[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Debug, Clone)]
 pub struct TransactionDetails {
     pub transaction: views::SignedTransactionView,

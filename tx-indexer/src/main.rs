@@ -17,6 +17,10 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(target: INDEXER, "Connecting to redis...");
     let redis_connection_manager = storage::connect(&opts.redis_connection_string).await?;
 
+    tracing::info!(target: INDEXER, "Connecting to scylla db...");
+    let scylla_db_client: std::sync::Arc<scylla::Session> =
+        std::sync::Arc::new(opts.build_scylla_db_session().await?);
+
     tracing::info!(target: INDEXER, "Generating LakeConfig...");
     let config: near_lake_framework::LakeConfig = opts.to_lake_config().await?;
 
@@ -26,7 +30,11 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(target: INDEXER, "Starting tx indexer...",);
     let mut handlers = tokio_stream::wrappers::ReceiverStream::new(stream)
         .map(|streamer_message| {
-            handle_streamer_message(streamer_message, &redis_connection_manager)
+            handle_streamer_message(
+                streamer_message,
+                &scylla_db_client,
+                &redis_connection_manager,
+            )
         })
         .buffer_unordered(1usize);
 
@@ -47,7 +55,8 @@ async fn main() -> anyhow::Result<()> {
 
 async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
-    redis_connection_manager: &storage::ConnectionManager,
+    scylla_db_client: &std::sync::Arc<scylla::Session>,
+    redis_connection_manager: &redis::aio::ConnectionManager,
 ) -> anyhow::Result<u64> {
     tracing::info!(
         target: INDEXER,
@@ -55,7 +64,11 @@ async fn handle_streamer_message(
         streamer_message.block.header.height
     );
 
-    let tx_checker_future = collector::transactions(&streamer_message, redis_connection_manager);
+    let tx_checker_future = collector::transactions(
+        &streamer_message,
+        scylla_db_client,
+        redis_connection_manager,
+    );
 
     match futures::try_join!(tx_checker_future) {
         Ok(_) => tracing::debug!(
