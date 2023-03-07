@@ -1,15 +1,14 @@
 use futures::future::{join_all, try_join_all};
 
-use near_indexer_primitives::views::ExecutionStatusView;
-use near_indexer_primitives::IndexerTransactionWithOutcome;
 use crate::storage;
 use crate::types::TransactionDetails;
+use near_indexer_primitives::views::ExecutionStatusView;
+use near_indexer_primitives::IndexerTransactionWithOutcome;
 
 pub(crate) async fn transactions(
     streamer_message: &near_indexer_primitives::StreamerMessage,
     redis_connection_manager: &storage::ConnectionManager,
 ) -> anyhow::Result<()> {
-
     collecting_tx(streamer_message, redis_connection_manager).await?;
     outcomes_and_receipts(streamer_message, redis_connection_manager).await?;
 
@@ -38,12 +37,7 @@ async fn collecting_tx(
         .iter()
         .filter_map(|shard| shard.chunk.as_ref())
         .flat_map(|chunk| chunk.transactions.iter())
-        .filter_map(|tx| {
-            Some(start_collecting_tx(
-                tx,
-                redis_connection_manager,
-            ))
-        });
+        .filter_map(|tx| Some(start_collecting_tx(tx, redis_connection_manager)));
     try_join_all(futures).await.map(|_| ())
 }
 
@@ -69,7 +63,7 @@ async fn start_collecting_tx(
                 &converted_into_receipt_id,
                 &transaction_hash_string,
             )
-                .await?;
+            .await?;
         }
         Err(e) => tracing::error!(
             target: crate::INDEXER,
@@ -95,7 +89,7 @@ async fn outcomes_and_receipts(
             redis_connection_manager,
             &receipt_execution_outcome.receipt.receipt_id.to_string(),
         )
-            .await
+        .await
         {
             tracing::debug!(
                 target: crate::INDEXER,
@@ -114,7 +108,8 @@ async fn outcomes_and_receipts(
                     redis_connection_manager,
                     &receipt_id.to_string(),
                     &transaction_hash,
-                ).await?;
+                )
+                .await?;
             }
 
             // Add the success receipt to the watching list
@@ -127,7 +122,7 @@ async fn outcomes_and_receipts(
                     &receipt_id.to_string(),
                     &transaction_hash,
                 )
-                    .await?;
+                .await?;
             }
 
             match storage::push_outcome_and_receipt(
@@ -135,7 +130,7 @@ async fn outcomes_and_receipts(
                 &transaction_hash,
                 receipt_execution_outcome.clone(),
             )
-                .await
+            .await
             {
                 Ok(_) => {}
                 Err(e) => tracing::error!(

@@ -1,6 +1,6 @@
-use futures::StreamExt;
-use clap::Parser;
 use crate::config::{init_tracing, Opts};
+use clap::Parser;
+use futures::StreamExt;
 
 mod collector;
 mod config;
@@ -11,7 +11,6 @@ pub(crate) const INDEXER: &str = "tx_indexer";
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-
     dotenv::dotenv().ok();
     init_tracing();
     let opts: Opts = Opts::parse();
@@ -56,8 +55,7 @@ async fn handle_streamer_message(
         streamer_message.block.header.height
     );
 
-    let tx_checker_future =
-        collector::transactions(&streamer_message, redis_connection_manager);
+    let tx_checker_future = collector::transactions(&streamer_message, redis_connection_manager);
 
     match futures::try_join!(tx_checker_future) {
         Ok(_) => tracing::debug!(
@@ -78,7 +76,7 @@ async fn handle_streamer_message(
         "last_indexed_block",
         &streamer_message.block.header.height.to_string(),
     )
-        .await?;
+    .await?;
 
     Ok(streamer_message.block.header.height)
 }

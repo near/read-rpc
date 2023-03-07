@@ -1,7 +1,7 @@
-pub use redis::{self, aio::ConnectionManager, FromRedisValue, ToRedisArgs};
-use near_indexer_primitives::IndexerExecutionOutcomeWithReceipt;
-use borsh::{BorshDeserialize, BorshSerialize};
 use crate::types::TransactionDetails;
+use borsh::{BorshDeserialize, BorshSerialize};
+use near_indexer_primitives::IndexerExecutionOutcomeWithReceipt;
+pub use redis::{self, aio::ConnectionManager, FromRedisValue, ToRedisArgs};
 
 const STORAGE: &str = "storage_tx";
 const TX_TO_SEND_LIST_KEY: &str = "transactions_to_send";
@@ -104,9 +104,8 @@ pub async fn receipts_transaction_hash_count(
         redis_connection_manager,
         format!("receipts_{}", transaction_hash),
     )
-        .await
+    .await
 }
-
 
 pub async fn get_last_indexed_block(
     redis_connection_manager: &ConnectionManager,
@@ -129,7 +128,7 @@ pub async fn set_tx(
         &transaction_hash_string,
         &encoded_tx_details,
     )
-        .await?;
+    .await?;
 
     tracing::debug!(
         target: crate::INDEXER,
@@ -166,7 +165,6 @@ pub async fn push_tx_to_send(
 pub async fn transactions_to_send(
     redis_connection_manager: &ConnectionManager,
 ) -> anyhow::Result<Vec<TransactionDetails>> {
-
     let length: usize = redis::cmd("LLEN")
         .arg(TX_TO_SEND_LIST_KEY)
         .query_async(&mut redis_connection_manager.clone())
@@ -209,7 +207,7 @@ pub async fn push_outcome_and_receipt(
                 .receipt_id
                 .to_string(),
         )
-            .await?;
+        .await?;
         transaction_details
             .receipts
             .push(indexer_execution_outcome_with_receipt.receipt);
@@ -221,8 +219,7 @@ pub async fn push_outcome_and_receipt(
         );
 
         let transaction_receipts_watching_count =
-            receipts_transaction_hash_count(redis_connection_manager, transaction_hash)
-                .await?;
+            receipts_transaction_hash_count(redis_connection_manager, transaction_hash).await?;
 
         if transaction_receipts_watching_count == 0 {
             tracing::debug!(target: crate::INDEXER, "Finished TX {}", &transaction_hash,);

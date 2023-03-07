@@ -2,20 +2,20 @@ pub use clap::{Parser, Subcommand};
 
 use scylla::{Session, SessionBuilder};
 
-use near_jsonrpc_client::{methods, JsonRpcClient};
-use near_indexer_primitives::types::{BlockReference, Finality};
 use crate::storage;
+use near_indexer_primitives::types::{BlockReference, Finality};
+use near_jsonrpc_client::{methods, JsonRpcClient};
 
 /// NEAR Indexer for Explorer
 /// Watches for stream of blocks from the chain
 #[derive(Parser, Debug)]
 #[clap(
-version,
-author,
-about,
-setting(clap::AppSettings::DisableHelpSubcommand),
-setting(clap::AppSettings::PropagateVersion),
-setting(clap::AppSettings::NextLineHelp)
+    version,
+    author,
+    about,
+    setting(clap::AppSettings::DisableHelpSubcommand),
+    setting(clap::AppSettings::PropagateVersion),
+    setting(clap::AppSettings::NextLineHelp)
 )]
 pub(crate) struct Opts {
     /// Connection string to connect to the Redis instance for cache. Default: "redis://127.0.0.1"
@@ -36,16 +36,9 @@ pub(crate) struct Opts {
     /// ScyllaDB password
     #[clap(long, env)]
     pub scylla_password: Option<String>,
-    // AWS Access Key with the rights to read from AWS S3
-    #[clap(long, env)]
-    pub lake_aws_access_key: String,
-    /// AWS Secret Access Key with the rights to read from AWS S3
-    #[clap(long, env)]
-    pub lake_aws_secret_access_key: String,
     /// Chain ID: testnet or mainnet
     #[clap(subcommand)]
     pub chain_id: ChainId,
-
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -78,33 +71,11 @@ impl Opts {
             ChainId::Testnet(_) => "https://rpc.testnet.near.org",
         }
     }
-
-    // Creates AWS Credentials for NEAR Lake
-    fn lake_credentials(&self) -> aws_credential_types::provider::SharedCredentialsProvider {
-        let provider = aws_sdk_s3::Credentials::new(
-            self.lake_aws_access_key.clone(),
-            self.lake_aws_secret_access_key.clone(),
-            None,
-            None,
-            "tx_indexer",
-        );
-        aws_credential_types::provider::SharedCredentialsProvider::new(provider)
-    }
-
-    pub fn lake_aws_sdk_config(&self) -> aws_types::sdk_config::SdkConfig {
-        aws_types::sdk_config::SdkConfig::builder()
-            .credentials_provider(self.lake_credentials())
-            .region(aws_types::region::Region::new("eu-central-1"))
-            .build()
-    }
 }
 
 impl Opts {
     pub async fn to_lake_config(&self) -> anyhow::Result<near_lake_framework::LakeConfig> {
-
-        let s3_config = aws_sdk_s3::config::Builder::from(&self.lake_aws_sdk_config()).build();
-
-        let config_builder = near_lake_framework::LakeConfigBuilder::default().s3_config(s3_config);
+        let config_builder = near_lake_framework::LakeConfigBuilder::default();
 
         Ok(match &self.chain_id {
             ChainId::Mainnet(_) => config_builder
@@ -114,17 +85,14 @@ impl Opts {
                 .testnet()
                 .start_block_height(get_start_block_height(self).await),
         }
-            .build()
-            .expect("Failed to build LakeConfig"))
+        .build()
+        .expect("Failed to build LakeConfig"))
     }
 }
 
-// TODO: refactor to read from Redis once `storage` is extracted to a separate crate
 async fn get_start_block_height(opts: &Opts) -> u64 {
     match opts.start_options() {
-        StartOptions::FromBlock { height } => {
-            *height
-        },
+        StartOptions::FromBlock { height } => *height,
         StartOptions::FromInterruption => {
             let redis_connection_manager = match storage::connect(&opts.redis_connection_string)
                 .await
