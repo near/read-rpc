@@ -295,7 +295,7 @@ async fn run_code_in_vm_runner(
             latest_protocol_version,
             Some(code_cache.deref()),
         )
-            .ok();
+        .ok();
         near_vm_runner::run(
             &contract_code,
             &contract_method_name,

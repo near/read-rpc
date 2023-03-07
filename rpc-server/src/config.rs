@@ -47,7 +47,6 @@ pub struct Opts {
     // AWS default region
     #[clap(long, env, default_value = "8000")]
     pub server_port: u16,
-
 }
 
 pub struct ServerContext {
@@ -55,6 +54,7 @@ pub struct ServerContext {
     pub scylla_db_client: std::sync::Arc<scylla::Session>,
     pub near_rpc_client: near_jsonrpc_client::JsonRpcClient,
     pub s3_bucket_name: String,
+    pub genesis_config: near_chain_configs::GenesisConfig,
     pub blocks_cache: std::sync::Arc<std::sync::RwLock<lru::LruCache<u64, CacheBlock>>>,
     pub final_block_height: std::sync::Arc<std::sync::atomic::AtomicU64>,
     pub compiled_contract_code_cache: std::sync::Arc<CompiledCodeCache>,

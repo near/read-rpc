@@ -2374,6 +2374,7 @@ dependencies = [
  "http",
  "jsonrpc-v2",
  "lru 0.8.1",
+ "near-chain-configs 0.0.0",
  "near-indexer-primitives 0.0.0",
  "near-jsonrpc-client 0.0.0",
  "near-jsonrpc-primitives 0.0.0",
