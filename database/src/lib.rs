@@ -73,18 +73,16 @@
 //         apply_migrations=false
 // ).await?,
 
-
 use scylla::prepared_statement::PreparedStatement;
 
 #[async_trait::async_trait]
 pub trait ScyllaStorageManager {
-
     async fn new(
         scylla_url: &str,
         scylla_keyspace: &str,
         scylla_user: Option<&str>,
         scylla_password: Option<&str>,
-        apply_migrations: bool
+        apply_migrations: bool,
     ) -> anyhow::Result<Box<Self>> {
         let scylla_db_session = std::sync::Arc::new(
             Self::get_scylladb_session(scylla_url, scylla_user, scylla_password).await?,
@@ -93,7 +91,9 @@ pub trait ScyllaStorageManager {
             tracing::info!("Running migrations into the scylla database...");
             Self::migrate(&scylla_db_session, scylla_keyspace).await?
         }
-        scylla_db_session.use_keyspace(scylla_keyspace, false).await?;
+        scylla_db_session
+            .use_keyspace(scylla_keyspace, false)
+            .await?;
         Self::prepare(scylla_db_session).await
     }
 
@@ -101,12 +101,10 @@ pub trait ScyllaStorageManager {
         scylla_db_session: &scylla::Session,
         scylla_keyspace: &str,
     ) -> anyhow::Result<()> {
-
-        Self::create_keyspace(
-            scylla_db_session,
-            scylla_keyspace,
-        ).await?;
-        scylla_db_session.use_keyspace(scylla_keyspace, false).await?;
+        Self::create_keyspace(scylla_db_session, scylla_keyspace).await?;
+        scylla_db_session
+            .use_keyspace(scylla_keyspace, false)
+            .await?;
         Ok(Self::create_tables(scylla_db_session).await?)
     }
 
@@ -167,7 +165,9 @@ pub trait ScyllaStorageManager {
     }
 
     // Prepare manager and queries
-    async fn prepare(scylla_db_session: std::sync::Arc<scylla::Session>) -> anyhow::Result<Box<Self>>;
+    async fn prepare(
+        scylla_db_session: std::sync::Arc<scylla::Session>,
+    ) -> anyhow::Result<Box<Self>>;
     // Example:
     // {
     //     Ok(Self {
@@ -181,5 +181,4 @@ pub trait ScyllaStorageManager {
     //             .await?,
     //     })
     // }
-
 }

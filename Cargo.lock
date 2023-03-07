@@ -4527,11 +4527,13 @@ name = "state-indexer"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "aws-sdk-s3",
  "aws-types",
  "bigdecimal",
  "borsh",
  "clap",
+ "database",
  "dotenv",
  "futures",
  "hex",
