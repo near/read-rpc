@@ -342,9 +342,9 @@ dependencies = [
 
 [[package]]
 name = "async-trait"
-version = "0.1.60"
+version = "0.1.66"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "677d1d8ab452a3936018a687b20e6f7cf5363d713b732b8884001317b0e48aa3"
+checksum = "b84f9ebcc6c1f5b8cb160f6990096a5c127f423fcb6e1ccc46c370cbdfb75dfc"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1474,6 +1474,16 @@ dependencies = [
  "hashbrown 0.12.3",
  "lock_api 0.4.7",
  "parking_lot_core 0.9.3",
+]
+
+[[package]]
+name = "database"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "scylla",
+ "tracing",
 ]
 
 [[package]]
@@ -3802,6 +3812,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "readnode-primitives"
+version = "0.1.0"
+dependencies = [
+ "borsh",
+ "near-indexer-primitives 0.16.0",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "redis"
 version = "0.22.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5100,16 +5120,20 @@ name = "tx-indexer"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "aws-credential-types",
  "aws-sdk-s3",
  "aws-types",
  "borsh",
  "clap",
+ "database",
  "dotenv",
  "futures",
  "near-indexer-primitives 0.16.0",
  "near-jsonrpc-client 0.5.0",
  "near-lake-framework",
+ "num-bigint",
+ "readnode-primitives",
  "redis",
  "scylla",
  "serde",

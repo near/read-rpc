@@ -1,27 +1,27 @@
+use crate::{config, storage};
 use futures::future::{join_all, try_join_all};
-
-use crate::storage;
-use crate::types::TransactionDetails;
 use near_indexer_primitives::views::ExecutionStatusView;
 use near_indexer_primitives::IndexerTransactionWithOutcome;
 
-pub(crate) async fn transactions(
+pub(crate) async fn index_transactions(
     streamer_message: &near_indexer_primitives::StreamerMessage,
-    scylla_db_client: &std::sync::Arc<scylla::Session>,
+    scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
     redis_connection_manager: &redis::aio::ConnectionManager,
 ) -> anyhow::Result<()> {
-    collecting_tx(streamer_message, redis_connection_manager).await?;
-    outcomes_and_receipts(streamer_message, redis_connection_manager).await?;
+    extract_transactions_to_collect(streamer_message, redis_connection_manager).await?;
+    collect_receipts_and_outcomes(streamer_message, redis_connection_manager).await?;
 
     let finished_transaction_details =
-        storage::transactions_to_send(redis_connection_manager).await?;
+        storage::transactions_to_save(redis_connection_manager).await?;
 
     if !finished_transaction_details.is_empty() {
         let scylla_db_client = scylla_db_client.clone();
+        let block_height = streamer_message.block.header.height.clone();
         tokio::spawn(async move {
-            let send_finished_transaction_details_futures = finished_transaction_details
-                .into_iter()
-                .map(|tx_details| save_transaction_details(&scylla_db_client, tx_details));
+            let send_finished_transaction_details_futures =
+                finished_transaction_details.into_iter().map(|tx_details| {
+                    save_transaction_details(&scylla_db_client, tx_details, block_height)
+                });
 
             join_all(send_finished_transaction_details_futures).await;
         });
@@ -30,7 +30,7 @@ pub(crate) async fn transactions(
     Ok(())
 }
 
-async fn collecting_tx(
+async fn extract_transactions_to_collect(
     streamer_message: &near_indexer_primitives::StreamerMessage,
     redis_connection_manager: &redis::aio::ConnectionManager,
 ) -> anyhow::Result<()> {
@@ -39,11 +39,16 @@ async fn collecting_tx(
         .iter()
         .filter_map(|shard| shard.chunk.as_ref())
         .flat_map(|chunk| chunk.transactions.iter())
-        .filter_map(|tx| Some(start_collecting_tx(tx, redis_connection_manager)));
+        .filter_map(|tx| {
+            Some(new_transaction_details_to_collecting_pool(
+                tx,
+                redis_connection_manager,
+            ))
+        });
     try_join_all(futures).await.map(|_| ())
 }
 
-async fn start_collecting_tx(
+async fn new_transaction_details_to_collecting_pool(
     transaction: &IndexerTransactionWithOutcome,
     redis_connection_manager: &redis::aio::ConnectionManager,
 ) -> anyhow::Result<()> {
@@ -57,7 +62,8 @@ async fn start_collecting_tx(
         .expect("`receipt_ids` must contain one Receipt ID")
         .to_string();
 
-    let transaction_details = TransactionDetails::from_indexer_tx(transaction.clone());
+    let transaction_details =
+        readnode_primitives::TransactionDetails::from_indexer_tx(transaction.clone());
     match storage::set_tx(redis_connection_manager, transaction_details).await {
         Ok(_) => {
             storage::push_receipt_to_watching_list(
@@ -77,7 +83,7 @@ async fn start_collecting_tx(
     Ok(())
 }
 
-async fn outcomes_and_receipts(
+async fn collect_receipts_and_outcomes(
     streamer_message: &near_indexer_primitives::StreamerMessage,
     redis_connection_manager: &redis::aio::ConnectionManager,
 ) -> anyhow::Result<()> {
@@ -146,34 +152,21 @@ async fn outcomes_and_receipts(
     Ok(())
 }
 
+// Save transaction detail into the scylla db
 async fn save_transaction_details(
-    scylla_db_client: &std::sync::Arc<scylla::Session>,
-    transaction_details: TransactionDetails,
+    scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
+    transaction_details: readnode_primitives::TransactionDetails,
+    block_height: u64,
 ) -> bool {
-    // TODO: Save transaction details into the scylla db
-    let mut query = scylla::statement::query::Query::new(
-        "
-        INSERT INTO state_changes_data
-        (...)
-        VALUES(?, ...)
-        ",
-    );
-    query.set_consistency(scylla::frame::types::Consistency::All);
     match scylla_db_client
-        .query(
-            query,
-            (
-                transaction_details.transaction.hash.to_string(),
-                // ...
-            ),
-        )
+        .add_transaction(transaction_details, block_height)
         .await
     {
         Ok(_) => true,
         Err(e) => {
             tracing::error!(
                 target: crate::INDEXER,
-                "Failed to save transaction details \n{:#?}",
+                "Failed to save transaction \n{:#?}",
                 e
             );
             false

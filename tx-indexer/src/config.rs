@@ -1,9 +1,10 @@
+use crate::storage;
+use borsh::BorshSerialize;
 pub use clap::{Parser, Subcommand};
 use near_indexer_primitives::types::{BlockReference, Finality};
 use near_jsonrpc_client::{methods, JsonRpcClient};
+use scylla::prepared_statement::PreparedStatement;
 use tracing_subscriber::EnvFilter;
-
-use crate::storage;
 
 /// NEAR Indexer for Explorer
 /// Watches for stream of blocks from the chain
@@ -23,7 +24,7 @@ pub(crate) struct Opts {
     /// Indexer ID to handle meta data about the instance
     #[clap(long, env)]
     pub indexer_id: String,
-    /// ScyllaDB connection string
+    /// ScyllaDB connection string. Default: "127.0.0.1:9042"
     #[clap(long, default_value = "127.0.0.1:9042", env)]
     pub scylla_url: String,
     /// ScyllaDB keyspace
@@ -86,40 +87,6 @@ impl Opts {
         }
         .build()
         .expect("Failed to build LakeConfig"))
-    }
-
-    pub async fn build_scylla_db_session(&self) -> anyhow::Result<scylla::Session> {
-        let mut scylla_db_session_builder =
-            scylla::SessionBuilder::new().known_node(&self.scylla_url);
-        if let Some(user) = self.scylla_user.as_deref() {
-            if let Some(password) = self.scylla_password.as_deref() {
-                scylla_db_session_builder = scylla_db_session_builder.user(user, password);
-            }
-        }
-        let scylladb_session = scylla_db_session_builder.build().await?;
-
-        // Create scylla_keyspace if not existing
-        let mut str_query = format!("CREATE KEYSPACE IF NOT EXISTS {} ", &self.scylla_keyspace);
-        str_query
-            .push_str("WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 1};");
-        scylladb_session.query(str_query, &[]).await?;
-        scylladb_session
-            .use_keyspace(&self.scylla_keyspace, false)
-            .await?;
-
-        // TODO: create table to store transaction in the db
-        // scylladb_session
-        //     .query(
-        //         "
-        //     CREATE TABLE IF NOT EXISTS transactions_details (
-        //         ...
-        //         PRIMARY KEY ((...), ...)
-        //     ) WITH CLUSTERING ORDER BY (... DESC)
-        // ",
-        //         &[],
-        //     )
-        //     .await?;
-        Ok(scylladb_session)
     }
 }
 
@@ -188,4 +155,68 @@ pub fn init_tracing() {
         .with_env_filter(env_filter)
         .with_writer(std::io::stderr)
         .init();
+}
+
+pub(crate) struct ScyllaDBManager {
+    scylla_session: std::sync::Arc<scylla::Session>,
+    add_transaction: PreparedStatement,
+}
+
+#[async_trait::async_trait]
+impl database::ScyllaStorageManager for ScyllaDBManager {
+    async fn create_tables(scylla_db_session: &scylla::Session) -> anyhow::Result<()> {
+        scylla_db_session
+            .query(
+                "CREATE TABLE IF NOT EXISTS transactions_details (
+                transaction_hash varchar,
+                block_height varint,
+                account_id varchar,
+                transaction_details BLOB,
+                PRIMARY KEY ((transaction_hash, account_id), block_height)
+            ) WITH CLUSTERING ORDER BY (block_height DESC)
+            ",
+                &[],
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn prepare(
+        scylla_db_session: std::sync::Arc<scylla::Session>,
+    ) -> anyhow::Result<Box<Self>> {
+        Ok(Box::new(Self {
+            scylla_session: scylla_db_session.clone(),
+            add_transaction: Self::prepare_query(
+                &scylla_db_session,
+                "INSERT INTO transactions_details
+                    (transaction_hash, block_height, account_id, transaction_details)
+                    VALUES(?, ?, ?, ?)",
+            )
+            .await?,
+        }))
+    }
+}
+
+impl ScyllaDBManager {
+    pub async fn add_transaction(
+        &self,
+        transaction: readnode_primitives::TransactionDetails,
+        block_height: u64,
+    ) -> anyhow::Result<()> {
+        let transaction_details = transaction
+            .try_to_vec()
+            .expect("Failed to borsh-serialize the Transaction");
+        self.scylla_session
+            .execute(
+                &self.add_transaction,
+                (
+                    transaction.transaction.hash.to_string(),
+                    num_bigint::BigInt::from(block_height),
+                    transaction.transaction.signer_id.to_string(),
+                    &transaction_details,
+                ),
+            )
+            .await?;
+        Ok(())
+    }
 }

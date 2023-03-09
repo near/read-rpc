@@ -37,6 +37,10 @@ In order to collect a `Transactions` with all related entities it does the follo
 
 In order to run we need to provide the necessary parameters, it can be done either via command line arguments or via environmental variables.
 
+Start the Redis instance for the `tx-indexer` instance. You can use the Docker command for that:
+```bash
+$ docker run --name redis -p 6379:6379 -d redis redis-server --save 60 1 --loglevel warning
+```
 An example `.env` file:
 
 ```

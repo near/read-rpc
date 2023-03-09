@@ -2,20 +2,23 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use near_indexer_primitives::{views, IndexerTransactionWithOutcome};
 use serde::{Deserialize, Serialize};
 
-// TODO: Make struct more closer to Transaction object from near rpc
 #[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Debug, Clone)]
 pub struct TransactionDetails {
-    pub transaction: views::SignedTransactionView,
     pub receipts: Vec<views::ReceiptView>,
-    pub execution_outcomes: Vec<views::ExecutionOutcomeWithIdView>,
+    pub receipts_outcome: Vec<views::ExecutionOutcomeWithIdView>,
+    pub status: views::ExecutionStatusView,
+    pub transaction: views::SignedTransactionView,
+    pub transaction_outcome: views::ExecutionOutcomeWithIdView,
 }
 
 impl TransactionDetails {
     pub fn from_indexer_tx(transaction: IndexerTransactionWithOutcome) -> Self {
         Self {
-            transaction: transaction.transaction.clone(),
             receipts: vec![],
-            execution_outcomes: vec![transaction.outcome.execution_outcome],
+            receipts_outcome: vec![],
+            status: transaction.outcome.execution_outcome.outcome.status.clone(),
+            transaction: transaction.transaction.clone(),
+            transaction_outcome: transaction.outcome.execution_outcome.clone(),
         }
     }
 }
