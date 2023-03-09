@@ -8,7 +8,23 @@ pub struct RPCError(pub(crate) near_jsonrpc_primitives::errors::RpcError);
 impl RPCError {
     pub(crate) fn unimplemented_error(msg: &str) -> Self {
         Self::from(near_jsonrpc_primitives::errors::RpcError::new(
+            -32601,
+            String::from(msg),
+            None,
+        ))
+    }
+
+    pub(crate) fn internal_error(msg: &str) -> Self {
+        Self::from(near_jsonrpc_primitives::errors::RpcError::new(
             -32603,
+            String::from(msg),
+            None,
+        ))
+    }
+
+    pub(crate) fn parse_error(msg: &str) -> Self {
+        Self::from(near_jsonrpc_primitives::errors::RpcError::new(
+            -32700,
             String::from(msg),
             None,
         ))

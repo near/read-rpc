@@ -18,6 +18,7 @@ hex = "0.4.3"
 http = "0.2.8"
 jsonrpc-v2 = { git  = "https://github.com/kobayurii/jsonrpc-v2", rev = "95e7b1d2567ae841163af212a3f25abb6862becb" }
 lru = "0.8.1"
+near-chain-configs = { git = "https://github.com/near/nearcore", rev = "7d9c73cf5cebdbe738175a769d44e5906c48eca7" }
 near-jsonrpc-client = { git = "https://github.com/kobayurii/near-jsonrpc-client-rs", rev = "819326b86c6a49ff4a45405b0746165c392cf0a3"}
 near-jsonrpc-primitives = { git = "https://github.com/near/nearcore", rev = "7d9c73cf5cebdbe738175a769d44e5906c48eca7" }
 near-indexer-primitives = { git = "https://github.com/near/nearcore", rev = "7d9c73cf5cebdbe738175a769d44e5906c48eca7" }

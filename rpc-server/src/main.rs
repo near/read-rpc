@@ -49,7 +49,7 @@ fn init_logging(use_tracer: bool) {
 }
 
 #[tokio::main]
-async fn main() -> std::io::Result<()> {
+async fn main() -> anyhow::Result<()> {
     dotenv().ok();
 
     let opts: Opts = Opts::parse();
@@ -95,6 +95,12 @@ async fn main() -> std::io::Result<()> {
         .await
         .expect("Connection to Scylla db error"),
     );
+
+    tracing::info!("Get genesis config...");
+    let genesis_config = near_rpc_client
+        .call(near_jsonrpc_client::methods::EXPERIMENTAL_genesis_config::RpcGenesisConfigRequest)
+        .await?;
+
     let state = ServerContext {
         s3_client: prepare_s3_client(
             &opts.access_key_id,
@@ -102,9 +108,10 @@ async fn main() -> std::io::Result<()> {
             opts.region.clone(),
         )
         .await,
-        scylla_db_client: scylla_db_client,
+        scylla_db_client,
         near_rpc_client: near_rpc_client.clone(),
         s3_bucket_name: opts.s3_bucket_name,
+        genesis_config,
         blocks_cache: std::sync::Arc::clone(&blocks_cache),
         final_block_height: std::sync::Arc::clone(&final_block_height),
         compiled_contract_code_cache,
@@ -142,6 +149,14 @@ async fn main() -> std::io::Result<()> {
         .with_method("status", modules::network::methods::status)
         .with_method("network_info", modules::network::methods::network_info)
         .with_method("validators", modules::network::methods::validators)
+        .with_method(
+            "EXPERIMENTAL_genesis_config",
+            modules::network::methods::genesis_config,
+        )
+        .with_method(
+            "EXPERIMENTAL_protocol_config",
+            modules::network::methods::protocol_config,
+        )
         .finish();
 
     actix_web::HttpServer::new(move || {
