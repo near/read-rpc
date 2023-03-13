@@ -28,13 +28,26 @@ async fn handle_streamer_message(
 
     handle_block(&streamer_message.block, scylladb_session).await?;
 
-    let futures = streamer_message.shards.into_iter().flat_map(|shard| {
-        shard.state_changes.into_iter().map(|state_change_with_cause| {
-            handle_state_change(state_change_with_cause, scylladb_session, block_height, block_hash)
+    let mut futures:  futures::stream::FuturesOrdered::<_> = streamer_message.shards
+        .into_iter()
+        .flat_map(|shard| {
+            shard.state_changes.into_iter().map(|state_change_with_cause| {
+                handle_state_change(state_change_with_cause, scylladb_session, block_height, block_hash)
+            })
         })
-    });
+        .collect();
 
-    futures::future::try_join_all(futures).await?;
+    while let Some(handle_state_change_result) = futures.next().await {
+        let _ = handle_state_change_result.map_err(|err| {
+            tracing::error!(
+                target: INDEXER,
+                "Failed to handle StateChange in block #{}: \n{:#?}",
+                block_height,
+                err,
+            );
+            err
+        })?;
+    }
 
     tracing::debug!(
         target: INDEXER,
