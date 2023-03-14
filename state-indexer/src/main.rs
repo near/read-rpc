@@ -28,26 +28,7 @@ async fn handle_streamer_message(
 
     handle_block(&streamer_message.block, scylladb_session).await?;
 
-    let mut futures:  futures::stream::FuturesOrdered::<_> = streamer_message.shards
-        .into_iter()
-        .flat_map(|shard| {
-            shard.state_changes.into_iter().map(|state_change_with_cause| {
-                handle_state_change(state_change_with_cause, scylladb_session, block_height, block_hash)
-            })
-        })
-        .collect();
-
-    while let Some(handle_state_change_result) = futures.next().await {
-        let _ = handle_state_change_result.map_err(|err| {
-            tracing::error!(
-                target: INDEXER,
-                "Failed to handle StateChange in block #{}: \n{:#?}",
-                block_height,
-                err,
-            );
-            err
-        })?;
-    }
+    handle_state_changes(streamer_message, scylladb_session, block_height, block_hash).await?;
 
     tracing::debug!(
         target: INDEXER,
@@ -108,7 +89,54 @@ async fn handle_block(
         .await?)
 }
 
-async fn handle_state_change(
+/// This function will iterate over all StateChangesWithCauseViews in order to collect
+/// a single StateChangesWithCauseView for a unique account and unique change kind.
+/// The reasoning behind this is that in a single Block (StreamerMessage) there might be a bunch of
+/// changes to the same change kind to the same account and we want to ensure we store the very last
+/// of them.
+/// It's impossible to achieve it with handling all of them one by one asynchronously (they might be handled
+/// in any order) so it's easier for us to skip all the changes except the latest one.
+async fn handle_state_changes(
+    streamer_message: near_indexer_primitives::StreamerMessage,
+    scylladb_session: &Session,
+    block_height: u64,
+    block_hash: CryptoHash,
+) -> anyhow::Result<Vec<()>> {
+    let mut state_changes_to_store =
+        std::collections::HashMap::<String, near_indexer_primitives::views::StateChangeWithCauseView>::new();
+
+    let initial_state_changes: Vec<near_indexer_primitives::views::StateChangeWithCauseView> = streamer_message
+        .shards
+        .into_iter()
+        .flat_map(|shard| shard.state_changes.into_iter())
+        .collect();
+
+    // Collecting a unique list of StateChangeWithCauseView for account_id + change kind
+    // by overwriting the records in the HashMap
+    for state_change in initial_state_changes {
+        let (account_id, change_kind): (&str, &str) = match &state_change.value {
+            StateChangeValueView::DataUpdate { account_id, .. }
+            | StateChangeValueView::DataDeletion { account_id, .. } => (account_id.as_ref(), "data"),
+            StateChangeValueView::AccessKeyUpdate { account_id, .. }
+            | StateChangeValueView::AccessKeyDeletion { account_id, .. } => (account_id.as_ref(), "access_key"),
+            StateChangeValueView::ContractCodeUpdate { account_id, .. }
+            | StateChangeValueView::ContractCodeDeletion { account_id } => (account_id.as_ref(), "contract"),
+            StateChangeValueView::AccountUpdate { account_id, .. }
+            | StateChangeValueView::AccountDeletion { account_id } => (account_id.as_ref(), "account"),
+        };
+        // This will override the previous record for this account_id and state change kind
+        state_changes_to_store.insert(format!("{account_id}_{change_kind}"), state_change);
+    }
+
+    // Asynchronous storing of StateChangeWithCauseView into the storage.
+    let futures = state_changes_to_store.into_values().map(|state_change_with_cause| {
+        store_state_change(state_change_with_cause, scylladb_session, block_height, block_hash)
+    });
+
+    futures::future::try_join_all(futures).await
+}
+
+async fn store_state_change(
     state_change: near_indexer_primitives::views::StateChangeWithCauseView,
     scylladb_session: &Session,
     block_height: u64,
