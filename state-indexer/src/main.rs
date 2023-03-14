@@ -90,10 +90,10 @@ async fn handle_block(
 }
 
 /// This function will iterate over all StateChangesWithCauseViews in order to collect
-/// a single StateChangesWithCauseView for a unique account and unique change kind.
+/// a single StateChangesWithCauseView for a unique account and unique change kind, and unique key.
 /// The reasoning behind this is that in a single Block (StreamerMessage) there might be a bunch of
-/// changes to the same change kind to the same account and we want to ensure we store the very last
-/// of them.
+/// changes to the same change kind to the same account to the same key (state key or public key) and
+/// we want to ensure we store the very last of them.
 /// It's impossible to achieve it with handling all of them one by one asynchronously (they might be handled
 /// in any order) so it's easier for us to skip all the changes except the latest one.
 async fn handle_state_changes(
@@ -111,21 +111,37 @@ async fn handle_state_changes(
         .flat_map(|shard| shard.state_changes.into_iter())
         .collect();
 
-    // Collecting a unique list of StateChangeWithCauseView for account_id + change kind
+    // Collecting a unique list of StateChangeWithCauseView for account_id + change kind + suffix
     // by overwriting the records in the HashMap
     for state_change in initial_state_changes {
-        let (account_id, change_kind): (&str, &str) = match &state_change.value {
-            StateChangeValueView::DataUpdate { account_id, .. }
-            | StateChangeValueView::DataDeletion { account_id, .. } => (account_id.as_ref(), "data"),
-            StateChangeValueView::AccessKeyUpdate { account_id, .. }
-            | StateChangeValueView::AccessKeyDeletion { account_id, .. } => (account_id.as_ref(), "access_key"),
+        let (account_id, change_kind, suffix): (&str, &str, Option<String>) = match &state_change.value {
+            StateChangeValueView::DataUpdate { account_id, key, .. }
+            | StateChangeValueView::DataDeletion { account_id, key } => {
+                // returning a hex-encoded key to ensure we store data changes to the key
+                // (if there is more than one change to the same key)
+                let key: &[u8] = key.as_ref();
+                (account_id.as_ref(), "data", Some(hex::encode(key).to_string()))
+            }
+            StateChangeValueView::AccessKeyUpdate {
+                account_id, public_key, ..
+            }
+            | StateChangeValueView::AccessKeyDeletion { account_id, public_key } => {
+                // returning a hex-encoded key to ensure we store data changes to the key
+                // (if there is more than one change to the same key)
+                let data_key = public_key
+                    .try_to_vec()
+                    .expect("Failed to borsh-serialize the PublicKey");
+                (account_id.as_ref(), "access_key", Some(hex::encode(data_key).to_string()))
+            }
+            // ContractCode and Account changes is not separate-able by any key, we can omit the suffix
             StateChangeValueView::ContractCodeUpdate { account_id, .. }
-            | StateChangeValueView::ContractCodeDeletion { account_id } => (account_id.as_ref(), "contract"),
+            | StateChangeValueView::ContractCodeDeletion { account_id } => (account_id.as_ref(), "contract", None),
             StateChangeValueView::AccountUpdate { account_id, .. }
-            | StateChangeValueView::AccountDeletion { account_id } => (account_id.as_ref(), "account"),
+            | StateChangeValueView::AccountDeletion { account_id } => (account_id.as_ref(), "account", None),
         };
-        // This will override the previous record for this account_id and state change kind
-        state_changes_to_store.insert(format!("{account_id}_{change_kind}"), state_change);
+        // This will override the previous record for this account_id and state change kind + suffix
+        state_changes_to_store
+            .insert(format!("{account_id}_{change_kind}_{}", suffix.unwrap_or_default()), state_change);
     }
 
     // Asynchronous storing of StateChangeWithCauseView into the storage.
