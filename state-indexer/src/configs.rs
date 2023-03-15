@@ -3,6 +3,7 @@ pub use clap::{Parser, Subcommand};
 use near_jsonrpc_client::{methods, JsonRpcClient};
 use near_lake_framework::near_indexer_primitives::types::{BlockReference, Finality};
 use scylla::prepared_statement::PreparedStatement;
+use database::ScyllaStorageManager;
 
 /// NEAR Indexer for Explorer
 /// Watches for stream of blocks from the chain
@@ -144,7 +145,7 @@ pub(crate) struct ScyllaDBManager {
 }
 
 #[async_trait::async_trait]
-impl database::ScyllaStorageManager for ScyllaDBManager {
+impl ScyllaStorageManager for ScyllaDBManager {
     async fn create_tables(scylla_db_session: &scylla::Session) -> anyhow::Result<()> {
         scylla_db_session
             .query(
@@ -350,39 +351,22 @@ impl ScyllaDBManager {
         key: &[u8],
         value: &[u8],
     ) -> anyhow::Result<()> {
-        tracing::debug!(
-            target: crate::INDEXER,
-            "INSERT INTO state_changes_data
-                (account_id, block_height, block_hash, data_key, data_value)
-                VALUES({}, {}, {}, {}, {:?})",
-            account_id.to_string(),
-            block_height,
-            block_hash.to_string(),
-            hex::encode(key),
-            value.to_vec(),
-        );
-        self.scylla_session
-            .execute(
-                &self.add_state_changes,
-                (
+        Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.add_state_changes,
+            (
                     account_id.to_string(),
                     block_height,
                     block_hash.to_string(),
                     hex::encode(key).to_string(),
                     value.to_vec(),
                 ),
-            )
-            .await?;
-
-        tracing::debug!(
-            target: crate::INDEXER,
-            "INSERT INTO account_state (account_id, data_key) VALUES({}, {})",
-            account_id.to_string(),
-            hex::encode(key),
-        );
-        self.scylla_session
-            .execute(&self.add_account_state, (account_id.to_string(), hex::encode(key).to_string()))
-            .await?;
+        ).await?;
+        Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.add_account_state,
+            (account_id.to_string(), hex::encode(key).to_string())
+        ).await?;
         Ok(())
     }
 
@@ -393,22 +377,11 @@ impl ScyllaDBManager {
         block_hash: near_indexer_primitives::CryptoHash,
         key: &[u8],
     ) -> anyhow::Result<()> {
-        tracing::debug!(
-            target: crate::INDEXER,
-            "INSERT INTO state_changes_data
-                (account_id, block_height, block_hash, data_key, data_value)
-                VALUES({}, {}, {}, {}, NULL)",
-            account_id.to_string(),
-            block_height,
-            block_hash.to_string(),
-            hex::encode(key),
-        );
-        self.scylla_session
-            .execute(
-                &self.delete_state_changes,
-                (account_id.to_string(), block_height, block_hash.to_string(), hex::encode(key).to_string()),
-            )
-            .await?;
+        Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.delete_state_changes,
+            (account_id.to_string(), block_height, block_hash.to_string(), hex::encode(key).to_string()),
+            ).await?;
         Ok(())
     }
 
@@ -420,21 +393,10 @@ impl ScyllaDBManager {
         public_key: &[u8],
         access_key: &[u8],
     ) -> anyhow::Result<()> {
-        tracing::debug!(
-            target: crate::INDEXER,
-            "INSERT INTO state_changes_access_key
-                (account_id, block_height, block_hash, data_key, data_value)
-                VALUES({}, {}, {}, {}, {:?})",
-            account_id.to_string(),
-            block_height,
-            block_hash.to_string(),
-            hex::encode(public_key),
-            access_key.to_vec(),
-        );
-        self.scylla_session
-            .execute(
-                &self.add_access_key,
-                (
+        Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.add_access_key,
+            (
                     account_id.to_string(),
                     block_height,
                     block_hash.to_string(),
@@ -453,22 +415,11 @@ impl ScyllaDBManager {
         block_hash: near_indexer_primitives::CryptoHash,
         public_key: &[u8],
     ) -> anyhow::Result<()> {
-        tracing::debug!(
-            target: crate::INDEXER,
-            "INSERT INTO state_changes_access_key
-                (account_id, block_height, block_hash, data_key, data_value)
-                VALUES({}, {}, {}, {}, NULL)",
-            account_id.to_string(),
-            block_height,
-            block_hash.to_string(),
-            hex::encode(public_key),
-        );
-        self.scylla_session
-            .execute(
-                &self.delete_access_key,
-                (account_id.to_string(), block_height, block_hash.to_string(), hex::encode(public_key).to_string()),
-            )
-            .await?;
+        Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.delete_access_key,
+            (account_id.to_string(), block_height, block_hash.to_string(), hex::encode(public_key).to_string()),
+            ).await?;
         Ok(())
     }
 
@@ -479,19 +430,11 @@ impl ScyllaDBManager {
         block_hash: near_indexer_primitives::CryptoHash,
         code: &[u8],
     ) -> anyhow::Result<()> {
-        tracing::debug!(
-            target: crate::INDEXER,
-            "INSERT INTO state_changes_contract
-                (account_id, block_height, block_hash, data_value)
-                VALUES({}, {}, {}, {:?})",
-            account_id.to_string(),
-            block_height,
-            block_hash.to_string(),
-            code,
-        );
-        self.scylla_session
-            .execute(&self.add_contract, (account_id.to_string(), block_height, block_hash.to_string(), code.to_vec()))
-            .await?;
+        Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.add_contract,
+            (account_id.to_string(), block_height, block_hash.to_string(), code.to_vec())
+        ).await?;
         Ok(())
     }
 
@@ -501,18 +444,11 @@ impl ScyllaDBManager {
         block_height: bigdecimal::BigDecimal,
         block_hash: near_indexer_primitives::CryptoHash,
     ) -> anyhow::Result<()> {
-        tracing::debug!(
-            target: crate::INDEXER,
-            "INSERT INTO state_changes_contract
-                (account_id, block_height, block_hash, data_value)
-                VALUES({}, {}, {}, NULL)",
-            account_id.to_string(),
-            block_height,
-            block_hash.to_string(),
-        );
-        self.scylla_session
-            .execute(&self.delete_contract, (account_id.to_string(), block_height, block_hash.to_string()))
-            .await?;
+        Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.delete_contract,
+            (account_id.to_string(), block_height, block_hash.to_string())
+        ).await?;
         Ok(())
     }
 
@@ -523,19 +459,11 @@ impl ScyllaDBManager {
         block_hash: near_indexer_primitives::CryptoHash,
         account: Vec<u8>,
     ) -> anyhow::Result<()> {
-        tracing::debug!(
-            target: crate::INDEXER,
-            "INSERT INTO state_changes_account
-                (account_id, block_height, block_hash, data_value)
-                VALUES({}, {}, {}, {:?})",
-            account_id.to_string(),
-            block_height,
-            block_hash.to_string(),
-            &account,
-        );
-        self.scylla_session
-            .execute(&self.add_account, (account_id.to_string(), block_height, block_hash.to_string(), account))
-            .await?;
+        Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.add_account,
+            (account_id.to_string(), block_height, block_hash.to_string(), account)
+        ).await?;
         Ok(())
     }
 
@@ -545,18 +473,11 @@ impl ScyllaDBManager {
         block_height: bigdecimal::BigDecimal,
         block_hash: near_indexer_primitives::CryptoHash,
     ) -> anyhow::Result<()> {
-        tracing::debug!(
-            target: crate::INDEXER,
-            "INSERT INTO state_changes_account
-                (account_id, block_height, block_hash, data_value)
-                VALUES({}, {}, {}, NULL)",
-            account_id.to_string(),
-            block_height,
-            block_hash.to_string(),
-        );
-        self.scylla_session
-            .execute(&self.delete_account, (account_id.to_string(), block_height, block_hash.to_string()))
-            .await?;
+        Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.delete_account,
+            (account_id.to_string(), block_height, block_hash.to_string())
+        ).await?;
         Ok(())
     }
 
@@ -566,19 +487,12 @@ impl ScyllaDBManager {
         block_hash: near_indexer_primitives::CryptoHash,
         chunks: Vec<String>,
     ) -> anyhow::Result<scylla::QueryResult> {
-        tracing::debug!(
-            target: crate::INDEXER,
-            "INSERT INTO blocks
-            (block_height, block_hash, chunks)
-            VALUES ({}, {}, {:?})",
-            block_height,
-            block_hash,
-            chunks,
-        );
-        Ok(self
-            .scylla_session
-            .execute(&self.add_block, (block_height, block_hash.to_string(), chunks))
-            .await?)
+        let query_result = Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.add_block,
+            (block_height, block_hash.to_string(), chunks)
+        ).await?;
+        Ok(query_result)
     }
 
     pub(crate) async fn update_meta(
@@ -586,17 +500,11 @@ impl ScyllaDBManager {
         indexer_id: &str,
         block_height: bigdecimal::BigDecimal,
     ) -> anyhow::Result<()> {
-        tracing::debug!(
-            target: crate::INDEXER,
-            "INSERT INTO meta
-            (indexer_id, last_processed_block_height)
-            VALUES ({}, {})",
-            indexer_id,
-            block_height,
-        );
-        self.scylla_session
-            .execute(&self.update_meta, (indexer_id, block_height))
-            .await?;
+        Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.update_meta,
+            (indexer_id, block_height)
+        ).await?;
         Ok(())
     }
 }

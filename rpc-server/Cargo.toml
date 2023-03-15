@@ -39,6 +39,8 @@ opentelemetry = { version = "0.17", features = ["rt-tokio-current-thread"] }
 opentelemetry-jaeger = { version = "0.16", features = ["rt-tokio-current-thread"] }
 tracing-opentelemetry = { version = "0.17" }
 
+database = { path = "../database"}
 
 [features]
 tracing-instrumentation = []
+scylla_db_tracing = ["database/scylla_db_tracing"]

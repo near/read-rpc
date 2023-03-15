@@ -5,6 +5,7 @@ use near_indexer_primitives::types::{BlockReference, Finality};
 use near_jsonrpc_client::{methods, JsonRpcClient};
 use scylla::prepared_statement::PreparedStatement;
 use tracing_subscriber::EnvFilter;
+use database::ScyllaStorageManager;
 
 /// NEAR Indexer for Explorer
 /// Watches for stream of blocks from the chain
@@ -163,7 +164,7 @@ pub(crate) struct ScyllaDBManager {
 }
 
 #[async_trait::async_trait]
-impl database::ScyllaStorageManager for ScyllaDBManager {
+impl ScyllaStorageManager for ScyllaDBManager {
     async fn create_tables(scylla_db_session: &scylla::Session) -> anyhow::Result<()> {
         scylla_db_session
             .query(
@@ -206,17 +207,16 @@ impl ScyllaDBManager {
         let transaction_details = transaction
             .try_to_vec()
             .expect("Failed to borsh-serialize the Transaction");
-        self.scylla_session
-            .execute(
-                &self.add_transaction,
-                (
-                    transaction.transaction.hash.to_string(),
-                    num_bigint::BigInt::from(block_height),
-                    transaction.transaction.signer_id.to_string(),
-                    &transaction_details,
-                ),
+        Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.add_transaction,
+            (
+                transaction.transaction.hash.to_string(),
+                num_bigint::BigInt::from(block_height),
+                transaction.transaction.signer_id.to_string(),
+                &transaction_details,
             )
-            .await?;
+        ).await?;
         Ok(())
     }
 }

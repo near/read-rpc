@@ -35,3 +35,7 @@ near-jsonrpc-client = "0.5.0"
 near-lake-framework = "0.7.0"
 
 database = { path = "../database"}
+
+
+[features]
+scylla_db_tracing = ["database/scylla_db_tracing"]
