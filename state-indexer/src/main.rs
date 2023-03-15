@@ -105,22 +105,21 @@ async fn handle_state_changes(
     let mut state_changes_to_store =
         std::collections::HashMap::<String, near_indexer_primitives::views::StateChangeWithCauseView>::new();
 
-    let initial_state_changes: Vec<near_indexer_primitives::views::StateChangeWithCauseView> = streamer_message
+    let initial_state_changes = streamer_message
         .shards
         .into_iter()
-        .flat_map(|shard| shard.state_changes.into_iter())
-        .collect();
+        .flat_map(|shard| shard.state_changes.into_iter());
 
     // Collecting a unique list of StateChangeWithCauseView for account_id + change kind + suffix
     // by overwriting the records in the HashMap
     for state_change in initial_state_changes {
-        let (account_id, change_kind, suffix): (&str, &str, Option<String>) = match &state_change.value {
+        let key = match &state_change.value {
             StateChangeValueView::DataUpdate { account_id, key, .. }
             | StateChangeValueView::DataDeletion { account_id, key } => {
                 // returning a hex-encoded key to ensure we store data changes to the key
                 // (if there is more than one change to the same key)
                 let key: &[u8] = key.as_ref();
-                (account_id.as_ref(), "data", Some(hex::encode(key).to_string()))
+                format!("{}_data_{}", account_id.as_ref(), hex::encode(key).to_string())
             }
             StateChangeValueView::AccessKeyUpdate {
                 account_id, public_key, ..
@@ -131,17 +130,16 @@ async fn handle_state_changes(
                 let data_key = public_key
                     .try_to_vec()
                     .expect("Failed to borsh-serialize the PublicKey");
-                (account_id.as_ref(), "access_key", Some(hex::encode(data_key).to_string()))
+                format!("{}_access_key_{}", account_id.as_ref(), hex::encode(data_key).to_string())
             }
             // ContractCode and Account changes is not separate-able by any key, we can omit the suffix
             StateChangeValueView::ContractCodeUpdate { account_id, .. }
-            | StateChangeValueView::ContractCodeDeletion { account_id } => (account_id.as_ref(), "contract", None),
+            | StateChangeValueView::ContractCodeDeletion { account_id } => format!("{}_contract", account_id.as_ref()),
             StateChangeValueView::AccountUpdate { account_id, .. }
-            | StateChangeValueView::AccountDeletion { account_id } => (account_id.as_ref(), "account", None),
+            | StateChangeValueView::AccountDeletion { account_id } => format!("{}_account", account_id.as_ref()),
         };
-        // This will override the previous record for this account_id and state change kind + suffix
-        state_changes_to_store
-            .insert(format!("{account_id}_{change_kind}_{}", suffix.unwrap_or_default()), state_change);
+        // This will override the previous record for this account_id + state change kind + suffix
+        state_changes_to_store.insert(key, state_change);
     }
 
     // Asynchronous storing of StateChangeWithCauseView into the storage.
