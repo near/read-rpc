@@ -5,7 +5,8 @@ pub async fn prepare_s3_client(
     secret_access_key: &str,
     region: String,
 ) -> aws_sdk_s3::Client {
-    let credentials = aws_types::Credentials::new(access_key_id, secret_access_key, None, None, "");
+    let credentials =
+        aws_credential_types::Credentials::new(access_key_id, secret_access_key, None, None, "");
     let s3_config = aws_sdk_s3::Config::builder()
         .credentials_provider(credentials)
         .region(aws_sdk_s3::Region::new(region))

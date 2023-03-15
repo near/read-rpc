@@ -1,6 +1,9 @@
 [workspace]
 
 members = [
+    "database",
+    "readnode-primitives",
     "rpc-server",
     "state-indexer",
+    "tx-indexer",
 ]
