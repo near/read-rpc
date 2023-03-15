@@ -23,7 +23,7 @@ async fn view_account(
     );
 
     let account =
-        fetch_account_from_scylla_db(&data.scylla_db_client, account_id, block.block_height)
+        fetch_account_from_scylla_db(&data.scylla_db_manager, account_id, block.block_height)
             .await?;
 
     Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
@@ -47,7 +47,7 @@ async fn view_code(
         block.block_height
     );
     let code_data_from_db =
-        fetch_contract_code_from_scylla_db(&data.scylla_db_client, account_id, block.block_height)
+        fetch_contract_code_from_scylla_db(&data.scylla_db_manager, account_id, block.block_height)
             .await?;
     Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc_primitives::types::query::QueryResponseKind::ViewCode(
@@ -79,7 +79,7 @@ async fn function_call(
         account_id,
         method_name,
         args,
-        data.scylla_db_client.clone(),
+        data.scylla_db_manager.clone(),
         &data.compiled_contract_code_cache,
         &data.contract_code_cache,
         block.block_height,
@@ -116,7 +116,7 @@ async fn view_state(
         prefix,
     );
     let contract_state = fetch_state_from_scylla_db(
-        &data.scylla_db_client,
+        &data.scylla_db_manager,
         account_id,
         block.block_height,
         prefix,
@@ -145,7 +145,7 @@ async fn view_access_key(
     );
 
     let access_key = fetch_access_key_from_scylla_db(
-        &data.scylla_db_client,
+        &data.scylla_db_manager,
         account_id,
         block.block_height,
         key_data,

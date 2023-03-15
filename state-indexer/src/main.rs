@@ -38,7 +38,7 @@ async fn handle_block(
     block: &near_indexer_primitives::views::BlockView,
     scylla_storage: &configs::ScyllaDBManager,
 ) -> anyhow::Result<scylla::QueryResult> {
-    Ok(scylla_storage
+    scylla_storage
         .add_block(
             bigdecimal::BigDecimal::from_u64(block.header.height).unwrap(),
             block.header.hash,
@@ -48,7 +48,7 @@ async fn handle_block(
                 .map(|chunk_header_view| chunk_header_view.chunk_hash.to_string())
                 .collect::<Vec<String>>(),
         )
-        .await?)
+        .await
 }
 
 /// This function will iterate over all StateChangesWithCauseViews in order to collect
@@ -216,7 +216,7 @@ async fn main() -> anyhow::Result<()> {
         &opts.scylla_keyspace,
         opts.scylla_user.as_deref(),
         opts.scylla_password.as_deref(),
-        true,
+        None,
     )
     .await?;
     let scylla_session = scylla_storage.scylla_session().await;

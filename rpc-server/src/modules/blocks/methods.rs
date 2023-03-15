@@ -17,7 +17,7 @@ pub async fn fetch_block(
         near_primitives::types::BlockReference::BlockId(block_id) => match block_id {
             near_primitives::types::BlockId::Height(block_height) => block_height,
             near_primitives::types::BlockId::Hash(block_hash) => {
-                scylla_db_convert_block_hash_to_block_height(&data.scylla_db_client, block_hash)
+                scylla_db_convert_block_hash_to_block_height(&data.scylla_db_manager, block_hash)
                     .await?
             }
         },
@@ -48,7 +48,7 @@ pub async fn fetch_chunk(
             near_primitives::types::BlockId::Height(block_height) => (block_height, shard_id),
             near_primitives::types::BlockId::Hash(block_hash) => {
                 let block_height = scylla_db_convert_block_hash_to_block_height(
-                    &data.scylla_db_client,
+                    &data.scylla_db_manager,
                     block_hash,
                 )
                 .await?;
@@ -57,7 +57,7 @@ pub async fn fetch_chunk(
         },
         near_jsonrpc_primitives::types::chunks::ChunkReference::ChunkHash { chunk_id } => {
             scylla_db_convert_chunk_hash_to_block_height_and_shard_id(
-                &data.scylla_db_client,
+                &data.scylla_db_manager,
                 chunk_id,
             )
             .await?

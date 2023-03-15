@@ -23,7 +23,7 @@ async fn main() -> anyhow::Result<()> {
             &opts.scylla_keyspace,
             opts.scylla_user.as_deref(),
             opts.scylla_password.as_deref(),
-            true,
+            None,
         )
         .await?,
     );

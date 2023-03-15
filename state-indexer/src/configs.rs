@@ -1,9 +1,9 @@
 use bigdecimal::ToPrimitive;
 pub use clap::{Parser, Subcommand};
+use database::ScyllaStorageManager;
 use near_jsonrpc_client::{methods, JsonRpcClient};
 use near_lake_framework::near_indexer_primitives::types::{BlockReference, Finality};
 use scylla::prepared_statement::PreparedStatement;
-use database::ScyllaStorageManager;
 
 /// NEAR Indexer for Explorer
 /// Watches for stream of blocks from the chain
@@ -355,18 +355,20 @@ impl ScyllaDBManager {
             &self.scylla_session,
             &self.add_state_changes,
             (
-                    account_id.to_string(),
-                    block_height,
-                    block_hash.to_string(),
-                    hex::encode(key).to_string(),
-                    value.to_vec(),
-                ),
-        ).await?;
+                account_id.to_string(),
+                block_height,
+                block_hash.to_string(),
+                hex::encode(key).to_string(),
+                value.to_vec(),
+            ),
+        )
+        .await?;
         Self::execute_prepared_query(
             &self.scylla_session,
             &self.add_account_state,
-            (account_id.to_string(), hex::encode(key).to_string())
-        ).await?;
+            (account_id.to_string(), hex::encode(key).to_string()),
+        )
+        .await?;
         Ok(())
     }
 
@@ -381,7 +383,8 @@ impl ScyllaDBManager {
             &self.scylla_session,
             &self.delete_state_changes,
             (account_id.to_string(), block_height, block_hash.to_string(), hex::encode(key).to_string()),
-            ).await?;
+        )
+        .await?;
         Ok(())
     }
 
@@ -397,14 +400,14 @@ impl ScyllaDBManager {
             &self.scylla_session,
             &self.add_access_key,
             (
-                    account_id.to_string(),
-                    block_height,
-                    block_hash.to_string(),
-                    hex::encode(public_key).to_string(),
-                    access_key.to_vec(),
-                ),
-            )
-            .await?;
+                account_id.to_string(),
+                block_height,
+                block_hash.to_string(),
+                hex::encode(public_key).to_string(),
+                access_key.to_vec(),
+            ),
+        )
+        .await?;
         Ok(())
     }
 
@@ -419,7 +422,8 @@ impl ScyllaDBManager {
             &self.scylla_session,
             &self.delete_access_key,
             (account_id.to_string(), block_height, block_hash.to_string(), hex::encode(public_key).to_string()),
-            ).await?;
+        )
+        .await?;
         Ok(())
     }
 
@@ -433,8 +437,9 @@ impl ScyllaDBManager {
         Self::execute_prepared_query(
             &self.scylla_session,
             &self.add_contract,
-            (account_id.to_string(), block_height, block_hash.to_string(), code.to_vec())
-        ).await?;
+            (account_id.to_string(), block_height, block_hash.to_string(), code.to_vec()),
+        )
+        .await?;
         Ok(())
     }
 
@@ -447,8 +452,9 @@ impl ScyllaDBManager {
         Self::execute_prepared_query(
             &self.scylla_session,
             &self.delete_contract,
-            (account_id.to_string(), block_height, block_hash.to_string())
-        ).await?;
+            (account_id.to_string(), block_height, block_hash.to_string()),
+        )
+        .await?;
         Ok(())
     }
 
@@ -462,8 +468,9 @@ impl ScyllaDBManager {
         Self::execute_prepared_query(
             &self.scylla_session,
             &self.add_account,
-            (account_id.to_string(), block_height, block_hash.to_string(), account)
-        ).await?;
+            (account_id.to_string(), block_height, block_hash.to_string(), account),
+        )
+        .await?;
         Ok(())
     }
 
@@ -476,8 +483,9 @@ impl ScyllaDBManager {
         Self::execute_prepared_query(
             &self.scylla_session,
             &self.delete_account,
-            (account_id.to_string(), block_height, block_hash.to_string())
-        ).await?;
+            (account_id.to_string(), block_height, block_hash.to_string()),
+        )
+        .await?;
         Ok(())
     }
 
@@ -490,8 +498,9 @@ impl ScyllaDBManager {
         let query_result = Self::execute_prepared_query(
             &self.scylla_session,
             &self.add_block,
-            (block_height, block_hash.to_string(), chunks)
-        ).await?;
+            (block_height, block_hash.to_string(), chunks),
+        )
+        .await?;
         Ok(query_result)
     }
 
@@ -500,11 +509,7 @@ impl ScyllaDBManager {
         indexer_id: &str,
         block_height: bigdecimal::BigDecimal,
     ) -> anyhow::Result<()> {
-        Self::execute_prepared_query(
-            &self.scylla_session,
-            &self.update_meta,
-            (indexer_id, block_height)
-        ).await?;
+        Self::execute_prepared_query(&self.scylla_session, &self.update_meta, (indexer_id, block_height)).await?;
         Ok(())
     }
 }

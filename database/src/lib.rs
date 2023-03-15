@@ -21,7 +21,6 @@
 // }
 //
 // If you need migrations describe the tables in the `create_tables`
-// and use apply_migrations = true
 //
 //     async fn create_tables(scylla_db_session: &scylla::Session) -> anyhow::Result<()> {
 //         scylla_db_session.query(
@@ -69,7 +68,7 @@
 //         scylla_keyspace,
 //         scylla_user,
 //         scylla_password,
-//         apply_migrations=false
+//         Some(keepalive_interval),
 // ).await?,
 
 use scylla::prepared_statement::PreparedStatement;
@@ -81,15 +80,21 @@ pub trait ScyllaStorageManager {
         scylla_keyspace: &str,
         scylla_user: Option<&str>,
         scylla_password: Option<&str>,
-        apply_migrations: bool,
+        keepalive_interval: Option<u64>,
     ) -> anyhow::Result<Box<Self>> {
         let scylla_db_session = std::sync::Arc::new(
-            Self::get_scylladb_session(scylla_url, scylla_user, scylla_password).await?,
+            Self::get_scylladb_session(
+                scylla_url,
+                scylla_user,
+                scylla_password,
+                keepalive_interval,
+            )
+            .await?,
         );
-        if apply_migrations {
-            tracing::info!("Running migrations into the scylla database...");
-            Self::migrate(&scylla_db_session, scylla_keyspace).await?
-        }
+
+        tracing::info!("Running migrations into the scylla database...");
+        Self::migrate(&scylla_db_session, scylla_keyspace).await?;
+
         scylla_db_session
             .use_keyspace(scylla_keyspace, false)
             .await?;
@@ -122,7 +127,8 @@ pub trait ScyllaStorageManager {
     //         ).await?;
     //     Ok(())
     async fn create_tables(_scylla_db_session: &scylla::Session) -> anyhow::Result<()> {
-        anyhow::bail!("Please describe the tables in the `create_tables`")
+        tracing::info!("Please describe the tables in the `create_tables`, if needed.");
+        Ok(())
     }
 
     // Create keyspace
@@ -148,7 +154,6 @@ pub trait ScyllaStorageManager {
         {
             let prepared = scylla_db_session.prepare(query).await?;
             Ok(prepared)
-
         }
 
         #[cfg(feature = "scylla_db_tracing")]
@@ -157,17 +162,20 @@ pub trait ScyllaStorageManager {
             prepared.set_tracing(true);
             Ok(prepared)
         }
-
     }
 
     async fn get_scylladb_session(
         scylla_url: &str,
         scylla_user: Option<&str>,
         scylla_password: Option<&str>,
+        keepalive_interval: Option<u64>,
     ) -> anyhow::Result<scylla::Session> {
         let mut session: scylla::SessionBuilder =
             scylla::SessionBuilder::new().known_node(scylla_url);
 
+        if let Some(keepalive) = keepalive_interval {
+            session = session.keepalive_interval(std::time::Duration::from_secs(keepalive));
+        }
         if let Some(user) = scylla_user {
             if let Some(password) = scylla_password {
                 session = session.user(user, password);
@@ -195,7 +203,6 @@ pub trait ScyllaStorageManager {
     //     })
     // }
 
-
     async fn execute_prepared_query(
         scylla_session: &scylla::Session,
         query: &PreparedStatement,
@@ -208,7 +215,8 @@ pub trait ScyllaStorageManager {
             let tracing_id: Option<uuid::Uuid> = result.tracing_id;
             if let Some(id) = tracing_id {
                 // Query tracing info from system_traces.sessions and system_traces.events
-                let tracing_info: scylla::tracing::TracingInfo = scylla_session.get_tracing_info(&id).await?;
+                let tracing_info: scylla::tracing::TracingInfo =
+                    scylla_session.get_tracing_info(&id).await?;
                 Self::log_tracing_info(tracing_info).await;
             }
         }
@@ -218,6 +226,7 @@ pub trait ScyllaStorageManager {
 
     // For now we show all scylla tracing_info datails
     // In future we can left only needed
+    #[cfg(feature = "scylla_db_tracing")]
     async fn log_tracing_info(tracing_info: scylla::tracing::TracingInfo) {
         let mut tracing_info_table = prettytable::table!(["Parameter", "Info"]);
 
@@ -253,28 +262,29 @@ pub trait ScyllaStorageManager {
             tracing_info_table.add_row(prettytable::row!["Started at", start_at]);
         }
 
-        let mut events_table = prettytable::table!(["Activity", "Thread", "Source", "Source elapsed"]);
+        let mut events_table =
+            prettytable::table!(["Activity", "Thread", "Source", "Source elapsed"]);
         for event in tracing_info.events.iter() {
             let mut event_row = vec![];
             let none_val = prettytable::Cell::new(&String::from("Unknown"));
             match &event.activity {
                 Some(act) => event_row.push(prettytable::Cell::new(act)),
-                None => event_row.push(none_val.clone())
+                None => event_row.push(none_val.clone()),
             }
 
             match &event.thread {
                 Some(thr) => event_row.push(prettytable::Cell::new(thr)),
-                None => event_row.push(none_val.clone())
+                None => event_row.push(none_val.clone()),
             }
 
             match &event.source {
                 Some(src) => event_row.push(prettytable::Cell::new(&src.to_string())),
-                None => event_row.push(none_val.clone())
+                None => event_row.push(none_val.clone()),
             }
 
             match &event.source_elapsed {
                 Some(src_el) => event_row.push(prettytable::Cell::new(&src_el.to_string())),
-                None => event_row.push(none_val)
+                None => event_row.push(none_val),
             }
             events_table.add_row(prettytable::Row::new(event_row));
         }
@@ -282,5 +292,4 @@ pub trait ScyllaStorageManager {
 
         tracing_info_table.printstd();
     }
-
 }

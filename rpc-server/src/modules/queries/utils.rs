@@ -1,7 +1,5 @@
-use crate::config::CompiledCodeCache;
-use crate::modules::queries::{
-    CodeStorage, ACCESS_KEY_SCOPE, ACCOUNT_SCOPE, CODE_SCOPE, DATA_SCOPE, MAX_LIMIT,
-};
+use crate::config::{CompiledCodeCache, ScyllaDBManager};
+use crate::modules::queries::{CodeStorage, MAX_LIMIT};
 use borsh::BorshDeserialize;
 use scylla::IntoTypedRows;
 use std::collections::HashMap;
@@ -10,62 +8,10 @@ use tokio::task;
 
 #[cfg_attr(
     feature = "tracing-instrumentation",
-    tracing::instrument(skip(scylla_db_client))
-)]
-pub async fn fetch_data_from_scylla_db(
-    scope: &str,
-    scylla_db_client: &std::sync::Arc<scylla::Session>,
-    account_id: &near_primitives::types::AccountId,
-    block_height: near_primitives::types::BlockHeight,
-    key_data: Option<Vec<u8>>,
-) -> anyhow::Result<Vec<u8>> {
-    let mut query_str = format!(
-        "SELECT data_value FROM state_changes_{scope} WHERE account_id = ? AND block_height <= ? "
-    );
-    let result = match key_data {
-        Some(data_key) => {
-            query_str.push_str("AND data_key = ? LIMIT 1");
-            scylla_db_client
-                .query(
-                    query_str,
-                    (
-                        account_id.to_string(),
-                        num_bigint::BigInt::from(block_height),
-                        hex::encode(&data_key).to_string(),
-                    ),
-                )
-                .await?
-                .single_row()
-        }
-        None => {
-            query_str.push_str("LIMIT 1");
-            scylla_db_client
-                .query(
-                    query_str,
-                    (
-                        account_id.to_string(),
-                        num_bigint::BigInt::from(block_height),
-                    ),
-                )
-                .await?
-                .single_row()
-        }
-    };
-    if let Ok(row) = result {
-        let (data_value,): (Vec<u8>,) = row.into_typed::<(Vec<u8>,)>()?;
-        Ok(data_value)
-    } else {
-        Ok(vec![])
-    }
-}
-
-#[cfg_attr(
-    feature = "tracing-instrumentation",
-    tracing::instrument(skip(scylla_db_client))
+    tracing::instrument(skip(scylla_db_manager))
 )]
 pub async fn get_stata_keys_from_scylla(
-    scope: &str,
-    scylla_db_client: &std::sync::Arc<scylla::Session>,
+    scylla_db_manager: &std::sync::Arc<ScyllaDBManager>,
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
     prefix: &[u8],
@@ -79,47 +25,29 @@ pub async fn get_stata_keys_from_scylla(
     let mut data: HashMap<Vec<u8>, Vec<u8>> = HashMap::new();
     let result = {
         if !prefix.is_empty() {
-            let hex_str_prefix = hex::encode(prefix);
-            scylla_db_client
-                .query(
-                    "SELECT data_key FROM account_state WHERE account_id = ? AND data_key LIKE ?",
-                    (
-                        account_id.to_string(),
-                        format!("{hex_str_prefix}%").to_string(),
-                    ),
-                )
+            scylla_db_manager
+                .get_state_keys_by_prefix(account_id, prefix)
                 .await
-                .expect("Invalid query into `account_state` table")
-                .rows
         } else {
-            scylla_db_client
-                .query(
-                    "SELECT data_key FROM account_state WHERE account_id = ?",
-                    (account_id.to_string(),),
-                )
-                .await
-                .expect("Invalid query into `account_state` table")
-                .rows
+            scylla_db_manager.get_all_state_keys(account_id).await
         }
     };
     match result {
-        Some(rows) => {
+        Ok(rows) => {
             for row in rows.into_typed::<(String,)>() {
                 let (hex_data_key,): (String,) = row.expect("Invalid data");
                 let data_key = hex::decode(hex_data_key).unwrap();
-                let data_value = fetch_data_from_scylla_db(
-                    scope,
-                    scylla_db_client,
-                    account_id,
-                    block_height,
-                    Some(data_key.clone()),
-                )
-                .await
-                .expect("Invalid data");
-                if !data_value.is_empty() {
-                    data.insert(data_key, data_value);
-                }
-
+                let data_row = scylla_db_manager
+                    .get_state_key_value(account_id, block_height, data_key.clone())
+                    .await;
+                if let Ok(row) = data_row {
+                    if let Ok(value) = row.into_typed::<(Vec<u8>,)>() {
+                        let (data_value,): (Vec<u8>,) = value;
+                        if !data_value.is_empty() {
+                            data.insert(data_key, data_value);
+                        }
+                    }
+                };
                 let keys_count = data.keys().len() as u8;
                 if keys_count > MAX_LIMIT {
                     return data;
@@ -127,16 +55,16 @@ pub async fn get_stata_keys_from_scylla(
             }
             data
         }
-        None => data,
+        Err(_) => data,
     }
 }
 
 #[cfg_attr(
     feature = "tracing-instrumentation",
-    tracing::instrument(skip(scylla_db_client))
+    tracing::instrument(skip(scylla_db_manager))
 )]
 pub async fn fetch_account_from_scylla_db(
-    scylla_db_client: &std::sync::Arc<scylla::Session>,
+    scylla_db_manager: &std::sync::Arc<ScyllaDBManager>,
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
 ) -> anyhow::Result<near_primitives::account::Account> {
@@ -146,25 +74,22 @@ pub async fn fetch_account_from_scylla_db(
         block_height,
     );
 
-    let account_from_db = fetch_data_from_scylla_db(
-        ACCOUNT_SCOPE,
-        scylla_db_client,
-        account_id,
-        block_height,
-        None,
-    )
-    .await?;
+    let row = scylla_db_manager
+        .get_account(account_id, block_height)
+        .await?;
+    let (data_value,): (Vec<u8>,) = row.into_typed::<(Vec<u8>,)>()?;
+
     Ok(near_primitives::account::Account::try_from_slice(
-        &account_from_db,
+        &data_value,
     )?)
 }
 
 #[cfg_attr(
     feature = "tracing-instrumentation",
-    tracing::instrument(skip(scylla_db_client))
+    tracing::instrument(skip(scylla_db_manager))
 )]
 pub async fn fetch_contract_code_from_scylla_db(
-    scylla_db_client: &std::sync::Arc<scylla::Session>,
+    scylla_db_manager: &std::sync::Arc<ScyllaDBManager>,
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
 ) -> anyhow::Result<Vec<u8>> {
@@ -173,9 +98,11 @@ pub async fn fetch_contract_code_from_scylla_db(
         account_id,
         block_height,
     );
-    let code_data_from_scylla_db =
-        fetch_data_from_scylla_db(CODE_SCOPE, scylla_db_client, account_id, block_height, None)
-            .await?;
+    let row = scylla_db_manager
+        .get_contract_code(account_id, block_height)
+        .await?;
+    let (code_data_from_scylla_db,): (Vec<u8>,) = row.into_typed::<(Vec<u8>,)>()?;
+
     if code_data_from_scylla_db.is_empty() {
         anyhow::bail!(
             "Contract code for {} on block height {} is not found in ScyllaDB",
@@ -189,10 +116,10 @@ pub async fn fetch_contract_code_from_scylla_db(
 
 #[cfg_attr(
     feature = "tracing-instrumentation",
-    tracing::instrument(skip(scylla_db_client))
+    tracing::instrument(skip(scylla_db_manager))
 )]
 pub async fn fetch_access_key_from_scylla_db(
-    scylla_db_client: &std::sync::Arc<scylla::Session>,
+    scylla_db_manager: &std::sync::Arc<ScyllaDBManager>,
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
     key_data: Vec<u8>,
@@ -203,25 +130,22 @@ pub async fn fetch_access_key_from_scylla_db(
         block_height,
         key_data,
     );
-    let access_key_from_scylla_db = fetch_data_from_scylla_db(
-        ACCESS_KEY_SCOPE,
-        scylla_db_client,
-        account_id,
-        block_height,
-        Some(key_data),
-    )
-    .await?;
+    let row = scylla_db_manager
+        .get_access_key(account_id, block_height, key_data)
+        .await?;
+    let (data_value,): (Vec<u8>,) = row.into_typed::<(Vec<u8>,)>()?;
+
     Ok(near_primitives::account::AccessKey::try_from_slice(
-        &access_key_from_scylla_db,
+        &data_value,
     )?)
 }
 
 #[cfg_attr(
     feature = "tracing-instrumentation",
-    tracing::instrument(skip(scylla_db_client))
+    tracing::instrument(skip(scylla_db_manager))
 )]
 pub async fn fetch_state_from_scylla_db(
-    scylla_db_client: &std::sync::Arc<scylla::Session>,
+    scylla_db_manager: &std::sync::Arc<ScyllaDBManager>,
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
     prefix: &[u8],
@@ -232,14 +156,8 @@ pub async fn fetch_state_from_scylla_db(
         block_height,
         prefix,
     );
-    let state_from_db = get_stata_keys_from_scylla(
-        DATA_SCOPE,
-        scylla_db_client,
-        account_id,
-        block_height,
-        prefix,
-    )
-    .await;
+    let state_from_db =
+        get_stata_keys_from_scylla(scylla_db_manager, account_id, block_height, prefix).await;
     if state_from_db.is_empty() {
         anyhow::bail!("Data not found in db")
     } else {
@@ -262,7 +180,7 @@ pub async fn fetch_state_from_scylla_db(
 #[cfg_attr(
     feature = "tracing-instrumentation",
     tracing::instrument(skip(
-        scylla_db_client,
+        scylla_db_manager,
         context,
         contract_code,
         compiled_contract_code_cache
@@ -274,12 +192,12 @@ async fn run_code_in_vm_runner(
     context: near_vm_logic::VMContext,
     account_id: near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
-    scylla_db_client: std::sync::Arc<scylla::Session>,
+    scylla_db_manager: std::sync::Arc<ScyllaDBManager>,
     latest_protocol_version: near_primitives::types::ProtocolVersion,
     compiled_contract_code_cache: &std::sync::Arc<CompiledCodeCache>,
 ) -> anyhow::Result<near_vm_logic::VMOutcome> {
     let contract_method_name = String::from(method_name);
-    let mut external = CodeStorage::init(scylla_db_client.clone(), account_id, block_height);
+    let mut external = CodeStorage::init(scylla_db_manager.clone(), account_id, block_height);
     let code_cache = std::sync::Arc::clone(compiled_contract_code_cache);
 
     let results = task::spawn_blocking(move || {
@@ -319,13 +237,13 @@ async fn run_code_in_vm_runner(
 
 #[cfg_attr(
     feature = "tracing-instrumentation",
-    tracing::instrument(skip(scylla_db_client, compiled_contract_code_cache))
+    tracing::instrument(skip(scylla_db_manager, compiled_contract_code_cache))
 )]
 pub async fn run_contract(
     account_id: near_primitives::types::AccountId,
     method_name: &str,
     args: near_primitives::types::FunctionArgs,
-    scylla_db_client: std::sync::Arc<scylla::Session>,
+    scylla_db_manager: std::sync::Arc<ScyllaDBManager>,
     compiled_contract_code_cache: &std::sync::Arc<CompiledCodeCache>,
     contract_code_cache: &std::sync::Arc<
         std::sync::RwLock<lru::LruCache<near_primitives::hash::CryptoHash, Vec<u8>>>,
@@ -335,7 +253,7 @@ pub async fn run_contract(
     latest_protocol_version: near_primitives::types::ProtocolVersion,
 ) -> anyhow::Result<near_vm_logic::VMOutcome> {
     let contract =
-        fetch_account_from_scylla_db(&scylla_db_client, &account_id, block_height).await?;
+        fetch_account_from_scylla_db(&scylla_db_manager, &account_id, block_height).await?;
     let code: Option<Vec<u8>> = contract_code_cache
         .write()
         .unwrap()
@@ -347,7 +265,7 @@ pub async fn run_contract(
         }
         None => {
             let code =
-                fetch_contract_code_from_scylla_db(&scylla_db_client, &account_id, block_height)
+                fetch_contract_code_from_scylla_db(&scylla_db_manager, &account_id, block_height)
                     .await?;
             contract_code_cache
                 .write()
@@ -382,7 +300,7 @@ pub async fn run_contract(
         context,
         account_id,
         block_height,
-        scylla_db_client.clone(),
+        scylla_db_manager.clone(),
         latest_protocol_version,
         compiled_contract_code_cache,
     )

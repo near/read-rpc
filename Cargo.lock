@@ -2347,6 +2347,7 @@ dependencies = [
  "actix-rt",
  "actix-web",
  "anyhow",
+ "async-trait",
  "aws-credential-types",
  "aws-sdk-s3",
  "aws-types",
