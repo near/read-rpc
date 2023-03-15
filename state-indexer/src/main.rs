@@ -28,13 +28,7 @@ async fn handle_streamer_message(
 
     handle_block(&streamer_message.block, scylladb_session).await?;
 
-    let futures = streamer_message.shards.into_iter().flat_map(|shard| {
-        shard.state_changes.into_iter().map(|state_change_with_cause| {
-            handle_state_change(state_change_with_cause, scylladb_session, block_height, block_hash)
-        })
-    });
-
-    futures::future::try_join_all(futures).await?;
+    handle_state_changes(streamer_message, scylladb_session, block_height, block_hash).await?;
 
     tracing::debug!(
         target: INDEXER,
@@ -95,7 +89,68 @@ async fn handle_block(
         .await?)
 }
 
-async fn handle_state_change(
+/// This function will iterate over all StateChangesWithCauseViews in order to collect
+/// a single StateChangesWithCauseView for a unique account and unique change kind, and unique key.
+/// The reasoning behind this is that in a single Block (StreamerMessage) there might be a bunch of
+/// changes to the same change kind to the same account to the same key (state key or public key) and
+/// we want to ensure we store the very last of them.
+/// It's impossible to achieve it with handling all of them one by one asynchronously (they might be handled
+/// in any order) so it's easier for us to skip all the changes except the latest one.
+async fn handle_state_changes(
+    streamer_message: near_indexer_primitives::StreamerMessage,
+    scylladb_session: &Session,
+    block_height: u64,
+    block_hash: CryptoHash,
+) -> anyhow::Result<Vec<()>> {
+    let mut state_changes_to_store =
+        std::collections::HashMap::<String, near_indexer_primitives::views::StateChangeWithCauseView>::new();
+
+    let initial_state_changes = streamer_message
+        .shards
+        .into_iter()
+        .flat_map(|shard| shard.state_changes.into_iter());
+
+    // Collecting a unique list of StateChangeWithCauseView for account_id + change kind + suffix
+    // by overwriting the records in the HashMap
+    for state_change in initial_state_changes {
+        let key = match &state_change.value {
+            StateChangeValueView::DataUpdate { account_id, key, .. }
+            | StateChangeValueView::DataDeletion { account_id, key } => {
+                // returning a hex-encoded key to ensure we store data changes to the key
+                // (if there is more than one change to the same key)
+                let key: &[u8] = key.as_ref();
+                format!("{}_data_{}", account_id.as_ref(), hex::encode(key).to_string())
+            }
+            StateChangeValueView::AccessKeyUpdate {
+                account_id, public_key, ..
+            }
+            | StateChangeValueView::AccessKeyDeletion { account_id, public_key } => {
+                // returning a hex-encoded key to ensure we store data changes to the key
+                // (if there is more than one change to the same key)
+                let data_key = public_key
+                    .try_to_vec()
+                    .expect("Failed to borsh-serialize the PublicKey");
+                format!("{}_access_key_{}", account_id.as_ref(), hex::encode(data_key).to_string())
+            }
+            // ContractCode and Account changes is not separate-able by any key, we can omit the suffix
+            StateChangeValueView::ContractCodeUpdate { account_id, .. }
+            | StateChangeValueView::ContractCodeDeletion { account_id } => format!("{}_contract", account_id.as_ref()),
+            StateChangeValueView::AccountUpdate { account_id, .. }
+            | StateChangeValueView::AccountDeletion { account_id } => format!("{}_account", account_id.as_ref()),
+        };
+        // This will override the previous record for this account_id + state change kind + suffix
+        state_changes_to_store.insert(key, state_change);
+    }
+
+    // Asynchronous storing of StateChangeWithCauseView into the storage.
+    let futures = state_changes_to_store.into_values().map(|state_change_with_cause| {
+        store_state_change(state_change_with_cause, scylladb_session, block_height, block_hash)
+    });
+
+    futures::future::try_join_all(futures).await
+}
+
+async fn store_state_change(
     state_change: near_indexer_primitives::views::StateChangeWithCauseView,
     scylladb_session: &Session,
     block_height: u64,
