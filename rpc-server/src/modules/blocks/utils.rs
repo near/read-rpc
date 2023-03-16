@@ -1,4 +1,4 @@
-use crate::config::ServerContext;
+use crate::config::{ScyllaDBManager, ServerContext};
 use crate::modules::blocks::methods::fetch_block;
 use crate::modules::blocks::CacheBlock;
 use num_traits::ToPrimitive;
@@ -99,23 +99,14 @@ pub async fn fetch_chunk_from_s3(
 
 #[cfg_attr(
     feature = "tracing-instrumentation",
-    tracing::instrument(skip(scylla_db_client))
+    tracing::instrument(skip(scylla_db_manager))
 )]
 pub async fn scylla_db_convert_block_hash_to_block_height(
-    scylla_db_client: &std::sync::Arc<scylla::Session>,
+    scylla_db_manager: &std::sync::Arc<ScyllaDBManager>,
     block_hash: near_primitives::hash::CryptoHash,
 ) -> Result<u64, near_jsonrpc_primitives::types::blocks::RpcBlockError> {
     tracing::debug!("`scylla_db_convert_block_hash_to_block_height` call");
-    let result = scylla_db_client
-        .query(
-            "SELECT block_height FROM blocks WHERE block_hash = ?",
-            (block_hash.to_string(),),
-        )
-        .await
-        // TODO: this will cause panic, do we really want to exit program?
-        .expect("Invalid query into `blocks` table")
-        .single_row();
-
+    let result = scylla_db_manager.get_block_by_hash(block_hash).await;
     if let Ok(row) = result {
         let (block_height,): (num_bigint::BigInt,) = row
             .into_typed::<(num_bigint::BigInt,)>()
@@ -134,10 +125,10 @@ pub async fn scylla_db_convert_block_hash_to_block_height(
 
 #[cfg_attr(
     feature = "tracing-instrumentation",
-    tracing::instrument(skip(scylla_db_client))
+    tracing::instrument(skip(scylla_db_manager))
 )]
 pub async fn scylla_db_convert_chunk_hash_to_block_height_and_shard_id(
-    scylla_db_client: &std::sync::Arc<scylla::Session>,
+    scylla_db_manager: &std::sync::Arc<ScyllaDBManager>,
     chunk_id: near_primitives::hash::CryptoHash,
 ) -> Result<
     (
@@ -147,16 +138,7 @@ pub async fn scylla_db_convert_chunk_hash_to_block_height_and_shard_id(
     near_jsonrpc_primitives::types::chunks::RpcChunkError,
 > {
     tracing::debug!("`scylla_db_convert_chunk_hash_to_block_height_and_shard_id` call");
-    let result = scylla_db_client
-        .query(
-            "SELECT block_height, chunks FROM blocks WHERE chunks CONTAINS ? LIMIT 1 ALLOW FILTERING",
-            (chunk_id.to_string(),),
-        )
-        .await
-        // TODO: this will cause panic, do we really want to exit program?
-        .expect("Invalid query into `blocks` table")
-        .single_row();
-
+    let result = scylla_db_manager.get_block_by_chunk_id(chunk_id).await;
     if let Ok(row) = result {
         let (block_height, chunks): (num_bigint::BigInt, Vec<String>) = row
             .into_typed::<(num_bigint::BigInt, Vec<String>)>()

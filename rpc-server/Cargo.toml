@@ -7,6 +7,7 @@ edition = "2021"
 actix-rt = "2.7.0"
 actix-web = "4.2.1"
 anyhow = "1.0.65"
+async-trait = "0.1.66"
 aws-credential-types = "0.53.0"
 aws-sdk-s3 = "0.23.0"
 aws-types = "0.53.0"
@@ -39,6 +40,8 @@ opentelemetry = { version = "0.17", features = ["rt-tokio-current-thread"] }
 opentelemetry-jaeger = { version = "0.16", features = ["rt-tokio-current-thread"] }
 tracing-opentelemetry = { version = "0.17" }
 
+database = { path = "../database"}
 
 [features]
 tracing-instrumentation = []
+scylla_db_tracing = ["database/scylla_db_tracing"]

@@ -14,25 +14,6 @@ pub async fn prepare_s3_client(
     aws_sdk_s3::Client::from_conf(s3_config)
 }
 
-pub async fn prepare_scylla_db_client(
-    scylla_url: &str,
-    scylla_keyspace: &str,
-    scylla_user: Option<&str>,
-    scylla_password: Option<&str>,
-    keepalive_interval: u64,
-) -> anyhow::Result<scylla::Session> {
-    let mut session: scylla::SessionBuilder = scylla::SessionBuilder::new()
-        .known_node(scylla_url)
-        .keepalive_interval(std::time::Duration::from_secs(keepalive_interval));
-    if let Some(user) = scylla_user {
-        if let Some(password) = scylla_password {
-            session = session.user(user, password);
-        }
-    }
-    session = session.use_keyspace(scylla_keyspace, false);
-    Ok(session.build().await?)
-}
-
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(params)))]
 pub async fn proxy_rpc_call<M>(
     client: &near_jsonrpc_client::JsonRpcClient,

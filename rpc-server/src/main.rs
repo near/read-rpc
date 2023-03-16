@@ -1,7 +1,8 @@
 use crate::config::CompiledCodeCache;
-use crate::utils::{get_final_cache_block, prepare_scylla_db_client};
+use crate::utils::get_final_cache_block;
 use clap::Parser;
 use config::{Opts, ServerContext};
+use database::ScyllaStorageManager;
 use dotenv::dotenv;
 use jsonrpc_v2::{Data, Server};
 use tracing_subscriber::layer::SubscriberExt;
@@ -84,16 +85,15 @@ async fn main() -> anyhow::Result<()> {
         std::num::NonZeroUsize::new(128).unwrap(),
     )));
 
-    let scylla_db_client = std::sync::Arc::new(
-        prepare_scylla_db_client(
+    let scylla_db_manager = std::sync::Arc::new(
+        *config::ScyllaDBManager::new(
             &opts.scylla_url,
             &opts.scylla_keyspace,
             opts.scylla_user.as_deref(),
             opts.scylla_password.as_deref(),
-            opts.scylla_keepalive_interval,
+            Some(opts.scylla_keepalive_interval),
         )
-        .await
-        .expect("Connection to Scylla db error"),
+        .await?,
     );
 
     tracing::info!("Get genesis config...");
@@ -108,7 +108,7 @@ async fn main() -> anyhow::Result<()> {
             opts.region.clone(),
         )
         .await,
-        scylla_db_client,
+        scylla_db_manager,
         near_rpc_client: near_rpc_client.clone(),
         s3_bucket_name: opts.s3_bucket_name,
         genesis_config,

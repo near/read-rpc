@@ -1,10 +1,9 @@
 use bigdecimal::ToPrimitive;
 pub use clap::{Parser, Subcommand};
-
-use scylla::{Session, SessionBuilder};
-
+use database::ScyllaStorageManager;
 use near_jsonrpc_client::{methods, JsonRpcClient};
 use near_lake_framework::near_indexer_primitives::types::{BlockReference, Finality};
+use scylla::prepared_statement::PreparedStatement;
 
 /// NEAR Indexer for Explorer
 /// Watches for stream of blocks from the chain
@@ -71,37 +70,32 @@ impl Opts {
 }
 
 impl Opts {
-    pub async fn to_lake_config(&self) -> anyhow::Result<near_lake_framework::LakeConfig> {
-        migrate(&self.scylla_url, &self.scylla_keyspace, self.scylla_user.as_deref(), self.scylla_password.as_deref())
-            .await?;
-
+    pub async fn to_lake_config(
+        &self,
+        scylladb_session: &std::sync::Arc<scylla::Session>,
+    ) -> anyhow::Result<near_lake_framework::LakeConfig> {
         let config_builder = near_lake_framework::LakeConfigBuilder::default();
 
         Ok(match &self.chain_id {
             ChainId::Mainnet(_) => config_builder
                 .mainnet()
-                .start_block_height(get_start_block_height(self).await?),
+                .start_block_height(get_start_block_height(self, scylladb_session).await?),
             ChainId::Testnet(_) => config_builder
                 .testnet()
-                .start_block_height(get_start_block_height(self).await?),
+                .start_block_height(get_start_block_height(self, scylladb_session).await?),
         }
         .build()
         .expect("Failed to build LakeConfig"))
     }
 }
 
-async fn get_start_block_height(opts: &Opts) -> anyhow::Result<u64> {
+async fn get_start_block_height(
+    opts: &Opts,
+    scylladb_session: &std::sync::Arc<scylla::Session>,
+) -> anyhow::Result<u64> {
     match opts.start_options() {
         StartOptions::FromBlock { height } => Ok(*height),
         StartOptions::FromInterruption => {
-            let scylladb_session = get_scylladb_session(
-                &opts.scylla_url,
-                &opts.scylla_keyspace,
-                opts.scylla_user.as_deref(),
-                opts.scylla_password.as_deref(),
-            )
-            .await?;
-
             let row = scylladb_session
                 .query("SELECT last_processed_block_height FROM meta WHERE indexer_id = ?", (&opts.indexer_id,))
                 .await?
@@ -130,173 +124,392 @@ async fn final_block_height(opts: &Opts) -> u64 {
     latest_block.header.height
 }
 
-// Database schema
-// Main table to keep all the state changes happening in NEAR Protocol
-// CREATE TABLE state_changes (
-//     account_id varchar,
-//     block_height varint,
-//     block_hash varchar,
-//     change_scope varchar,
-//     data_key BLOB,
-//     data_value BLOB,
-//     PRIMARY KEY ((account_id, change_scope), block_height) -- prim key like this because we mostly are going to query by these 3 fields
-// );
-//
-// Map-table to store relation between block_hash-block_height and included chunk hashes
-// CREATE TABLE IF NOT EXISTS blocks (
-//     block_hash varchar,
-//     bloch_height varint,
-//     chunks set<varchar>,
-//     PRIMARY KEY (block_height)
-// );
-//
-// Meta table to provide start from interruption
-// CREATE TABLE IF NOT EXISTS meta (
-//     indexer_id varchar PRIMARY KEY,
-//     last_processed_block_height varint
-// )
-pub(crate) async fn migrate(
-    scylla_url: &str,
-    scylla_keyspace: &str,
-    scylla_user: Option<&str>,
-    scylla_password: Option<&str>,
-) -> anyhow::Result<()> {
-    let mut scylladb_session_builder = SessionBuilder::new().known_node(scylla_url);
-    if let Some(user) = scylla_user {
-        if let Some(password) = scylla_password {
-            scylladb_session_builder = scylladb_session_builder.user(user, password);
-        }
-    }
-    let scylladb_session = scylladb_session_builder.build().await?;
+pub(crate) struct ScyllaDBManager {
+    scylla_session: std::sync::Arc<scylla::Session>,
 
-    let mut str_query = format!("CREATE KEYSPACE IF NOT EXISTS {scylla_keyspace} ");
-    str_query.push_str("WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 1};");
+    add_state_changes: PreparedStatement,
+    delete_state_changes: PreparedStatement,
 
-    scylladb_session.query(str_query, &[]).await?;
+    add_access_key: PreparedStatement,
+    delete_access_key: PreparedStatement,
 
-    scylladb_session.use_keyspace(scylla_keyspace, false).await?;
+    add_contract: PreparedStatement,
+    delete_contract: PreparedStatement,
 
-    scylladb_session
-        .query(
-            "
-            CREATE TABLE IF NOT EXISTS state_changes_data (
-                account_id varchar,
-                block_height varint,
-                block_hash varchar,
-                data_key varchar,
-                data_value BLOB,
-                PRIMARY KEY ((account_id, data_key), block_height)
-            ) WITH CLUSTERING ORDER BY (block_height DESC)
-        ",
-            &[],
-        )
-        .await?;
+    add_account: PreparedStatement,
+    delete_account: PreparedStatement,
 
-    scylladb_session
-        .query(
-            "
-            CREATE TABLE IF NOT EXISTS state_changes_access_key (
-                account_id varchar,
-                block_height varint,
-                block_hash varchar,
-                data_key varchar,
-                data_value BLOB,
-                PRIMARY KEY ((account_id, data_key), block_height)
-            ) WITH CLUSTERING ORDER BY (block_height DESC)
-        ",
-            &[],
-        )
-        .await?;
-
-    scylladb_session
-        .query(
-            "
-            CREATE TABLE IF NOT EXISTS state_changes_contract (
-                account_id varchar,
-                block_height varint,
-                block_hash varchar,
-                data_value BLOB,
-                PRIMARY KEY (account_id, block_height)
-            ) WITH CLUSTERING ORDER BY (block_height DESC)
-        ",
-            &[],
-        )
-        .await?;
-
-    scylladb_session
-        .query(
-            "
-            CREATE TABLE IF NOT EXISTS state_changes_account (
-                account_id varchar,
-                block_height varint,
-                block_hash varchar,
-                data_value BLOB,
-                PRIMARY KEY (account_id, block_height)
-            ) WITH CLUSTERING ORDER BY (block_height DESC)
-        ",
-            &[],
-        )
-        .await?;
-
-    scylladb_session
-        .query(
-            "
-            CREATE TABLE IF NOT EXISTS blocks (
-                block_height varint,
-                block_hash varchar,
-                chunks list<varchar>,
-                PRIMARY KEY (block_hash)
-            )
-        ",
-            &[],
-        )
-        .await?;
-
-    scylladb_session
-        .query(
-            "
-            CREATE TABLE IF NOT EXISTS meta (
-                indexer_id varchar PRIMARY KEY,
-                last_processed_block_height varint
-            )
-        ",
-            &[],
-        )
-        .await?;
-
-    scylladb_session
-        .query(
-            "
-            CREATE TABLE IF NOT EXISTS account_state (
-                account_id varchar,
-                data_key varchar,
-                PRIMARY KEY (account_id, data_key),
-            )
-        ",
-            &[],
-        )
-        .await?;
-
-    Ok(())
+    add_block: PreparedStatement,
+    add_account_state: PreparedStatement,
+    update_meta: PreparedStatement,
 }
 
-pub(crate) async fn get_scylladb_session(
-    scylla_url: &str,
-    scylla_keyspace: &str,
-    scylla_user: Option<&str>,
-    scylla_password: Option<&str>,
-) -> anyhow::Result<Session> {
-    tracing::debug!(target: crate::INDEXER, "Connecting to ScyllaDB");
-    let mut session: SessionBuilder = SessionBuilder::new().known_node(scylla_url);
+#[async_trait::async_trait]
+impl ScyllaStorageManager for ScyllaDBManager {
+    async fn create_tables(scylla_db_session: &scylla::Session) -> anyhow::Result<()> {
+        scylla_db_session
+            .query(
+                "
+                CREATE TABLE IF NOT EXISTS state_changes_data (
+                    account_id varchar,
+                    block_height varint,
+                    block_hash varchar,
+                    data_key varchar,
+                    data_value BLOB,
+                    PRIMARY KEY ((account_id, data_key), block_height)
+                ) WITH CLUSTERING ORDER BY (block_height DESC)
+            ",
+                &[],
+            )
+            .await?;
 
-    if let Some(user) = scylla_user {
-        tracing::debug!(target: crate::INDEXER, "Got ScyllaDB credentials, authenticating...");
-        if let Some(password) = scylla_password {
-            session = session.user(user, password);
-        }
+        scylla_db_session
+            .query(
+                "
+                CREATE TABLE IF NOT EXISTS state_changes_access_key (
+                    account_id varchar,
+                    block_height varint,
+                    block_hash varchar,
+                    data_key varchar,
+                    data_value BLOB,
+                    PRIMARY KEY ((account_id, data_key), block_height)
+                ) WITH CLUSTERING ORDER BY (block_height DESC)
+            ",
+                &[],
+            )
+            .await?;
+
+        scylla_db_session
+            .query(
+                "
+                CREATE TABLE IF NOT EXISTS state_changes_contract (
+                    account_id varchar,
+                    block_height varint,
+                    block_hash varchar,
+                    data_value BLOB,
+                    PRIMARY KEY (account_id, block_height)
+                ) WITH CLUSTERING ORDER BY (block_height DESC)
+            ",
+                &[],
+            )
+            .await?;
+
+        scylla_db_session
+            .query(
+                "
+                CREATE TABLE IF NOT EXISTS state_changes_account (
+                    account_id varchar,
+                    block_height varint,
+                    block_hash varchar,
+                    data_value BLOB,
+                    PRIMARY KEY (account_id, block_height)
+                ) WITH CLUSTERING ORDER BY (block_height DESC)
+            ",
+                &[],
+            )
+            .await?;
+
+        scylla_db_session
+            .query(
+                "
+                CREATE TABLE IF NOT EXISTS blocks (
+                    block_height varint,
+                    block_hash varchar,
+                    chunks list<varchar>,
+                    PRIMARY KEY (block_hash)
+                )
+            ",
+                &[],
+            )
+            .await?;
+
+        scylla_db_session
+            .query(
+                "
+                CREATE TABLE IF NOT EXISTS meta (
+                    indexer_id varchar PRIMARY KEY,
+                    last_processed_block_height varint
+                )
+            ",
+                &[],
+            )
+            .await?;
+
+        scylla_db_session
+            .query(
+                "
+                CREATE TABLE IF NOT EXISTS account_state (
+                    account_id varchar,
+                    data_key varchar,
+                    PRIMARY KEY (account_id, data_key),
+                )
+            ",
+                &[],
+            )
+            .await?;
+        Ok(())
     }
 
-    session = session.use_keyspace(scylla_keyspace, false);
+    async fn prepare(scylla_db_session: std::sync::Arc<scylla::Session>) -> anyhow::Result<Box<Self>> {
+        Ok(Box::new(Self {
+            scylla_session: scylla_db_session.clone(),
+            add_state_changes: Self::prepare_query(
+                &scylla_db_session,
+                "INSERT INTO state_changes_data
+                    (account_id, block_height, block_hash, data_key, data_value)
+                    VALUES(?, ?, ?, ?, ?)",
+            )
+            .await?,
+            delete_state_changes: Self::prepare_query(
+                &scylla_db_session,
+                "INSERT INTO state_changes_data
+                    (account_id, block_height, block_hash, data_key, data_value)
+                    VALUES(?, ?, ?, ?, NULL)",
+            )
+            .await?,
 
-    Ok(session.build().await?)
+            add_access_key: Self::prepare_query(
+                &scylla_db_session,
+                "INSERT INTO state_changes_access_key
+                    (account_id, block_height, block_hash, data_key, data_value)
+                    VALUES(?, ?, ?, ?, ?)",
+            )
+            .await?,
+            delete_access_key: Self::prepare_query(
+                &scylla_db_session,
+                "INSERT INTO state_changes_access_key
+                    (account_id, block_height, block_hash, data_key, data_value)
+                    VALUES(?, ?, ?, ?, NULL)",
+            )
+            .await?,
+
+            add_contract: Self::prepare_query(
+                &scylla_db_session,
+                "INSERT INTO state_changes_contract
+                    (account_id, block_height, block_hash, data_value)
+                    VALUES(?, ?, ?, ?)",
+            )
+            .await?,
+            delete_contract: Self::prepare_query(
+                &scylla_db_session,
+                "INSERT INTO state_changes_contract
+                    (account_id, block_height, block_hash, data_value)
+                    VALUES(?, ?, ?, NULL)",
+            )
+            .await?,
+
+            add_account: Self::prepare_query(
+                &scylla_db_session,
+                "INSERT INTO state_changes_account
+                    (account_id, block_height, block_hash, data_value)
+                    VALUES(?, ?, ?, ?)",
+            )
+            .await?,
+            delete_account: Self::prepare_query(
+                &scylla_db_session,
+                "INSERT INTO state_changes_account
+                    (account_id, block_height, block_hash, data_value)
+                    VALUES(?, ?, ?, NULL)",
+            )
+            .await?,
+
+            add_block: Self::prepare_query(
+                &scylla_db_session,
+                "INSERT INTO blocks
+                    (block_height, block_hash, chunks)
+                    VALUES (?, ?, ?)",
+            )
+            .await?,
+            add_account_state: Self::prepare_query(
+                &scylla_db_session,
+                "INSERT INTO account_state
+                    (account_id, data_key)
+                    VALUES(?, ?)",
+            )
+            .await?,
+            update_meta: Self::prepare_query(
+                &scylla_db_session,
+                "INSERT INTO meta
+                    (indexer_id, last_processed_block_height)
+                    VALUES (?, ?)",
+            )
+            .await?,
+        }))
+    }
+}
+
+impl ScyllaDBManager {
+    pub(crate) async fn scylla_session(&self) -> std::sync::Arc<scylla::Session> {
+        self.scylla_session.clone()
+    }
+
+    pub(crate) async fn add_state_changes(
+        &self,
+        account_id: near_indexer_primitives::types::AccountId,
+        block_height: bigdecimal::BigDecimal,
+        block_hash: near_indexer_primitives::CryptoHash,
+        key: &[u8],
+        value: &[u8],
+    ) -> anyhow::Result<()> {
+        Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.add_state_changes,
+            (
+                account_id.to_string(),
+                block_height,
+                block_hash.to_string(),
+                hex::encode(key).to_string(),
+                value.to_vec(),
+            ),
+        )
+        .await?;
+        Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.add_account_state,
+            (account_id.to_string(), hex::encode(key).to_string()),
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub(crate) async fn delete_state_changes(
+        &self,
+        account_id: near_indexer_primitives::types::AccountId,
+        block_height: bigdecimal::BigDecimal,
+        block_hash: near_indexer_primitives::CryptoHash,
+        key: &[u8],
+    ) -> anyhow::Result<()> {
+        Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.delete_state_changes,
+            (account_id.to_string(), block_height, block_hash.to_string(), hex::encode(key).to_string()),
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub(crate) async fn add_access_key(
+        &self,
+        account_id: near_indexer_primitives::types::AccountId,
+        block_height: bigdecimal::BigDecimal,
+        block_hash: near_indexer_primitives::CryptoHash,
+        public_key: &[u8],
+        access_key: &[u8],
+    ) -> anyhow::Result<()> {
+        Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.add_access_key,
+            (
+                account_id.to_string(),
+                block_height,
+                block_hash.to_string(),
+                hex::encode(public_key).to_string(),
+                access_key.to_vec(),
+            ),
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub(crate) async fn delete_access_key(
+        &self,
+        account_id: near_indexer_primitives::types::AccountId,
+        block_height: bigdecimal::BigDecimal,
+        block_hash: near_indexer_primitives::CryptoHash,
+        public_key: &[u8],
+    ) -> anyhow::Result<()> {
+        Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.delete_access_key,
+            (account_id.to_string(), block_height, block_hash.to_string(), hex::encode(public_key).to_string()),
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub(crate) async fn add_contract_code(
+        &self,
+        account_id: near_indexer_primitives::types::AccountId,
+        block_height: bigdecimal::BigDecimal,
+        block_hash: near_indexer_primitives::CryptoHash,
+        code: &[u8],
+    ) -> anyhow::Result<()> {
+        Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.add_contract,
+            (account_id.to_string(), block_height, block_hash.to_string(), code.to_vec()),
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub(crate) async fn delete_contract_code(
+        &self,
+        account_id: near_indexer_primitives::types::AccountId,
+        block_height: bigdecimal::BigDecimal,
+        block_hash: near_indexer_primitives::CryptoHash,
+    ) -> anyhow::Result<()> {
+        Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.delete_contract,
+            (account_id.to_string(), block_height, block_hash.to_string()),
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub(crate) async fn add_account(
+        &self,
+        account_id: near_indexer_primitives::types::AccountId,
+        block_height: bigdecimal::BigDecimal,
+        block_hash: near_indexer_primitives::CryptoHash,
+        account: Vec<u8>,
+    ) -> anyhow::Result<()> {
+        Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.add_account,
+            (account_id.to_string(), block_height, block_hash.to_string(), account),
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub(crate) async fn delete_account(
+        &self,
+        account_id: near_indexer_primitives::types::AccountId,
+        block_height: bigdecimal::BigDecimal,
+        block_hash: near_indexer_primitives::CryptoHash,
+    ) -> anyhow::Result<()> {
+        Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.delete_account,
+            (account_id.to_string(), block_height, block_hash.to_string()),
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub(crate) async fn add_block(
+        &self,
+        block_height: bigdecimal::BigDecimal,
+        block_hash: near_indexer_primitives::CryptoHash,
+        chunks: Vec<String>,
+    ) -> anyhow::Result<scylla::QueryResult> {
+        let query_result = Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.add_block,
+            (block_height, block_hash.to_string(), chunks),
+        )
+        .await?;
+        Ok(query_result)
+    }
+
+    pub(crate) async fn update_meta(
+        &self,
+        indexer_id: &str,
+        block_height: bigdecimal::BigDecimal,
+    ) -> anyhow::Result<()> {
+        Self::execute_prepared_query(&self.scylla_session, &self.update_meta, (indexer_id, block_height)).await?;
+        Ok(())
+    }
 }
