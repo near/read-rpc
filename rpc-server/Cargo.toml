@@ -6,12 +6,12 @@ edition = "2021"
 [dependencies]
 actix-rt = "2.7.0"
 actix-web = "4.2.1"
-anyhow = "1.0.65"
+anyhow = "1.0.70"
 async-trait = "0.1.66"
 aws-credential-types = "0.53.0"
 aws-sdk-s3 = "0.23.0"
 aws-types = "0.53.0"
-borsh = "0.9.3"
+borsh = "0.10.2"
 clap = { version = "3.2.22", features = ["color", "derive", "env"] }
 dotenv = "0.15.0"
 erased-serde = "0.3.23"
@@ -20,13 +20,6 @@ hex = "0.4.3"
 http = "0.2.8"
 jsonrpc-v2 = { git  = "https://github.com/kobayurii/jsonrpc-v2", rev = "95e7b1d2567ae841163af212a3f25abb6862becb" }
 lru = "0.8.1"
-near-chain-configs = { git = "https://github.com/near/nearcore", rev = "7d9c73cf5cebdbe738175a769d44e5906c48eca7" }
-near-jsonrpc-client = { git = "https://github.com/kobayurii/near-jsonrpc-client-rs", rev = "819326b86c6a49ff4a45405b0746165c392cf0a3"}
-near-jsonrpc-primitives = { git = "https://github.com/near/nearcore", rev = "7d9c73cf5cebdbe738175a769d44e5906c48eca7" }
-near-indexer-primitives = { git = "https://github.com/near/nearcore", rev = "7d9c73cf5cebdbe738175a769d44e5906c48eca7" }
-near-primitives = { git = "https://github.com/near/nearcore", rev = "7d9c73cf5cebdbe738175a769d44e5906c48eca7" }
-near-vm-runner = { git = "https://github.com/near/nearcore", rev = "7d9c73cf5cebdbe738175a769d44e5906c48eca7" }
-near-vm-logic = { git = "https://github.com/near/nearcore", rev = "7d9c73cf5cebdbe738175a769d44e5906c48eca7" }
 num-bigint = "0.3"
 num-traits = "0.2.15"
 scylla = "0.7.0"
@@ -41,6 +34,16 @@ opentelemetry-jaeger = { version = "0.16", features = ["rt-tokio-current-thread"
 tracing-opentelemetry = { version = "0.17" }
 
 database = { path = "../database"}
+readnode-primitives = { path = "../readnode-primitives"}
+
+near-chain-configs = "0.16.1"
+near-jsonrpc-client = "0.5.1"
+near-jsonrpc-primitives = "0.16.1"
+near-indexer-primitives = "0.16.1"
+near-primitives = "0.16.1"
+near-primitives-core = "0.16.1"
+near-vm-runner = "0.16.1"
+near-vm-logic = "0.16.1"
 
 [features]
 tracing-instrumentation = []

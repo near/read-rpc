@@ -63,7 +63,7 @@ async fn new_transaction_details_to_collecting_pool(
         .to_string();
 
     let transaction_details =
-        readnode_primitives::TransactionDetails::from_indexer_tx(transaction.clone());
+        readnode_primitives::CollectingTransactionDetails::from_indexer_tx(transaction.clone());
     match storage::set_tx(redis_connection_manager, transaction_details).await {
         Ok(_) => {
             storage::push_receipt_to_watching_list(
@@ -155,18 +155,30 @@ async fn collect_receipts_and_outcomes(
 // Save transaction detail into the scylla db
 async fn save_transaction_details(
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
-    transaction_details: readnode_primitives::TransactionDetails,
+    tx_details: readnode_primitives::CollectingTransactionDetails,
     block_height: u64,
 ) -> bool {
-    match scylla_db_client
-        .add_transaction(transaction_details, block_height)
-        .await
-    {
-        Ok(_) => true,
+    match tx_details.to_final_transaction_result() {
+        Ok(transaction_details) => {
+            match scylla_db_client
+                .add_transaction(transaction_details, block_height)
+                .await
+            {
+                Ok(_) => true,
+                Err(e) => {
+                    tracing::error!(
+                        target: crate::INDEXER,
+                        "Failed to save transaction \n{:#?}",
+                        e
+                    );
+                    false
+                }
+            }
+        }
         Err(e) => {
             tracing::error!(
                 target: crate::INDEXER,
-                "Failed to save transaction \n{:#?}",
+                "Failed to get final transaction \n{:#?}",
                 e
             );
             false

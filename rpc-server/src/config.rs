@@ -18,10 +18,6 @@ pub struct Opts {
     #[clap(long, env)]
     pub scylla_url: String,
 
-    // Scylla default keyspace
-    #[clap(long, env, default_value = "state_indexer")]
-    pub scylla_keyspace: String,
-
     /// ScyllaDB user(login)
     #[clap(long, env)]
     pub scylla_user: Option<String>,
@@ -108,6 +104,7 @@ pub struct ScyllaDBManager {
     get_account: PreparedStatement,
     get_contract_code: PreparedStatement,
     get_access_key: PreparedStatement,
+    get_transaction: PreparedStatement,
 }
 
 #[async_trait::async_trait]
@@ -120,44 +117,48 @@ impl ScyllaStorageManager for ScyllaDBManager {
 
             get_block_by_hash: Self::prepare_query(
                 &scylla_db_session,
-                "SELECT block_height FROM blocks WHERE block_hash = ? LIMIT 1",
+                "SELECT block_height FROM state_indexer.blocks WHERE block_hash = ? LIMIT 1",
             ).await?,
 
             get_block_by_chunk_id: Self::prepare_query(
                 &scylla_db_session,
-                "SELECT block_height, chunks FROM blocks WHERE chunks CONTAINS ? LIMIT 1 ALLOW FILTERING",
+                "SELECT block_height, chunks FROM state_indexer.blocks WHERE chunks CONTAINS ? LIMIT 1 ALLOW FILTERING",
             ).await?,
 
             get_all_state_keys: Self::prepare_query(
                 &scylla_db_session,
-                "SELECT data_key FROM account_state WHERE account_id = ?"
+                "SELECT data_key FROM state_indexer.account_state WHERE account_id = ?"
             ).await?,
 
             get_state_keys_by_prefix: Self::prepare_query(
                 &scylla_db_session,
-                "SELECT data_key FROM account_state WHERE account_id = ? AND data_key LIKE ?"
+                "SELECT data_key FROM state_indexer.account_state WHERE account_id = ? AND data_key LIKE ?"
             ).await?,
 
             get_state_key_value: Self::prepare_query(
                 &scylla_db_session,
-                "SELECT data_value FROM state_changes_data WHERE account_id = ? AND block_height <= ? AND data_key = ? LIMIT 1"
+                "SELECT data_value FROM state_indexer.state_changes_data WHERE account_id = ? AND block_height <= ? AND data_key = ? LIMIT 1"
             ).await?,
 
             get_account: Self::prepare_query(
                 &scylla_db_session,
-                "SELECT data_value FROM state_changes_account WHERE account_id = ? AND block_height <= ? LIMIT 1"
+                "SELECT data_value FROM state_indexer.state_changes_account WHERE account_id = ? AND block_height <= ? LIMIT 1"
             ).await?,
 
             get_contract_code: Self::prepare_query(
                 &scylla_db_session,
-                "SELECT data_value FROM state_changes_contract WHERE account_id = ? AND block_height <= ? LIMIT 1"
+                "SELECT data_value FROM state_indexer.state_changes_contract WHERE account_id = ? AND block_height <= ? LIMIT 1"
             ).await?,
 
             get_access_key: Self::prepare_query(
                 &scylla_db_session,
-                "SELECT data_value FROM state_changes_access_key WHERE account_id = ? AND block_height <= ? AND data_key = ? LIMIT 1"
+                "SELECT data_value FROM state_indexer.state_changes_access_key WHERE account_id = ? AND block_height <= ? AND data_key = ? LIMIT 1"
             ).await?,
 
+            get_transaction: Self::prepare_query(
+                &scylla_db_session,
+                "SELECT transaction_details FROM tx_indexer.transactions_details WHERE transaction_hash = ? AND account_id = ? LIMIT 1"
+            ).await?,
         }))
     }
 }
@@ -302,6 +303,21 @@ impl ScyllaDBManager {
                 num_bigint::BigInt::from(block_height),
                 hex::encode(&key_data).to_string(),
             ),
+        )
+        .await?
+        .single_row()?;
+        Ok(result)
+    }
+
+    pub async fn get_transaction_by_hash(
+        &self,
+        transaction_hash: near_primitives::hash::CryptoHash,
+        account_id: near_primitives::types::AccountId,
+    ) -> anyhow::Result<scylla::frame::response::result::Row> {
+        let result = Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.get_transaction,
+            (transaction_hash.to_string(), account_id.to_string()),
         )
         .await?
         .single_row()?;

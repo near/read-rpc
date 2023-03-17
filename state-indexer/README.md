@@ -7,7 +7,6 @@ The indexer built on top of Lake Framework that watches the network and stores t
 ```
 INDEXER_ID=state-indexer-1
 SCYLLA_URL=127.0.0.1:9042
-SCYLLA_KEYSPACE=state_indexer
 SCYLLA_USER=cassandra
 SCYLLA_PASSWORD=cassandra
 AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
@@ -22,13 +21,15 @@ $ docker run --name some-scylla -p 9042:9042 --hostname some-scylla -d scylladb/
 ```
 
 You can find the schema definition in the `src/configs.rs` file. There is a `migrate` function that is being called on every start. It will create necessary tables if they don't exist.
-
+For state-indexer we are using keyspace `state_indexer` by default.
 ### cqlsh
 
 In order to connect to the ScyllaDB cluster and run some queries directly you can use `cqlsh` like so:
 
 ```
 docker exec -it some-scylla cqlsh
+
+use state_indexer;
 ```
 
 ## Build state-indexer and run

@@ -220,7 +220,7 @@ async fn run_code_in_vm_runner(
             &mut external,
             context,
             &near_vm_logic::VMConfig::test(),
-            &near_primitives::runtime::fees::RuntimeFeesConfig::test(),
+            &near_primitives_core::runtime::fees::RuntimeFeesConfig::test(),
             &[],
             latest_protocol_version,
             Some(code_cache.deref()),
@@ -228,10 +228,8 @@ async fn run_code_in_vm_runner(
     })
     .await?;
     match results {
-        near_vm_runner::VMResult::Ok(result) => Ok(result),
-        near_vm_runner::VMResult::Aborted(output, err) => {
-            anyhow::bail!("Run contract abort!\n{:#?}\n{:#?}", output, err)
-        }
+        Ok(result) => Ok(result),
+        Err(err) => anyhow::bail!("Run contract abort! \n{:#?}", err),
     }
 }
 

@@ -166,6 +166,7 @@ pub(crate) struct ScyllaDBManager {
 #[async_trait::async_trait]
 impl ScyllaStorageManager for ScyllaDBManager {
     async fn create_tables(scylla_db_session: &scylla::Session) -> anyhow::Result<()> {
+        scylla_db_session.use_keyspace("tx_indexer", false).await?;
         scylla_db_session
             .query(
                 "CREATE TABLE IF NOT EXISTS transactions_details (
@@ -182,6 +183,14 @@ impl ScyllaStorageManager for ScyllaDBManager {
         Ok(())
     }
 
+    async fn create_keyspace(scylla_db_session: &scylla::Session) -> anyhow::Result<()> {
+        scylla_db_session.query(
+            "CREATE KEYSPACE IF NOT EXISTS tx_indexer WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 1}",
+            &[]
+        ).await?;
+        Ok(())
+    }
+
     async fn prepare(
         scylla_db_session: std::sync::Arc<scylla::Session>,
     ) -> anyhow::Result<Box<Self>> {
@@ -189,7 +198,7 @@ impl ScyllaStorageManager for ScyllaDBManager {
             scylla_session: scylla_db_session.clone(),
             add_transaction: Self::prepare_query(
                 &scylla_db_session,
-                "INSERT INTO transactions_details
+                "INSERT INTO tx_indexer.transactions_details
                     (transaction_hash, block_height, account_id, transaction_details)
                     VALUES(?, ?, ?, ?)",
             )

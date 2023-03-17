@@ -88,7 +88,6 @@ async fn main() -> anyhow::Result<()> {
     let scylla_db_manager = std::sync::Arc::new(
         *config::ScyllaDBManager::new(
             &opts.scylla_url,
-            &opts.scylla_keyspace,
             opts.scylla_user.as_deref(),
             opts.scylla_password.as_deref(),
             Some(opts.scylla_keepalive_interval),
@@ -136,7 +135,11 @@ async fn main() -> anyhow::Result<()> {
         .with_method("query", modules::queries::methods::query)
         .with_method("block", modules::blocks::methods::block)
         .with_method("chunk", modules::blocks::methods::chunk)
-        .with_method("tx", modules::transactions::methods::tx_status_common)
+        .with_method("tx", modules::transactions::methods::tx)
+        .with_method(
+            "EXPERIMENTAL_tx_status",
+            modules::transactions::methods::tx_status,
+        )
         .with_method(
             "broadcast_tx_async",
             modules::transactions::methods::send_tx_async,

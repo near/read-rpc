@@ -58,22 +58,28 @@ impl near_vm_logic::External for CodeStorage {
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
-    fn storage_get(&self, key: &[u8]) -> Result<Option<Box<dyn near_vm_logic::ValuePtr>>> {
+    fn storage_get(
+        &self,
+        key: &[u8],
+        _mode: near_vm_logic::StorageGetMode,
+    ) -> Result<Option<Box<dyn near_vm_logic::ValuePtr>>> {
         let get_db_data = self.scylla_db_manager.get_state_key_value(
             &self.account_id,
             self.block_height,
             key.to_vec(),
         );
-        let row = block_on(get_db_data).unwrap();
-        Ok(if let Ok((data,)) = row.into_typed::<(Vec<u8>,)>() {
-            if !data.is_empty() {
-                Some(Box::new(StorageValuePtr { value: data }) as Box<_>)
+        match block_on(get_db_data) {
+            Ok(row) => Ok(if let Ok((data,)) = row.into_typed::<(Vec<u8>,)>() {
+                if !data.is_empty() {
+                    Some(Box::new(StorageValuePtr { value: data }) as Box<_>)
+                } else {
+                    None
+                }
             } else {
                 None
-            }
-        } else {
-            None
-        })
+            }),
+            Err(_) => Ok(None),
+        }
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
@@ -101,12 +107,14 @@ impl near_vm_logic::External for CodeStorage {
             self.block_height,
             key.to_vec(),
         );
-        let row = block_on(get_db_stata_keys).unwrap();
-        Ok(if let Ok((data,)) = row.into_typed::<(Vec<u8>,)>() {
-            !data.is_empty()
-        } else {
-            false
-        })
+        match block_on(get_db_stata_keys) {
+            Ok(row) => Ok(if let Ok((data,)) = row.into_typed::<(Vec<u8>,)>() {
+                !data.is_empty()
+            } else {
+                false
+            }),
+            Err(_) => Ok(false),
+        }
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]

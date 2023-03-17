@@ -213,7 +213,6 @@ async fn main() -> anyhow::Result<()> {
 
     let scylla_storage = configs::ScyllaDBManager::new(
         &opts.scylla_url,
-        &opts.scylla_keyspace,
         opts.scylla_user.as_deref(),
         opts.scylla_password.as_deref(),
         None,
