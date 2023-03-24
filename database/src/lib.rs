@@ -77,7 +77,6 @@ use scylla::prepared_statement::PreparedStatement;
 pub trait ScyllaStorageManager {
     async fn new(
         scylla_url: &str,
-        scylla_keyspace: &str,
         scylla_user: Option<&str>,
         scylla_password: Option<&str>,
         keepalive_interval: Option<u64>,
@@ -93,27 +92,18 @@ pub trait ScyllaStorageManager {
         );
 
         tracing::info!("Running migrations into the scylla database...");
-        Self::migrate(&scylla_db_session, scylla_keyspace).await?;
-
-        scylla_db_session
-            .use_keyspace(scylla_keyspace, false)
-            .await?;
+        Self::migrate(&scylla_db_session).await?;
         Self::prepare(scylla_db_session).await
     }
 
-    async fn migrate(
-        scylla_db_session: &scylla::Session,
-        scylla_keyspace: &str,
-    ) -> anyhow::Result<()> {
-        Self::create_keyspace(scylla_db_session, scylla_keyspace).await?;
-        scylla_db_session
-            .use_keyspace(scylla_keyspace, false)
-            .await?;
+    async fn migrate(scylla_db_session: &scylla::Session) -> anyhow::Result<()> {
+        Self::create_keyspace(scylla_db_session).await?;
         Ok(Self::create_tables(scylla_db_session).await?)
     }
 
     // Create tables
     // Example:
+    //         scylla_db_session.use_keyspace(`scylla_keyspace`, false).await?;
     //         scylla_db_session.query(
     //             "CREATE TABLE IF NOT EXISTS transactions_details (
     //                 transaction_hash varchar,
@@ -132,14 +122,14 @@ pub trait ScyllaStorageManager {
     }
 
     // Create keyspace
-    async fn create_keyspace(
-        scylla_db_session: &scylla::Session,
-        scylla_keyspace: &str,
-    ) -> anyhow::Result<()> {
-        let mut str_query = format!("CREATE KEYSPACE IF NOT EXISTS {scylla_keyspace} ");
-        str_query
-            .push_str("WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 1};");
-        scylla_db_session.query(str_query, &[]).await?;
+    // Example:
+    //      scylla_db_session.query(
+    //          "CREATE KEYSPACE IF NOT EXISTS `scylla_keyspace` WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 1}",
+    //          &[]
+    //      ).await?;
+    // Ok(())
+    async fn create_keyspace(_scylla_db_session: &scylla::Session) -> anyhow::Result<()> {
+        tracing::info!("Please create  keyspace in the `create_keyspace`, if needed.");
         Ok(())
     }
 

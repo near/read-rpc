@@ -41,13 +41,29 @@ Start the Redis instance for the `tx-indexer` instance. You can use the Docker c
 ```bash
 $ docker run --name redis -p 6379:6379 -d redis redis-server --save 60 1 --loglevel warning
 ```
-An example `.env` file:
 
+Set up local ScyllaDB
+```
+$ docker run --name some-scylla -p 9042:9042 --hostname some-scylla -d scylladb/scylla --smp 1
+```
+
+You can find the schema definition in the `src/configs.rs` file. There is a `migrate` function that is being called on every start. It will create necessary tables if they don't exist.
+For tx-indexer we are using keyspace `tx_indexer` by default.
+### cqlsh
+
+In order to connect to the ScyllaDB cluster and run some queries directly you can use `cqlsh` like so:
+
+```
+docker exec -it some-scylla cqlsh
+
+use tx_indexer;
+```
+
+An example `.env` file:
 ```
 REDIS_CONNECTION_STRING=redis://127.0.0.1
 INDEXER_ID=tx-indexer
 SCYLLA_URL=127.0.0.1:9042
-SCYLLA_KEYSPACE=transactions
 SCYLLA_USER=admin
 SCYLLA_PASSWORD=password
 

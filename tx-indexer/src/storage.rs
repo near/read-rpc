@@ -116,7 +116,7 @@ pub async fn get_last_indexed_block(
 
 pub async fn set_tx(
     redis_connection_manager: &redis::aio::ConnectionManager,
-    transaction_details: readnode_primitives::TransactionDetails,
+    transaction_details: readnode_primitives::CollectingTransactionDetails,
 ) -> anyhow::Result<()> {
     let transaction_hash_string = transaction_details.transaction.hash.to_string();
     let encoded_tx_details = transaction_details.try_to_vec()?;
@@ -139,17 +139,17 @@ pub async fn set_tx(
 pub async fn get_tx(
     redis_connection_manager: &redis::aio::ConnectionManager,
     transaction_hash: &str,
-) -> anyhow::Result<Option<readnode_primitives::TransactionDetails>> {
+) -> anyhow::Result<Option<readnode_primitives::CollectingTransactionDetails>> {
     let value: Vec<u8> = get(redis_connection_manager, transaction_hash).await?;
 
     Ok(Some(
-        readnode_primitives::TransactionDetails::try_from_slice(&value)?,
+        readnode_primitives::CollectingTransactionDetails::try_from_slice(&value)?,
     ))
 }
 
 pub async fn push_tx_to_save(
     redis_connection_manager: &redis::aio::ConnectionManager,
-    transaction_details: readnode_primitives::TransactionDetails,
+    transaction_details: readnode_primitives::CollectingTransactionDetails,
 ) -> anyhow::Result<()> {
     let encoded_tx_details = transaction_details.try_to_vec()?;
 
@@ -164,7 +164,7 @@ pub async fn push_tx_to_save(
 
 pub async fn transactions_to_save(
     redis_connection_manager: &redis::aio::ConnectionManager,
-) -> anyhow::Result<Vec<readnode_primitives::TransactionDetails>> {
+) -> anyhow::Result<Vec<readnode_primitives::CollectingTransactionDetails>> {
     let length: usize = redis::cmd("LLEN")
         .arg(TX_TO_SEND_LIST_KEY)
         .query_async(&mut redis_connection_manager.clone())
@@ -176,9 +176,11 @@ pub async fn transactions_to_save(
         .query_async(&mut redis_connection_manager.clone())
         .await?;
 
-    let tx_details: Vec<readnode_primitives::TransactionDetails> = values
+    let tx_details: Vec<readnode_primitives::CollectingTransactionDetails> = values
         .iter()
-        .filter_map(|value| readnode_primitives::TransactionDetails::try_from_slice(value).ok())
+        .filter_map(|value| {
+            readnode_primitives::CollectingTransactionDetails::try_from_slice(value).ok()
+        })
         .collect();
 
     Ok(tx_details)
@@ -212,22 +214,11 @@ pub async fn push_outcome_and_receipt(
             .receipts
             .push(indexer_execution_outcome_with_receipt.receipt);
 
-        transaction_details.receipts_outcome.push(
+        transaction_details.execution_outcomes.push(
             indexer_execution_outcome_with_receipt
                 .execution_outcome
                 .clone(),
         );
-
-        match transaction_details.transaction_outcome.outcome.status {
-            near_indexer_primitives::views::ExecutionStatusView::SuccessReceiptId(receipt_id) => {
-                for outcome in transaction_details.receipts_outcome.iter() {
-                    if receipt_id == outcome.id {
-                        transaction_details.status = outcome.outcome.status.clone()
-                    }
-                }
-            }
-            _ => {}
-        }
 
         let transaction_receipts_watching_count =
             receipts_transaction_hash_count(redis_connection_manager, transaction_hash).await?;

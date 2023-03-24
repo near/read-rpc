@@ -8,7 +8,6 @@ AWS_DEFAULT_REGION=eu-central-1
 AWS_BUCKET_NAME=buket_name
 NEAR_RPC_URL=https://rpc.testnet.near.org
 SCYLLA_URL=127.0.0.1:9042
-SCYLLA_KEYSPACE=key_space_name
 SCYLLA_USER=username
 SCYLLA_PASSWORD=password
 SCYLLA_KEEPALIVE_INTERVAL=60

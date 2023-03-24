@@ -23,9 +23,6 @@ pub(crate) struct Opts {
     /// ScyllaDB connection string
     #[clap(long, default_value = "127.0.0.1:9042", env)]
     pub scylla_url: String,
-    /// ScyllaDB keyspace
-    #[clap(long, default_value = "state_indexer", env)]
-    pub scylla_keyspace: String,
     /// ScyllaDB user(login)
     #[clap(long, env)]
     pub scylla_user: Option<String>,
@@ -147,6 +144,7 @@ pub(crate) struct ScyllaDBManager {
 #[async_trait::async_trait]
 impl ScyllaStorageManager for ScyllaDBManager {
     async fn create_tables(scylla_db_session: &scylla::Session) -> anyhow::Result<()> {
+        scylla_db_session.use_keyspace("state_indexer", false).await?;
         scylla_db_session
             .query(
                 "
@@ -250,19 +248,27 @@ impl ScyllaStorageManager for ScyllaDBManager {
         Ok(())
     }
 
+    async fn create_keyspace(scylla_db_session: &scylla::Session) -> anyhow::Result<()> {
+        scylla_db_session.query(
+            "CREATE KEYSPACE IF NOT EXISTS state_indexer WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 1}",
+            &[]
+        ).await?;
+        Ok(())
+    }
+
     async fn prepare(scylla_db_session: std::sync::Arc<scylla::Session>) -> anyhow::Result<Box<Self>> {
         Ok(Box::new(Self {
             scylla_session: scylla_db_session.clone(),
             add_state_changes: Self::prepare_query(
                 &scylla_db_session,
-                "INSERT INTO state_changes_data
+                "INSERT INTO state_indexer.state_changes_data
                     (account_id, block_height, block_hash, data_key, data_value)
                     VALUES(?, ?, ?, ?, ?)",
             )
             .await?,
             delete_state_changes: Self::prepare_query(
                 &scylla_db_session,
-                "INSERT INTO state_changes_data
+                "INSERT INTO state_indexer.state_changes_data
                     (account_id, block_height, block_hash, data_key, data_value)
                     VALUES(?, ?, ?, ?, NULL)",
             )
@@ -270,14 +276,14 @@ impl ScyllaStorageManager for ScyllaDBManager {
 
             add_access_key: Self::prepare_query(
                 &scylla_db_session,
-                "INSERT INTO state_changes_access_key
+                "INSERT INTO state_indexer.state_changes_access_key
                     (account_id, block_height, block_hash, data_key, data_value)
                     VALUES(?, ?, ?, ?, ?)",
             )
             .await?,
             delete_access_key: Self::prepare_query(
                 &scylla_db_session,
-                "INSERT INTO state_changes_access_key
+                "INSERT INTO state_indexer.state_changes_access_key
                     (account_id, block_height, block_hash, data_key, data_value)
                     VALUES(?, ?, ?, ?, NULL)",
             )
@@ -285,14 +291,14 @@ impl ScyllaStorageManager for ScyllaDBManager {
 
             add_contract: Self::prepare_query(
                 &scylla_db_session,
-                "INSERT INTO state_changes_contract
+                "INSERT INTO state_indexer.state_changes_contract
                     (account_id, block_height, block_hash, data_value)
                     VALUES(?, ?, ?, ?)",
             )
             .await?,
             delete_contract: Self::prepare_query(
                 &scylla_db_session,
-                "INSERT INTO state_changes_contract
+                "INSERT INTO state_indexer.state_changes_contract
                     (account_id, block_height, block_hash, data_value)
                     VALUES(?, ?, ?, NULL)",
             )
@@ -300,14 +306,14 @@ impl ScyllaStorageManager for ScyllaDBManager {
 
             add_account: Self::prepare_query(
                 &scylla_db_session,
-                "INSERT INTO state_changes_account
+                "INSERT INTO state_indexer.state_changes_account
                     (account_id, block_height, block_hash, data_value)
                     VALUES(?, ?, ?, ?)",
             )
             .await?,
             delete_account: Self::prepare_query(
                 &scylla_db_session,
-                "INSERT INTO state_changes_account
+                "INSERT INTO state_indexer.state_changes_account
                     (account_id, block_height, block_hash, data_value)
                     VALUES(?, ?, ?, NULL)",
             )
@@ -315,21 +321,21 @@ impl ScyllaStorageManager for ScyllaDBManager {
 
             add_block: Self::prepare_query(
                 &scylla_db_session,
-                "INSERT INTO blocks
+                "INSERT INTO state_indexer.blocks
                     (block_height, block_hash, chunks)
                     VALUES (?, ?, ?)",
             )
             .await?,
             add_account_state: Self::prepare_query(
                 &scylla_db_session,
-                "INSERT INTO account_state
+                "INSERT INTO state_indexer.account_state
                     (account_id, data_key)
                     VALUES(?, ?)",
             )
             .await?,
             update_meta: Self::prepare_query(
                 &scylla_db_session,
-                "INSERT INTO meta
+                "INSERT INTO state_indexer.meta
                     (indexer_id, last_processed_block_height)
                     VALUES (?, ?)",
             )
