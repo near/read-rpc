@@ -105,6 +105,8 @@ pub struct ScyllaDBManager {
     get_contract_code: PreparedStatement,
     get_access_key: PreparedStatement,
     get_transaction: PreparedStatement,
+    get_receipt: PreparedStatement,
+    get_transaction_by_hash: PreparedStatement,
 }
 
 #[async_trait::async_trait]
@@ -158,6 +160,16 @@ impl ScyllaStorageManager for ScyllaDBManager {
             get_transaction: Self::prepare_query(
                 &scylla_db_session,
                 "SELECT transaction_details FROM tx_indexer.transactions_details WHERE transaction_hash = ? AND account_id = ? LIMIT 1"
+            ).await?,
+
+            get_receipt: Self::prepare_query(
+                &scylla_db_session,
+                "SELECT receipt_id, parent_transaction_hash, block_height, shard_id FROM tx_indexer.receipts_map WHERE receipt_id = ?"
+            ).await?,
+
+            get_transaction_by_hash: Self::prepare_query(
+                &scylla_db_session,
+                "SELECT transaction_details FROM tx_indexer.transactions_details WHERE transaction_hash = ? LIMIT 1 ALLOW FILTERING"
             ).await?,
         }))
     }
@@ -309,7 +321,7 @@ impl ScyllaDBManager {
         Ok(result)
     }
 
-    pub async fn get_transaction_by_hash(
+    pub async fn get_transaction_by_hash_and_account_id(
         &self,
         transaction_hash: near_primitives::hash::CryptoHash,
         account_id: near_primitives::types::AccountId,
@@ -318,6 +330,34 @@ impl ScyllaDBManager {
             &self.scylla_session,
             &self.get_transaction,
             (transaction_hash.to_string(), account_id.to_string()),
+        )
+        .await?
+        .single_row()?;
+        Ok(result)
+    }
+
+    pub async fn get_receipt_by_id(
+        &self,
+        receipt_id: near_primitives::hash::CryptoHash,
+    ) -> anyhow::Result<scylla::frame::response::result::Row> {
+        let result = Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.get_receipt,
+            (receipt_id.to_string(),),
+        )
+        .await?
+        .single_row()?;
+        Ok(result)
+    }
+
+    pub async fn get_transaction_by_hash(
+        &self,
+        transaction_hash: &str,
+    ) -> anyhow::Result<scylla::frame::response::result::Row> {
+        let result = Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.get_transaction_by_hash,
+            (transaction_hash.to_string(),),
         )
         .await?
         .single_row()?;

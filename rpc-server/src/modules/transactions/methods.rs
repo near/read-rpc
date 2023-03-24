@@ -76,7 +76,7 @@ async fn tx_status_common(
     };
     let row = data
         .scylla_db_manager
-        .get_transaction_by_hash(tx_hash, account_id)
+        .get_transaction_by_hash_and_account_id(tx_hash, account_id)
         .await?;
     let (data_value,): (Vec<u8>,) = row.into_typed::<(Vec<u8>,)>()?;
     let transaction: readnode_primitives::TransactionDetails =

@@ -160,6 +160,7 @@ async fn main() -> anyhow::Result<()> {
             "EXPERIMENTAL_protocol_config",
             modules::network::methods::protocol_config,
         )
+        .with_method("EXPERIMENTAL_receipt", modules::receipts::methods::receipt)
         .finish();
 
     actix_web::HttpServer::new(move || {
