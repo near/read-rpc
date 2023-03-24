@@ -1,0 +1,103 @@
+   Compiling tokio v1.26.0
+   Compiling tracing-core v0.1.29
+   Compiling time v0.3.11
+   Compiling sct v0.6.1
+   Compiling hex v0.4.3
+   Compiling webpki v0.21.4
+   Compiling digest v0.10.6
+   Compiling aws-types v0.13.0
+   Compiling near-account-id v0.15.0
+   Compiling rand v0.8.5
+   Compiling rustls v0.19.1
+   Compiling ct-logs v0.8.0
+   Compiling tracing v0.1.36
+   Compiling uint v0.9.3
+   Compiling near-rpc-error-core v0.15.0
+   Compiling primitive-types v0.10.1
+   Compiling aws-smithy-types v0.43.0
+   Compiling secp256k1 v0.24.0
+   Compiling near-rpc-error-macro v0.15.0
+   Compiling sha2 v0.10.2
+   Compiling aws-smithy-eventstream v0.43.0
+   Compiling rustls-native-certs v0.5.0
+   Compiling near-crypto v0.15.0
+   Compiling near-primitives-core v0.15.0
+   Compiling near-vm-errors v0.15.0
+   Compiling bytesize v1.1.0
+   Compiling xmlparser v0.13.3
+   Compiling async-trait v0.1.60
+   Compiling aws-smithy-xml v0.43.0
+   Compiling near-primitives v0.15.0
+   Compiling aws-smithy-query v0.43.0
+   Compiling aws-smithy-json v0.43.0
+   Compiling uuid v1.1.2
+   Compiling futures-executor v0.3.25
+   Compiling futures v0.3.25
+   Compiling tokio-util v0.7.3
+   Compiling tokio-rustls v0.22.0
+   Compiling tokio-stream v0.1.9
+   Compiling tower v0.4.13
+   Compiling tokio-native-tls v0.3.0
+   Compiling md-5 v0.10.1
+   Compiling h2 v0.3.13
+   Compiling aws-smithy-async v0.43.0
+   Compiling scylla-cql v0.0.3
+   Compiling matchers v0.0.1
+   Compiling tracing-serde v0.1.3
+   Compiling tracing-log v0.1.3
+   Compiling ansi_term v0.12.1
+   Compiling tracing-subscriber v0.2.25
+   Compiling openssl-probe v0.1.5
+   Compiling humantime v2.1.0
+   Compiling scylla v0.7.0
+   Compiling hyper v0.14.20
+   Compiling near-chain-configs v0.15.0
+   Compiling near-indexer-primitives v0.15.0
+   Compiling near-jsonrpc-primitives v0.15.0
+   Compiling aws-smithy-http v0.43.0
+   Compiling aws-smithy-http-tower v0.43.0
+   Compiling hyper-rustls v0.22.1
+   Compiling aws-smithy-client v0.43.0
+   Compiling aws-sigv4 v0.13.0
+   Compiling hyper-tls v0.5.0
+   Compiling aws-http v0.13.0
+   Compiling aws-endpoint v0.13.0
+   Compiling aws-sig-auth v0.13.0
+   Compiling reqwest v0.11.12
+   Compiling aws-sdk-sso v0.13.0
+   Compiling aws-sdk-sts v0.13.0
+   Compiling aws-sdk-s3 v0.13.0
+   Compiling near-jsonrpc-client v0.4.1
+   Compiling aws-config v0.13.0
+   Compiling near-lake-framework v0.6.0
+   Compiling state-indexer v0.1.0 (/Users/khorolets/projects/pagoda/100xRPC/json-rpc-100x/state-indexer)
+    Finished release [optimized] target(s) in 41.20s
+     Running `/Users/khorolets/projects/pagoda/100xRPC/json-rpc-100x/target/release/state-indexer mainnet from-latest`
+[2mMar 13 17:08:40.438[0m [32m INFO[0m state_indexer: Block height 87209510
+[2mMar 13 17:08:40.897[0m [32m INFO[0m state_indexer: Block height 87209511
+[2mMar 13 17:08:41.013[0m [32m INFO[0m state_indexer: Block height 87209512
+[2mMar 13 17:08:42.972[0m [32m INFO[0m state_indexer: Block height 87209513
+[2mMar 13 17:08:45.183[0m [32m INFO[0m state_indexer: Block height 87209514
+[2mMar 13 17:08:45.451[0m [32m INFO[0m state_indexer: Block height 87209515
+[2mMar 13 17:08:45.500[0m [32m INFO[0m state_indexer: Block height 87209516
+[2mMar 13 17:08:47.773[0m [32m INFO[0m state_indexer: Block height 87209517
+[2mMar 13 17:08:50.024[0m [32m INFO[0m state_indexer: Block height 87209518
+[2mMar 13 17:08:50.176[0m [32m INFO[0m state_indexer: Block height 87209519
+[2mMar 13 17:08:52.299[0m [32m INFO[0m state_indexer: Block height 87209520
+[2mMar 13 17:08:52.477[0m [32m INFO[0m state_indexer: Block height 87209521
+[2mMar 13 17:08:54.633[0m [32m INFO[0m state_indexer: Block height 87209522
+[2mMar 13 17:08:54.833[0m [32m INFO[0m state_indexer: Block height 87209523
+[2mMar 13 17:08:56.962[0m [32m INFO[0m state_indexer: Block height 87209524
+[2mMar 13 17:08:57.224[0m [32m INFO[0m state_indexer: Block height 87209525
+[2mMar 13 17:08:59.302[0m [32m INFO[0m state_indexer: Block height 87209526
+[2mMar 13 17:08:59.441[0m [32m INFO[0m state_indexer: Block height 87209527
+[2mMar 13 17:09:01.542[0m [32m INFO[0m state_indexer: Block height 87209528
+[2mMar 13 17:09:01.926[0m [32m INFO[0m state_indexer: Block height 87209529
+[2mMar 13 17:09:04.043[0m [32m INFO[0m state_indexer: Block height 87209530
+[2mMar 13 17:09:04.627[0m [32m INFO[0m state_indexer: Block height 87209531
+[2mMar 13 17:09:06.703[0m [32m INFO[0m state_indexer: Block height 87209532
+[2mMar 13 17:09:06.962[0m [32m INFO[0m state_indexer: Block height 87209533
+[2mMar 13 17:09:09.042[0m [32m INFO[0m state_indexer: Block height 87209534
+[2mMar 13 17:09:09.253[0m [32m INFO[0m state_indexer: Block height 87209535
+[2mMar 13 17:09:11.456[0m [32m INFO[0m state_indexer: Block height 87209536
+[2mMar 13 17:09:11.672[0m [32m INFO[0m state_indexer: Block height 87209537

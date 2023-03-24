@@ -1,10 +1,11 @@
-FROM rust:1.67 AS builder
+FROM rust:1.68 AS builder
 WORKDIR /tmp/
 
 COPY Cargo.lock ./
-RUN echo '[workspace]\nmembers = ["rpc-server", "database"]' > Cargo.toml
+RUN echo '[workspace]\nmembers = ["rpc-server", "database", "readnode-primitives"]' > Cargo.toml
 COPY rpc-server/Cargo.toml rpc-server/Cargo.toml
 COPY database database
+COPY readnode-primitives readnode-primitives
 RUN mkdir rpc-server/src && echo 'fn main() {}' > rpc-server/src/main.rs cargo build --release && rm -r rpc-server/src
 
 # copy your source tree
