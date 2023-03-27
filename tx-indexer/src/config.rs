@@ -175,7 +175,7 @@ impl ScyllaStorageManager for ScyllaDBManager {
                 block_height varint,
                 account_id varchar,
                 transaction_details BLOB,
-                PRIMARY KEY ((transaction_hash, account_id), block_height)
+                PRIMARY KEY (transaction_hash, block_height)
             ) WITH CLUSTERING ORDER BY (block_height DESC)
             ",
                 &[],

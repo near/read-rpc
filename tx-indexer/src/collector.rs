@@ -3,6 +3,8 @@ use futures::future::{join_all, try_join_all};
 use near_indexer_primitives::views::ExecutionStatusView;
 use near_indexer_primitives::IndexerTransactionWithOutcome;
 
+// TODO: Handle known TX hash collision case for mainnet
+// ref: https://github.com/near/near-indexer-for-explorer/issues/84
 pub(crate) async fn index_transactions(
     streamer_message: &near_indexer_primitives::StreamerMessage,
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
@@ -202,32 +204,30 @@ async fn save_transaction_details(
     tx_details: readnode_primitives::CollectingTransactionDetails,
     block_height: u64,
 ) -> bool {
-    match tx_details.to_final_transaction_result() {
-        Ok(transaction_details) => {
-            match scylla_db_client
-                .add_transaction(transaction_details, block_height)
-                .await
-            {
-                Ok(_) => true,
-                Err(e) => {
-                    tracing::error!(
-                        target: crate::INDEXER,
-                        "Failed to save transaction \n{:#?}",
-                        e
-                    );
-                    false
-                }
-            }
-        }
-        Err(e) => {
+    let transaction_details = match tx_details.to_final_transaction_result() {
+        Ok(details) => details,
+        Err(err) => {
             tracing::error!(
                 target: crate::INDEXER,
                 "Failed to get final transaction \n{:#?}",
-                e
+                err
             );
-            false
+            return false;
         }
-    }
+    };
+
+    let result = scylla_db_client
+        .add_transaction(transaction_details, block_height)
+        .await
+        .map_err(|err| {
+            tracing::error!(
+                target: crate::INDEXER,
+                "Failed to save transaction \n{:#?}",
+                err
+            );
+        });
+
+    result.is_ok()
 }
 
 // Save receipt_id, parent_transaction_hash, block_height and shard_id to the ScyllaDb
@@ -238,14 +238,12 @@ async fn save_receipt(
     block_height: u64,
     shard_id: u64,
 ) -> anyhow::Result<()> {
-    match scylla_db_client
+    scylla_db_client
         .add_receipt(receipt_id, parent_tx_hash, block_height, shard_id)
         .await
-    {
-        Ok(_) => Ok(()),
-        Err(e) => {
-            tracing::error!(target: crate::INDEXER, "Failed to save receipt \n{:#?}", e);
-            Err(e)
-        }
-    }
+        .map_err(|err| {
+            tracing::error!(target: crate::INDEXER, "Failed to save receipt \n{:#?}", err);
+            err
+        })?;
+    Ok(())
 }

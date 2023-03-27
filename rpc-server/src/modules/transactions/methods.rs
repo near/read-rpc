@@ -65,7 +65,7 @@ async fn tx_status_common(
     fetch_receipt: bool,
 ) -> anyhow::Result<near_primitives::views::FinalExecutionOutcomeViewEnum> {
     tracing::debug!("`tx_status_common` call.");
-    let (tx_hash, account_id) = match &transaction_info {
+    let (tx_hash, _account_id) = match &transaction_info {
         near_jsonrpc_primitives::types::transactions::TransactionInfo::Transaction(tx) => {
             (tx.get_hash(), tx.transaction.signer_id.clone())
         }
@@ -76,7 +76,7 @@ async fn tx_status_common(
     };
     let row = data
         .scylla_db_manager
-        .get_transaction_by_hash_and_account_id(tx_hash, account_id)
+        .get_transaction_by_hash(&tx_hash.to_string())
         .await?;
     let (data_value,): (Vec<u8>,) = row.into_typed::<(Vec<u8>,)>()?;
     let transaction: readnode_primitives::TransactionDetails =
