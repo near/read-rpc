@@ -1,6 +1,6 @@
 use futures::{
+    future::{join_all, try_join_all},
     StreamExt,
-    future::{join_all, try_join_all}
 };
 
 use near_indexer_primitives::views::ExecutionStatusView;
@@ -125,17 +125,14 @@ async fn collect_receipts_and_outcomes(
 ) -> anyhow::Result<()> {
     let block_height = streamer_message.block.header.height;
 
-    let shard_futures = streamer_message
-        .shards
-        .iter()
-        .map(|shard| {
-            process_shard(
-                scylla_db_client,
-                redis_connection_manager,
-                block_height,
-                shard,
-            )
-        });
+    let shard_futures = streamer_message.shards.iter().map(|shard| {
+        process_shard(
+            scylla_db_client,
+            redis_connection_manager,
+            block_height,
+            shard,
+        )
+    });
 
     futures::future::try_join_all(shard_futures).await?;
 
@@ -148,18 +145,19 @@ async fn process_shard(
     block_height: u64,
     shard: &near_indexer_primitives::IndexerShard,
 ) -> anyhow::Result<()> {
-    let process_receipt_execution_outcome_futures = shard
-        .receipt_execution_outcomes
-        .iter()
-        .map(|receipt_execution_outcome| {
-            process_receipt_execution_outcome(
-                scylla_db_client,
-                redis_connection_manager,
-                block_height,
-                shard.shard_id,
-                receipt_execution_outcome,
-            )
-        });
+    let process_receipt_execution_outcome_futures =
+        shard
+            .receipt_execution_outcomes
+            .iter()
+            .map(|receipt_execution_outcome| {
+                process_receipt_execution_outcome(
+                    scylla_db_client,
+                    redis_connection_manager,
+                    block_height,
+                    shard.shard_id,
+                    receipt_execution_outcome,
+                )
+            });
 
     futures::future::try_join_all(process_receipt_execution_outcome_futures).await?;
 
@@ -241,7 +239,6 @@ async fn process_receipt_execution_outcome(
             });
         }
 
-
         let _ = storage::push_outcome_and_receipt(
             redis_connection_manager,
             &transaction_hash,
@@ -303,7 +300,11 @@ async fn save_receipt(
         .add_receipt(receipt_id, parent_tx_hash, block_height, shard_id)
         .await
         .map_err(|err| {
-            tracing::error!(target: crate::INDEXER, "Failed to save receipt \n{:#?}", err);
+            tracing::error!(
+                target: crate::INDEXER,
+                "Failed to save receipt \n{:#?}",
+                err
+            );
             err
         })?;
     Ok(())

@@ -1,4 +1,4 @@
-use anyhow::{Context};
+use anyhow::Context;
 use borsh::BorshDeserialize;
 
 use jsonrpc_v2::{Data, Params};
@@ -14,10 +14,12 @@ async fn fetch_receipt(
 ) -> anyhow::Result<near_primitives::views::ReceiptView> {
     let receipt_id = request.receipt_reference.receipt_id;
 
-    let (_receipt_id, tx_hash, _block_height, _shard_id) =
-        data.scylla_db_manager.get_receipt_by_id(receipt_id).await
-            .with_context(|| format!("receipts_map doesn't contain receipt_id {}", receipt_id))?
-            .into_typed::<(String, String, num_bigint::BigInt, num_bigint::BigInt)>()?;
+    let (_receipt_id, tx_hash, _block_height, _shard_id) = data
+        .scylla_db_manager
+        .get_receipt_by_id(receipt_id)
+        .await
+        .with_context(|| format!("receipts_map doesn't contain receipt_id {}", receipt_id))?
+        .into_typed::<(String, String, num_bigint::BigInt, num_bigint::BigInt)>()?;
 
     // Getting the raw Vec<u8> of the TransactionDetails from ScyllaDB
     let (transaction_details,) = data
@@ -27,14 +29,19 @@ async fn fetch_receipt(
         .with_context(|| "Failed to get TransactionDetails from ScyllaDB")?
         .into_typed::<(Vec<u8>,)>()?;
 
-    let transaction_details = readnode_primitives::TransactionDetails::try_from_slice(&transaction_details)?;
-
+    let transaction_details =
+        readnode_primitives::TransactionDetails::try_from_slice(&transaction_details)?;
 
     let receipt_view = transaction_details
         .receipts
         .into_iter()
         .find(|receipt| receipt.receipt_id == receipt_id)
-        .with_context(|| format!("Couldn't find Receipt {} in TransactionDetails {}", receipt_id, tx_hash))?;
+        .with_context(|| {
+            format!(
+                "Couldn't find Receipt {} in TransactionDetails {}",
+                receipt_id, tx_hash
+            )
+        })?;
 
     Ok(receipt_view)
 }
