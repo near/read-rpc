@@ -4,7 +4,11 @@ use database::ScyllaStorageManager;
 use futures::StreamExt;
 mod collector;
 mod config;
+mod metrics;
 mod storage;
+
+#[macro_use]
+extern crate lazy_static;
 
 pub(crate) const INDEXER: &str = "tx_indexer";
 
@@ -32,6 +36,9 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!(target: INDEXER, "Instantiating the stream...",);
     let (sender, stream) = near_lake_framework::streamer(config);
+
+    // Initiate metrics http server
+    tokio::spawn(metrics::init_server(opts.port).expect("Failed to start metrics server"));
 
     tracing::info!(target: INDEXER, "Starting tx indexer...",);
     let mut handlers = tokio_stream::wrappers::ReceiverStream::new(stream)
@@ -96,6 +103,11 @@ async fn handle_streamer_message(
         &streamer_message.block.header.height.to_string(),
     )
     .await?;
+
+    metrics::BLOCK_PROCESSED_TOTAL.inc();
+    // Prometheus Gauge Metric type do not support u64
+    // https://github.com/tikv/rust-prometheus/issues/470
+    metrics::LATEST_BLOCK_HEIGHT.set(i64::try_from(streamer_message.block.header.height)?);
 
     Ok(streamer_message.block.header.height)
 }

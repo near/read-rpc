@@ -25,6 +25,9 @@ pub(crate) struct Opts {
     /// Indexer ID to handle meta data about the instance
     #[clap(long, env)]
     pub indexer_id: String,
+    /// Port for metrics server
+    #[clap(long, default_value = "8080", env)]
+    pub port: u16,
     /// ScyllaDB connection string. Default: "127.0.0.1:9042"
     #[clap(long, default_value = "127.0.0.1:9042", env)]
     pub scylla_url: String,

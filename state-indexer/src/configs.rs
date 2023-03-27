@@ -29,6 +29,9 @@ pub(crate) struct Opts {
     /// ScyllaDB password
     #[clap(long, env)]
     pub scylla_password: Option<String>,
+    /// Metrics HTTP server port
+    #[clap(long, default_value = "8080", env)]
+    pub port: u16,
     /// Chain ID: testnet or mainnet
     #[clap(subcommand)]
     pub chain_id: ChainId,

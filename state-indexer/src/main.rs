@@ -12,6 +12,10 @@ use near_indexer_primitives::CryptoHash;
 use near_primitives_core::account::Account;
 
 mod configs;
+mod metrics;
+
+#[macro_use]
+extern crate lazy_static;
 
 // Categories for logging
 pub(crate) const INDEXER: &str = "state_indexer";
@@ -31,6 +35,10 @@ async fn handle_streamer_message(
     scylla_storage
         .update_meta(indexer_id, bigdecimal::BigDecimal::from_u64(block_height).unwrap())
         .await?;
+    metrics::BLOCK_PROCESSED_TOTAL.inc();
+    // Prometheus Gauge Metric type do not support u64
+    // https://github.com/tikv/rust-prometheus/issues/470
+    metrics::LATEST_BLOCK_HEIGHT.set(i64::try_from(block_height)?);
     Ok(())
 }
 
@@ -221,6 +229,9 @@ async fn main() -> anyhow::Result<()> {
     let scylla_session = scylla_storage.scylla_session().await;
     let config: near_lake_framework::LakeConfig = opts.to_lake_config(&scylla_session).await?;
     let (sender, stream) = near_lake_framework::streamer(config);
+
+    // Initiate metrics http server
+    tokio::spawn(metrics::init_server(opts.port).expect("Failed to start metrics server"));
 
     let mut handlers = tokio_stream::wrappers::ReceiverStream::new(stream)
         .map(|streamer_message| handle_streamer_message(streamer_message, &scylla_storage, &opts.indexer_id))
