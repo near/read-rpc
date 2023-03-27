@@ -81,7 +81,7 @@ async fn handle_state_changes(
                 // returning a hex-encoded key to ensure we store data changes to the key
                 // (if there is more than one change to the same key)
                 let key: &[u8] = key.as_ref();
-                format!("{}_data_{}", account_id.as_ref(), hex::encode(key).to_string())
+                format!("{}_data_{}", account_id.as_ref(), hex::encode(key))
             }
             StateChangeValueView::AccessKeyUpdate {
                 account_id, public_key, ..
@@ -92,7 +92,7 @@ async fn handle_state_changes(
                 let data_key = public_key
                     .try_to_vec()
                     .expect("Failed to borsh-serialize the PublicKey");
-                format!("{}_access_key_{}", account_id.as_ref(), hex::encode(data_key).to_string())
+                format!("{}_access_key_{}", account_id.as_ref(), hex::encode(data_key))
             }
             // ContractCode and Account changes is not separate-able by any key, we can omit the suffix
             StateChangeValueView::ContractCodeUpdate { account_id, .. }

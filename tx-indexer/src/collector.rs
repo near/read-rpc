@@ -1,7 +1,12 @@
-use crate::{config, storage};
-use futures::future::{join_all, try_join_all};
+use futures::{
+    StreamExt,
+    future::{join_all, try_join_all}
+};
+
 use near_indexer_primitives::views::ExecutionStatusView;
 use near_indexer_primitives::IndexerTransactionWithOutcome;
+
+use crate::{config, storage};
 
 // TODO: Handle known TX hash collision case for mainnet
 // ref: https://github.com/near/near-indexer-for-explorer/issues/84
@@ -20,7 +25,7 @@ pub(crate) async fn index_transactions(
 
     if !finished_transaction_details.is_empty() {
         let scylla_db_client = scylla_db_client.clone();
-        let block_height = streamer_message.block.header.height.clone();
+        let block_height = streamer_message.block.header.height;
         tokio::spawn(async move {
             let send_finished_transaction_details_futures =
                 finished_transaction_details.into_iter().map(|tx_details| {
@@ -53,7 +58,7 @@ async fn extract_transactions_to_collect(
                 new_transaction_details_to_collecting_pool(
                     tx,
                     block_height,
-                    shard_id.clone(),
+                    shard_id,
                     scylla_db_client,
                     redis_connection_manager,
                 )
@@ -98,7 +103,7 @@ async fn new_transaction_details_to_collecting_pool(
         Ok(_) => {
             storage::push_receipt_to_watching_list(
                 redis_connection_manager,
-                &converted_into_receipt_id,
+                converted_into_receipt_id,
                 &transaction_hash_string,
             )
             .await?;
@@ -113,6 +118,91 @@ async fn new_transaction_details_to_collecting_pool(
     Ok(())
 }
 
+// async fn collect_receipts_and_outcomes(
+//     streamer_message: &near_indexer_primitives::StreamerMessage,
+//     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
+//     redis_connection_manager: &redis::aio::ConnectionManager,
+// ) -> anyhow::Result<()> {
+//     let block_height = streamer_message.block.header.height;
+
+//     for shard in &streamer_message.shards {
+//         for receipt_execution_outcome in &shard.receipt_execution_outcomes {
+//             if let Ok(Some(transaction_hash)) = storage::remove_receipt_from_watching_list(
+//                 redis_connection_manager,
+//                 &receipt_execution_outcome.receipt.receipt_id.to_string(),
+//             )
+//             .await
+//             {
+//                 tracing::debug!(
+//                     target: crate::INDEXER,
+//                     "-R {}",
+//                     &receipt_execution_outcome.receipt.receipt_id.to_string(),
+//                 );
+//                 // Add the newly produced receipt_ids to the watching list
+//                 for receipt_id in receipt_execution_outcome
+//                     .execution_outcome
+//                     .outcome
+//                     .receipt_ids
+//                     .iter()
+//                 {
+//                     tracing::debug!(target: crate::INDEXER, "+R {}", &receipt_id.to_string(),);
+//                     storage::push_receipt_to_watching_list(
+//                         redis_connection_manager,
+//                         receipt_id.to_string(),
+//                         &transaction_hash,
+//                     )
+//                     .await?;
+//                     save_receipt(
+//                         scylla_db_client,
+//                         &receipt_id.to_string(),
+//                         &transaction_hash,
+//                         block_height,
+//                         shard.shard_id,
+//                     )
+//                     .await?;
+//                 }
+
+//                 // Add the success receipt to the watching list
+//                 if let ExecutionStatusView::SuccessReceiptId(receipt_id) =
+//                     receipt_execution_outcome.execution_outcome.outcome.status
+//                 {
+//                     tracing::debug!(target: crate::INDEXER, "+R {}", &receipt_id.to_string(),);
+//                     storage::push_receipt_to_watching_list(
+//                         redis_connection_manager,
+//                         receipt_id.to_string(),
+//                         &transaction_hash,
+//                     )
+//                     .await?;
+//                     save_receipt(
+//                         scylla_db_client,
+//                         &receipt_id.to_string(),
+//                         &transaction_hash,
+//                         block_height,
+//                         shard.shard_id,
+//                     )
+//                     .await?;
+//                 }
+
+//                 let _ = storage::push_outcome_and_receipt(
+//                     redis_connection_manager,
+//                     &transaction_hash,
+//                     receipt_execution_outcome.clone(),
+//                 )
+//                 .await
+//                 .map_err(|e| {
+//                     tracing::error!(
+//                         target: crate::INDEXER,
+//                         "Failed to push_outcome_and_receipt\n{:#?}",
+//                         e
+//                     )
+//                 });
+
+//             }
+//         }
+//     }
+//     Ok(())
+// }
+
 async fn collect_receipts_and_outcomes(
     streamer_message: &near_indexer_primitives::StreamerMessage,
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
@@ -120,80 +210,136 @@ async fn collect_receipts_and_outcomes(
 ) -> anyhow::Result<()> {
     let block_height = streamer_message.block.header.height;
 
-    for shard in &streamer_message.shards {
-        for receipt_execution_outcome in &shard.receipt_execution_outcomes {
-            if let Ok(Some(transaction_hash)) = storage::remove_receipt_from_watching_list(
+    let shard_futures = streamer_message
+        .shards
+        .iter()
+        .map(|shard| {
+            process_shard(
+                scylla_db_client,
                 redis_connection_manager,
-                &receipt_execution_outcome.receipt.receipt_id.to_string(),
+                block_height,
+                shard,
             )
-            .await
-            {
+        });
+
+    futures::future::try_join_all(shard_futures).await?;
+
+    Ok(())
+}
+
+async fn process_shard(
+    scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
+    redis_connection_manager: &redis::aio::ConnectionManager,
+    block_height: u64,
+    shard: &near_indexer_primitives::IndexerShard,
+) -> anyhow::Result<()> {
+    let process_receipt_execution_outcome_futures = shard
+        .receipt_execution_outcomes
+        .iter()
+        .map(|receipt_execution_outcome| {
+            process_receipt_execution_outcome(
+                scylla_db_client,
+                redis_connection_manager,
+                block_height,
+                shard.shard_id,
+                receipt_execution_outcome,
+            )
+        });
+
+    futures::future::try_join_all(process_receipt_execution_outcome_futures).await?;
+
+    Ok(())
+}
+
+async fn process_receipt_execution_outcome(
+    scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
+    redis_connection_manager: &redis::aio::ConnectionManager,
+    block_height: u64,
+    shard_id: u64,
+    receipt_execution_outcome: &near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
+) -> anyhow::Result<()> {
+    if let Ok(Some(transaction_hash)) = storage::remove_receipt_from_watching_list(
+        redis_connection_manager,
+        &receipt_execution_outcome.receipt.receipt_id.to_string(),
+    )
+    .await
+    {
+        tracing::debug!(
+            target: crate::INDEXER,
+            "-R {}",
+            &receipt_execution_outcome.receipt.receipt_id.to_string(),
+        );
+
+        tracing::debug!(
+            target: crate::INDEXER,
+            "Saving receipt {} to the `receipts_map` in ScyllaDB",
+            &receipt_execution_outcome.receipt.receipt_id.to_string(),
+        );
+
+        save_receipt(
+            scylla_db_client,
+            &receipt_execution_outcome.receipt.receipt_id.to_string(),
+            &transaction_hash,
+            block_height,
+            shard_id,
+        )
+        .await?;
+
+        let mut tasks = futures::stream::FuturesUnordered::new();
+
+        // Add the newly produced receipt_ids to the watching list
+        tasks.extend(
+            receipt_execution_outcome
+                .execution_outcome
+                .outcome
+                .receipt_ids
+                .iter()
+                .map(|receipt_id| {
+                    tracing::debug!(target: crate::INDEXER, "+R {}", &receipt_id.to_string(),);
+                    storage::push_receipt_to_watching_list(
+                        redis_connection_manager,
+                        receipt_id.to_string(),
+                        &transaction_hash,
+                    )
+                }),
+        );
+
+        // Add the success receipt to the watching list
+        if let ExecutionStatusView::SuccessReceiptId(receipt_id) =
+            receipt_execution_outcome.execution_outcome.outcome.status
+        {
+            tracing::debug!(target: crate::INDEXER, "+R {}", &receipt_id.to_string(),);
+            tasks.push(storage::push_receipt_to_watching_list(
+                redis_connection_manager,
+                receipt_id.to_string(),
+                &transaction_hash,
+            ));
+        }
+
+        while let Some(result) = tasks.next().await {
+            let _ = result.map_err(|e| {
                 tracing::debug!(
                     target: crate::INDEXER,
-                    "-R {}",
-                    &receipt_execution_outcome.receipt.receipt_id.to_string(),
-                );
-                // Add the newly produced receipt_ids to the watching list
-                for receipt_id in receipt_execution_outcome
-                    .execution_outcome
-                    .outcome
-                    .receipt_ids
-                    .iter()
-                {
-                    tracing::debug!(target: crate::INDEXER, "+R {}", &receipt_id.to_string(),);
-                    storage::push_receipt_to_watching_list(
-                        redis_connection_manager,
-                        &receipt_id.to_string(),
-                        &transaction_hash,
-                    )
-                    .await?;
-                    save_receipt(
-                        scylla_db_client,
-                        &receipt_id.to_string(),
-                        &transaction_hash,
-                        block_height,
-                        shard.shard_id,
-                    )
-                    .await?;
-                }
-
-                // Add the success receipt to the watching list
-                if let ExecutionStatusView::SuccessReceiptId(receipt_id) =
-                    receipt_execution_outcome.execution_outcome.outcome.status
-                {
-                    tracing::debug!(target: crate::INDEXER, "+R {}", &receipt_id.to_string(),);
-                    storage::push_receipt_to_watching_list(
-                        redis_connection_manager,
-                        &receipt_id.to_string(),
-                        &transaction_hash,
-                    )
-                    .await?;
-                    save_receipt(
-                        scylla_db_client,
-                        &receipt_id.to_string(),
-                        &transaction_hash,
-                        block_height,
-                        shard.shard_id,
-                    )
-                    .await?;
-                }
-
-                match storage::push_outcome_and_receipt(
-                    redis_connection_manager,
-                    &transaction_hash,
-                    receipt_execution_outcome.clone(),
+                    "Task encountered an error: {:#?}",
+                    e
                 )
-                .await
-                {
-                    Ok(_) => {}
-                    Err(e) => tracing::error!(
-                        target: crate::INDEXER,
-                        "Failed to push_outcome_and_receipt\n{:#?}",
-                        e
-                    ),
-                };
-            }
+            });
         }
+
+
+        let _ = storage::push_outcome_and_receipt(
+            redis_connection_manager,
+            &transaction_hash,
+            receipt_execution_outcome.clone(),
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!(
+                target: crate::INDEXER,
+                "Failed to push_outcome_and_receipt\n{:#?}",
+                e
+            )
+        });
     }
     Ok(())
 }

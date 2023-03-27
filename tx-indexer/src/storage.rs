@@ -58,7 +58,7 @@ pub async fn get<V: redis::FromRedisValue + std::fmt::Debug>(
 /// The counter holds how many Receipts related to the Transaction are in watching list
 pub async fn push_receipt_to_watching_list(
     redis_connection_manager: &redis::aio::ConnectionManager,
-    receipt_id: &str,
+    receipt_id: String,
     cache_value: &str,
 ) -> anyhow::Result<()> {
     set(redis_connection_manager, receipt_id, cache_value).await?;

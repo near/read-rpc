@@ -83,11 +83,10 @@ where
         if let JsonRpcError::ServerError(JsonRpcServerError::HandlerError(error)) = err {
             near_jsonrpc_primitives::errors::RpcError::from(error).into()
         } else {
-            Self {
-                0: near_jsonrpc_primitives::errors::RpcError::serialization_error(
-                    "Failed to serialize JsonRpcError".to_string(),
-                ),
-            }
+            Self(near_jsonrpc_primitives::errors::RpcError::serialization_error(
+                "Failed to serialize JsonRpcError".to_string()
+            ))
+
         }
     }
 }

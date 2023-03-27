@@ -12,7 +12,7 @@ async fn fetch_receipt(
     data: &Data<ServerContext>,
     request: &near_jsonrpc_primitives::types::receipts::RpcReceiptRequest,
 ) -> anyhow::Result<near_primitives::views::ReceiptView> {
-    let receipt_id = request.receipt_reference.receipt_id.clone();
+    let receipt_id = request.receipt_reference.receipt_id;
 
     let (_receipt_id, tx_hash, _block_height, _shard_id) =
         data.scylla_db_manager.get_receipt_by_id(receipt_id).await
@@ -56,8 +56,7 @@ pub async fn receipt(
         Ok(resp) => resp,
         Err(err) => {
             tracing::debug!("Receipt not found: {:#?}", err);
-            let receipt_view = proxy_rpc_call(&data.near_rpc_client, request).await?;
-            receipt_view
+            proxy_rpc_call(&data.near_rpc_client, request).await?
         }
     };
 
