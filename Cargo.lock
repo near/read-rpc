@@ -4501,6 +4501,7 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 name = "state-indexer"
 version = "0.1.0"
 dependencies = [
+ "actix-web",
  "anyhow",
  "async-trait",
  "aws-sdk-s3",
@@ -4515,12 +4516,14 @@ dependencies = [
  "http",
  "humantime",
  "itertools",
+ "lazy_static",
  "near-indexer-primitives",
  "near-jsonrpc-client",
  "near-lake-framework",
  "near-primitives-core",
  "num-bigint",
  "openssl-probe",
+ "prometheus",
  "scylla",
  "serde",
  "serde_json",
@@ -5107,6 +5110,7 @@ dependencies = [
 name = "tx-indexer"
 version = "0.1.0"
 dependencies = [
+ "actix-web",
  "anyhow",
  "async-trait",
  "aws-credential-types",
@@ -5117,10 +5121,12 @@ dependencies = [
  "database",
  "dotenv",
  "futures",
+ "lazy_static",
  "near-indexer-primitives",
  "near-jsonrpc-client",
  "near-lake-framework",
  "num-bigint",
+ "prometheus",
  "readnode-primitives",
  "redis",
  "scylla",
