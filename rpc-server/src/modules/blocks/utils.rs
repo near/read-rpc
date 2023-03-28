@@ -44,14 +44,13 @@ pub async fn fetch_block_from_s3(
     feature = "tracing-instrumentation",
     tracing::instrument(skip(s3_client))
 )]
-pub async fn fetch_chunk_from_s3(
+pub async fn fetch_shard_from_s3(
     s3_client: &aws_sdk_s3::Client,
     s3_bucket_name: &str,
     block_height: near_primitives::types::BlockHeight,
     shard_id: near_primitives::types::ShardId,
-) -> Result<near_primitives::views::ChunkView, near_jsonrpc_primitives::types::chunks::RpcChunkError>
-{
-    tracing::debug!("`fetch_chunk_from_s3` call");
+) -> anyhow::Result<near_indexer_primitives::IndexerShard> {
+    tracing::debug!("`fetch_shard_from_s3` call");
     match s3_client
         .get_object()
         .bucket(s3_bucket_name)
@@ -60,35 +59,50 @@ pub async fn fetch_chunk_from_s3(
         .await
     {
         Ok(response) => {
-            let body_bytes = response.body.collect().await.unwrap().into_bytes();
-
-            match serde_json::from_slice::<near_indexer_primitives::IndexerShard>(
-                body_bytes.as_ref(),
-            ) {
-                Ok(shard) => match shard.chunk {
-                    Some(chunk) => Ok(near_primitives::views::ChunkView {
-                        author: chunk.author,
-                        header: chunk.header,
-                        transactions: chunk
-                            .transactions
-                            .into_iter()
-                            .map(|indexer_transaction| indexer_transaction.transaction)
-                            .collect(),
-                        receipts: chunk.receipts,
-                    }),
-                    None => Err(
-                        near_jsonrpc_primitives::types::chunks::RpcChunkError::InternalError {
-                            error_message: "Unavailable chunk".to_string(),
-                        },
-                    ),
-                },
-                Err(err) => Err(
-                    near_jsonrpc_primitives::types::chunks::RpcChunkError::InternalError {
-                        error_message: err.to_string(),
-                    },
-                ),
+            let body_bytes = match response.body.collect().await {
+                Ok(body) => body.into_bytes(),
+                Err(err) => anyhow::bail!("Invalid data from s3 {:?}", err)
+            };
+            match serde_json::from_slice::<near_indexer_primitives::IndexerShard>(body_bytes.as_ref()) {
+                Ok(val) => Ok(val),
+                Err(err) => anyhow::bail!("Invalid serialised data {:?}.", err)
             }
         }
+        Err(err) => anyhow::bail!("Error to get object from s3 {:?}", err)
+    }
+}
+
+
+#[cfg_attr(
+    feature = "tracing-instrumentation",
+    tracing::instrument(skip(s3_client))
+)]
+pub async fn fetch_chunk_from_s3(
+    s3_client: &aws_sdk_s3::Client,
+    s3_bucket_name: &str,
+    block_height: near_primitives::types::BlockHeight,
+    shard_id: near_primitives::types::ShardId,
+) -> Result<near_primitives::views::ChunkView, near_jsonrpc_primitives::types::chunks::RpcChunkError>
+{
+    tracing::debug!("`fetch_chunk_from_s3` call");
+    match fetch_shard_from_s3(s3_client, s3_bucket_name, block_height, shard_id).await {
+        Ok(shard) => match shard.chunk {
+            Some(chunk) => Ok(near_primitives::views::ChunkView {
+                author: chunk.author,
+                header: chunk.header,
+                transactions: chunk
+                    .transactions
+                    .into_iter()
+                    .map(|indexer_transaction| indexer_transaction.transaction)
+                    .collect(),
+                receipts: chunk.receipts,
+            }),
+            None => Err(
+                near_jsonrpc_primitives::types::chunks::RpcChunkError::InternalError {
+                    error_message: "Unavailable chunk".to_string(),
+                },
+            ),
+        },
         Err(err) => Err(
             near_jsonrpc_primitives::types::chunks::RpcChunkError::InternalError {
                 error_message: err.to_string(),
