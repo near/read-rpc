@@ -20,7 +20,7 @@ impl CollectingTransactionDetails {
 
     pub fn to_final_transaction_result(&self) -> anyhow::Result<TransactionDetails> {
         let mut outcomes = self.execution_outcomes.clone();
-        let mut looking_for_id = self.transaction.hash.clone();
+        let mut looking_for_id = self.transaction.hash;
         let num_outcomes = outcomes.len();
         let finale_status = outcomes.iter().find_map(|outcome_with_id| {
             if outcome_with_id.id == looking_for_id {

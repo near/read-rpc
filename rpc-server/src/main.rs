@@ -26,7 +26,7 @@ fn init_logging(use_tracer: bool) {
         .with(tracing_subscriber::fmt::Layer::default());
 
     if use_tracer {
-        let app_name = "json-rpc-100x";
+        let app_name = "json_rpc_100x";
         // Start a new Jaeger trace pipeline.
         // Spans are exported in batch - recommended setup for a production application.
         opentelemetry::global::set_text_map_propagator(
@@ -160,6 +160,7 @@ async fn main() -> anyhow::Result<()> {
             "EXPERIMENTAL_protocol_config",
             modules::network::methods::protocol_config,
         )
+        .with_method("EXPERIMENTAL_receipt", modules::receipts::methods::receipt)
         .finish();
 
     actix_web::HttpServer::new(move || {

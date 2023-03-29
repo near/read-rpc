@@ -164,6 +164,7 @@ pub fn init_tracing() {
 pub(crate) struct ScyllaDBManager {
     scylla_session: std::sync::Arc<scylla::Session>,
     add_transaction: PreparedStatement,
+    add_receipt: PreparedStatement,
 }
 
 #[async_trait::async_trait]
@@ -177,12 +178,27 @@ impl ScyllaStorageManager for ScyllaDBManager {
                 block_height varint,
                 account_id varchar,
                 transaction_details BLOB,
-                PRIMARY KEY ((transaction_hash, account_id), block_height)
+                PRIMARY KEY (transaction_hash, block_height)
             ) WITH CLUSTERING ORDER BY (block_height DESC)
             ",
                 &[],
             )
             .await?;
+
+        scylla_db_session
+            .query(
+                "CREATE TABLE IF NOT EXISTS receipts_map (
+                receipt_id varchar,
+                block_height varint,
+                parent_transaction_hash varchar,
+                shard_id varint,
+                PRIMARY KEY (receipt_id)
+            )
+            ",
+                &[],
+            )
+            .await?;
+
         Ok(())
     }
 
@@ -203,6 +219,13 @@ impl ScyllaStorageManager for ScyllaDBManager {
                 &scylla_db_session,
                 "INSERT INTO tx_indexer.transactions_details
                     (transaction_hash, block_height, account_id, transaction_details)
+                    VALUES(?, ?, ?, ?)",
+            )
+            .await?,
+            add_receipt: Self::prepare_query(
+                &scylla_db_session,
+                "INSERT INTO tx_indexer.receipts_map
+                    (receipt_id, block_height, parent_transaction_hash, shard_id)
                     VALUES(?, ?, ?, ?)",
             )
             .await?,
@@ -227,6 +250,27 @@ impl ScyllaDBManager {
                 num_bigint::BigInt::from(block_height),
                 transaction.transaction.signer_id.to_string(),
                 &transaction_details,
+            ),
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn add_receipt(
+        &self,
+        receipt_id: &str,
+        parent_tx_hash: &str,
+        block_height: u64,
+        shard_id: u64,
+    ) -> anyhow::Result<()> {
+        Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.add_receipt,
+            (
+                receipt_id,
+                num_bigint::BigInt::from(block_height),
+                parent_tx_hash,
+                num_bigint::BigInt::from(shard_id),
             ),
         )
         .await?;
