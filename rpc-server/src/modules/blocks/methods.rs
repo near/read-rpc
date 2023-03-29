@@ -70,13 +70,8 @@ pub async fn fetch_chunk(
     .await?)
 }
 
-
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
-pub async fn fetch_changes_in_block(
-    data: &Data<ServerContext>,
-    block_reference: near_primitives::types::BlockReference,
-) -> anyhow::Result<near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockByTypeResponse> {
-    let block_view = fetch_block(&data, block_reference).await?;
+async fn fetch_shards(data: &Data<ServerContext>, block_view: &near_primitives::views::BlockView) -> anyhow::Result<Vec<near_indexer_primitives::IndexerShard>> {
     let fetch_shards_futures = (0..block_view.chunks.len() as u64)
         .collect::<Vec<u64>>()
         .into_iter()
@@ -88,7 +83,16 @@ pub async fn fetch_changes_in_block(
                 shard_id
             )
         });
-    let shards = futures::future::try_join_all(fetch_shards_futures).await?;
+    Ok(futures::future::try_join_all(fetch_shards_futures).await?)
+}
+
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
+async fn fetch_changes_in_block(
+    data: &Data<ServerContext>,
+    block_reference: near_primitives::types::BlockReference,
+) -> anyhow::Result<near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockByTypeResponse> {
+    let block_view = fetch_block(&data, block_reference).await?;
+    let shards = fetch_shards(&data, &block_view).await?;
     let mut changes = vec![];
     for shard in shards.into_iter() {
         for change in shard.state_changes.into_iter() {
@@ -115,6 +119,28 @@ pub async fn fetch_changes_in_block(
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
+async fn fetch_changes_in_block_by_type(
+    data: &Data<ServerContext>,
+    block_reference: near_primitives::types::BlockReference,
+    state_changes_request: &near_primitives::views::StateChangesRequestView,
+) -> anyhow::Result<near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockResponse> {
+    let block_view = fetch_block(&data, block_reference).await?;
+    let shards = fetch_shards(&data, &block_view).await?;
+    let mut changes = vec![];
+    for shard in shards.into_iter() {
+        for change in shard.state_changes.into_iter() {
+            // TODO: filter changes
+            changes.push(change)
+        }
+    };
+    Ok(near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockResponse {
+        block_hash: block_view.header.hash,
+        changes
+    })
+}
+
+
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn block(
     data: Data<ServerContext>,
     Params(params): Params<near_jsonrpc_primitives::types::blocks::RpcBlockRequest>,
@@ -135,7 +161,7 @@ pub async fn block(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn changes_in_block(
     data: Data<ServerContext>,
-    Params(params): Params<near_jsonrpc_primitives::types::blocks::RpcBlockRequest>,
+    Params(params): Params<near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockRequest>,
 ) -> Result<near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockByTypeResponse, RPCError> {
     match fetch_changes_in_block(&data, params.block_reference.clone()).await {
         Ok(changes) => Ok(changes),
@@ -143,15 +169,29 @@ pub async fn changes_in_block(
             tracing::warn!("`changes_in_block` error: {:?}", err);
             let response = proxy_rpc_call(
                 &data.near_rpc_client,
-                near_jsonrpc_client::methods::EXPERIMENTAL_changes_in_block::RpcStateChangesInBlockRequest {
-                    block_reference: params.block_reference
-                }
+                params
             ).await?;
             Ok(response)
         }
     }
 
 }
+
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
+pub async fn changes_in_block_by_type(
+    data: Data<ServerContext>,
+    Params(params): Params<near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockByTypeRequest>,
+) -> Result<near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockResponse, RPCError> {
+    match fetch_changes_in_block_by_type(&data, params.block_reference.clone(), &params.state_changes_request).await {
+        Ok(changes) => Ok(changes),
+        Err(err) => {
+            tracing::warn!("`changes_in_block` error: {:?}", err);
+            Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
+        }
+    }
+
+}
+
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn chunk(
     data: Data<ServerContext>,
