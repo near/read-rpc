@@ -150,8 +150,20 @@ async fn main() -> anyhow::Result<()> {
         )
         .with_method("gas_price", modules::gas::methods::gas_price)
         .with_method("status", modules::network::methods::status)
+        .with_method(
+            "light_client_proof",
+            modules::clients::methods::light_client_proof,
+        )
+        .with_method(
+            "next_light_client_block",
+            modules::clients::methods::next_light_client_block,
+        )
         .with_method("network_info", modules::network::methods::network_info)
         .with_method("validators", modules::network::methods::validators)
+        .with_method(
+            "EXPERIMENTAL_validators_ordered",
+            modules::network::methods::validators_ordered,
+        )
         .with_method(
             "EXPERIMENTAL_genesis_config",
             modules::network::methods::genesis_config,

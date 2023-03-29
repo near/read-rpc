@@ -28,6 +28,13 @@ pub async fn validators(
     Ok(near_jsonrpc_primitives::types::validator::RpcValidatorResponse { validator_info })
 }
 
+pub async fn validators_ordered(
+    data: Data<ServerContext>,
+    Params(params): Params<near_jsonrpc_primitives::types::validator::RpcValidatorsOrderedRequest>,
+) -> Result<near_jsonrpc_primitives::types::validator::RpcValidatorsOrderedResponse, RPCError> {
+    Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
+}
+
 pub async fn genesis_config(
     data: Data<ServerContext>,
     Params(_params): Params<Value>,
