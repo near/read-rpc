@@ -134,8 +134,14 @@ async fn main() -> anyhow::Result<()> {
         .with_data(Data::new(state))
         .with_method("query", modules::queries::methods::query)
         .with_method("block", modules::blocks::methods::block)
-        .with_method("EXPERIMENTAL_changes", modules::blocks::methods::changes_in_block_by_type)
-        .with_method("EXPERIMENTAL_changes_in_block", modules::blocks::methods::changes_in_block)
+        .with_method(
+            "EXPERIMENTAL_changes",
+            modules::blocks::methods::changes_in_block_by_type,
+        )
+        .with_method(
+            "EXPERIMENTAL_changes_in_block",
+            modules::blocks::methods::changes_in_block,
+        )
         .with_method("chunk", modules::blocks::methods::chunk)
         .with_method("tx", modules::transactions::methods::tx)
         .with_method(

@@ -61,17 +61,18 @@ pub async fn fetch_shard_from_s3(
         Ok(response) => {
             let body_bytes = match response.body.collect().await {
                 Ok(body) => body.into_bytes(),
-                Err(err) => anyhow::bail!("Invalid data from s3 {:?}", err)
+                Err(err) => anyhow::bail!("Invalid data from s3 {:?}", err),
             };
-            match serde_json::from_slice::<near_indexer_primitives::IndexerShard>(body_bytes.as_ref()) {
+            match serde_json::from_slice::<near_indexer_primitives::IndexerShard>(
+                body_bytes.as_ref(),
+            ) {
                 Ok(val) => Ok(val),
-                Err(err) => anyhow::bail!("Invalid serialised data {:?}.", err)
+                Err(err) => anyhow::bail!("Invalid serialised data {:?}.", err),
             }
         }
-        Err(err) => anyhow::bail!("Error to get object from s3 {:?}", err)
+        Err(err) => anyhow::bail!("Error to get object from s3 {:?}", err),
     }
 }
-
 
 #[cfg_attr(
     feature = "tracing-instrumentation",
