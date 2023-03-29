@@ -1,13 +1,13 @@
 use crate::config::ServerContext;
 use crate::errors::RPCError;
 use crate::modules::blocks::utils::{
-    fetch_block_from_s3, fetch_chunk_from_s3, fetch_shard_from_s3,
+    fetch_block_from_s3, fetch_chunk_from_s3, fetch_shard_from_s3, is_matching_change,
     scylla_db_convert_block_hash_to_block_height,
     scylla_db_convert_chunk_hash_to_block_height_and_shard_id,
 };
 use crate::utils::proxy_rpc_call;
 use jsonrpc_v2::{Data, Params};
-use near_primitives::views::{StateChangeValueView, StateChangesRequestView};
+use near_primitives::views::StateChangeValueView;
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn fetch_block(
@@ -100,28 +100,34 @@ async fn fetch_changes_in_block(
 ) -> anyhow::Result<near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockByTypeResponse> {
     let block_view = fetch_block(&data, block_reference).await?;
     let shards = fetch_shards(&data, &block_view).await?;
-    let mut changes = vec![];
-    for shard in shards.into_iter() {
-        for change in shard.state_changes.into_iter() {
-            match change.value {
-                StateChangeValueView::AccountUpdate { account_id, .. }
-                | StateChangeValueView::AccountDeletion { account_id } => changes.push(
-                    near_primitives::views::StateChangeKindView::AccountTouched { account_id },
-                ),
-                StateChangeValueView::AccessKeyUpdate { account_id, .. }
-                | StateChangeValueView::AccessKeyDeletion { account_id, .. } => changes.push(
-                    near_primitives::views::StateChangeKindView::AccessKeyTouched { account_id },
-                ),
-                StateChangeValueView::DataUpdate { account_id, .. }
-                | StateChangeValueView::DataDeletion { account_id, .. } => changes
-                    .push(near_primitives::views::StateChangeKindView::DataTouched { account_id }),
-                StateChangeValueView::ContractCodeUpdate { account_id, .. }
-                | StateChangeValueView::ContractCodeDeletion { account_id } => changes.push(
-                    near_primitives::views::StateChangeKindView::ContractCodeTouched { account_id },
-                ),
-            }
-        }
-    }
+    let changes = shards
+        .into_iter()
+        .flat_map(|shard| {
+            shard
+                .state_changes
+                .into_iter()
+                .map(|change| match change.value {
+                    StateChangeValueView::AccountUpdate { account_id, .. }
+                    | StateChangeValueView::AccountDeletion { account_id } => {
+                        near_primitives::views::StateChangeKindView::AccountTouched { account_id }
+                    }
+                    StateChangeValueView::AccessKeyUpdate { account_id, .. }
+                    | StateChangeValueView::AccessKeyDeletion { account_id, .. } => {
+                        near_primitives::views::StateChangeKindView::AccessKeyTouched { account_id }
+                    }
+                    StateChangeValueView::DataUpdate { account_id, .. }
+                    | StateChangeValueView::DataDeletion { account_id, .. } => {
+                        near_primitives::views::StateChangeKindView::DataTouched { account_id }
+                    }
+                    StateChangeValueView::ContractCodeUpdate { account_id, .. }
+                    | StateChangeValueView::ContractCodeDeletion { account_id } => {
+                        near_primitives::views::StateChangeKindView::ContractCodeTouched {
+                            account_id,
+                        }
+                    }
+                })
+        })
+        .collect();
     Ok(
         near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockByTypeResponse {
             block_hash: block_view.header.hash,
@@ -138,88 +144,11 @@ async fn fetch_changes_in_block_by_type(
 ) -> anyhow::Result<near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockResponse> {
     let block_view = fetch_block(&data, block_reference).await?;
     let shards = fetch_shards(&data, &block_view).await?;
-    let mut changes = vec![];
-    for shard in shards.into_iter() {
-        for change in shard.state_changes.into_iter() {
-            match state_changes_request {
-                StateChangesRequestView::AccountChanges { account_ids } => match &change.value {
-                    StateChangeValueView::AccountUpdate { account_id, .. }
-                    | StateChangeValueView::AccountDeletion { account_id } => {
-                        if account_ids.contains(account_id) {
-                            changes.push(change)
-                        }
-                    }
-                    _ => {}
-                },
-
-                StateChangesRequestView::SingleAccessKeyChanges { keys } => match &change.value {
-                    StateChangeValueView::AccessKeyUpdate {
-                        account_id,
-                        public_key,
-                        ..
-                    }
-                    | StateChangeValueView::AccessKeyDeletion {
-                        account_id,
-                        public_key,
-                    } => {
-                        let mut account_ids = vec![];
-                        let mut public_keys = vec![];
-                        for account_public_key in keys.iter() {
-                            account_ids.push(account_public_key.account_id.clone());
-                            public_keys.push(account_public_key.public_key.clone());
-                        }
-                        if account_ids.contains(account_id) && public_keys.contains(public_key) {
-                            changes.push(change)
-                        }
-                    }
-                    _ => {}
-                },
-
-                StateChangesRequestView::AllAccessKeyChanges { account_ids } => {
-                    match &change.value {
-                        StateChangeValueView::AccessKeyUpdate { account_id, .. }
-                        | StateChangeValueView::AccessKeyDeletion { account_id, .. } => {
-                            if account_ids.contains(account_id) {
-                                changes.push(change)
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-
-                StateChangesRequestView::ContractCodeChanges { account_ids } => {
-                    match &change.value {
-                        StateChangeValueView::ContractCodeUpdate { account_id, .. }
-                        | StateChangeValueView::ContractCodeDeletion { account_id } => {
-                            if account_ids.contains(account_id) {
-                                changes.push(change)
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-
-                StateChangesRequestView::DataChanges {
-                    account_ids,
-                    key_prefix,
-                } => match &change.value {
-                    StateChangeValueView::DataUpdate {
-                        account_id, key, ..
-                    }
-                    | StateChangeValueView::DataDeletion { account_id, key } => {
-                        if account_ids.contains(account_id)
-                            && hex::encode(key)
-                                .to_string()
-                                .starts_with(&hex::encode(key_prefix).to_string())
-                        {
-                            changes.push(change)
-                        }
-                    }
-                    _ => {}
-                },
-            }
-        }
-    }
+    let changes = shards
+        .into_iter()
+        .flat_map(|shard| shard.state_changes)
+        .filter(|change| is_matching_change(change, &state_changes_request))
+        .collect();
     Ok(
         near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockResponse {
             block_hash: block_view.header.hash,
