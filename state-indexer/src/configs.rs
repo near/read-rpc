@@ -4,6 +4,7 @@ use database::ScyllaStorageManager;
 use near_jsonrpc_client::{methods, JsonRpcClient};
 use near_lake_framework::near_indexer_primitives::types::{BlockReference, Finality};
 use scylla::prepared_statement::PreparedStatement;
+use std::collections::HashMap;
 
 /// NEAR Indexer for Explorer
 /// Watches for stream of blocks from the chain
@@ -132,6 +133,8 @@ pub(crate) struct ScyllaDBManager {
 
     add_access_key: PreparedStatement,
     delete_access_key: PreparedStatement,
+    add_account_access_keys: PreparedStatement,
+    get_account_access_keys: PreparedStatement,
 
     add_contract: PreparedStatement,
     delete_contract: PreparedStatement,
@@ -174,6 +177,20 @@ impl ScyllaStorageManager for ScyllaDBManager {
                     data_key varchar,
                     data_value BLOB,
                     PRIMARY KEY ((account_id, data_key), block_height)
+                ) WITH CLUSTERING ORDER BY (block_height DESC)
+            ",
+                &[],
+            )
+            .await?;
+
+        scylla_db_session
+            .query(
+                "
+                CREATE TABLE IF NOT EXISTS account_access_keys (
+                    account_id varchar,
+                    block_height varint,
+                    active_access_keys map<varchar, BLOB>,
+                    PRIMARY KEY (account_id, block_height)
                 ) WITH CLUSTERING ORDER BY (block_height DESC)
             ",
                 &[],
@@ -289,6 +306,19 @@ impl ScyllaStorageManager for ScyllaDBManager {
                 "INSERT INTO state_indexer.state_changes_access_key
                     (account_id, block_height, block_hash, data_key, data_value)
                     VALUES(?, ?, ?, ?, NULL)",
+            )
+            .await?,
+            add_account_access_keys: Self::prepare_query(
+                &scylla_db_session,
+                "INSERT INTO state_indexer.account_access_keys
+                    (account_id, block_height, active_access_keys)
+                    VALUES(?, ?, ?)",
+            )
+            .await?,
+            get_account_access_keys: Self::prepare_query(
+                &scylla_db_session,
+                "SELECT active_access_keys FROM state_indexer.account_access_keys
+                    WHERE account_id = ? AND block_height < ? LIMIT 1",
             )
             .await?,
 
@@ -431,6 +461,55 @@ impl ScyllaDBManager {
             &self.scylla_session,
             &self.delete_access_key,
             (account_id.to_string(), block_height, block_hash.to_string(), hex::encode(public_key).to_string()),
+        )
+        .await?;
+        Ok(())
+    }
+    async fn get_access_keys(
+        &self,
+        account_id: near_indexer_primitives::types::AccountId,
+        block_height: bigdecimal::BigDecimal,
+    ) -> anyhow::Result<scylla::frame::response::result::Row> {
+        let result = Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.get_account_access_keys,
+            (account_id.to_string(), block_height),
+        )
+        .await?
+        .single_row()?;
+        Ok(result)
+    }
+
+    pub(crate) async fn add_account_access_keys(
+        &self,
+        account_id: near_indexer_primitives::types::AccountId,
+        block_height: bigdecimal::BigDecimal,
+        public_key: &[u8],
+        access_key: Option<&[u8]>,
+    ) -> anyhow::Result<()> {
+        let public_key_hex = hex::encode(public_key).to_string();
+
+        let mut account_keys = match self.get_access_keys(account_id.clone(), block_height.clone()).await {
+            Ok(row) => match row.into_typed::<(HashMap<String, Vec<u8>>,)>() {
+                Ok((account_keys,)) => account_keys,
+                Err(_) => HashMap::new(),
+            },
+            Err(_) => HashMap::new(),
+        };
+
+        match access_key {
+            Some(access_key) => {
+                account_keys.insert(public_key_hex, access_key.to_vec());
+            }
+            None => {
+                account_keys.remove(&public_key_hex);
+            }
+        }
+
+        Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.add_account_access_keys,
+            (account_id.to_string(), block_height, &account_keys),
         )
         .await?;
         Ok(())

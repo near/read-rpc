@@ -104,6 +104,7 @@ pub struct ScyllaDBManager {
     get_account: PreparedStatement,
     get_contract_code: PreparedStatement,
     get_access_key: PreparedStatement,
+    get_account_access_keys: PreparedStatement,
     get_receipt: PreparedStatement,
     get_transaction_by_hash: PreparedStatement,
 }
@@ -154,6 +155,11 @@ impl ScyllaStorageManager for ScyllaDBManager {
             get_access_key: Self::prepare_query(
                 &scylla_db_session,
                 "SELECT data_value FROM state_indexer.state_changes_access_key WHERE account_id = ? AND block_height <= ? AND data_key = ? LIMIT 1"
+            ).await?,
+
+            get_account_access_keys: Self::prepare_query(
+                &scylla_db_session,
+                "SELECT active_access_keys FROM state_indexer.account_access_keys WHERE account_id = ? AND block_height <= ? LIMIT 1"
             ).await?,
 
             get_receipt: Self::prepare_query(
@@ -310,6 +316,24 @@ impl ScyllaDBManager {
                 account_id.to_string(),
                 num_bigint::BigInt::from(block_height),
                 hex::encode(&key_data).to_string(),
+            ),
+        )
+        .await?
+        .single_row()?;
+        Ok(result)
+    }
+
+    pub async fn get_account_access_keys(
+        &self,
+        account_id: &near_primitives::types::AccountId,
+        block_height: near_primitives::types::BlockHeight,
+    ) -> anyhow::Result<scylla::frame::response::result::Row> {
+        let result = Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.get_account_access_keys,
+            (
+                account_id.to_string(),
+                num_bigint::BigInt::from(block_height),
             ),
         )
         .await?

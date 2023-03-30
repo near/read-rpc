@@ -4,7 +4,8 @@ use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
 use crate::modules::blocks::CacheBlock;
 use crate::modules::queries::utils::{
     fetch_access_key_from_scylla_db, fetch_account_from_scylla_db,
-    fetch_contract_code_from_scylla_db, fetch_state_from_scylla_db, run_contract,
+    fetch_contract_code_from_scylla_db, fetch_list_access_keys_from_scylla_db,
+    fetch_state_from_scylla_db, run_contract,
 };
 use crate::utils::proxy_rpc_call;
 use borsh::BorshSerialize;
@@ -162,6 +163,34 @@ async fn view_access_key(
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
+async fn view_access_keys_list(
+    data: &Data<ServerContext>,
+    block: CacheBlock,
+    account_id: &near_primitives::types::AccountId,
+) -> anyhow::Result<near_jsonrpc_primitives::types::query::RpcQueryResponse> {
+    tracing::debug!(
+        "`view_access_key` call. AccountID {}, block {}",
+        account_id,
+        block.block_height,
+    );
+
+    let access_keys = fetch_list_access_keys_from_scylla_db(
+        &data.scylla_db_manager,
+        account_id,
+        block.block_height,
+    )
+    .await?;
+
+    Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
+        kind: near_jsonrpc_primitives::types::query::QueryResponseKind::AccessKeyList(
+            near_primitives::views::AccessKeyList { keys: access_keys },
+        ),
+        block_height: block.block_height,
+        block_hash: block.block_hash,
+    })
+}
+
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn query(
     data: Data<ServerContext>,
     Params(params): Params<near_jsonrpc_primitives::types::query::RpcQueryRequest>,
@@ -222,8 +251,14 @@ pub async fn query(
                 Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
             }
         },
-        near_primitives::views::QueryRequest::ViewAccessKeyList { account_id: _ } => Err(
-            RPCError::unimplemented_error("ViewAccessKeyList - Unimplemented"),
-        ),
+        near_primitives::views::QueryRequest::ViewAccessKeyList { account_id } => {
+            match view_access_keys_list(&data, block, &account_id).await {
+                Ok(result) => Ok(result),
+                Err(e) => {
+                    tracing::debug!("Access Key List not found: {:?}", e);
+                    Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
+                }
+            }
+        }
     }
 }
