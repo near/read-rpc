@@ -32,7 +32,8 @@ async fn main() -> anyhow::Result<()> {
     );
 
     tracing::info!(target: INDEXER, "Generating LakeConfig...");
-    let config: near_lake_framework::LakeConfig = opts.to_lake_config().await?;
+    let scylla_session = scylla_db_client.scylla_session().await;
+    let config: near_lake_framework::LakeConfig = opts.to_lake_config(&scylla_session).await?;
 
     tracing::info!(target: INDEXER, "Instantiating the stream...",);
     let (sender, stream) = near_lake_framework::streamer(config);
@@ -47,6 +48,7 @@ async fn main() -> anyhow::Result<()> {
                 streamer_message,
                 &scylla_db_client,
                 &redis_connection_manager,
+                &opts.indexer_id,
             )
         })
         .buffer_unordered(1usize);
@@ -70,6 +72,7 @@ async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
     redis_connection_manager: &redis::aio::ConnectionManager,
+    indexer_id: &str,
 ) -> anyhow::Result<u64> {
     tracing::info!(
         target: INDEXER,
@@ -96,13 +99,9 @@ async fn handle_streamer_message(
             e
         ),
     };
-
-    storage::set(
-        redis_connection_manager,
-        "last_indexed_block",
-        &streamer_message.block.header.height.to_string(),
-    )
-    .await?;
+    scylla_db_client
+        .update_meta(indexer_id, streamer_message.block.header.height)
+        .await?;
 
     metrics::BLOCK_PROCESSED_TOTAL.inc();
     // Prometheus Gauge Metric type do not support u64

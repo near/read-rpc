@@ -97,7 +97,10 @@ async fn get_start_block_height(
         StartOptions::FromBlock { height } => Ok(*height),
         StartOptions::FromInterruption => {
             let row = scylladb_session
-                .query("SELECT last_processed_block_height FROM meta WHERE indexer_id = ?", (&opts.indexer_id,))
+                .query(
+                    "SELECT last_processed_block_height FROM state_indexer.meta WHERE indexer_id = ?",
+                    (&opts.indexer_id,),
+                )
                 .await?
                 .single_row();
 

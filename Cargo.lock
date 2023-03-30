@@ -5126,6 +5126,7 @@ dependencies = [
  "near-jsonrpc-client",
  "near-lake-framework",
  "num-bigint",
+ "num-traits",
  "prometheus",
  "readnode-primitives",
  "redis",

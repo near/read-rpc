@@ -1,9 +1,9 @@
-use crate::storage;
 use borsh::BorshSerialize;
 pub use clap::{Parser, Subcommand};
 use database::ScyllaStorageManager;
 use near_indexer_primitives::types::{BlockReference, Finality};
 use near_jsonrpc_client::{methods, JsonRpcClient};
+use num_traits::ToPrimitive;
 use scylla::prepared_statement::PreparedStatement;
 use tracing_subscriber::EnvFilter;
 
@@ -78,52 +78,51 @@ impl Opts {
 }
 
 impl Opts {
-    pub async fn to_lake_config(&self) -> anyhow::Result<near_lake_framework::LakeConfig> {
+    pub async fn to_lake_config(
+        &self,
+        scylladb_session: &std::sync::Arc<scylla::Session>,
+    ) -> anyhow::Result<near_lake_framework::LakeConfig> {
         let config_builder = near_lake_framework::LakeConfigBuilder::default();
 
         Ok(match &self.chain_id {
             ChainId::Mainnet(_) => config_builder
                 .mainnet()
-                .start_block_height(get_start_block_height(self).await),
+                .start_block_height(get_start_block_height(self, scylladb_session).await?),
             ChainId::Testnet(_) => config_builder
                 .testnet()
-                .start_block_height(get_start_block_height(self).await),
+                .start_block_height(get_start_block_height(self, scylladb_session).await?),
         }
         .build()
         .expect("Failed to build LakeConfig"))
     }
 }
 
-async fn get_start_block_height(opts: &Opts) -> u64 {
+async fn get_start_block_height(
+    opts: &Opts,
+    scylladb_session: &std::sync::Arc<scylla::Session>,
+) -> anyhow::Result<u64> {
     match opts.start_options() {
-        StartOptions::FromBlock { height } => *height,
+        StartOptions::FromBlock { height } => Ok(*height),
         StartOptions::FromInterruption => {
-            let redis_connection_manager = match storage::connect(&opts.redis_connection_string)
-                .await
-            {
-                Ok(connection_manager) => connection_manager,
-                Err(err) => {
-                    tracing::warn!(
-                        target: "tx_indexer",
-                        "Failed to connect to Redis to get last synced block, failing to the latest...\n{:#?}",
-                        err,
-                    );
-                    return final_block_height(opts).await;
-                }
-            };
-            match storage::get_last_indexed_block(&redis_connection_manager).await {
-                Ok(last_indexed_block) => last_indexed_block,
-                Err(err) => {
-                    tracing::warn!(
-                        target: "tx_indexer",
-                        "Failed to get last indexer block from Redis. Failing to the latest one...\n{:#?}",
-                        err
-                    );
-                    final_block_height(opts).await
-                }
+            let row = scylladb_session
+                .query(
+                    "SELECT last_processed_block_height FROM tx_indexer.meta WHERE indexer_id = ?",
+                    (&opts.indexer_id,),
+                )
+                .await?
+                .single_row();
+
+            if let Ok(row) = row {
+                let (block_height,): (num_bigint::BigInt,) =
+                    row.into_typed::<(num_bigint::BigInt,)>()?;
+                Ok(block_height
+                    .to_u64()
+                    .expect("Failed to convert BigInt to u64"))
+            } else {
+                Ok(final_block_height(opts).await)
             }
         }
-        StartOptions::FromLatest => final_block_height(opts).await,
+        StartOptions::FromLatest => Ok(final_block_height(opts).await),
     }
 }
 
@@ -165,6 +164,7 @@ pub(crate) struct ScyllaDBManager {
     scylla_session: std::sync::Arc<scylla::Session>,
     add_transaction: PreparedStatement,
     add_receipt: PreparedStatement,
+    update_meta: PreparedStatement,
 }
 
 #[async_trait::async_trait]
@@ -194,6 +194,18 @@ impl ScyllaStorageManager for ScyllaDBManager {
                 shard_id varint,
                 PRIMARY KEY (receipt_id)
             )
+            ",
+                &[],
+            )
+            .await?;
+
+        scylla_db_session
+            .query(
+                "
+                CREATE TABLE IF NOT EXISTS meta (
+                    indexer_id varchar PRIMARY KEY,
+                    last_processed_block_height varint
+                )
             ",
                 &[],
             )
@@ -229,11 +241,22 @@ impl ScyllaStorageManager for ScyllaDBManager {
                     VALUES(?, ?, ?, ?)",
             )
             .await?,
+            update_meta: Self::prepare_query(
+                &scylla_db_session,
+                "INSERT INTO tx_indexer.meta
+                    (indexer_id, last_processed_block_height)
+                    VALUES (?, ?)",
+            )
+            .await?,
         }))
     }
 }
 
 impl ScyllaDBManager {
+    pub(crate) async fn scylla_session(&self) -> std::sync::Arc<scylla::Session> {
+        self.scylla_session.clone()
+    }
+
     pub async fn add_transaction(
         &self,
         transaction: readnode_primitives::TransactionDetails,
@@ -272,6 +295,20 @@ impl ScyllaDBManager {
                 parent_tx_hash,
                 num_bigint::BigInt::from(shard_id),
             ),
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub(crate) async fn update_meta(
+        &self,
+        indexer_id: &str,
+        block_height: u64,
+    ) -> anyhow::Result<()> {
+        Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.update_meta,
+            (indexer_id, num_bigint::BigInt::from(block_height)),
         )
         .await?;
         Ok(())
