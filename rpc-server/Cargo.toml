@@ -37,6 +37,7 @@ database = { path = "../database"}
 readnode-primitives = { path = "../readnode-primitives"}
 
 near-chain-configs = "0.16.1"
+near-crypto = "0.16.1"
 near-jsonrpc-client = "0.5.1"
 near-jsonrpc-primitives = "0.16.1"
 near-indexer-primitives = "0.16.1"

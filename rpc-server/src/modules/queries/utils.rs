@@ -144,6 +144,42 @@ pub async fn fetch_access_key_from_scylla_db(
     feature = "tracing-instrumentation",
     tracing::instrument(skip(scylla_db_manager))
 )]
+pub async fn fetch_list_access_keys_from_scylla_db(
+    scylla_db_manager: &std::sync::Arc<ScyllaDBManager>,
+    account_id: &near_primitives::types::AccountId,
+    block_height: near_primitives::types::BlockHeight,
+) -> anyhow::Result<Vec<near_primitives::views::AccessKeyInfoView>> {
+    tracing::debug!(
+        "`fetch_list_access_keys_from_scylla_db` call. AccountID {}, block {}",
+        account_id,
+        block_height,
+    );
+    let row = scylla_db_manager
+        .get_account_access_keys(account_id, block_height)
+        .await?;
+    let (account_keys,): (HashMap<String, Vec<u8>>,) =
+        row.into_typed::<(HashMap<String, Vec<u8>>,)>()?;
+    let account_keys_view = account_keys
+        .into_iter()
+        .map(
+            |(public_key_hex, access_key)| near_primitives::views::AccessKeyInfoView {
+                public_key: near_crypto::PublicKey::try_from_slice(
+                    &hex::decode(public_key_hex).unwrap(),
+                )
+                .unwrap(),
+                access_key: near_primitives::views::AccessKeyView::from(
+                    near_primitives::account::AccessKey::try_from_slice(&access_key).unwrap(),
+                ),
+            },
+        )
+        .collect();
+    Ok(account_keys_view)
+}
+
+#[cfg_attr(
+    feature = "tracing-instrumentation",
+    tracing::instrument(skip(scylla_db_manager))
+)]
 pub async fn fetch_state_from_scylla_db(
     scylla_db_manager: &std::sync::Arc<ScyllaDBManager>,
     account_id: &near_primitives::types::AccountId,

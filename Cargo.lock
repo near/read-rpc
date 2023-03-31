@@ -2431,6 +2431,7 @@ dependencies = [
  "jsonrpc-v2",
  "lru 0.8.1",
  "near-chain-configs",
+ "near-crypto",
  "near-indexer-primitives",
  "near-jsonrpc-client",
  "near-jsonrpc-primitives",

@@ -150,7 +150,10 @@ async fn store_state_change(
                 .try_to_vec()
                 .expect("Failed to borsh-serialize the AccessKey");
             scylla_storage
-                .add_access_key(account_id, block_height, block_hash, &data_key, &data_value)
+                .add_access_key(account_id.clone(), block_height.clone(), block_hash, &data_key, &data_value)
+                .await?;
+            scylla_storage
+                .add_account_access_keys(account_id, block_height, &data_key, Some(&data_value))
                 .await?;
         }
         StateChangeValueView::AccessKeyDeletion { account_id, public_key } => {
@@ -158,8 +161,11 @@ async fn store_state_change(
                 .try_to_vec()
                 .expect("Failed to borsh-serialize the PublicKey");
             scylla_storage
-                .delete_access_key(account_id, block_height, block_hash, &data_key)
-                .await?
+                .delete_access_key(account_id.clone(), block_height.clone(), block_hash, &data_key)
+                .await?;
+            scylla_storage
+                .add_account_access_keys(account_id, block_height, &data_key, None)
+                .await?;
         }
         StateChangeValueView::ContractCodeUpdate { account_id, code } => {
             scylla_storage
