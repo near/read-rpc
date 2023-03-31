@@ -105,15 +105,6 @@ pub async fn receipts_transaction_hash_count(
     .await
 }
 
-pub async fn get_last_indexed_block(
-    redis_connection_manager: &redis::aio::ConnectionManager,
-) -> anyhow::Result<u64> {
-    Ok(redis::cmd("GET")
-        .arg("last_indexed_block")
-        .query_async(&mut redis_connection_manager.clone())
-        .await?)
-}
-
 pub async fn set_tx(
     redis_connection_manager: &redis::aio::ConnectionManager,
     transaction_details: readnode_primitives::CollectingTransactionDetails,
