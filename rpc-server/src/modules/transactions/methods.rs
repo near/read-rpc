@@ -107,7 +107,7 @@ pub async fn tx(
             ),
             Err(err) => {
                 tracing::debug!("Transaction not found: {:#?}", err);
-                let resp = proxy_rpc_call(
+                let response = proxy_rpc_call(
                     &data.near_rpc_client,
                     near_jsonrpc_client::methods::tx::RpcTransactionStatusRequest {
                         transaction_info: request.transaction_info,
@@ -116,7 +116,7 @@ pub async fn tx(
                 .await?;
                 Ok(
                     near_jsonrpc_primitives::types::transactions::RpcTransactionResponse {
-                        final_execution_outcome: FinalExecutionOutcome(resp),
+                        final_execution_outcome: FinalExecutionOutcome(response),
                     },
                 )
             }
@@ -143,7 +143,7 @@ pub async fn tx_status(
             ),
             Err(err) => {
                 tracing::debug!("Transaction not found: {:#?}", err);
-                let rep = proxy_rpc_call(
+                let response = proxy_rpc_call(
                         &data.near_rpc_client,
                         near_jsonrpc_client::methods::EXPERIMENTAL_tx_status::RpcTransactionStatusRequest{
                             transaction_info: request.transaction_info
@@ -151,7 +151,7 @@ pub async fn tx_status(
                     ).await?;
                 Ok(
                     near_jsonrpc_primitives::types::transactions::RpcTransactionResponse {
-                        final_execution_outcome: FinalExecutionOutcomeWithReceipt(rep),
+                        final_execution_outcome: FinalExecutionOutcomeWithReceipt(response),
                     },
                 )
             }

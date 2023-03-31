@@ -1,6 +1,8 @@
 use crate::config::{ScyllaDBManager, ServerContext};
 use crate::modules::blocks::methods::fetch_block;
 use crate::modules::blocks::CacheBlock;
+use anyhow::Context;
+use near_primitives::views::{StateChangeValueView, StateChangesRequestView};
 use num_traits::ToPrimitive;
 
 #[cfg_attr(
@@ -44,6 +46,36 @@ pub async fn fetch_block_from_s3(
     feature = "tracing-instrumentation",
     tracing::instrument(skip(s3_client))
 )]
+pub async fn fetch_shard_from_s3(
+    s3_client: &aws_sdk_s3::Client,
+    s3_bucket_name: &str,
+    block_height: near_primitives::types::BlockHeight,
+    shard_id: near_primitives::types::ShardId,
+) -> anyhow::Result<near_indexer_primitives::IndexerShard> {
+    tracing::debug!("`fetch_shard_from_s3` call");
+    let response = s3_client
+        .get_object()
+        .bucket(s3_bucket_name)
+        .key(format!("{:0>12}/shard_{shard_id}.json", block_height))
+        .send()
+        .await
+        .with_context(|| "Error to get object from s3")?;
+    let body_bytes = response
+        .body
+        .collect()
+        .await
+        .with_context(|| "Invalid data from s3")?
+        .into_bytes();
+    Ok(
+        serde_json::from_slice::<near_indexer_primitives::IndexerShard>(body_bytes.as_ref())
+            .with_context(|| "Invalid serialised data")?,
+    )
+}
+
+#[cfg_attr(
+    feature = "tracing-instrumentation",
+    tracing::instrument(skip(s3_client))
+)]
 pub async fn fetch_chunk_from_s3(
     s3_client: &aws_sdk_s3::Client,
     s3_bucket_name: &str,
@@ -52,43 +84,24 @@ pub async fn fetch_chunk_from_s3(
 ) -> Result<near_primitives::views::ChunkView, near_jsonrpc_primitives::types::chunks::RpcChunkError>
 {
     tracing::debug!("`fetch_chunk_from_s3` call");
-    match s3_client
-        .get_object()
-        .bucket(s3_bucket_name)
-        .key(format!("{:0>12}/shard_{shard_id}.json", block_height))
-        .send()
-        .await
-    {
-        Ok(response) => {
-            let body_bytes = response.body.collect().await.unwrap().into_bytes();
-
-            match serde_json::from_slice::<near_indexer_primitives::IndexerShard>(
-                body_bytes.as_ref(),
-            ) {
-                Ok(shard) => match shard.chunk {
-                    Some(chunk) => Ok(near_primitives::views::ChunkView {
-                        author: chunk.author,
-                        header: chunk.header,
-                        transactions: chunk
-                            .transactions
-                            .into_iter()
-                            .map(|indexer_transaction| indexer_transaction.transaction)
-                            .collect(),
-                        receipts: chunk.receipts,
-                    }),
-                    None => Err(
-                        near_jsonrpc_primitives::types::chunks::RpcChunkError::InternalError {
-                            error_message: "Unavailable chunk".to_string(),
-                        },
-                    ),
+    match fetch_shard_from_s3(s3_client, s3_bucket_name, block_height, shard_id).await {
+        Ok(shard) => match shard.chunk {
+            Some(chunk) => Ok(near_primitives::views::ChunkView {
+                author: chunk.author,
+                header: chunk.header,
+                transactions: chunk
+                    .transactions
+                    .into_iter()
+                    .map(|indexer_transaction| indexer_transaction.transaction)
+                    .collect(),
+                receipts: chunk.receipts,
+            }),
+            None => Err(
+                near_jsonrpc_primitives::types::chunks::RpcChunkError::InternalError {
+                    error_message: "Unavailable chunk".to_string(),
                 },
-                Err(err) => Err(
-                    near_jsonrpc_primitives::types::chunks::RpcChunkError::InternalError {
-                        error_message: err.to_string(),
-                    },
-                ),
-            }
-        }
+            ),
+        },
         Err(err) => Err(
             near_jsonrpc_primitives::types::chunks::RpcChunkError::InternalError {
                 error_message: err.to_string(),
@@ -207,6 +220,75 @@ pub async fn fetch_block_from_cache_or_get(
                 .unwrap()
                 .put(block_from_s3.header.height, block);
             block
+        }
+    }
+}
+
+/// Determines whether a given `StateChangeWithCauseView` object matches a set of criteria
+/// specified by the `state_changes_request` parameter.
+/// Using for filtering state changes.
+pub(crate) fn is_matching_change(
+    change: &near_primitives::views::StateChangeWithCauseView,
+    state_changes_request: &StateChangesRequestView,
+) -> bool {
+    match state_changes_request {
+        StateChangesRequestView::AccountChanges { account_ids }
+        | StateChangesRequestView::AllAccessKeyChanges { account_ids }
+        | StateChangesRequestView::ContractCodeChanges { account_ids } => {
+            if let StateChangeValueView::AccountUpdate { account_id, .. }
+            | StateChangeValueView::AccountDeletion { account_id }
+            | StateChangeValueView::AccessKeyUpdate { account_id, .. }
+            | StateChangeValueView::AccessKeyDeletion { account_id, .. }
+            | StateChangeValueView::ContractCodeUpdate { account_id, .. }
+            | StateChangeValueView::ContractCodeDeletion { account_id } = &change.value
+            {
+                account_ids.contains(account_id)
+            } else {
+                false
+            }
+        }
+
+        StateChangesRequestView::SingleAccessKeyChanges { keys } => {
+            if let StateChangeValueView::AccessKeyUpdate {
+                account_id,
+                public_key,
+                ..
+            }
+            | StateChangeValueView::AccessKeyDeletion {
+                account_id,
+                public_key,
+            } = &change.value
+            {
+                let account_id_match = keys
+                    .iter()
+                    .any(|account_public_key| account_public_key.account_id == *account_id);
+
+                let public_key_match = keys
+                    .iter()
+                    .any(|account_public_key| account_public_key.public_key == *public_key);
+
+                account_id_match && public_key_match
+            } else {
+                false
+            }
+        }
+
+        StateChangesRequestView::DataChanges {
+            account_ids,
+            key_prefix,
+        } => {
+            if let StateChangeValueView::DataUpdate {
+                account_id, key, ..
+            }
+            | StateChangeValueView::DataDeletion { account_id, key } = &change.value
+            {
+                account_ids.contains(account_id)
+                    && hex::encode(key)
+                        .to_string()
+                        .starts_with(&hex::encode(key_prefix).to_string())
+            } else {
+                false
+            }
         }
     }
 }
