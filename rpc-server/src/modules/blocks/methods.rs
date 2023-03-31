@@ -163,16 +163,14 @@ pub async fn block(
     Params(params): Params<near_jsonrpc_primitives::types::blocks::RpcBlockRequest>,
 ) -> Result<near_jsonrpc_primitives::types::blocks::RpcBlockResponse, RPCError> {
     tracing::debug!("`block` called with parameters: {:?}", params);
-    match fetch_block(&data, params.block_reference.clone()).await {
-        Ok(block_view) => {
-            Ok(near_jsonrpc_primitives::types::blocks::RpcBlockResponse { block_view })
-        }
+    let block_view = match fetch_block(&data, params.block_reference.clone()).await {
+        Ok(block_view) => block_view,
         Err(err) => {
             tracing::warn!("`block` error: {:?}", err);
-            let block_view = proxy_rpc_call(&data.near_rpc_client, params).await?;
-            Ok(near_jsonrpc_primitives::types::blocks::RpcBlockResponse { block_view })
+            proxy_rpc_call(&data.near_rpc_client, params).await?
         }
-    }
+    };
+    Ok(near_jsonrpc_primitives::types::blocks::RpcBlockResponse { block_view })
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
@@ -220,14 +218,12 @@ pub async fn chunk(
 ) -> Result<near_jsonrpc_primitives::types::chunks::RpcChunkResponse, RPCError> {
     tracing::debug!("`chunk` called with parameters: {:?}", params);
 
-    match fetch_chunk(&data, params.chunk_reference.clone()).await {
-        Ok(chunk_view) => {
-            Ok(near_jsonrpc_primitives::types::chunks::RpcChunkResponse { chunk_view })
-        }
+    let chunk_view = match fetch_chunk(&data, params.chunk_reference.clone()).await {
+        Ok(chunk_view) => chunk_view,
         Err(err) => {
             tracing::warn!("`chunk` error: {:?}", err);
-            let chunk_view = proxy_rpc_call(&data.near_rpc_client, params).await?;
-            Ok(near_jsonrpc_primitives::types::chunks::RpcChunkResponse { chunk_view })
+            proxy_rpc_call(&data.near_rpc_client, params).await?
         }
-    }
+    };
+    Ok(near_jsonrpc_primitives::types::chunks::RpcChunkResponse { chunk_view })
 }
