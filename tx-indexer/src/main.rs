@@ -15,7 +15,9 @@ pub(crate) const INDEXER: &str = "tx_indexer";
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
-    init_tracing();
+
+    init_tracing()?;
+
     let opts: Opts = Opts::parse();
     tracing::info!(target: INDEXER, "Connecting to redis...");
     let redis_connection_manager = storage::connect(&opts.redis_connection_string).await?;

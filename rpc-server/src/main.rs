@@ -14,7 +14,7 @@ mod errors;
 mod modules;
 mod utils;
 
-fn init_logging(use_tracer: bool) {
+fn init_logging(use_tracer: bool) -> anyhow::Result<()> {
     // Filter based on level - trace, debug, info, warn, error
     // Tunable via `RUST_LOG` env variable
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
@@ -22,8 +22,7 @@ fn init_logging(use_tracer: bool) {
 
     // Combined them all together in a `tracing` subscriber
     let subscriber = tracing_subscriber::Registry::default()
-        .with(env_filter)
-        .with(tracing_subscriber::fmt::Layer::default());
+            .with(env_filter);
 
     if use_tracer {
         let app_name = "json_rpc_100x";
@@ -34,19 +33,34 @@ fn init_logging(use_tracer: bool) {
         );
         let tracer = opentelemetry_jaeger::new_pipeline()
             .with_service_name(app_name)
-            .install_simple()
-            .unwrap();
+            .install_simple()?;
         // Create a `tracing` layer using the Jaeger tracer
         let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
-        subscriber
-            .with(telemetry)
-            .try_init()
-            .expect("Failed to install `tracing` subscriber.");
+
+        if std::env::var("ENABLE_JSON_LOGS").is_ok() {
+            subscriber
+                .with(telemetry)
+                .with(tracing_subscriber::fmt::Layer::default().json())
+                .try_init()?;
+        } else {
+            subscriber
+                .with(telemetry)
+                .with(tracing_subscriber::fmt::Layer::default().compact())
+                .try_init()?;
+        };
     } else {
-        subscriber
-            .try_init()
-            .expect("Failed to install `tracing` subscriber.");
+        if std::env::var("ENABLE_JSON_LOGS").is_ok() {
+            subscriber
+                .with(tracing_subscriber::fmt::Layer::default().json())
+                .try_init()?;
+        } else {
+            subscriber
+            .with(tracing_subscriber::fmt::Layer::default().compact())
+            .try_init()?;
+        };
     }
+
+    Ok(())
 }
 
 #[tokio::main]
@@ -59,7 +73,7 @@ async fn main() -> anyhow::Result<()> {
     init_logging(true);
 
     #[cfg(not(feature = "tracing-instrumentation"))]
-    init_logging(false);
+    init_logging(false)?;
 
     let near_rpc_client = near_jsonrpc_client::JsonRpcClient::connect(opts.rpc_url.to_string());
     let blocks_cache = std::sync::Arc::new(std::sync::RwLock::new(lru::LruCache::new(

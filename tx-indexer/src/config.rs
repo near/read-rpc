@@ -137,7 +137,7 @@ async fn final_block_height(opts: &Opts) -> u64 {
     latest_block.header.height
 }
 
-pub fn init_tracing() {
+pub fn init_tracing() -> anyhow::Result<()> {
     let mut env_filter = EnvFilter::new("near_lake_framework=info,tx_indexer=info");
 
     if let Ok(rust_log) = std::env::var("RUST_LOG") {
@@ -154,10 +154,17 @@ pub fn init_tracing() {
         }
     }
 
-    tracing_subscriber::fmt::Subscriber::builder()
+    let subscriber = tracing_subscriber::fmt::Subscriber::builder()
         .with_env_filter(env_filter)
-        .with_writer(std::io::stderr)
-        .init();
+        .with_writer(std::io::stderr);
+
+    if std::env::var("ENABLE_JSON_LOGS").is_ok() {
+        subscriber.json().init();
+    } else {
+        subscriber.compact().init();
+    }
+
+    Ok(())
 }
 
 pub(crate) struct ScyllaDBManager {
