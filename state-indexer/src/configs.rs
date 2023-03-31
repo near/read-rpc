@@ -128,6 +128,36 @@ async fn final_block_height(opts: &Opts) -> u64 {
     latest_block.header.height
 }
 
+pub(crate) fn init_tracing() -> anyhow::Result<()>{
+    let mut env_filter = tracing_subscriber::EnvFilter::new("state_indexer=info");
+
+    if let Ok(rust_log) = std::env::var("RUST_LOG") {
+        if !rust_log.is_empty() {
+            for directive in rust_log.split(',').filter_map(|s| match s.parse() {
+                Ok(directive) => Some(directive),
+                Err(err) => {
+                    eprintln!("Ignoring directive `{}`: {}", s, err);
+                    None
+                }
+            }) {
+                env_filter = env_filter.add_directive(directive);
+            }
+        }
+    }
+
+    let subscriber = tracing_subscriber::fmt::Subscriber::builder()
+        .with_env_filter(env_filter)
+        .with_writer(std::io::stderr);
+
+    if std::env::var("ENABLE_JSON_LOGS").is_ok() {
+        subscriber.json().init();
+    } else {
+        subscriber.compact().init();
+    }
+
+    Ok(())
+}
+
 pub(crate) struct ScyllaDBManager {
     scylla_session: std::sync::Arc<scylla::Session>,
 

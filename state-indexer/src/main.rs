@@ -4,8 +4,6 @@ use clap::Parser;
 use database::ScyllaStorageManager;
 use futures::StreamExt;
 
-use tracing_subscriber::EnvFilter;
-
 use crate::configs::Opts;
 use near_indexer_primitives::views::StateChangeValueView;
 use near_indexer_primitives::CryptoHash;
@@ -198,30 +196,11 @@ async fn store_state_change(
 async fn main() -> anyhow::Result<()> {
     // We use it to automatically search the for root certificates to perform HTTPS calls
     // (sending telemetry and downloading genesis)
+    dotenv::dotenv().ok();
+
     openssl_probe::init_ssl_cert_env_vars();
 
-    let mut env_filter = EnvFilter::new("state_indexer=info");
-
-    if let Ok(rust_log) = std::env::var("RUST_LOG") {
-        if !rust_log.is_empty() {
-            for directive in rust_log.split(',').filter_map(|s| match s.parse() {
-                Ok(directive) => Some(directive),
-                Err(err) => {
-                    eprintln!("Ignoring directive `{}`: {}", s, err);
-                    None
-                }
-            }) {
-                env_filter = env_filter.add_directive(directive);
-            }
-        }
-    }
-
-    tracing_subscriber::fmt::Subscriber::builder()
-        .with_env_filter(env_filter)
-        .with_writer(std::io::stderr)
-        .init();
-
-    dotenv::dotenv().ok();
+    configs::init_tracing()?;
 
     let opts: Opts = Opts::parse();
 
