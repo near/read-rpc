@@ -102,6 +102,7 @@ impl HashStorage {
             .collect();
         for transaction in keys {
             self.transactions_to_save.remove(&transaction);
+            tracing::debug!(target: STORAGE, "-T {}", transaction);
         }
         Ok(transaction)
     }
