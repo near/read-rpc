@@ -14,14 +14,12 @@ ref: [`struct TransactionDetails`](./src/types.rs)
 
 ## How it works
 
-An instance of `tx-indexer` requires to have a dedicated `Redis` instance for the cache.
-
 The `tx-indexer` works like any other Lake-based indexer watching the network.
 
 In order to collect a `Transactions` with all related entities it does the following:
 
 1. Converts `Transaction` into a `tx-indexer`-defined structure `TransactionDetails`
-2. Stores the data into cache (Redis)
+2. Stores the data into cache
 3. Watched for `ExecutionOutcomes` and its statuses. Depending on the status:
     - `SuccessValue` means the `Receipt` "branch" has finished successfully
     - `SuccessReceiptId` means a new `Receipt` branch has started and we need to follow it
@@ -36,11 +34,6 @@ In order to collect a `Transactions` with all related entities it does the follo
 ### Prerequisites
 
 In order to run we need to provide the necessary parameters, it can be done either via command line arguments or via environmental variables.
-
-Start the Redis instance for the `tx-indexer` instance. You can use the Docker command for that:
-```bash
-$ docker run --name redis -p 6379:6379 -d redis redis-server --save 60 1 --loglevel warning
-```
 
 Set up local ScyllaDB
 ```
@@ -61,7 +54,6 @@ use tx_indexer;
 
 An example `.env` file:
 ```
-REDIS_CONNECTION_STRING=redis://127.0.0.1
 INDEXER_ID=tx-indexer
 SCYLLA_URL=127.0.0.1:9042
 SCYLLA_USER=admin
@@ -81,6 +73,6 @@ cargo run --release -- <chain_id> <start_options>
 - `chain_id` (\*) `testnet` or `mainnet`
 - `start_options`:
     - `from-latest` fetches the final block height from the RPC and starts indexing from that block
-    - `from-interruption` will fetch the `last_processed_block_height` from Redis in order to start from that block (will fallback to `from-latest` if Redis doesn't have a record, for instance in case of fresh start with empty Redis storage)
+    - `from-interruption` will fetch the `last_processed_block_height` from scylla-db in order to start from that block (will fallback to `from-latest` if scylla-db doesn't have a record, for instance in case of fresh start with empty storage)
     - `from-block <N>` starts indexing from the block height `<N>`
 

@@ -1,3 +1,4 @@
+use std::future::ready;
 use futures::{
     future::{join_all, try_join_all},
     StreamExt,
@@ -13,15 +14,16 @@ use crate::{config, storage};
 pub(crate) async fn index_transactions(
     streamer_message: &near_indexer_primitives::StreamerMessage,
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
-    redis_connection_manager: &redis::aio::ConnectionManager,
+    hash_storage: &std::sync::Arc<futures_locks::RwLock<storage::HashStorage>>,
 ) -> anyhow::Result<()> {
-    extract_transactions_to_collect(streamer_message, scylla_db_client, redis_connection_manager)
-        .await?;
-    collect_receipts_and_outcomes(streamer_message, scylla_db_client, redis_connection_manager)
-        .await?;
+    extract_transactions_to_collect(streamer_message, scylla_db_client, hash_storage).await?;
+    collect_receipts_and_outcomes(streamer_message, scylla_db_client, hash_storage).await?;
 
-    let finished_transaction_details =
-        storage::transactions_to_save(redis_connection_manager).await?;
+    let finished_transaction_details = hash_storage.with_write(
+        |mut hash_storage| {
+            ready(hash_storage.transactions_to_save())
+        }
+    ).await?;
 
     if !finished_transaction_details.is_empty() {
         let scylla_db_client = scylla_db_client.clone();
@@ -39,12 +41,12 @@ pub(crate) async fn index_transactions(
     Ok(())
 }
 
-// Extracts all Transactions from the given `StreamerMessage` and pushes them to the Redis
+// Extracts all Transactions from the given `StreamerMessage` and pushes them to the memory storage
 // by calling the function `new_transaction_details_to_collecting_pool`.
 async fn extract_transactions_to_collect(
     streamer_message: &near_indexer_primitives::StreamerMessage,
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
-    redis_connection_manager: &redis::aio::ConnectionManager,
+    hash_storage: &std::sync::Arc<futures_locks::RwLock<storage::HashStorage>>,
 ) -> anyhow::Result<()> {
     let block_height = streamer_message.block.header.height;
 
@@ -60,22 +62,22 @@ async fn extract_transactions_to_collect(
                     block_height,
                     shard_id,
                     scylla_db_client,
-                    redis_connection_manager,
+                    hash_storage,
                 )
             })
         });
     try_join_all(futures).await.map(|_| ())
 }
 
-// Converts Transaction into CollectingTransactionDetails and puts it into Redis.
+// Converts Transaction into CollectingTransactionDetails and puts it into memory storage.
 // Also, adds the Receipt produced by ExecutionOutcome of the given Transaction to the watching list
-// in Redis
+// in memory storage
 async fn new_transaction_details_to_collecting_pool(
     transaction: &IndexerTransactionWithOutcome,
     block_height: u64,
     shard_id: u64,
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
-    redis_connection_manager: &redis::aio::ConnectionManager,
+    hash_storage: &std::sync::Arc<futures_locks::RwLock<storage::HashStorage>>,
 ) -> anyhow::Result<()> {
     let transaction_hash_string = transaction.transaction.hash.to_string();
     let converted_into_receipt_id = transaction
@@ -99,18 +101,19 @@ async fn new_transaction_details_to_collecting_pool(
 
     let transaction_details =
         readnode_primitives::CollectingTransactionDetails::from_indexer_tx(transaction.clone());
-    match storage::set_tx(redis_connection_manager, transaction_details).await {
+    match hash_storage.with_write(
+        |mut hash_storage| {
+        ready(hash_storage.set_tx(transaction_details))
+    }).await
+    {
         Ok(_) => {
-            storage::push_receipt_to_watching_list(
-                redis_connection_manager,
-                converted_into_receipt_id,
-                &transaction_hash_string,
-            )
-            .await?;
+            hash_storage.with_write(|mut hash_storage| {
+                ready(hash_storage.push_receipt_to_watching_list(converted_into_receipt_id, transaction_hash_string))
+            }).await?
         }
         Err(e) => tracing::error!(
             target: crate::INDEXER,
-            "Failed to add TransactionDetails to Redis\n{:#?}",
+            "Failed to add TransactionDetails to memory storage\n{:#?}",
             e
         ),
     }
@@ -121,18 +124,14 @@ async fn new_transaction_details_to_collecting_pool(
 async fn collect_receipts_and_outcomes(
     streamer_message: &near_indexer_primitives::StreamerMessage,
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
-    redis_connection_manager: &redis::aio::ConnectionManager,
+    hash_storage: &std::sync::Arc<futures_locks::RwLock<storage::HashStorage>>,
 ) -> anyhow::Result<()> {
     let block_height = streamer_message.block.header.height;
 
-    let shard_futures = streamer_message.shards.iter().map(|shard| {
-        process_shard(
-            scylla_db_client,
-            redis_connection_manager,
-            block_height,
-            shard,
-        )
-    });
+    let shard_futures = streamer_message
+        .shards
+        .iter()
+        .map(|shard| process_shard(scylla_db_client, hash_storage, block_height, shard));
 
     futures::future::try_join_all(shard_futures).await?;
 
@@ -141,7 +140,7 @@ async fn collect_receipts_and_outcomes(
 
 async fn process_shard(
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
-    redis_connection_manager: &redis::aio::ConnectionManager,
+    hash_storage: &std::sync::Arc<futures_locks::RwLock<storage::HashStorage>>,
     block_height: u64,
     shard: &near_indexer_primitives::IndexerShard,
 ) -> anyhow::Result<()> {
@@ -152,7 +151,7 @@ async fn process_shard(
             .map(|receipt_execution_outcome| {
                 process_receipt_execution_outcome(
                     scylla_db_client,
-                    redis_connection_manager,
+                    hash_storage,
                     block_height,
                     shard.shard_id,
                     receipt_execution_outcome,
@@ -164,19 +163,29 @@ async fn process_shard(
     Ok(())
 }
 
+async fn push_receipt_to_watching_list(
+    hash_storage: &std::sync::Arc<futures_locks::RwLock<storage::HashStorage>>,
+    receipt_id: String,
+    transaction_hash: String
+) -> anyhow::Result<()> {
+    hash_storage.with_write(|mut hash_storage| {
+        ready(hash_storage.push_receipt_to_watching_list(receipt_id, transaction_hash))
+    }).await
+}
+
 async fn process_receipt_execution_outcome(
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
-    redis_connection_manager: &redis::aio::ConnectionManager,
+    hash_storage: &std::sync::Arc<futures_locks::RwLock<storage::HashStorage>>,
     block_height: u64,
     shard_id: u64,
     receipt_execution_outcome: &near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
 ) -> anyhow::Result<()> {
-    if let Ok(Some(transaction_hash)) = storage::remove_receipt_from_watching_list(
-        redis_connection_manager,
-        &receipt_execution_outcome.receipt.receipt_id.to_string(),
-    )
-    .await
-    {
+    let receipt_id = receipt_execution_outcome.receipt.receipt_id.clone().to_string();
+    if let Ok(Some(transaction_hash)) = hash_storage.with_write(
+        move |mut hash_storage| {
+            ready(hash_storage.remove_receipt_from_watching_list(&receipt_id))
+        }
+    ).await {
         tracing::debug!(
             target: crate::INDEXER,
             "-R {}",
@@ -209,11 +218,7 @@ async fn process_receipt_execution_outcome(
                 .iter()
                 .map(|receipt_id| {
                     tracing::debug!(target: crate::INDEXER, "+R {}", &receipt_id.to_string(),);
-                    storage::push_receipt_to_watching_list(
-                        redis_connection_manager,
-                        receipt_id.to_string(),
-                        &transaction_hash,
-                    )
+                    push_receipt_to_watching_list(hash_storage, receipt_id.to_string(), transaction_hash.clone())
                 }),
         );
 
@@ -222,11 +227,9 @@ async fn process_receipt_execution_outcome(
             receipt_execution_outcome.execution_outcome.outcome.status
         {
             tracing::debug!(target: crate::INDEXER, "+R {}", &receipt_id.to_string(),);
-            tasks.push(storage::push_receipt_to_watching_list(
-                redis_connection_manager,
-                receipt_id.to_string(),
-                &transaction_hash,
-            ));
+            tasks.push(
+                push_receipt_to_watching_list(hash_storage, receipt_id.to_string(), transaction_hash.clone())
+            );
         }
 
         while let Some(result) = tasks.next().await {
@@ -238,20 +241,20 @@ async fn process_receipt_execution_outcome(
                 )
             });
         }
-
-        let _ = storage::push_outcome_and_receipt(
-            redis_connection_manager,
-            &transaction_hash,
-            receipt_execution_outcome.clone(),
-        )
-        .await
-        .map_err(|e| {
-            tracing::error!(
-                target: crate::INDEXER,
-                "Failed to push_outcome_and_receipt\n{:#?}",
-                e
+        let receipt_outcome = receipt_execution_outcome.clone();
+        let _ = hash_storage.with_write( move |mut hash_storage| {
+            ready(hash_storage.push_outcome_and_receipt(
+                &transaction_hash,
+                receipt_outcome
+                )
             )
-        });
+        }).await.map_err(|e| {
+                tracing::error!(
+                    target: crate::INDEXER,
+                    "Failed to push_outcome_and_receipt\n{:#?}",
+                    e
+                )
+            });
     }
     Ok(())
 }

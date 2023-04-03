@@ -19,9 +19,6 @@ use tracing_subscriber::EnvFilter;
     setting(clap::AppSettings::NextLineHelp)
 )]
 pub(crate) struct Opts {
-    /// Connection string to connect to the Redis instance for cache. Default: "redis://127.0.0.1"
-    #[clap(long, default_value = "redis://127.0.0.1", env)]
-    pub redis_connection_string: String,
     /// Indexer ID to handle meta data about the instance
     #[clap(long, env)]
     pub indexer_id: String,

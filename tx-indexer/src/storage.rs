@@ -1,235 +1,149 @@
-use borsh::{BorshDeserialize, BorshSerialize};
 use near_indexer_primitives::IndexerExecutionOutcomeWithReceipt;
 
 const STORAGE: &str = "storage_tx";
-const TX_TO_SEND_LIST_KEY: &str = "transactions_to_send";
 
-pub async fn get_redis_client(redis_connection_str: &str) -> redis::Client {
-    redis::Client::open(redis_connection_str).expect("can create redis client")
+pub struct HashStorage {
+    transactions:
+        std::collections::HashMap<String, readnode_primitives::CollectingTransactionDetails>,
+    receipts_counters: std::collections::HashMap<String, u64>,
+    receipts_watching_list: std::collections::HashMap<String, String>,
+    transactions_to_save:
+        std::collections::HashMap<String, readnode_primitives::CollectingTransactionDetails>,
 }
 
-pub async fn connect(redis_connection_str: &str) -> anyhow::Result<redis::aio::ConnectionManager> {
-    Ok(get_redis_client(redis_connection_str)
-        .await
-        .get_tokio_connection_manager()
-        .await?)
-}
-
-pub async fn del(
-    redis_connection_manager: &redis::aio::ConnectionManager,
-    key: impl redis::ToRedisArgs + std::fmt::Debug,
-) -> anyhow::Result<()> {
-    redis::cmd("DEL")
-        .arg(&key)
-        .query_async(&mut redis_connection_manager.clone())
-        .await?;
-    tracing::debug!(target: STORAGE, "DEL: {:?}", key);
-    Ok(())
-}
-
-pub async fn set(
-    redis_connection_manager: &redis::aio::ConnectionManager,
-    key: impl redis::ToRedisArgs + std::fmt::Debug,
-    value: impl redis::ToRedisArgs + std::fmt::Debug,
-) -> anyhow::Result<()> {
-    redis::cmd("SET")
-        .arg(&key)
-        .arg(&value)
-        .query_async(&mut redis_connection_manager.clone())
-        .await?;
-    tracing::debug!(target: STORAGE, "SET: {:?}: {:?}", key, value,);
-    Ok(())
-}
-
-pub async fn get<V: redis::FromRedisValue + std::fmt::Debug>(
-    redis_connection_manager: &redis::aio::ConnectionManager,
-    key: impl redis::ToRedisArgs + std::fmt::Debug,
-) -> anyhow::Result<V> {
-    let value: V = redis::cmd("GET")
-        .arg(&key)
-        .query_async(&mut redis_connection_manager.clone())
-        .await?;
-    tracing::debug!(target: STORAGE, "GET: {:?}: {:?}", &key, &value,);
-    Ok(value)
-}
-
-/// Sets the key `receipt_id: &str` with value `transaction_hash: &str` to the Redis storage.
-/// Increments the counter `receipts_{transaction_hash}` by one.
-/// The counter holds how many Receipts related to the Transaction are in watching list
-pub async fn push_receipt_to_watching_list(
-    redis_connection_manager: &redis::aio::ConnectionManager,
-    receipt_id: String,
-    cache_value: &str,
-) -> anyhow::Result<()> {
-    set(redis_connection_manager, receipt_id, cache_value).await?;
-    redis::cmd("INCR")
-        .arg(format!("receipts_{}", cache_value))
-        .query_async(&mut redis_connection_manager.clone())
-        .await?;
-    Ok(())
-}
-
-/// Removes key `receipt_id: &str` from Redis storage.
-/// If the key exists in the storage decreases the `receipts_{transaction_hash}` counter.
-pub async fn remove_receipt_from_watching_list(
-    redis_connection_manager: &redis::aio::ConnectionManager,
-    receipt_id: &str,
-) -> anyhow::Result<Option<String>> {
-    match get::<Option<String>>(redis_connection_manager, receipt_id).await {
-        Ok(maybe_transaction_hash) => {
-            if let Some(ref transaction_hash) = maybe_transaction_hash {
-                redis::cmd("DECR")
-                    .arg(format!("receipts_{}", transaction_hash))
-                    .query_async(&mut redis_connection_manager.clone())
-                    .await?;
-                tracing::debug!(target: STORAGE, "DECR: receipts_{}", transaction_hash);
-                del(redis_connection_manager, receipt_id).await?;
-            }
-            Ok(maybe_transaction_hash)
-        }
-        Err(e) => {
-            anyhow::bail!(e)
+impl HashStorage {
+    pub(crate) fn new() -> Self {
+        Self {
+            transactions: std::collections::HashMap::new(),
+            receipts_counters: std::collections::HashMap::new(),
+            receipts_watching_list: std::collections::HashMap::new(),
+            transactions_to_save: std::collections::HashMap::new(),
         }
     }
-}
 
-/// Returns the value of the `receipts_{transaction_hash}` counter
-pub async fn receipts_transaction_hash_count(
-    redis_connection_manager: &redis::aio::ConnectionManager,
-    transaction_hash: &str,
-) -> anyhow::Result<u64> {
-    get::<u64>(
-        redis_connection_manager,
-        format!("receipts_{}", transaction_hash),
-    )
-    .await
-}
+    pub fn push_receipt_to_watching_list(
+        &mut self,
+        receipt_id: String,
+        cache_value: String,
+    ) -> anyhow::Result<()> {
+        let counter = self
+            .receipts_counters
+            .entry(cache_value.to_string())
+            .or_insert(0);
+        *counter += 1;
+        self.receipts_watching_list
+            .insert(receipt_id, cache_value);
+        Ok(())
+    }
 
-pub async fn set_tx(
-    redis_connection_manager: &redis::aio::ConnectionManager,
-    transaction_details: readnode_primitives::CollectingTransactionDetails,
-) -> anyhow::Result<()> {
-    let transaction_hash_string = transaction_details.transaction.hash.to_string();
-    let encoded_tx_details = transaction_details.try_to_vec()?;
-
-    set(
-        redis_connection_manager,
-        &transaction_hash_string,
-        &encoded_tx_details,
-    )
-    .await?;
-
-    tracing::debug!(
-        target: crate::INDEXER,
-        "TX added for collecting {}",
-        &transaction_hash_string
-    );
-    Ok(())
-}
-
-pub async fn get_tx(
-    redis_connection_manager: &redis::aio::ConnectionManager,
-    transaction_hash: &str,
-) -> anyhow::Result<Option<readnode_primitives::CollectingTransactionDetails>> {
-    let value: Vec<u8> = get(redis_connection_manager, transaction_hash).await?;
-
-    Ok(Some(
-        readnode_primitives::CollectingTransactionDetails::try_from_slice(&value)?,
-    ))
-}
-
-pub async fn push_tx_to_save(
-    redis_connection_manager: &redis::aio::ConnectionManager,
-    transaction_details: readnode_primitives::CollectingTransactionDetails,
-) -> anyhow::Result<()> {
-    let encoded_tx_details = transaction_details.try_to_vec()?;
-
-    redis::cmd("RPUSH")
-        .arg(TX_TO_SEND_LIST_KEY)
-        .arg(&encoded_tx_details)
-        .query_async(&mut redis_connection_manager.clone())
-        .await?;
-
-    Ok(())
-}
-
-pub async fn transactions_to_save(
-    redis_connection_manager: &redis::aio::ConnectionManager,
-) -> anyhow::Result<Vec<readnode_primitives::CollectingTransactionDetails>> {
-    let length: usize = redis::cmd("LLEN")
-        .arg(TX_TO_SEND_LIST_KEY)
-        .query_async(&mut redis_connection_manager.clone())
-        .await?;
-
-    let values: Vec<Vec<u8>> = redis::cmd("LPOP")
-        .arg(TX_TO_SEND_LIST_KEY)
-        .arg(length)
-        .query_async(&mut redis_connection_manager.clone())
-        .await?;
-
-    let tx_details: Vec<readnode_primitives::CollectingTransactionDetails> = values
-        .iter()
-        .filter_map(|value| {
-            readnode_primitives::CollectingTransactionDetails::try_from_slice(value).ok()
-        })
-        .collect();
-
-    Ok(tx_details)
-}
-
-pub async fn push_outcome_and_receipt(
-    redis_connection_manager: &redis::aio::ConnectionManager,
-    transaction_hash: &str,
-    indexer_execution_outcome_with_receipt: IndexerExecutionOutcomeWithReceipt,
-) -> anyhow::Result<()> {
-    if let Ok(Some(mut transaction_details)) =
-        get_tx(redis_connection_manager, transaction_hash).await
-    {
-        tracing::debug!(
-            target: crate::INDEXER,
-            "-R {}",
-            &indexer_execution_outcome_with_receipt
-                .receipt
-                .receipt_id
-                .to_string(),
-        );
-        remove_receipt_from_watching_list(
-            redis_connection_manager,
-            &indexer_execution_outcome_with_receipt
-                .receipt
-                .receipt_id
-                .to_string(),
-        )
-        .await?;
-        transaction_details
-            .receipts
-            .push(indexer_execution_outcome_with_receipt.receipt);
-
-        transaction_details.execution_outcomes.push(
-            indexer_execution_outcome_with_receipt
-                .execution_outcome
-                .clone(),
-        );
-
-        let transaction_receipts_watching_count =
-            receipts_transaction_hash_count(redis_connection_manager, transaction_hash).await?;
-
-        if transaction_receipts_watching_count == 0 {
-            tracing::debug!(target: crate::INDEXER, "Finished TX {}", &transaction_hash,);
-
-            push_tx_to_save(redis_connection_manager, transaction_details).await?;
-            del(redis_connection_manager, transaction_hash).await?;
+    pub fn remove_receipt_from_watching_list(
+        &mut self,
+        receipt_id: &str,
+    ) -> anyhow::Result<Option<String>> {
+        if let Some(cache_value) = self.receipts_watching_list.remove(receipt_id) {
+            let counter = self
+                .receipts_counters
+                .entry(cache_value.clone())
+                .or_insert(0);
+            *counter -= 1;
+            Ok(Some(cache_value))
         } else {
-            tracing::debug!(
-                target: crate::INDEXER,
-                "{} | UPDATE TX {}",
-                transaction_receipts_watching_count,
-                &transaction_hash
-            );
-            set_tx(redis_connection_manager, transaction_details).await?;
+            Ok(None)
         }
-    } else {
-        tracing::debug!(target: crate::INDEXER, "Missing TX {}", &transaction_hash);
     }
-    Ok(())
+
+    pub fn receipts_transaction_hash_count(
+        &self,
+        transaction_hash: &str,
+    ) -> anyhow::Result<u64> {
+        self.receipts_counters
+            .get(transaction_hash)
+            .map(|x| *x)
+            .ok_or(anyhow::anyhow!("No such transaction hash"))
+    }
+
+    pub fn set_tx(
+        &mut self,
+        transaction_details: readnode_primitives::CollectingTransactionDetails,
+    ) -> anyhow::Result<()> {
+        self.transactions.insert(
+            transaction_details.transaction.hash.to_string(),
+            transaction_details,
+        );
+        Ok(())
+    }
+
+    pub fn get_tx(
+        &self,
+        transaction_hash: &str,
+    ) -> Option<readnode_primitives::CollectingTransactionDetails> {
+        self
+            .transactions
+            .get(transaction_hash)
+            .map(|x| x.clone())
+    }
+
+    pub fn push_tx_to_save(
+        &mut self,
+        transaction_details: readnode_primitives::CollectingTransactionDetails,
+    ) -> anyhow::Result<()> {
+        self.transactions_to_save.insert(
+            transaction_details.transaction.hash.to_string(),
+            transaction_details,
+        );
+        Ok(())
+    }
+
+    pub fn transactions_to_save(
+        &mut self,
+    ) -> anyhow::Result<Vec<readnode_primitives::CollectingTransactionDetails>> {
+        let transaction = self
+            .transactions_to_save
+            .values()
+            .map(|x| x.clone())
+            .collect();
+        let keys: Vec<_> = self
+            .transactions_to_save
+            .keys()
+            .map(|x| x.clone())
+            .collect();
+        for transaction in keys {
+            self.transactions_to_save.remove(&transaction);
+        }
+        Ok(transaction)
+    }
+
+    pub fn push_outcome_and_receipt(
+        &mut self,
+        transaction_hash: &str,
+        indexer_execution_outcome_with_receipt: IndexerExecutionOutcomeWithReceipt,
+    ) -> anyhow::Result<()> {
+        if let Some(mut transaction_details) = self.get_tx(transaction_hash)
+        {
+            self.remove_receipt_from_watching_list(
+                &indexer_execution_outcome_with_receipt
+                    .receipt
+                    .receipt_id
+                    .to_string(),
+            )?;
+            transaction_details
+                .receipts
+                .push(indexer_execution_outcome_with_receipt.receipt);
+            transaction_details
+                .execution_outcomes
+                .push(indexer_execution_outcome_with_receipt.execution_outcome);
+            let transaction_receipts_watching_count = self
+                .receipts_transaction_hash_count(transaction_hash)?;
+            if transaction_receipts_watching_count == 0 {
+                self.push_tx_to_save(transaction_details.clone())?;
+                self.transactions.remove(transaction_hash);
+                self.receipts_counters.remove(transaction_hash);
+            } else {
+                self.set_tx(transaction_details.clone())?;
+            }
+        } else {
+            tracing::error!(target: STORAGE, "No such transaction hash {}", transaction_hash);
+        }
+        Ok(())
+    }
 }

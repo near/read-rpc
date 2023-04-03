@@ -19,8 +19,8 @@ async fn main() -> anyhow::Result<()> {
     init_tracing()?;
 
     let opts: Opts = Opts::parse();
-    tracing::info!(target: INDEXER, "Connecting to redis...");
-    let redis_connection_manager = storage::connect(&opts.redis_connection_string).await?;
+    tracing::info!(target: INDEXER, "Creating hash storage...");
+    let hash_storage = std::sync::Arc::new(futures_locks::RwLock::new(storage::HashStorage::new()));
 
     tracing::info!(target: INDEXER, "Connecting to scylla db...");
     let scylla_db_client: std::sync::Arc<config::ScyllaDBManager> = std::sync::Arc::new(
@@ -49,7 +49,7 @@ async fn main() -> anyhow::Result<()> {
             handle_streamer_message(
                 streamer_message,
                 &scylla_db_client,
-                &redis_connection_manager,
+                &hash_storage,
                 &opts.indexer_id,
             )
         })
@@ -73,7 +73,7 @@ async fn main() -> anyhow::Result<()> {
 async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
-    redis_connection_manager: &redis::aio::ConnectionManager,
+    hash_storage: &std::sync::Arc<futures_locks::RwLock<storage::HashStorage>>,
     indexer_id: &str,
 ) -> anyhow::Result<u64> {
     tracing::info!(
@@ -82,11 +82,8 @@ async fn handle_streamer_message(
         streamer_message.block.header.height
     );
 
-    let tx_future = collector::index_transactions(
-        &streamer_message,
-        scylla_db_client,
-        redis_connection_manager,
-    );
+    let tx_future =
+        collector::index_transactions(&streamer_message, scylla_db_client, hash_storage);
 
     match futures::try_join!(tx_future) {
         Ok(_) => tracing::debug!(
