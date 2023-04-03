@@ -31,8 +31,7 @@ impl HashStorage {
             .entry(cache_value.to_string())
             .or_insert(0);
         *counter += 1;
-        self.receipts_watching_list
-            .insert(receipt_id, cache_value);
+        self.receipts_watching_list.insert(receipt_id, cache_value);
         Ok(())
     }
 
@@ -52,10 +51,7 @@ impl HashStorage {
         }
     }
 
-    pub fn receipts_transaction_hash_count(
-        &self,
-        transaction_hash: &str,
-    ) -> anyhow::Result<u64> {
+    pub fn receipts_transaction_hash_count(&self, transaction_hash: &str) -> anyhow::Result<u64> {
         self.receipts_counters
             .get(transaction_hash)
             .map(|x| *x)
@@ -77,10 +73,7 @@ impl HashStorage {
         &self,
         transaction_hash: &str,
     ) -> Option<readnode_primitives::CollectingTransactionDetails> {
-        self
-            .transactions
-            .get(transaction_hash)
-            .map(|x| x.clone())
+        self.transactions.get(transaction_hash).map(|x| x.clone())
     }
 
     pub fn push_tx_to_save(
@@ -118,8 +111,7 @@ impl HashStorage {
         transaction_hash: &str,
         indexer_execution_outcome_with_receipt: IndexerExecutionOutcomeWithReceipt,
     ) -> anyhow::Result<()> {
-        if let Some(mut transaction_details) = self.get_tx(transaction_hash)
-        {
+        if let Some(mut transaction_details) = self.get_tx(transaction_hash) {
             self.remove_receipt_from_watching_list(
                 &indexer_execution_outcome_with_receipt
                     .receipt
@@ -132,8 +124,8 @@ impl HashStorage {
             transaction_details
                 .execution_outcomes
                 .push(indexer_execution_outcome_with_receipt.execution_outcome);
-            let transaction_receipts_watching_count = self
-                .receipts_transaction_hash_count(transaction_hash)?;
+            let transaction_receipts_watching_count =
+                self.receipts_transaction_hash_count(transaction_hash)?;
             if transaction_receipts_watching_count == 0 {
                 self.push_tx_to_save(transaction_details.clone())?;
                 self.transactions.remove(transaction_hash);
@@ -142,7 +134,11 @@ impl HashStorage {
                 self.set_tx(transaction_details.clone())?;
             }
         } else {
-            tracing::error!(target: STORAGE, "No such transaction hash {}", transaction_hash);
+            tracing::error!(
+                target: STORAGE,
+                "No such transaction hash {}",
+                transaction_hash
+            );
         }
         Ok(())
     }
