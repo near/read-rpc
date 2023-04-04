@@ -31,7 +31,8 @@ impl HashStorage {
             .entry(cache_value.to_string())
             .or_insert(0);
         *counter += 1;
-        self.receipts_watching_list.insert(receipt_id, cache_value);
+        self.receipts_watching_list.insert(receipt_id.clone(), cache_value.clone());
+        tracing::debug!(target: STORAGE, "+R {} - {}", receipt_id, cache_value);
         Ok(())
     }
 
@@ -40,11 +41,10 @@ impl HashStorage {
         receipt_id: &str,
     ) -> anyhow::Result<Option<String>> {
         if let Some(cache_value) = self.receipts_watching_list.remove(receipt_id) {
-            let counter = self
-                .receipts_counters
-                .entry(cache_value.clone())
-                .or_insert(0);
-            *counter -= 1;
+            if let Some(counter) = self.receipts_counters.get_mut(&cache_value) {
+                *counter -= 1;
+            }
+            tracing::debug!(target: STORAGE, "-R {} - {}", receipt_id, cache_value);
             Ok(Some(cache_value))
         } else {
             Ok(None)
@@ -62,10 +62,12 @@ impl HashStorage {
         &mut self,
         transaction_details: readnode_primitives::CollectingTransactionDetails,
     ) -> anyhow::Result<()> {
+        let transaction_hash = transaction_details.transaction.hash.clone().to_string();
         self.transactions.insert(
             transaction_details.transaction.hash.to_string(),
             transaction_details,
         );
+        tracing::debug!(target: STORAGE, "+T {}", transaction_hash,);
         Ok(())
     }
 
@@ -90,21 +92,16 @@ impl HashStorage {
     pub fn transactions_to_save(
         &mut self,
     ) -> anyhow::Result<Vec<readnode_primitives::CollectingTransactionDetails>> {
-        let transaction = self
-            .transactions_to_save
-            .values()
-            .map(|x| x.clone())
-            .collect();
-        let keys: Vec<_> = self
-            .transactions_to_save
-            .keys()
-            .map(|x| x.clone())
-            .collect();
-        for transaction in keys {
-            self.transactions_to_save.remove(&transaction);
-            tracing::debug!(target: STORAGE, "-T {}", transaction);
+        let mut transactions = vec![];
+        let mut keys = vec![];
+        for (transaction_hash, transaction_details) in self.transactions_to_save.iter() {
+            transactions.push(transaction_details.clone());
+            keys.push(transaction_hash.clone());
         }
-        Ok(transaction)
+        for transaction in keys.iter() {
+            self.transactions_to_save.remove(transaction);
+        }
+        Ok(transactions)
     }
 
     pub fn push_outcome_and_receipt(
@@ -131,6 +128,7 @@ impl HashStorage {
                 self.push_tx_to_save(transaction_details.clone())?;
                 self.transactions.remove(transaction_hash);
                 self.receipts_counters.remove(transaction_hash);
+                tracing::debug!(target: STORAGE, "-T {}", transaction_hash);
             } else {
                 self.set_tx(transaction_details.clone())?;
             }

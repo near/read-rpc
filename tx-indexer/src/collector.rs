@@ -20,7 +20,7 @@ pub(crate) async fn index_transactions(
     collect_receipts_and_outcomes(streamer_message, scylla_db_client, hash_storage).await?;
 
     let finished_transaction_details = hash_storage
-        .with_write(|mut hash_storage| ready(hash_storage.transactions_to_save()))
+        .with_write_local(|mut hash_storage| ready(hash_storage.transactions_to_save()))
         .await?;
 
     if !finished_transaction_details.is_empty() {
@@ -100,14 +100,12 @@ async fn new_transaction_details_to_collecting_pool(
     let transaction_details =
         readnode_primitives::CollectingTransactionDetails::from_indexer_tx(transaction.clone());
     match hash_storage
-        .with_write(|mut hash_storage| ready(hash_storage.set_tx(transaction_details)))
+        .with_write_local(|mut hash_storage| ready(hash_storage.set_tx(transaction_details)))
         .await
     {
         Ok(_) => {
-            tracing::debug!(target: crate::INDEXER, "+T {}", transaction_hash_string,);
-            tracing::debug!(target: crate::INDEXER, "+R {}", converted_into_receipt_id,);
             hash_storage
-                .with_write(|mut hash_storage| {
+                .with_write_local(|mut hash_storage| {
                     ready(hash_storage.push_receipt_to_watching_list(
                         converted_into_receipt_id,
                         transaction_hash_string,
@@ -172,9 +170,8 @@ async fn push_receipt_to_watching_list(
     receipt_id: String,
     transaction_hash: String,
 ) -> anyhow::Result<()> {
-    tracing::debug!(target: crate::INDEXER, "+R {}", receipt_id,);
     hash_storage
-        .with_write(|mut hash_storage| {
+        .with_write_local(|mut hash_storage| {
             ready(hash_storage.push_receipt_to_watching_list(receipt_id, transaction_hash))
         })
         .await
@@ -193,17 +190,11 @@ async fn process_receipt_execution_outcome(
         .clone()
         .to_string();
     if let Ok(Some(transaction_hash)) = hash_storage
-        .with_write(move |mut hash_storage| {
+        .with_write_local(move |mut hash_storage| {
             ready(hash_storage.remove_receipt_from_watching_list(&receipt_id))
         })
         .await
     {
-        tracing::debug!(
-            target: crate::INDEXER,
-            "-R {}",
-            &receipt_execution_outcome.receipt.receipt_id.to_string(),
-        );
-
         tracing::debug!(
             target: crate::INDEXER,
             "Saving receipt {} to the `receipts_map` in ScyllaDB",
@@ -229,7 +220,6 @@ async fn process_receipt_execution_outcome(
                 .receipt_ids
                 .iter()
                 .map(|receipt_id| {
-                    tracing::debug!(target: crate::INDEXER, "+R {}", &receipt_id.to_string(),);
                     push_receipt_to_watching_list(
                         hash_storage,
                         receipt_id.to_string(),
@@ -242,7 +232,6 @@ async fn process_receipt_execution_outcome(
         if let ExecutionStatusView::SuccessReceiptId(receipt_id) =
             receipt_execution_outcome.execution_outcome.outcome.status
         {
-            tracing::debug!(target: crate::INDEXER, "+R {}", &receipt_id.to_string(),);
             tasks.push(push_receipt_to_watching_list(
                 hash_storage,
                 receipt_id.to_string(),
@@ -261,7 +250,7 @@ async fn process_receipt_execution_outcome(
         }
         let receipt_outcome = receipt_execution_outcome.clone();
         let _ = hash_storage
-            .with_write(move |mut hash_storage| {
+            .with_write_local(move |mut hash_storage| {
                 ready(hash_storage.push_outcome_and_receipt(&transaction_hash, receipt_outcome))
             })
             .await
