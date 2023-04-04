@@ -1,8 +1,7 @@
 use futures::{
     future::{join_all, try_join_all},
-    StreamExt,
+    FutureExt,
 };
-use std::future::ready;
 
 use near_indexer_primitives::views::ExecutionStatusView;
 use near_indexer_primitives::IndexerTransactionWithOutcome;
@@ -20,7 +19,8 @@ pub(crate) async fn index_transactions(
     collect_receipts_and_outcomes(streamer_message, scylla_db_client, hash_storage).await?;
 
     let finished_transaction_details = hash_storage
-        .with_write_local(|mut hash_storage| ready(hash_storage.transactions_to_save()))
+        .write()
+        .map(|mut hash_storage| hash_storage.transactions_to_save())
         .await?;
 
     if !finished_transaction_details.is_empty() {
@@ -88,28 +88,29 @@ async fn new_transaction_details_to_collecting_pool(
         .to_string();
 
     // Save the Receipt produced by the Transaction to the ScyllaDB Map
-    save_receipt(
-        scylla_db_client,
-        &converted_into_receipt_id,
-        &transaction_hash_string,
+    tokio::spawn(save_receipt(
+        scylla_db_client.clone(),
+        converted_into_receipt_id.clone(),
+        transaction_hash_string.clone(),
         block_height,
         shard_id,
-    )
-    .await?;
+    ));
 
     let transaction_details =
         readnode_primitives::CollectingTransactionDetails::from_indexer_tx(transaction.clone());
     match hash_storage
-        .with_write_local(|mut hash_storage| ready(hash_storage.set_tx(transaction_details)))
+        .write()
+        .map(|mut hash_storage| hash_storage.set_tx(transaction_details))
         .await
     {
         Ok(_) => {
             hash_storage
-                .with_write_local(|mut hash_storage| {
-                    ready(hash_storage.push_receipt_to_watching_list(
+                .write()
+                .map(|mut hash_storage| {
+                    hash_storage.push_receipt_to_watching_list(
                         converted_into_receipt_id,
                         transaction_hash_string,
-                    ))
+                    )
                 })
                 .await?
         }
@@ -171,8 +172,9 @@ async fn push_receipt_to_watching_list(
     transaction_hash: String,
 ) -> anyhow::Result<()> {
     hash_storage
-        .with_write_local(|mut hash_storage| {
-            ready(hash_storage.push_receipt_to_watching_list(receipt_id, transaction_hash))
+        .write()
+        .map(|mut hash_storage| {
+            hash_storage.push_receipt_to_watching_list(receipt_id, transaction_hash)
         })
         .await
 }
@@ -190,68 +192,51 @@ async fn process_receipt_execution_outcome(
         .clone()
         .to_string();
     if let Ok(Some(transaction_hash)) = hash_storage
-        .with_write_local(move |mut hash_storage| {
-            ready(hash_storage.remove_receipt_from_watching_list(&receipt_id))
-        })
+        .write()
+        .map(|mut hash_storage| hash_storage.remove_receipt_from_watching_list(&receipt_id))
         .await
     {
-        tracing::debug!(
-            target: crate::INDEXER,
-            "Saving receipt {} to the `receipts_map` in ScyllaDB",
-            &receipt_execution_outcome.receipt.receipt_id.to_string(),
-        );
-
-        save_receipt(
-            scylla_db_client,
-            &receipt_execution_outcome.receipt.receipt_id.to_string(),
-            &transaction_hash,
+        tokio::spawn(save_receipt(
+            scylla_db_client.clone(),
+            receipt_id.clone(),
+            transaction_hash.clone(),
             block_height,
             shard_id,
-        )
-        .await?;
-
-        let mut tasks = futures::stream::FuturesUnordered::new();
+        ));
 
         // Add the newly produced receipt_ids to the watching list
-        tasks.extend(
-            receipt_execution_outcome
-                .execution_outcome
-                .outcome
-                .receipt_ids
-                .iter()
-                .map(|receipt_id| {
-                    push_receipt_to_watching_list(
-                        hash_storage,
-                        receipt_id.to_string(),
-                        transaction_hash.clone(),
-                    )
-                }),
-        );
+        let tasks = receipt_execution_outcome
+            .execution_outcome
+            .outcome
+            .receipt_ids
+            .iter()
+            .map(|receipt_id| {
+                push_receipt_to_watching_list(
+                    hash_storage,
+                    receipt_id.to_string(),
+                    transaction_hash.clone(),
+                )
+            });
+
+        futures::future::try_join_all(tasks).await?;
 
         // Add the success receipt to the watching list
         if let ExecutionStatusView::SuccessReceiptId(receipt_id) =
             receipt_execution_outcome.execution_outcome.outcome.status
         {
-            tasks.push(push_receipt_to_watching_list(
+            push_receipt_to_watching_list(
                 hash_storage,
                 receipt_id.to_string(),
                 transaction_hash.clone(),
-            ));
+            )
+            .await?;
         }
 
-        while let Some(result) = tasks.next().await {
-            let _ = result.map_err(|e| {
-                tracing::debug!(
-                    target: crate::INDEXER,
-                    "Task encountered an error: {:#?}",
-                    e
-                )
-            });
-        }
         let receipt_outcome = receipt_execution_outcome.clone();
         let _ = hash_storage
-            .with_write_local(move |mut hash_storage| {
-                ready(hash_storage.push_outcome_and_receipt(&transaction_hash, receipt_outcome))
+            .write()
+            .map(move |mut hash_storage| {
+                hash_storage.push_outcome_and_receipt(&transaction_hash, receipt_outcome)
             })
             .await
             .map_err(|e| {
@@ -299,14 +284,19 @@ async fn save_transaction_details(
 
 // Save receipt_id, parent_transaction_hash, block_height and shard_id to the ScyllaDb
 async fn save_receipt(
-    scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
-    receipt_id: &str,
-    parent_tx_hash: &str,
+    scylla_db_client: std::sync::Arc<config::ScyllaDBManager>,
+    receipt_id: String,
+    parent_tx_hash: String,
     block_height: u64,
     shard_id: u64,
 ) -> anyhow::Result<()> {
+    tracing::debug!(
+        target: crate::INDEXER,
+        "Saving receipt_id: {} to `receipts_map` in ScyllaDB",
+        receipt_id,
+    );
     scylla_db_client
-        .add_receipt(receipt_id, parent_tx_hash, block_height, shard_id)
+        .add_receipt(&receipt_id, &parent_tx_hash, block_height, shard_id)
         .await
         .map_err(|err| {
             tracing::error!(
