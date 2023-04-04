@@ -24,15 +24,16 @@ impl HashStorage {
     pub fn push_receipt_to_watching_list(
         &mut self,
         receipt_id: String,
-        cache_value: String,
+        transaction_hash: String,
     ) -> anyhow::Result<()> {
-        let counter = self
+        let receipts_counter = self
             .receipts_counters
-            .entry(cache_value.to_string())
+            .entry(transaction_hash.to_string())
             .or_insert(0);
-        *counter += 1;
-        self.receipts_watching_list.insert(receipt_id.clone(), cache_value.clone());
-        tracing::debug!(target: STORAGE, "+R {} - {}", receipt_id, cache_value);
+        *receipts_counter += 1;
+        self.receipts_watching_list
+            .insert(receipt_id.clone(), transaction_hash.clone());
+        tracing::debug!(target: STORAGE, "+R {} - {}", receipt_id, transaction_hash);
         Ok(())
     }
 
@@ -40,12 +41,12 @@ impl HashStorage {
         &mut self,
         receipt_id: &str,
     ) -> anyhow::Result<Option<String>> {
-        if let Some(cache_value) = self.receipts_watching_list.remove(receipt_id) {
-            if let Some(counter) = self.receipts_counters.get_mut(&cache_value) {
-                *counter -= 1;
+        if let Some(transaction_hash) = self.receipts_watching_list.remove(receipt_id) {
+            if let Some(receipts_counter) = self.receipts_counters.get_mut(&transaction_hash) {
+                *receipts_counter -= 1;
             }
-            tracing::debug!(target: STORAGE, "-R {} - {}", receipt_id, cache_value);
-            Ok(Some(cache_value))
+            tracing::debug!(target: STORAGE, "-R {} - {}", receipt_id, transaction_hash);
+            Ok(Some(transaction_hash))
         } else {
             Ok(None)
         }
@@ -54,8 +55,11 @@ impl HashStorage {
     pub fn receipts_transaction_hash_count(&self, transaction_hash: &str) -> anyhow::Result<u64> {
         self.receipts_counters
             .get(transaction_hash)
-            .map(|x| *x)
-            .ok_or(anyhow::anyhow!("No such transaction hash"))
+            .map(|count| *count)
+            .ok_or(anyhow::anyhow!(
+                "No such transaction hash {}",
+                transaction_hash
+            ))
     }
 
     pub fn set_tx(
@@ -75,7 +79,9 @@ impl HashStorage {
         &self,
         transaction_hash: &str,
     ) -> Option<readnode_primitives::CollectingTransactionDetails> {
-        self.transactions.get(transaction_hash).map(|x| x.clone())
+        self.transactions
+            .get(transaction_hash)
+            .map(|transaction_details| transaction_details.clone())
     }
 
     pub fn push_tx_to_save(
@@ -93,13 +99,13 @@ impl HashStorage {
         &mut self,
     ) -> anyhow::Result<Vec<readnode_primitives::CollectingTransactionDetails>> {
         let mut transactions = vec![];
-        let mut keys = vec![];
+        let mut transactions_hashes = vec![];
         for (transaction_hash, transaction_details) in self.transactions_to_save.iter() {
             transactions.push(transaction_details.clone());
-            keys.push(transaction_hash.clone());
+            transactions_hashes.push(transaction_hash.clone());
         }
-        for transaction in keys.iter() {
-            self.transactions_to_save.remove(transaction);
+        for transaction_hash in transactions_hashes.iter() {
+            self.transactions_to_save.remove(transaction_hash);
         }
         Ok(transactions)
     }
