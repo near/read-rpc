@@ -135,7 +135,7 @@ async fn final_block_height(opts: &Opts) -> u64 {
 }
 
 pub fn init_tracing() -> anyhow::Result<()> {
-    let mut env_filter = EnvFilter::new("near_lake_framework=info,tx_indexer=info");
+    let mut env_filter = EnvFilter::new("near_lake_framework=info,tx_indexer=info,storage_tx=info");
 
     if let Ok(rust_log) = std::env::var("RUST_LOG") {
         if !rust_log.is_empty() {
