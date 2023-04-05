@@ -79,9 +79,7 @@ impl HashStorage {
         &self,
         transaction_hash: &str,
     ) -> Option<readnode_primitives::CollectingTransactionDetails> {
-        self.transactions
-            .get(transaction_hash)
-            .map(|transaction_details| transaction_details.clone())
+        self.transactions.get(transaction_hash).cloned()
     }
 
     pub fn push_tx_to_save(
@@ -93,6 +91,13 @@ impl HashStorage {
             transaction_details,
         );
         Ok(())
+    }
+
+    pub fn get_transaction_hash_by_receipt_id(
+        &self,
+        receipt_id: &str,
+    ) -> anyhow::Result<Option<String>> {
+        Ok(self.receipts_watching_list.get(receipt_id).cloned())
     }
 
     pub fn transactions_to_save(
