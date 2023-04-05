@@ -21,7 +21,8 @@ fn init_logging(use_tracer: bool) -> anyhow::Result<()> {
         .unwrap_or(tracing_subscriber::EnvFilter::new("info"));
 
     // Combined them all together in a `tracing` subscriber
-    let subscriber = tracing_subscriber::Registry::default().with(env_filter);
+    let subscriber = tracing_subscriber::Registry::default()
+            .with(env_filter);
 
     if use_tracer {
         let app_name = "json_rpc_100x";
@@ -54,8 +55,8 @@ fn init_logging(use_tracer: bool) -> anyhow::Result<()> {
                 .try_init()?;
         } else {
             subscriber
-                .with(tracing_subscriber::fmt::Layer::default().compact())
-                .try_init()?;
+            .with(tracing_subscriber::fmt::Layer::default().compact())
+            .try_init()?;
         };
     }
 

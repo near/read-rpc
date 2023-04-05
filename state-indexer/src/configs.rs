@@ -128,7 +128,7 @@ async fn final_block_height(opts: &Opts) -> u64 {
     latest_block.header.height
 }
 
-pub(crate) fn init_tracing() -> anyhow::Result<()> {
+pub(crate) fn init_tracing() -> anyhow::Result<()>{
     let mut env_filter = tracing_subscriber::EnvFilter::new("state_indexer=info");
 
     if let Ok(rust_log) = std::env::var("RUST_LOG") {

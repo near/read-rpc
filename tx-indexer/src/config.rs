@@ -19,6 +19,9 @@ use tracing_subscriber::EnvFilter;
     setting(clap::AppSettings::NextLineHelp)
 )]
 pub(crate) struct Opts {
+    /// Connection string to connect to the Redis instance for cache. Default: "redis://127.0.0.1"
+    #[clap(long, default_value = "redis://127.0.0.1", env)]
+    pub redis_connection_string: String,
     /// Indexer ID to handle meta data about the instance
     #[clap(long, env)]
     pub indexer_id: String,
@@ -135,7 +138,7 @@ async fn final_block_height(opts: &Opts) -> u64 {
 }
 
 pub fn init_tracing() -> anyhow::Result<()> {
-    let mut env_filter = EnvFilter::new("near_lake_framework=info,tx_indexer=info,storage_tx=info");
+    let mut env_filter = EnvFilter::new("near_lake_framework=info,tx_indexer=info");
 
     if let Ok(rust_log) = std::env::var("RUST_LOG") {
         if !rust_log.is_empty() {
