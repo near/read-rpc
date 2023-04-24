@@ -153,16 +153,12 @@ pub async fn scylla_db_convert_chunk_hash_to_block_height_and_shard_id(
     tracing::debug!("`scylla_db_convert_chunk_hash_to_block_height_and_shard_id` call");
     let result = scylla_db_manager.get_block_by_chunk_id(chunk_id).await;
     if let Ok(row) = result {
-        let (block_height, chunks): (num_bigint::BigInt, Vec<String>) = row
-            .into_typed::<(num_bigint::BigInt, Vec<String>)>()
+        let (block_height, shard_id): (num_bigint::BigInt, i32) = row
+            .into_typed::<(num_bigint::BigInt, i32)>()
             .expect("Invalid value from db");
         let block_height = block_height
             .to_u64()
             .expect("Error to convert BigInt into u64");
-        let shard_id = chunks
-            .iter()
-            .position(|chunk_hash| chunk_hash == &chunk_id.to_string())
-            .unwrap();
         Ok((block_height, shard_id as u64))
     } else {
         Err(

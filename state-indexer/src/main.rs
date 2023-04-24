@@ -43,7 +43,7 @@ async fn handle_streamer_message(
 async fn handle_block(
     block: &near_indexer_primitives::views::BlockView,
     scylla_storage: &configs::ScyllaDBManager,
-) -> anyhow::Result<scylla::QueryResult> {
+) -> anyhow::Result<()> {
     scylla_storage
         .add_block(
             bigdecimal::BigDecimal::from_u64(block.header.height).unwrap(),

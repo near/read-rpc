@@ -1,9 +1,9 @@
 use crate::config::ServerContext;
 use crate::errors::RPCError;
+use crate::modules::network::parse_validator_request;
 use crate::utils::proxy_rpc_call;
 use jsonrpc_v2::{Data, Params};
 use serde_json::Value;
-use crate::modules::network::parse_validator_request;
 
 pub async fn status(
     Params(_params): Params<Value>,
@@ -30,7 +30,7 @@ pub async fn validators(
             let validator_info = proxy_rpc_call(&data.near_rpc_client, request).await?;
             Ok(near_jsonrpc_primitives::types::validator::RpcValidatorResponse { validator_info })
         }
-        Err(err) => Err(RPCError::parse_error(&err.to_string()))
+        Err(err) => Err(RPCError::parse_error(&err.to_string())),
     }
 }
 

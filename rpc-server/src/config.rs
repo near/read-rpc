@@ -119,12 +119,12 @@ impl ScyllaStorageManager for ScyllaDBManager {
 
             get_block_by_hash: Self::prepare_query(
                 &scylla_db_session,
-                "SELECT block_height FROM state_indexer.blocks WHERE block_hash = ? LIMIT 1",
+                "SELECT block_height FROM state_indexer.chunks WHERE block_hash = ? LIMIT 1",
             ).await?,
 
             get_block_by_chunk_id: Self::prepare_query(
                 &scylla_db_session,
-                "SELECT block_height, chunks FROM state_indexer.blocks WHERE chunks CONTAINS ? LIMIT 1 ALLOW FILTERING",
+                "SELECT block_height, shard_id FROM state_indexer.chunks WHERE chunk_hash = ? LIMIT 1",
             ).await?,
 
             get_all_state_keys: Self::prepare_query(
