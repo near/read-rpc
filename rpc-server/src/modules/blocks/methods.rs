@@ -100,34 +100,173 @@ async fn fetch_changes_in_block(
 ) -> anyhow::Result<near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockByTypeResponse> {
     let block_view = fetch_block(&data, block_reference).await?;
     let shards = fetch_shards(&data, &block_view).await?;
-    let changes = shards
+
+    let state_changes: near_primitives::views::StateChangesView = shards
         .into_iter()
-        .flat_map(|shard| {
-            shard
-                .state_changes
-                .into_iter()
-                .map(|change| match change.value {
-                    StateChangeValueView::AccountUpdate { account_id, .. }
-                    | StateChangeValueView::AccountDeletion { account_id } => {
-                        near_primitives::views::StateChangeKindView::AccountTouched { account_id }
-                    }
-                    StateChangeValueView::AccessKeyUpdate { account_id, .. }
-                    | StateChangeValueView::AccessKeyDeletion { account_id, .. } => {
-                        near_primitives::views::StateChangeKindView::AccessKeyTouched { account_id }
-                    }
-                    StateChangeValueView::DataUpdate { account_id, .. }
-                    | StateChangeValueView::DataDeletion { account_id, .. } => {
-                        near_primitives::views::StateChangeKindView::DataTouched { account_id }
-                    }
-                    StateChangeValueView::ContractCodeUpdate { account_id, .. }
-                    | StateChangeValueView::ContractCodeDeletion { account_id } => {
-                        near_primitives::views::StateChangeKindView::ContractCodeTouched {
-                            account_id,
+        .flat_map(|shard| shard.state_changes)
+        .collect();
+
+    let mut changes = vec![];
+    let mut last_change: Option<near_primitives::views::StateChangeWithCauseView> = None;
+
+    for change in state_changes.into_iter() {
+        match &change.value {
+            StateChangeValueView::AccountUpdate { account_id, .. } => {
+                if let Some(last_change) = &last_change {
+                    if let StateChangeValueView::AccountUpdate {
+                        account_id: last_account_id,
+                        ..
+                    } = &last_change.value
+                    {
+                        if last_account_id == account_id {
+                            continue;
                         }
                     }
-                })
-        })
-        .collect();
+                }
+                let account_id = account_id.clone();
+                changes.push(
+                    near_primitives::views::StateChangeKindView::AccountTouched { account_id },
+                );
+            }
+
+            StateChangeValueView::AccountDeletion { account_id } => {
+                if let Some(last_change) = &last_change {
+                    if let StateChangeValueView::AccountDeletion {
+                        account_id: last_account_id,
+                        ..
+                    } = &last_change.value
+                    {
+                        if last_account_id == account_id {
+                            continue;
+                        }
+                    }
+                }
+                let account_id = account_id.clone();
+                changes.push(
+                    near_primitives::views::StateChangeKindView::AccountTouched { account_id },
+                );
+            }
+
+            StateChangeValueView::AccessKeyUpdate {
+                account_id,
+                public_key,
+                ..
+            } => {
+                if let Some(last_change) = &last_change {
+                    if let StateChangeValueView::AccessKeyUpdate {
+                        account_id: last_account_id,
+                        public_key: last_public_key,
+                        ..
+                    } = &last_change.value
+                    {
+                        if last_account_id == account_id && last_public_key == public_key {
+                            continue;
+                        }
+                    }
+                }
+                let account_id = account_id.clone();
+                changes.push(
+                    near_primitives::views::StateChangeKindView::AccessKeyTouched { account_id },
+                );
+            }
+
+            StateChangeValueView::AccessKeyDeletion {
+                account_id,
+                public_key,
+            } => {
+                if let Some(last_change) = &last_change {
+                    if let StateChangeValueView::AccessKeyDeletion {
+                        account_id: last_account_id,
+                        public_key: last_public_key,
+                    } = &last_change.value
+                    {
+                        if last_account_id == account_id && last_public_key == public_key {
+                            continue;
+                        }
+                    }
+                }
+                let account_id = account_id.clone();
+                changes.push(
+                    near_primitives::views::StateChangeKindView::AccessKeyTouched { account_id },
+                );
+            }
+
+            StateChangeValueView::DataUpdate {
+                account_id, key, ..
+            } => {
+                if let Some(last_change) = &last_change {
+                    if let StateChangeValueView::DataUpdate {
+                        account_id: last_account_id,
+                        key: last_key,
+                        ..
+                    } = &last_change.value
+                    {
+                        if last_account_id == account_id && last_key == key {
+                            continue;
+                        }
+                    }
+                }
+                let account_id = account_id.clone();
+                changes
+                    .push(near_primitives::views::StateChangeKindView::DataTouched { account_id });
+            }
+
+            StateChangeValueView::DataDeletion { account_id, key } => {
+                if let Some(last_change) = &last_change {
+                    if let StateChangeValueView::DataDeletion {
+                        account_id: last_account_id,
+                        key: last_key,
+                    } = &last_change.value
+                    {
+                        if last_account_id == account_id && last_key == key {
+                            continue;
+                        }
+                    }
+                }
+                let account_id = account_id.clone();
+                changes
+                    .push(near_primitives::views::StateChangeKindView::DataTouched { account_id });
+            }
+
+            StateChangeValueView::ContractCodeUpdate { account_id, .. } => {
+                if let Some(last_change) = &last_change {
+                    if let StateChangeValueView::ContractCodeUpdate {
+                        account_id: last_account_id,
+                        ..
+                    } = &last_change.value
+                    {
+                        if last_account_id == account_id {
+                            continue;
+                        }
+                    }
+                }
+                let account_id = account_id.clone();
+                changes.push(
+                    near_primitives::views::StateChangeKindView::ContractCodeTouched { account_id },
+                );
+            }
+
+            StateChangeValueView::ContractCodeDeletion { account_id } => {
+                if let Some(last_change) = &last_change {
+                    if let StateChangeValueView::ContractCodeDeletion {
+                        account_id: last_account_id,
+                        ..
+                    } = &last_change.value
+                    {
+                        if last_account_id == account_id {
+                            continue;
+                        }
+                    }
+                }
+                let account_id = account_id.clone();
+                changes.push(
+                    near_primitives::views::StateChangeKindView::ContractCodeTouched { account_id },
+                );
+            }
+        };
+        last_change = Some(change);
+    }
+
     Ok(
         near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockByTypeResponse {
             block_hash: block_view.header.hash,
