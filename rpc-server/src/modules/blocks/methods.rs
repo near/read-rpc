@@ -7,6 +7,8 @@ use crate::modules::blocks::utils::{
 };
 use crate::utils::proxy_rpc_call;
 use jsonrpc_v2::{Data, Params};
+
+use near_primitives::trie_key::TrieKey;
 use near_primitives::views::StateChangeValueView;
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
@@ -101,171 +103,72 @@ async fn fetch_changes_in_block(
     let block_view = fetch_block(&data, block_reference).await?;
     let shards = fetch_shards(&data, &block_view).await?;
 
-    let state_changes: near_primitives::views::StateChangesView = shards
+    let trie_keys = shards
         .into_iter()
         .flat_map(|shard| shard.state_changes)
-        .collect();
-
-    let mut changes = vec![];
-    let mut last_change: Option<near_primitives::views::StateChangeWithCauseView> = None;
-
-    for change in state_changes.into_iter() {
-        match &change.value {
-            StateChangeValueView::AccountUpdate { account_id, .. } => {
-                if let Some(last_change) = &last_change {
-                    if let StateChangeValueView::AccountUpdate {
-                        account_id: last_account_id,
-                        ..
-                    } = &last_change.value
-                    {
-                        if last_account_id == account_id {
-                            continue;
-                        }
-                    }
+        .map(
+            |state_change_with_cause| match state_change_with_cause.value {
+                StateChangeValueView::AccountUpdate { account_id, .. }
+                | StateChangeValueView::AccountDeletion { account_id } => {
+                    TrieKey::Account { account_id }
                 }
-                let account_id = account_id.clone();
-                changes.push(
-                    near_primitives::views::StateChangeKindView::AccountTouched { account_id },
-                );
-            }
-
-            StateChangeValueView::AccountDeletion { account_id } => {
-                if let Some(last_change) = &last_change {
-                    if let StateChangeValueView::AccountDeletion {
-                        account_id: last_account_id,
-                        ..
-                    } = &last_change.value
-                    {
-                        if last_account_id == account_id {
-                            continue;
-                        }
-                    }
+                StateChangeValueView::DataUpdate {
+                    account_id, key, ..
                 }
-                let account_id = account_id.clone();
-                changes.push(
-                    near_primitives::views::StateChangeKindView::AccountTouched { account_id },
-                );
-            }
-
-            StateChangeValueView::AccessKeyUpdate {
-                account_id,
-                public_key,
-                ..
-            } => {
-                if let Some(last_change) = &last_change {
-                    if let StateChangeValueView::AccessKeyUpdate {
-                        account_id: last_account_id,
-                        public_key: last_public_key,
-                        ..
-                    } = &last_change.value
-                    {
-                        if last_account_id == account_id && last_public_key == public_key {
-                            continue;
-                        }
-                    }
+                | StateChangeValueView::DataDeletion { account_id, key } => {
+                    let key: Vec<u8> =
+                        <near_indexer_primitives::types::StoreKey as AsRef<Vec<u8>>>::as_ref(&key)
+                            .to_vec();
+                    TrieKey::ContractData { account_id, key }
                 }
-                let account_id = account_id.clone();
-                changes.push(
-                    near_primitives::views::StateChangeKindView::AccessKeyTouched { account_id },
-                );
-            }
-
-            StateChangeValueView::AccessKeyDeletion {
-                account_id,
-                public_key,
-            } => {
-                if let Some(last_change) = &last_change {
-                    if let StateChangeValueView::AccessKeyDeletion {
-                        account_id: last_account_id,
-                        public_key: last_public_key,
-                    } = &last_change.value
-                    {
-                        if last_account_id == account_id && last_public_key == public_key {
-                            continue;
-                        }
-                    }
+                StateChangeValueView::ContractCodeUpdate { account_id, .. }
+                | StateChangeValueView::ContractCodeDeletion { account_id } => {
+                    TrieKey::ContractCode { account_id }
                 }
-                let account_id = account_id.clone();
-                changes.push(
-                    near_primitives::views::StateChangeKindView::AccessKeyTouched { account_id },
-                );
-            }
-
-            StateChangeValueView::DataUpdate {
-                account_id, key, ..
-            } => {
-                if let Some(last_change) = &last_change {
-                    if let StateChangeValueView::DataUpdate {
-                        account_id: last_account_id,
-                        key: last_key,
-                        ..
-                    } = &last_change.value
-                    {
-                        if last_account_id == account_id && last_key == key {
-                            continue;
-                        }
-                    }
+                StateChangeValueView::AccessKeyUpdate {
+                    account_id,
+                    public_key,
+                    ..
                 }
-                let account_id = account_id.clone();
-                changes
-                    .push(near_primitives::views::StateChangeKindView::DataTouched { account_id });
-            }
+                | StateChangeValueView::AccessKeyDeletion {
+                    account_id,
+                    public_key,
+                } => TrieKey::AccessKey {
+                    account_id,
+                    public_key,
+                },
+            },
+        );
 
-            StateChangeValueView::DataDeletion { account_id, key } => {
-                if let Some(last_change) = &last_change {
-                    if let StateChangeValueView::DataDeletion {
-                        account_id: last_account_id,
-                        key: last_key,
-                    } = &last_change.value
-                    {
-                        if last_account_id == account_id && last_key == key {
-                            continue;
-                        }
-                    }
-                }
-                let account_id = account_id.clone();
-                changes
-                    .push(near_primitives::views::StateChangeKindView::DataTouched { account_id });
+    let mut unique_trie_keys = vec![];
+    for trie_key in trie_keys {
+        if let Some(prev_trie_key) = unique_trie_keys.last() {
+            if prev_trie_key == &trie_key {
+                continue;
             }
+        }
 
-            StateChangeValueView::ContractCodeUpdate { account_id, .. } => {
-                if let Some(last_change) = &last_change {
-                    if let StateChangeValueView::ContractCodeUpdate {
-                        account_id: last_account_id,
-                        ..
-                    } = &last_change.value
-                    {
-                        if last_account_id == account_id {
-                            continue;
-                        }
-                    }
-                }
-                let account_id = account_id.clone();
-                changes.push(
-                    near_primitives::views::StateChangeKindView::ContractCodeTouched { account_id },
-                );
-            }
-
-            StateChangeValueView::ContractCodeDeletion { account_id } => {
-                if let Some(last_change) = &last_change {
-                    if let StateChangeValueView::ContractCodeDeletion {
-                        account_id: last_account_id,
-                        ..
-                    } = &last_change.value
-                    {
-                        if last_account_id == account_id {
-                            continue;
-                        }
-                    }
-                }
-                let account_id = account_id.clone();
-                changes.push(
-                    near_primitives::views::StateChangeKindView::ContractCodeTouched { account_id },
-                );
-            }
-        };
-        last_change = Some(change);
+        unique_trie_keys.push(trie_key);
     }
+
+    let changes = unique_trie_keys
+        .into_iter()
+        .filter_map(|trie_key| match trie_key {
+            TrieKey::Account { account_id } => {
+                Some(near_primitives::views::StateChangeKindView::AccountTouched { account_id })
+            }
+            TrieKey::ContractData { account_id, .. } => {
+                Some(near_primitives::views::StateChangeKindView::DataTouched { account_id })
+            }
+            TrieKey::ContractCode { account_id } => Some(
+                near_primitives::views::StateChangeKindView::ContractCodeTouched { account_id },
+            ),
+            TrieKey::AccessKey { account_id, .. } => {
+                Some(near_primitives::views::StateChangeKindView::AccessKeyTouched { account_id })
+            }
+            _ => None,
+        })
+        .collect();
 
     Ok(
         near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockByTypeResponse {
