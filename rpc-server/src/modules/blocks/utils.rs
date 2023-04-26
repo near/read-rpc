@@ -153,13 +153,14 @@ pub async fn scylla_db_convert_chunk_hash_to_block_height_and_shard_id(
     tracing::debug!("`scylla_db_convert_chunk_hash_to_block_height_and_shard_id` call");
     let result = scylla_db_manager.get_block_by_chunk_id(chunk_id).await;
     if let Ok(row) = result {
-        let (block_height, shard_id): (num_bigint::BigInt, i32) = row
-            .into_typed::<(num_bigint::BigInt, i32)>()
+        let (block_height, shard_id): (num_bigint::BigInt, num_bigint::BigInt) = row
+            .into_typed::<(num_bigint::BigInt, num_bigint::BigInt)>()
             .expect("Invalid value from db");
         let block_height = block_height
             .to_u64()
             .expect("Error to convert BigInt into u64");
-        Ok((block_height, shard_id as u64))
+        let shard_id = shard_id.to_u64().expect("Error to convert BigInt into u64");
+        Ok((block_height, shard_id))
     } else {
         Err(
             near_jsonrpc_primitives::types::chunks::RpcChunkError::InternalError {
