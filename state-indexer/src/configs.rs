@@ -1,10 +1,10 @@
-use bigdecimal::ToPrimitive;
 pub use clap::{Parser, Subcommand};
 use database::ScyllaStorageManager;
 use near_jsonrpc_client::{methods, JsonRpcClient};
 use near_lake_framework::near_indexer_primitives::types::{BlockReference, Finality};
 use scylla::prepared_statement::PreparedStatement;
 use std::collections::HashMap;
+use num_traits::ToPrimitive;
 
 /// NEAR Indexer for Explorer
 /// Watches for stream of blocks from the chain
@@ -175,7 +175,7 @@ pub(crate) struct ScyllaDBManager {
     add_account: PreparedStatement,
     delete_account: PreparedStatement,
 
-    add_block: PreparedStatement,
+    add_chunk: PreparedStatement,
     add_account_state: PreparedStatement,
     update_meta: PreparedStatement,
 }
@@ -263,17 +263,25 @@ impl ScyllaStorageManager for ScyllaDBManager {
         scylla_db_session
             .query(
                 "
-                CREATE TABLE IF NOT EXISTS blocks (
+                CREATE TABLE IF NOT EXISTS chunks (
                     block_height varint,
                     block_hash varchar,
-                    chunks list<varchar>,
-                    PRIMARY KEY (block_hash)
+                    chunk_hash varchar,
+                    shard_id varint,
+                    PRIMARY KEY (chunk_hash)
                 )
             ",
                 &[],
             )
             .await?;
-
+        scylla_db_session
+            .query(
+                "
+                CREATE INDEX IF NOT EXISTS block_by_hash ON chunks (block_hash);
+            ",
+                &[],
+            )
+            .await?;
         scylla_db_session
             .query(
                 "
@@ -385,11 +393,11 @@ impl ScyllaStorageManager for ScyllaDBManager {
             )
             .await?,
 
-            add_block: Self::prepare_query(
+            add_chunk: Self::prepare_query(
                 &scylla_db_session,
-                "INSERT INTO state_indexer.blocks
-                    (block_height, block_hash, chunks)
-                    VALUES (?, ?, ?)",
+                "INSERT INTO state_indexer.chunks
+                    (block_height, block_hash, chunk_hash, shard_id)
+                    VALUES (?, ?, ?, ?)",
             )
             .await?,
             add_account_state: Self::prepare_query(
@@ -418,7 +426,7 @@ impl ScyllaDBManager {
     pub(crate) async fn add_state_changes(
         &self,
         account_id: near_indexer_primitives::types::AccountId,
-        block_height: bigdecimal::BigDecimal,
+        block_height: num_bigint::BigInt,
         block_hash: near_indexer_primitives::CryptoHash,
         key: &[u8],
         value: &[u8],
@@ -447,7 +455,7 @@ impl ScyllaDBManager {
     pub(crate) async fn delete_state_changes(
         &self,
         account_id: near_indexer_primitives::types::AccountId,
-        block_height: bigdecimal::BigDecimal,
+        block_height: num_bigint::BigInt,
         block_hash: near_indexer_primitives::CryptoHash,
         key: &[u8],
     ) -> anyhow::Result<()> {
@@ -463,7 +471,7 @@ impl ScyllaDBManager {
     pub(crate) async fn add_access_key(
         &self,
         account_id: near_indexer_primitives::types::AccountId,
-        block_height: bigdecimal::BigDecimal,
+        block_height: num_bigint::BigInt,
         block_hash: near_indexer_primitives::CryptoHash,
         public_key: &[u8],
         access_key: &[u8],
@@ -486,7 +494,7 @@ impl ScyllaDBManager {
     pub(crate) async fn delete_access_key(
         &self,
         account_id: near_indexer_primitives::types::AccountId,
-        block_height: bigdecimal::BigDecimal,
+        block_height: num_bigint::BigInt,
         block_hash: near_indexer_primitives::CryptoHash,
         public_key: &[u8],
     ) -> anyhow::Result<()> {
@@ -501,7 +509,7 @@ impl ScyllaDBManager {
     async fn get_access_keys(
         &self,
         account_id: near_indexer_primitives::types::AccountId,
-        block_height: bigdecimal::BigDecimal,
+        block_height: num_bigint::BigInt,
     ) -> anyhow::Result<scylla::frame::response::result::Row> {
         let result = Self::execute_prepared_query(
             &self.scylla_session,
@@ -516,7 +524,7 @@ impl ScyllaDBManager {
     pub(crate) async fn add_account_access_keys(
         &self,
         account_id: near_indexer_primitives::types::AccountId,
-        block_height: bigdecimal::BigDecimal,
+        block_height: num_bigint::BigInt,
         public_key: &[u8],
         access_key: Option<&[u8]>,
     ) -> anyhow::Result<()> {
@@ -551,7 +559,7 @@ impl ScyllaDBManager {
     pub(crate) async fn add_contract_code(
         &self,
         account_id: near_indexer_primitives::types::AccountId,
-        block_height: bigdecimal::BigDecimal,
+        block_height: num_bigint::BigInt,
         block_hash: near_indexer_primitives::CryptoHash,
         code: &[u8],
     ) -> anyhow::Result<()> {
@@ -567,7 +575,7 @@ impl ScyllaDBManager {
     pub(crate) async fn delete_contract_code(
         &self,
         account_id: near_indexer_primitives::types::AccountId,
-        block_height: bigdecimal::BigDecimal,
+        block_height: num_bigint::BigInt,
         block_hash: near_indexer_primitives::CryptoHash,
     ) -> anyhow::Result<()> {
         Self::execute_prepared_query(
@@ -582,7 +590,7 @@ impl ScyllaDBManager {
     pub(crate) async fn add_account(
         &self,
         account_id: near_indexer_primitives::types::AccountId,
-        block_height: bigdecimal::BigDecimal,
+        block_height: num_bigint::BigInt,
         block_hash: near_indexer_primitives::CryptoHash,
         account: Vec<u8>,
     ) -> anyhow::Result<()> {
@@ -598,7 +606,7 @@ impl ScyllaDBManager {
     pub(crate) async fn delete_account(
         &self,
         account_id: near_indexer_primitives::types::AccountId,
-        block_height: bigdecimal::BigDecimal,
+        block_height: num_bigint::BigInt,
         block_hash: near_indexer_primitives::CryptoHash,
     ) -> anyhow::Result<()> {
         Self::execute_prepared_query(
@@ -612,23 +620,25 @@ impl ScyllaDBManager {
 
     pub(crate) async fn add_block(
         &self,
-        block_height: bigdecimal::BigDecimal,
+        block_height: num_bigint::BigInt,
         block_hash: near_indexer_primitives::CryptoHash,
         chunks: Vec<String>,
-    ) -> anyhow::Result<scylla::QueryResult> {
-        let query_result = Self::execute_prepared_query(
-            &self.scylla_session,
-            &self.add_block,
-            (block_height, block_hash.to_string(), chunks),
-        )
-        .await?;
-        Ok(query_result)
+    ) -> anyhow::Result<()> {
+        let save_chunks_futures = chunks.iter().enumerate().map(|(shard_id, chunk)| {
+            Self::execute_prepared_query(
+                &self.scylla_session,
+                &self.add_chunk,
+                (block_height.clone(), block_hash.to_string(), chunk.to_string(), num_bigint::BigInt::from(shard_id)),
+            )
+        });
+        futures::future::try_join_all(save_chunks_futures).await?;
+        Ok(())
     }
 
     pub(crate) async fn update_meta(
         &self,
         indexer_id: &str,
-        block_height: bigdecimal::BigDecimal,
+        block_height: num_bigint::BigInt,
     ) -> anyhow::Result<()> {
         Self::execute_prepared_query(&self.scylla_session, &self.update_meta, (indexer_id, block_height)).await?;
         Ok(())

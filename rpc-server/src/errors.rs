@@ -25,8 +25,8 @@ impl RPCError {
     pub(crate) fn parse_error(msg: &str) -> Self {
         Self::from(near_jsonrpc_primitives::errors::RpcError::new(
             -32700,
-            String::from(msg),
-            None,
+            String::from("Parse error"),
+            Some(serde_json::json!(format!("Parse error: {}", msg))),
         ))
     }
 }

@@ -1,4 +1,3 @@
-use bigdecimal::FromPrimitive;
 use borsh::BorshSerialize;
 use clap::Parser;
 use database::ScyllaStorageManager;
@@ -31,7 +30,7 @@ async fn handle_streamer_message(
     handle_state_changes(streamer_message, scylla_storage, block_height, block_hash).await?;
 
     scylla_storage
-        .update_meta(indexer_id, bigdecimal::BigDecimal::from_u64(block_height).unwrap())
+        .update_meta(indexer_id, num_bigint::BigInt::from(block_height))
         .await?;
     metrics::BLOCK_PROCESSED_TOTAL.inc();
     // Prometheus Gauge Metric type do not support u64
@@ -43,10 +42,10 @@ async fn handle_streamer_message(
 async fn handle_block(
     block: &near_indexer_primitives::views::BlockView,
     scylla_storage: &configs::ScyllaDBManager,
-) -> anyhow::Result<scylla::QueryResult> {
+) -> anyhow::Result<()> {
     scylla_storage
         .add_block(
-            bigdecimal::BigDecimal::from_u64(block.header.height).unwrap(),
+            num_bigint::BigInt::from(block.header.height),
             block.header.hash,
             block
                 .chunks
@@ -124,7 +123,7 @@ async fn store_state_change(
     block_height: u64,
     block_hash: CryptoHash,
 ) -> anyhow::Result<()> {
-    let block_height = bigdecimal::BigDecimal::from_u64(block_height).unwrap();
+    let block_height = num_bigint::BigInt::from(block_height);
     match state_change.value {
         StateChangeValueView::DataUpdate { account_id, key, value } => {
             scylla_storage
