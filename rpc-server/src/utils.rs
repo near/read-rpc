@@ -1,4 +1,6 @@
 use crate::modules::blocks::CacheBlock;
+#[cfg(feature = "shadow_data_consistency")]
+use assert_json_diff::{assert_json_matches_no_panic, CompareMode, Config, NumericMode};
 
 pub async fn prepare_s3_client(
     access_key_id: &str,
@@ -71,4 +73,58 @@ pub async fn update_final_block_height_regularly(
             break;
         }
     }
+}
+
+/// The `shadow_compare_results` is a function that compares
+/// the results of a JSON-RPC call made using the `near_jsonrpc_client` library
+/// with a given `hundredx_response_json` object representing the expected results.
+/// This function is conditionally compiled using the `cfg` attribute
+/// with the `shadow_data_consistency` feature.
+///
+/// The function takes three arguments:
+///
+/// `hundredx_response`: a `Result<serde_json::Value, serde_json::Error>` object representing the results from 100x.
+/// `client`: `near_jsonrpc_client::JsonRpcClient`.
+/// `params`: `near_jsonrpc_client::methods::RpcMethod` trait.
+#[cfg(feature = "shadow_data_consistency")]
+pub async fn shadow_compare_results<M>(
+    hundredx_response: Result<serde_json::Value, serde_json::Error>,
+    client: near_jsonrpc_client::JsonRpcClient,
+    params: M,
+) where
+    M: near_jsonrpc_client::methods::RpcMethod + std::fmt::Debug,
+    <M as near_jsonrpc_client::methods::RpcMethod>::Response: serde::ser::Serialize,
+    <M as near_jsonrpc_client::methods::RpcMethod>::Error: std::fmt::Debug,
+{
+    tracing::debug!("Compare results. {:?}", params);
+
+    let hundredx_response_json = match hundredx_response {
+        Ok(hundredx_response_json) => hundredx_response_json,
+        Err(err) => {
+            tracing::error!(target: "is_not_consistency", "Parse hundredx response error: {:#?}", err);
+            return;
+        }
+    };
+
+    let near_rpc_response_json = match client.call(params).await {
+        Ok(near_rpc_response) => match serde_json::to_value(&near_rpc_response) {
+            Ok(near_rpc_response_json) => near_rpc_response_json,
+            Err(err) => {
+                tracing::error!(target: "is_not_consistency", "Parse PRC response error: {:#?}", err);
+                return;
+            }
+        },
+        Err(err) => {
+            tracing::error!(target: "is_not_consistency", "RPC call error: {:#?}", err);
+            return;
+        }
+    };
+
+    let config = Config::new(CompareMode::Strict).numeric_mode(NumericMode::AssumeFloat);
+
+    if let Err(err) =
+        assert_json_matches_no_panic(&hundredx_response_json, &near_rpc_response_json, config)
+    {
+        tracing::error!(target: "is_not_consistency", "The results don't match: {:#?}", err);
+    };
 }

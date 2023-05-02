@@ -8,6 +8,8 @@ use crate::modules::queries::utils::{
     fetch_state_from_scylla_db, run_contract,
 };
 use crate::utils::proxy_rpc_call;
+#[cfg(feature = "shadow_data_consistency")]
+use crate::utils::shadow_compare_results;
 use borsh::BorshSerialize;
 use jsonrpc_v2::{Data, Params};
 
@@ -190,75 +192,61 @@ async fn view_access_keys_list(
     })
 }
 
+#[allow(unused)]
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn query(
     data: Data<ServerContext>,
-    Params(params): Params<near_jsonrpc_primitives::types::query::RpcQueryRequest>,
+    Params(mut params): Params<near_jsonrpc_primitives::types::query::RpcQueryRequest>,
 ) -> Result<near_jsonrpc_primitives::types::query::RpcQueryResponse, RPCError> {
     tracing::debug!("`query` call. Params: {:?}", params,);
     let block = fetch_block_from_cache_or_get(&data, params.block_reference.clone()).await;
-    match params.request.clone() {
+    let result = match params.request.clone() {
         near_primitives::views::QueryRequest::ViewAccount { account_id } => {
-            match view_account(&data, block, &account_id).await {
-                Ok(result) => Ok(result),
-                Err(e) => {
-                    tracing::debug!("Account not found: {:?}", e);
-                    Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
-                }
-            }
+            view_account(&data, block, &account_id).await
         }
         near_primitives::views::QueryRequest::ViewCode { account_id } => {
-            match view_code(&data, block, &account_id).await {
-                Ok(result) => Ok(result),
-                Err(e) => {
-                    tracing::debug!("Code not found: {:?}", e);
-                    Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
-                }
-            }
+            view_code(&data, block, &account_id).await
         }
         near_primitives::views::QueryRequest::ViewAccessKey {
             account_id,
             public_key,
-        } => {
-            match view_access_key(&data, block, &account_id, public_key.try_to_vec().unwrap()).await
-            {
-                Ok(result) => Ok(result),
-                Err(e) => {
-                    tracing::debug!("Access Key not found: {:?}", e);
-                    Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
-                }
-            }
-        }
+        } => view_access_key(&data, block, &account_id, public_key.try_to_vec().unwrap()).await,
         near_primitives::views::QueryRequest::ViewState {
             account_id,
             prefix,
             include_proof: _,
-        } => match view_state(&data, block, &account_id, prefix.as_ref()).await {
-            Ok(result) => Ok(result),
-            Err(e) => {
-                tracing::debug!("State not found: {:?}", e);
-                Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
-            }
-        },
+        } => view_state(&data, block, &account_id, prefix.as_ref()).await,
         near_primitives::views::QueryRequest::CallFunction {
             account_id,
             method_name,
             args,
-        } => match function_call(&data, block, account_id, &method_name, args.clone()).await {
-            Ok(result) => Ok(result),
-            Err(e) => {
-                tracing::debug!("Result not found: {:?}", e);
-                Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
-            }
-        },
+        } => function_call(&data, block, account_id, &method_name, args.clone()).await,
         near_primitives::views::QueryRequest::ViewAccessKeyList { account_id } => {
-            match view_access_keys_list(&data, block, &account_id).await {
-                Ok(result) => Ok(result),
-                Err(e) => {
-                    tracing::debug!("Access Key List not found: {:?}", e);
-                    Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
+            view_access_keys_list(&data, block, &account_id).await
+        }
+    };
+    match result {
+        Ok(result) => {
+            #[cfg(feature = "shadow_data_consistency")]
+            {
+                let near_rpc_client = data.near_rpc_client.clone();
+                if let near_primitives::types::BlockReference::Finality(_) = params.block_reference
+                {
+                    params.block_reference = near_primitives::types::BlockReference::from(
+                        near_primitives::types::BlockId::Height(block.block_height),
+                    )
                 }
-            }
+                tokio::task::spawn(shadow_compare_results(
+                    serde_json::to_value(&result),
+                    near_rpc_client,
+                    params,
+                ));
+            };
+            Ok(result)
+        }
+        Err(e) => {
+            tracing::debug!("Result not found: {:?}, Params: {:?}", e, params);
+            Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
         }
     }
 }

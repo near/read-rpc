@@ -6,6 +6,8 @@ use crate::modules::blocks::utils::{
     scylla_db_convert_chunk_hash_to_block_height_and_shard_id,
 };
 use crate::utils::proxy_rpc_call;
+#[cfg(feature = "shadow_data_consistency")]
+use crate::utils::shadow_compare_results;
 use jsonrpc_v2::{Data, Params};
 
 use near_primitives::trie_key::TrieKey;
@@ -199,14 +201,32 @@ async fn fetch_changes_in_block_by_type(
     )
 }
 
+#[allow(unused)]
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn block(
     data: Data<ServerContext>,
-    Params(params): Params<near_jsonrpc_primitives::types::blocks::RpcBlockRequest>,
+    Params(mut params): Params<near_jsonrpc_primitives::types::blocks::RpcBlockRequest>,
 ) -> Result<near_jsonrpc_primitives::types::blocks::RpcBlockResponse, RPCError> {
     tracing::debug!("`block` called with parameters: {:?}", params);
     let block_view = match fetch_block(&data, params.block_reference.clone()).await {
-        Ok(block_view) => block_view,
+        Ok(block_view) => {
+            #[cfg(feature = "shadow_data_consistency")]
+            {
+                let near_rpc_client = data.near_rpc_client.clone();
+                if let near_primitives::types::BlockReference::Finality(_) = params.block_reference
+                {
+                    params.block_reference = near_primitives::types::BlockReference::from(
+                        near_primitives::types::BlockId::Height(block_view.header.height),
+                    )
+                }
+                tokio::task::spawn(shadow_compare_results(
+                    serde_json::to_value(&block_view),
+                    near_rpc_client,
+                    params,
+                ));
+            };
+            block_view
+        }
         Err(err) => {
             tracing::warn!("`block` error: {:?}", err);
             proxy_rpc_call(&data.near_rpc_client, params).await?
@@ -215,14 +235,34 @@ pub async fn block(
     Ok(near_jsonrpc_primitives::types::blocks::RpcBlockResponse { block_view })
 }
 
+#[allow(unused)]
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn changes_in_block(
     data: Data<ServerContext>,
-    Params(params): Params<near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockRequest>,
+    Params(mut params): Params<
+        near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockRequest,
+    >,
 ) -> Result<near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockByTypeResponse, RPCError>
 {
     match fetch_changes_in_block(&data, params.block_reference.clone()).await {
-        Ok(changes) => Ok(changes),
+        Ok(changes) => {
+            #[cfg(feature = "shadow_data_consistency")]
+            {
+                let near_rpc_client = data.near_rpc_client.clone();
+                if let near_primitives::types::BlockReference::Finality(_) = params.block_reference
+                {
+                    params.block_reference = near_primitives::types::BlockReference::from(
+                        near_primitives::types::BlockId::Hash(changes.block_hash),
+                    )
+                }
+                tokio::task::spawn(shadow_compare_results(
+                    serde_json::to_value(&changes),
+                    near_rpc_client,
+                    params,
+                ));
+            };
+            Ok(changes)
+        }
         Err(err) => {
             tracing::warn!("`changes_in_block` error: {:?}", err);
             let response = proxy_rpc_call(&data.near_rpc_client, params).await?;
@@ -231,10 +271,11 @@ pub async fn changes_in_block(
     }
 }
 
+#[allow(unused)]
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn changes_in_block_by_type(
     data: Data<ServerContext>,
-    Params(params): Params<
+    Params(mut params): Params<
         near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockByTypeRequest,
     >,
 ) -> Result<near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockResponse, RPCError> {
@@ -245,7 +286,24 @@ pub async fn changes_in_block_by_type(
     )
     .await
     {
-        Ok(changes) => Ok(changes),
+        Ok(changes) => {
+            #[cfg(feature = "shadow_data_consistency")]
+            {
+                let near_rpc_client = data.near_rpc_client.clone();
+                if let near_primitives::types::BlockReference::Finality(_) = params.block_reference
+                {
+                    params.block_reference = near_primitives::types::BlockReference::from(
+                        near_primitives::types::BlockId::Hash(changes.block_hash),
+                    )
+                }
+                tokio::task::spawn(shadow_compare_results(
+                    serde_json::to_value(&changes),
+                    near_rpc_client,
+                    params,
+                ));
+            };
+            Ok(changes)
+        }
         Err(err) => {
             tracing::warn!("`changes_in_block` error: {:?}", err);
             Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
@@ -261,7 +319,18 @@ pub async fn chunk(
     tracing::debug!("`chunk` called with parameters: {:?}", params);
 
     let chunk_view = match fetch_chunk(&data, params.chunk_reference.clone()).await {
-        Ok(chunk_view) => chunk_view,
+        Ok(chunk_view) => {
+            #[cfg(feature = "shadow_data_consistency")]
+            {
+                let near_rpc_client = data.near_rpc_client.clone();
+                tokio::task::spawn(shadow_compare_results(
+                    serde_json::to_value(&chunk_view),
+                    near_rpc_client,
+                    params,
+                ));
+            };
+            chunk_view
+        }
         Err(err) => {
             tracing::warn!("`chunk` error: {:?}", err);
             proxy_rpc_call(&data.near_rpc_client, params).await?

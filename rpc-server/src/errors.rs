@@ -77,7 +77,7 @@ impl From<near_jsonrpc_primitives::errors::RpcError> for RPCError {
 
 impl<E> From<JsonRpcError<E>> for RPCError
 where
-    near_jsonrpc_primitives::errors::RpcError: std::convert::From<E>,
+    near_jsonrpc_primitives::errors::RpcError: From<E>,
 {
     fn from(err: JsonRpcError<E>) -> Self {
         if let JsonRpcError::ServerError(JsonRpcServerError::HandlerError(error)) = err {

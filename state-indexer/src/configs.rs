@@ -2,9 +2,9 @@ pub use clap::{Parser, Subcommand};
 use database::ScyllaStorageManager;
 use near_jsonrpc_client::{methods, JsonRpcClient};
 use near_lake_framework::near_indexer_primitives::types::{BlockReference, Finality};
+use num_traits::ToPrimitive;
 use scylla::prepared_statement::PreparedStatement;
 use std::collections::HashMap;
-use num_traits::ToPrimitive;
 
 /// NEAR Indexer for Explorer
 /// Watches for stream of blocks from the chain
@@ -635,11 +635,7 @@ impl ScyllaDBManager {
         Ok(())
     }
 
-    pub(crate) async fn update_meta(
-        &self,
-        indexer_id: &str,
-        block_height: num_bigint::BigInt,
-    ) -> anyhow::Result<()> {
+    pub(crate) async fn update_meta(&self, indexer_id: &str, block_height: num_bigint::BigInt) -> anyhow::Result<()> {
         Self::execute_prepared_query(&self.scylla_session, &self.update_meta, (indexer_id, block_height)).await?;
         Ok(())
     }

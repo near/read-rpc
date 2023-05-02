@@ -6,6 +6,8 @@ use jsonrpc_v2::{Data, Params};
 use crate::config::ServerContext;
 use crate::errors::RPCError;
 use crate::utils::proxy_rpc_call;
+#[cfg(feature = "shadow_data_consistency")]
+use crate::utils::shadow_compare_results;
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 async fn fetch_receipt(
@@ -60,7 +62,18 @@ pub async fn receipt(
         };
 
     let receipt_view = match fetch_receipt(&data, &request).await {
-        Ok(resp) => resp,
+        Ok(receipts) => {
+            #[cfg(feature = "shadow_data_consistency")]
+            {
+                let near_rpc_client = data.near_rpc_client.clone();
+                tokio::task::spawn(shadow_compare_results(
+                    serde_json::to_value(&receipts),
+                    near_rpc_client,
+                    request,
+                ));
+            };
+            receipts
+        }
         Err(err) => {
             tracing::debug!("Receipt not found: {:#?}", err);
             proxy_rpc_call(&data.near_rpc_client, request).await?
