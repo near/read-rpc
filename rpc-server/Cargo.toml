@@ -7,6 +7,7 @@ edition = "2021"
 actix-rt = "2.7.0"
 actix-web = "4.2.1"
 anyhow = "1.0.70"
+assert-json-diff = { version = "2.0.2", optional = true }
 async-trait = "0.1.66"
 aws-credential-types = "0.53.0"
 aws-sdk-s3 = "0.23.0"
@@ -49,3 +50,4 @@ near-vm-logic = "0.16.1"
 [features]
 tracing-instrumentation = []
 scylla_db_tracing = ["database/scylla_db_tracing"]
+shadow_data_consistency = ["dep:assert-json-diff",]

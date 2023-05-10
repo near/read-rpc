@@ -4,6 +4,8 @@ use crate::modules::transactions::{
     parse_signed_transaction, parse_transaction_status_common_request,
 };
 use crate::utils::proxy_rpc_call;
+#[cfg(feature = "shadow_data_consistency")]
+use crate::utils::shadow_compare_results;
 use borsh::BorshDeserialize;
 use jsonrpc_v2::{Data, Params};
 use near_primitives::views::FinalExecutionOutcomeViewEnum::{
@@ -48,10 +50,7 @@ pub async fn send_tx_commit(
     match proxy_rpc_call(&data.near_rpc_client, proxy_params).await {
         Ok(resp) => Ok(
             near_jsonrpc_primitives::types::transactions::RpcTransactionResponse {
-                final_execution_outcome:
-                    near_primitives::views::FinalExecutionOutcomeViewEnum::FinalExecutionOutcome(
-                        resp,
-                    ),
+                final_execution_outcome: FinalExecutionOutcome(resp),
             },
         ),
         Err(err) => Err(RPCError::from(err)),
@@ -100,11 +99,24 @@ pub async fn tx(
     tracing::debug!("`tx` call. Params: {:?}", params);
     match parse_transaction_status_common_request(params.clone()).await {
         Ok(request) => match tx_status_common(&data, &request.transaction_info, false).await {
-            Ok(transaction) => Ok(
-                near_jsonrpc_primitives::types::transactions::RpcTransactionResponse {
-                    final_execution_outcome: transaction,
-                },
-            ),
+            Ok(transaction) => {
+                #[cfg(feature = "shadow_data_consistency")]
+                if let FinalExecutionOutcome(outcome) = &transaction {
+                    let near_rpc_client = data.near_rpc_client.clone();
+                    tokio::task::spawn(shadow_compare_results(
+                        serde_json::to_value(outcome),
+                        near_rpc_client,
+                        near_jsonrpc_client::methods::tx::RpcTransactionStatusRequest {
+                            transaction_info: request.transaction_info,
+                        },
+                    ));
+                }
+                Ok(
+                    near_jsonrpc_primitives::types::transactions::RpcTransactionResponse {
+                        final_execution_outcome: transaction,
+                    },
+                )
+            }
             Err(err) => {
                 tracing::debug!("Transaction not found: {:#?}", err);
                 let response = proxy_rpc_call(
@@ -136,11 +148,24 @@ pub async fn tx_status(
     tracing::debug!("`tx_status` call. Params: {:?}", params);
     match parse_transaction_status_common_request(params.clone()).await {
         Ok(request) => match tx_status_common(&data, &request.transaction_info, true).await {
-            Ok(transaction) => Ok(
-                near_jsonrpc_primitives::types::transactions::RpcTransactionResponse {
-                    final_execution_outcome: transaction,
-                },
-            ),
+            Ok(transaction) => {
+                #[cfg(feature = "shadow_data_consistency")]
+                if let FinalExecutionOutcomeWithReceipt(outcome) = &transaction {
+                    let near_rpc_client = data.near_rpc_client.clone();
+                    tokio::task::spawn(shadow_compare_results(
+                        serde_json::to_value(outcome),
+                        near_rpc_client,
+                        near_jsonrpc_client::methods::EXPERIMENTAL_tx_status::RpcTransactionStatusRequest{
+                            transaction_info: request.transaction_info
+                        },
+                    ));
+                }
+                Ok(
+                    near_jsonrpc_primitives::types::transactions::RpcTransactionResponse {
+                        final_execution_outcome: transaction,
+                    },
+                )
+            }
             Err(err) => {
                 tracing::debug!("Transaction not found: {:#?}", err);
                 let response = proxy_rpc_call(
