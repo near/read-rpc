@@ -138,7 +138,7 @@ pub trait ScyllaStorageManager {
         query_text: &str,
     ) -> anyhow::Result<PreparedStatement> {
         let mut query = scylla::statement::query::Query::new(query_text);
-        query.set_consistency(scylla::frame::types::Consistency::All);
+        query.set_consistency(scylla::frame::types::Consistency::LocalQuorum);
 
         #[cfg(not(feature = "scylla_db_tracing"))]
         {
