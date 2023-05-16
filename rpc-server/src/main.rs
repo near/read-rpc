@@ -24,7 +24,7 @@ fn init_logging(use_tracer: bool) -> anyhow::Result<()> {
     let subscriber = tracing_subscriber::Registry::default().with(env_filter);
 
     if use_tracer {
-        let app_name = "json_rpc_100x";
+        let app_name = "read_rpc_server";
         // Start a new Jaeger trace pipeline.
         // Spans are exported in batch - recommended setup for a production application.
         opentelemetry::global::set_text_map_propagator(

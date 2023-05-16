@@ -9,7 +9,7 @@ The purpose of this indexer is to watch for every single `Transaction` in NEAR P
 
 TODO: Update the README once the structure is finalized.
 
-ref: [`struct TransactionDetails`](./src/types.rs)
+ref: [`struct TransactionDetails`](../readnode-primitives/src/lib.rs)
 
 
 ## How it works

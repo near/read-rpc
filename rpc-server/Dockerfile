@@ -17,5 +17,5 @@ RUN cargo build --release --features "$features"
 
 FROM ubuntu:20.04
 RUN apt update && apt install -yy openssl ca-certificates
-COPY --from=builder /tmp/target/release/json-rpc-100x .
-ENTRYPOINT ["./json-rpc-100x"]
+COPY --from=builder /tmp/target/release/read-rpc-server .
+ENTRYPOINT ["./read-rpc-server"]
