@@ -2417,52 +2417,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "json-rpc-100x"
-version = "0.1.0"
-dependencies = [
- "actix-rt",
- "actix-web",
- "anyhow",
- "assert-json-diff",
- "async-trait",
- "aws-credential-types",
- "aws-sdk-s3",
- "aws-types",
- "borsh 0.10.2",
- "clap",
- "database",
- "dotenv",
- "erased-serde",
- "futures",
- "hex",
- "http",
- "jsonrpc-v2",
- "lru 0.8.1",
- "near-chain-configs",
- "near-crypto",
- "near-indexer-primitives",
- "near-jsonrpc-client",
- "near-jsonrpc-primitives",
- "near-primitives",
- "near-primitives-core",
- "near-vm-logic",
- "near-vm-runner",
- "num-bigint",
- "num-traits",
- "opentelemetry",
- "opentelemetry-jaeger",
- "readnode-primitives",
- "scylla",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "tracing-actix-web",
- "tracing-opentelemetry",
- "tracing-subscriber 0.3.16",
-]
-
-[[package]]
 name = "json_comments"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3793,6 +3747,52 @@ dependencies = [
  "crossbeam-deque",
  "crossbeam-utils",
  "num_cpus",
+]
+
+[[package]]
+name = "read-rpc-server"
+version = "0.1.0"
+dependencies = [
+ "actix-rt",
+ "actix-web",
+ "anyhow",
+ "assert-json-diff",
+ "async-trait",
+ "aws-credential-types",
+ "aws-sdk-s3",
+ "aws-types",
+ "borsh 0.10.2",
+ "clap",
+ "database",
+ "dotenv",
+ "erased-serde",
+ "futures",
+ "hex",
+ "http",
+ "jsonrpc-v2",
+ "lru 0.8.1",
+ "near-chain-configs",
+ "near-crypto",
+ "near-indexer-primitives",
+ "near-jsonrpc-client",
+ "near-jsonrpc-primitives",
+ "near-primitives",
+ "near-primitives-core",
+ "near-vm-logic",
+ "near-vm-runner",
+ "num-bigint",
+ "num-traits",
+ "opentelemetry",
+ "opentelemetry-jaeger",
+ "readnode-primitives",
+ "scylla",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-actix-web",
+ "tracing-opentelemetry",
+ "tracing-subscriber 0.3.16",
 ]
 
 [[package]]

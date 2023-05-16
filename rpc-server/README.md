@@ -1,4 +1,4 @@
-# json-rpc-100x
+# read-rpc-server
 
 ## Create `.env` file in the project root
 ```
@@ -34,7 +34,7 @@ cargo run --release --features tracing-instrumentation
 ```
 You can visit the Jaeger page by going to http://localhost:16686
 
-#### Run RPC service 
+#### Run RPC service
 ```bash
 $ ./target/release/json-rpc-100x
 ```

@@ -1,13 +1,13 @@
-# JSON RPC 100x aka Read Node
+# Read RPC
 
-This workspace holds the collection of components for the JSON RPC 100x aka Read Node product.
+This workspace holds the collection of components for the Read RPC.
 
 ## Current content
 
 ### `rpc-server`
 
 The JSON RPC server implementation that repeats all the APIs current real NEAR JSON RPC but using a different data sources:
-- The 100x (Read Node) Storage (ScyllaDB currently)
+- The Read RPC Storage (ScyllaDB currently)
 - NEAR Lake Data buckets (AWS S3 currently)
 - real NEAR JSON RPC
 
