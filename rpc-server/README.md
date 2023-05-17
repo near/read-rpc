@@ -36,7 +36,7 @@ You can visit the Jaeger page by going to http://localhost:16686
 
 #### Run RPC service
 ```bash
-$ ./target/release/json-rpc-100x
+$ ./target/release/read-rpc-server
 ```
 
 * mainnet https://rpc.mainnet.near.org
