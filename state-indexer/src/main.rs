@@ -223,7 +223,7 @@ async fn main() -> anyhow::Result<()> {
 
     let mut handlers = tokio_stream::wrappers::ReceiverStream::new(stream)
         .map(|streamer_message| handle_streamer_message(streamer_message, &scylla_storage, &opts.indexer_id))
-        .buffer_unordered(1usize);
+        .buffer_unordered(opts.concurrency);
 
     while let Some(_handle_message) = handlers.next().await {
         if let Err(err) = _handle_message {
