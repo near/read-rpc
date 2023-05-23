@@ -149,9 +149,11 @@ async fn store_state_change(
             scylla_storage
                 .add_access_key(account_id.clone(), block_height.clone(), block_hash, &data_key, &data_value)
                 .await?;
-            scylla_storage
-                .add_account_access_keys(account_id, block_height, &data_key, Some(&data_value))
-                .await?;
+
+            // TODO: this method is a suspect to cause delays, disabling it to test the performance
+            // scylla_storage
+            //     .add_account_access_keys(account_id, block_height, &data_key, Some(&data_value))
+            //     .await?;
         }
         StateChangeValueView::AccessKeyDeletion { account_id, public_key } => {
             let data_key = public_key
@@ -160,9 +162,11 @@ async fn store_state_change(
             scylla_storage
                 .delete_access_key(account_id.clone(), block_height.clone(), block_hash, &data_key)
                 .await?;
-            scylla_storage
-                .add_account_access_keys(account_id, block_height, &data_key, None)
-                .await?;
+
+            // TODO: this method is a suspect to cause delays, disabling it to test the performance
+            // scylla_storage
+            //     .add_account_access_keys(account_id, block_height, &data_key, None)
+            //     .await?;
         }
         StateChangeValueView::ContractCodeUpdate { account_id, code } => {
             scylla_storage
