@@ -33,6 +33,8 @@ pub(crate) struct Opts {
     /// Metrics HTTP server port
     #[clap(long, default_value = "8080", env)]
     pub port: u16,
+    #[clap(long, default_value = "1", env)]
+    pub concurrency: usize,
     /// Chain ID: testnet or mainnet
     #[clap(subcommand)]
     pub chain_id: ChainId,
