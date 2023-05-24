@@ -572,7 +572,18 @@ impl ScyllaDBManager {
                 account_keys.remove(&public_key_hex);
             }
         }
+        self.update_account_access_keys(account_id.to_string(), block_height, account_keys)
+            .await?;
+        Ok(())
+    }
 
+    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self, account_keys)))]
+    async fn update_account_access_keys(
+        &self,
+        account_id: String,
+        block_height: num_bigint::BigInt,
+        account_keys: HashMap<String, Vec<u8>>,
+    ) -> anyhow::Result<()> {
         Self::execute_prepared_query(
             &self.scylla_session,
             &self.add_account_access_keys,

@@ -30,12 +30,23 @@ async fn handle_streamer_message(
     let block_hash = streamer_message.block.header.hash;
     tracing::info!(target: INDEXER, "Block height {}", block_height,);
 
-    handle_block(&streamer_message.block, scylla_storage).await?;
-    handle_state_changes(streamer_message, scylla_storage, block_height, block_hash).await?;
+    let handle_block_future = handle_block(
+        block_height,
+        block_hash,
+        streamer_message
+            .block
+            .chunks
+            .iter()
+            .map(|c| c.chunk_hash.to_string())
+            .collect(),
+        scylla_storage,
+    );
+    let handle_state_change_future = handle_state_changes(streamer_message, scylla_storage, block_height, block_hash);
 
-    scylla_storage
-        .update_meta(indexer_id, num_bigint::BigInt::from(block_height))
-        .await?;
+    let update_meta_future = scylla_storage.update_meta(indexer_id, num_bigint::BigInt::from(block_height));
+
+    futures::try_join!(handle_block_future, handle_state_change_future, update_meta_future)?;
+
     metrics::BLOCK_PROCESSED_TOTAL.inc();
     // Prometheus Gauge Metric type do not support u64
     // https://github.com/tikv/rust-prometheus/issues/470
@@ -43,24 +54,15 @@ async fn handle_streamer_message(
     Ok(())
 }
 
-#[cfg_attr(
-    feature = "tracing-instrumentation",
-    tracing::instrument(skip(block, scylla_storage))
-)]
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(scylla_storage)))]
 async fn handle_block(
-    block: &near_indexer_primitives::views::BlockView,
+    block_height: u64,
+    block_hash: CryptoHash,
+    chunks: Vec<String>,
     scylla_storage: &configs::ScyllaDBManager,
 ) -> anyhow::Result<()> {
     scylla_storage
-        .add_block(
-            num_bigint::BigInt::from(block.header.height),
-            block.header.hash,
-            block
-                .chunks
-                .iter()
-                .map(|chunk_header_view| chunk_header_view.chunk_hash.to_string())
-                .collect::<Vec<String>>(),
-        )
+        .add_block(num_bigint::BigInt::from(block_height), block_hash, chunks)
         .await
 }
 
@@ -162,27 +164,31 @@ async fn store_state_change(
             let data_value = access_key
                 .try_to_vec()
                 .expect("Failed to borsh-serialize the AccessKey");
-            scylla_storage
-                .add_access_key(account_id.clone(), block_height.clone(), block_hash, &data_key, &data_value)
-                .await?;
+            let add_access_key_future = scylla_storage.add_access_key(
+                account_id.clone(),
+                block_height.clone(),
+                block_hash,
+                &data_key,
+                &data_value,
+            );
 
             // TODO: this method is a suspect to cause delays, disabling it to test the performance
-            scylla_storage
-                .add_account_access_keys(account_id, block_height, &data_key, Some(&data_value))
-                .await?;
+            let add_account_access_keys_future =
+                scylla_storage.add_account_access_keys(account_id, block_height, &data_key, Some(&data_value));
+            futures::try_join!(add_access_key_future, add_account_access_keys_future)?;
         }
         StateChangeValueView::AccessKeyDeletion { account_id, public_key } => {
             let data_key = public_key
                 .try_to_vec()
                 .expect("Failed to borsh-serialize the PublicKey");
-            scylla_storage
-                .delete_access_key(account_id.clone(), block_height.clone(), block_hash, &data_key)
-                .await?;
+            let delete_access_key_future =
+                scylla_storage.delete_access_key(account_id.clone(), block_height.clone(), block_hash, &data_key);
 
             // TODO: this method is a suspect to cause delays, disabling it to test the performance
-            scylla_storage
-                .add_account_access_keys(account_id, block_height, &data_key, None)
-                .await?;
+            let add_account_access_keys_future =
+                scylla_storage.add_account_access_keys(account_id, block_height, &data_key, None);
+
+            futures::try_join!(delete_access_key_future, add_account_access_keys_future)?;
         }
         StateChangeValueView::ContractCodeUpdate { account_id, code } => {
             scylla_storage
