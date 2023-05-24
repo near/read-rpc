@@ -5,6 +5,8 @@ use near_lake_framework::near_indexer_primitives::types::{BlockReference, Finali
 use num_traits::ToPrimitive;
 use scylla::prepared_statement::PreparedStatement;
 use std::collections::HashMap;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
 /// NEAR Indexer for Explorer
 /// Watches for stream of blocks from the chain
@@ -147,19 +149,28 @@ pub(crate) fn init_tracing() -> anyhow::Result<()> {
         }
     }
 
-    let subscriber = tracing_subscriber::fmt::Subscriber::builder()
-        .with_env_filter(env_filter)
-        .with_writer(std::io::stderr);
+    opentelemetry::global::set_text_map_propagator(opentelemetry::sdk::propagation::TraceContextPropagator::new());
+    let tracer = opentelemetry_jaeger::new_pipeline()
+        .with_service_name("state-indexer")
+        .install_simple()?;
+    let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
+
+    let subscriber = tracing_subscriber::Registry::default().with(env_filter).with(telemetry);
 
     if std::env::var("ENABLE_JSON_LOGS").is_ok() {
-        subscriber.json().init();
+        subscriber
+            .with(tracing_subscriber::fmt::Layer::default().json())
+            .try_init()?;
     } else {
-        subscriber.compact().init();
+        subscriber
+            .with(tracing_subscriber::fmt::Layer::default().compact())
+            .try_init()?;
     }
 
     Ok(())
 }
 
+#[derive(Debug)]
 pub(crate) struct ScyllaDBManager {
     scylla_session: std::sync::Arc<scylla::Session>,
 
@@ -425,6 +436,7 @@ impl ScyllaDBManager {
         self.scylla_session.clone()
     }
 
+    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self, key, value)))]
     pub(crate) async fn add_state_changes(
         &self,
         account_id: near_indexer_primitives::types::AccountId,
@@ -454,6 +466,7 @@ impl ScyllaDBManager {
         Ok(())
     }
 
+    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self, key)))]
     pub(crate) async fn delete_state_changes(
         &self,
         account_id: near_indexer_primitives::types::AccountId,
@@ -470,6 +483,10 @@ impl ScyllaDBManager {
         Ok(())
     }
 
+    #[cfg_attr(
+        feature = "tracing-instrumentation",
+        tracing::instrument(skip(self, public_key, access_key))
+    )]
     pub(crate) async fn add_access_key(
         &self,
         account_id: near_indexer_primitives::types::AccountId,
@@ -493,6 +510,7 @@ impl ScyllaDBManager {
         Ok(())
     }
 
+    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self, public_key)))]
     pub(crate) async fn delete_access_key(
         &self,
         account_id: near_indexer_primitives::types::AccountId,
@@ -508,6 +526,8 @@ impl ScyllaDBManager {
         .await?;
         Ok(())
     }
+
+    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
     async fn get_access_keys(
         &self,
         account_id: near_indexer_primitives::types::AccountId,
@@ -523,6 +543,10 @@ impl ScyllaDBManager {
         Ok(result)
     }
 
+    #[cfg_attr(
+        feature = "tracing-instrumentation",
+        tracing::instrument(skip(self, public_key, access_key))
+    )]
     pub(crate) async fn add_account_access_keys(
         &self,
         account_id: near_indexer_primitives::types::AccountId,
@@ -558,6 +582,7 @@ impl ScyllaDBManager {
         Ok(())
     }
 
+    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self, code)))]
     pub(crate) async fn add_contract_code(
         &self,
         account_id: near_indexer_primitives::types::AccountId,
@@ -574,6 +599,7 @@ impl ScyllaDBManager {
         Ok(())
     }
 
+    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
     pub(crate) async fn delete_contract_code(
         &self,
         account_id: near_indexer_primitives::types::AccountId,
@@ -589,6 +615,7 @@ impl ScyllaDBManager {
         Ok(())
     }
 
+    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self, account)))]
     pub(crate) async fn add_account(
         &self,
         account_id: near_indexer_primitives::types::AccountId,
@@ -605,6 +632,7 @@ impl ScyllaDBManager {
         Ok(())
     }
 
+    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
     pub(crate) async fn delete_account(
         &self,
         account_id: near_indexer_primitives::types::AccountId,
@@ -620,6 +648,7 @@ impl ScyllaDBManager {
         Ok(())
     }
 
+    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
     pub(crate) async fn add_block(
         &self,
         block_height: num_bigint::BigInt,
@@ -637,6 +666,7 @@ impl ScyllaDBManager {
         Ok(())
     }
 
+    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self, indexer_id)))]
     pub(crate) async fn update_meta(&self, indexer_id: &str, block_height: num_bigint::BigInt) -> anyhow::Result<()> {
         Self::execute_prepared_query(&self.scylla_session, &self.update_meta, (indexer_id, block_height)).await?;
         Ok(())

@@ -17,6 +17,10 @@ extern crate lazy_static;
 // Categories for logging
 pub(crate) const INDEXER: &str = "state_indexer";
 
+#[cfg_attr(
+    feature = "tracing-instrumentation",
+    tracing::instrument(skip(streamer_message, scylla_storage, indexer_id))
+)]
 async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
     scylla_storage: &configs::ScyllaDBManager,
@@ -39,6 +43,10 @@ async fn handle_streamer_message(
     Ok(())
 }
 
+#[cfg_attr(
+    feature = "tracing-instrumentation",
+    tracing::instrument(skip(block, scylla_storage))
+)]
 async fn handle_block(
     block: &near_indexer_primitives::views::BlockView,
     scylla_storage: &configs::ScyllaDBManager,
@@ -63,6 +71,10 @@ async fn handle_block(
 /// we want to ensure we store the very last of them.
 /// It's impossible to achieve it with handling all of them one by one asynchronously (they might be handled
 /// in any order) so it's easier for us to skip all the changes except the latest one.
+#[cfg_attr(
+    feature = "tracing-instrumentation",
+    tracing::instrument(skip(streamer_message, scylla_storage))
+)]
 async fn handle_state_changes(
     streamer_message: near_indexer_primitives::StreamerMessage,
     scylla_storage: &configs::ScyllaDBManager,
@@ -117,6 +129,10 @@ async fn handle_state_changes(
     futures::future::try_join_all(futures).await
 }
 
+#[cfg_attr(
+    feature = "tracing-instrumentation",
+    tracing::instrument(skip(state_change, scylla_storage))
+)]
 async fn store_state_change(
     state_change: near_indexer_primitives::views::StateChangeWithCauseView,
     scylla_storage: &configs::ScyllaDBManager,
@@ -151,9 +167,9 @@ async fn store_state_change(
                 .await?;
 
             // TODO: this method is a suspect to cause delays, disabling it to test the performance
-            // scylla_storage
-            //     .add_account_access_keys(account_id, block_height, &data_key, Some(&data_value))
-            //     .await?;
+            scylla_storage
+                .add_account_access_keys(account_id, block_height, &data_key, Some(&data_value))
+                .await?;
         }
         StateChangeValueView::AccessKeyDeletion { account_id, public_key } => {
             let data_key = public_key
@@ -164,9 +180,9 @@ async fn store_state_change(
                 .await?;
 
             // TODO: this method is a suspect to cause delays, disabling it to test the performance
-            // scylla_storage
-            //     .add_account_access_keys(account_id, block_height, &data_key, None)
-            //     .await?;
+            scylla_storage
+                .add_account_access_keys(account_id, block_height, &data_key, None)
+                .await?;
         }
         StateChangeValueView::ContractCodeUpdate { account_id, code } => {
             scylla_storage

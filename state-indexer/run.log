@@ -1,103 +1,691 @@
-   Compiling tokio v1.26.0
-   Compiling tracing-core v0.1.29
-   Compiling time v0.3.11
-   Compiling sct v0.6.1
-   Compiling hex v0.4.3
-   Compiling webpki v0.21.4
-   Compiling digest v0.10.6
-   Compiling aws-types v0.13.0
-   Compiling near-account-id v0.15.0
-   Compiling rand v0.8.5
-   Compiling rustls v0.19.1
-   Compiling ct-logs v0.8.0
-   Compiling tracing v0.1.36
-   Compiling uint v0.9.3
-   Compiling near-rpc-error-core v0.15.0
-   Compiling primitive-types v0.10.1
-   Compiling aws-smithy-types v0.43.0
-   Compiling secp256k1 v0.24.0
-   Compiling near-rpc-error-macro v0.15.0
-   Compiling sha2 v0.10.2
-   Compiling aws-smithy-eventstream v0.43.0
-   Compiling rustls-native-certs v0.5.0
-   Compiling near-crypto v0.15.0
-   Compiling near-primitives-core v0.15.0
-   Compiling near-vm-errors v0.15.0
-   Compiling bytesize v1.1.0
-   Compiling xmlparser v0.13.3
-   Compiling async-trait v0.1.60
-   Compiling aws-smithy-xml v0.43.0
-   Compiling near-primitives v0.15.0
-   Compiling aws-smithy-query v0.43.0
-   Compiling aws-smithy-json v0.43.0
-   Compiling uuid v1.1.2
-   Compiling futures-executor v0.3.25
-   Compiling futures v0.3.25
-   Compiling tokio-util v0.7.3
-   Compiling tokio-rustls v0.22.0
-   Compiling tokio-stream v0.1.9
-   Compiling tower v0.4.13
-   Compiling tokio-native-tls v0.3.0
-   Compiling md-5 v0.10.1
-   Compiling h2 v0.3.13
-   Compiling aws-smithy-async v0.43.0
-   Compiling scylla-cql v0.0.3
-   Compiling matchers v0.0.1
-   Compiling tracing-serde v0.1.3
-   Compiling tracing-log v0.1.3
-   Compiling ansi_term v0.12.1
-   Compiling tracing-subscriber v0.2.25
-   Compiling openssl-probe v0.1.5
-   Compiling humantime v2.1.0
-   Compiling scylla v0.7.0
-   Compiling hyper v0.14.20
-   Compiling near-chain-configs v0.15.0
-   Compiling near-indexer-primitives v0.15.0
-   Compiling near-jsonrpc-primitives v0.15.0
-   Compiling aws-smithy-http v0.43.0
-   Compiling aws-smithy-http-tower v0.43.0
-   Compiling hyper-rustls v0.22.1
-   Compiling aws-smithy-client v0.43.0
-   Compiling aws-sigv4 v0.13.0
-   Compiling hyper-tls v0.5.0
-   Compiling aws-http v0.13.0
-   Compiling aws-endpoint v0.13.0
-   Compiling aws-sig-auth v0.13.0
-   Compiling reqwest v0.11.12
-   Compiling aws-sdk-sso v0.13.0
-   Compiling aws-sdk-sts v0.13.0
-   Compiling aws-sdk-s3 v0.13.0
-   Compiling near-jsonrpc-client v0.4.1
-   Compiling aws-config v0.13.0
-   Compiling near-lake-framework v0.6.0
    Compiling state-indexer v0.1.0 (/Users/khorolets/projects/pagoda/100xRPC/json-rpc-100x/state-indexer)
-    Finished release [optimized] target(s) in 41.20s
-     Running `/Users/khorolets/projects/pagoda/100xRPC/json-rpc-100x/target/release/state-indexer mainnet from-latest`
-[2mMar 13 17:08:40.438[0m [32m INFO[0m state_indexer: Block height 87209510
-[2mMar 13 17:08:40.897[0m [32m INFO[0m state_indexer: Block height 87209511
-[2mMar 13 17:08:41.013[0m [32m INFO[0m state_indexer: Block height 87209512
-[2mMar 13 17:08:42.972[0m [32m INFO[0m state_indexer: Block height 87209513
-[2mMar 13 17:08:45.183[0m [32m INFO[0m state_indexer: Block height 87209514
-[2mMar 13 17:08:45.451[0m [32m INFO[0m state_indexer: Block height 87209515
-[2mMar 13 17:08:45.500[0m [32m INFO[0m state_indexer: Block height 87209516
-[2mMar 13 17:08:47.773[0m [32m INFO[0m state_indexer: Block height 87209517
-[2mMar 13 17:08:50.024[0m [32m INFO[0m state_indexer: Block height 87209518
-[2mMar 13 17:08:50.176[0m [32m INFO[0m state_indexer: Block height 87209519
-[2mMar 13 17:08:52.299[0m [32m INFO[0m state_indexer: Block height 87209520
-[2mMar 13 17:08:52.477[0m [32m INFO[0m state_indexer: Block height 87209521
-[2mMar 13 17:08:54.633[0m [32m INFO[0m state_indexer: Block height 87209522
-[2mMar 13 17:08:54.833[0m [32m INFO[0m state_indexer: Block height 87209523
-[2mMar 13 17:08:56.962[0m [32m INFO[0m state_indexer: Block height 87209524
-[2mMar 13 17:08:57.224[0m [32m INFO[0m state_indexer: Block height 87209525
-[2mMar 13 17:08:59.302[0m [32m INFO[0m state_indexer: Block height 87209526
-[2mMar 13 17:08:59.441[0m [32m INFO[0m state_indexer: Block height 87209527
-[2mMar 13 17:09:01.542[0m [32m INFO[0m state_indexer: Block height 87209528
-[2mMar 13 17:09:01.926[0m [32m INFO[0m state_indexer: Block height 87209529
-[2mMar 13 17:09:04.043[0m [32m INFO[0m state_indexer: Block height 87209530
-[2mMar 13 17:09:04.627[0m [32m INFO[0m state_indexer: Block height 87209531
-[2mMar 13 17:09:06.703[0m [32m INFO[0m state_indexer: Block height 87209532
-[2mMar 13 17:09:06.962[0m [32m INFO[0m state_indexer: Block height 87209533
-[2mMar 13 17:09:09.042[0m [32m INFO[0m state_indexer: Block height 87209534
-[2mMar 13 17:09:09.253[0m [32m INFO[0m state_indexer: Block height 87209535
-[2mMar 13 17:09:11.456[0m [32m INFO[0m state_indexer: Block height 87209536
-[2mMar 13 17:09:11.672[0m [32m INFO[0m state_indexer: Block height 87209537
+    Finished release [optimized] target(s) in 10.51s
+     Running `/Users/khorolets/projects/pagoda/100xRPC/json-rpc-100x/target/release/state-indexer mainnet from-block 78457565`
+[2m2023-05-24T09:26:31.160139Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Starting metrics server on http://0.0.0.0:8080/metrics
+[2m2023-05-24T09:26:32.456014Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457565
+[2m2023-05-24T09:26:32.496511Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457566
+[2m2023-05-24T09:26:32.504417Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457567
+[2m2023-05-24T09:26:32.511702Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457568
+[2m2023-05-24T09:26:32.724308Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457569
+[2m2023-05-24T09:26:32.767368Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457570
+[2m2023-05-24T09:26:32.779903Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457571
+[2m2023-05-24T09:26:32.786529Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457572
+[2m2023-05-24T09:26:32.791841Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457573
+[2m2023-05-24T09:26:32.797634Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457574
+[2m2023-05-24T09:26:32.809553Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457575
+[2m2023-05-24T09:26:32.819864Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457576
+[2m2023-05-24T09:26:32.824695Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457577
+[2m2023-05-24T09:26:32.917403Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457578
+[2m2023-05-24T09:26:32.924828Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457579
+[2m2023-05-24T09:26:32.931338Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457580
+[2m2023-05-24T09:26:32.935542Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457581
+[2m2023-05-24T09:26:32.940953Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457582
+[2m2023-05-24T09:26:32.947044Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457583
+[2m2023-05-24T09:26:32.952613Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457584
+[2m2023-05-24T09:26:32.956746Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457585
+[2m2023-05-24T09:26:32.959526Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457586
+[2m2023-05-24T09:26:32.964018Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457587
+[2m2023-05-24T09:26:32.968015Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457588
+[2m2023-05-24T09:26:32.971887Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457589
+[2m2023-05-24T09:26:32.975741Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457590
+[2m2023-05-24T09:26:32.979022Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457591
+[2m2023-05-24T09:26:32.982977Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457592
+[2m2023-05-24T09:26:32.986968Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457593
+[2m2023-05-24T09:26:32.990417Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457594
+[2m2023-05-24T09:26:32.994056Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457595
+[2m2023-05-24T09:26:32.998267Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457596
+[2m2023-05-24T09:26:33.002672Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457597
+[2m2023-05-24T09:26:33.006635Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457598
+[2m2023-05-24T09:26:33.015127Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457599
+[2m2023-05-24T09:26:33.020173Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457600
+[2m2023-05-24T09:26:33.023749Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457601
+[2m2023-05-24T09:26:33.028442Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457602
+[2m2023-05-24T09:26:33.034694Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457603
+[2m2023-05-24T09:26:33.041628Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457604
+[2m2023-05-24T09:26:33.048410Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457605
+[2m2023-05-24T09:26:33.055048Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457606
+[2m2023-05-24T09:26:33.062960Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457607
+[2m2023-05-24T09:26:33.070101Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457608
+[2m2023-05-24T09:26:33.075455Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457609
+[2m2023-05-24T09:26:33.080795Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457610
+[2m2023-05-24T09:26:33.084418Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457611
+[2m2023-05-24T09:26:33.088556Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457612
+[2m2023-05-24T09:26:33.092887Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457613
+[2m2023-05-24T09:26:33.096468Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457614
+[2m2023-05-24T09:26:33.099881Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457615
+[2m2023-05-24T09:26:33.103328Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457616
+[2m2023-05-24T09:26:33.106803Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457617
+[2m2023-05-24T09:26:33.110537Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457618
+[2m2023-05-24T09:26:33.114767Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457619
+[2m2023-05-24T09:26:33.119367Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457620
+[2m2023-05-24T09:26:33.122668Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457621
+[2m2023-05-24T09:26:33.127103Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457622
+[2m2023-05-24T09:26:33.131229Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457623
+[2m2023-05-24T09:26:33.134398Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457624
+[2m2023-05-24T09:26:33.138847Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457625
+[2m2023-05-24T09:26:33.143059Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457626
+[2m2023-05-24T09:26:33.148667Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457627
+[2m2023-05-24T09:26:33.152989Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457628
+[2m2023-05-24T09:26:33.157493Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457629
+[2m2023-05-24T09:26:33.160471Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457630
+[2m2023-05-24T09:26:33.163963Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457631
+[2m2023-05-24T09:26:33.167673Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457632
+[2m2023-05-24T09:26:33.172655Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457633
+[2m2023-05-24T09:26:33.176752Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457634
+[2m2023-05-24T09:26:33.180287Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457635
+[2m2023-05-24T09:26:33.183543Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457636
+[2m2023-05-24T09:26:33.186926Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457637
+[2m2023-05-24T09:26:33.190677Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457638
+[2m2023-05-24T09:26:33.193427Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457639
+[2m2023-05-24T09:26:33.196427Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457640
+[2m2023-05-24T09:26:33.198957Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457641
+[2m2023-05-24T09:26:33.202886Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457642
+[2m2023-05-24T09:26:33.207626Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457643
+[2m2023-05-24T09:26:33.212462Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457644
+[2m2023-05-24T09:26:33.215690Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457645
+[2m2023-05-24T09:26:33.218550Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457646
+[2m2023-05-24T09:26:33.222403Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457647
+[2m2023-05-24T09:26:33.226208Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457648
+[2m2023-05-24T09:26:33.230969Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457649
+[2m2023-05-24T09:26:33.234626Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457650
+[2m2023-05-24T09:26:33.237437Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457651
+[2m2023-05-24T09:26:33.241122Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457652
+[2m2023-05-24T09:26:33.246198Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457653
+[2m2023-05-24T09:26:33.249814Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457654
+[2m2023-05-24T09:26:33.252751Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457655
+[2m2023-05-24T09:26:33.256158Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457656
+[2m2023-05-24T09:26:33.259496Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457657
+[2m2023-05-24T09:26:33.263254Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457658
+[2m2023-05-24T09:26:33.266243Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457659
+[2m2023-05-24T09:26:33.269337Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457660
+[2m2023-05-24T09:26:33.272224Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457661
+[2m2023-05-24T09:26:33.275688Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457662
+[2m2023-05-24T09:26:33.281062Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457663
+[2m2023-05-24T09:26:33.285077Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457664
+[2m2023-05-24T09:26:33.288525Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457665
+[2m2023-05-24T09:26:33.291610Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457666
+[2m2023-05-24T09:26:33.296907Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457667
+[2m2023-05-24T09:26:33.301772Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457668
+[2m2023-05-24T09:26:33.304410Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457669
+[2m2023-05-24T09:26:33.309605Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457670
+[2m2023-05-24T09:26:33.315085Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457671
+[2m2023-05-24T09:26:33.320117Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457672
+[2m2023-05-24T09:26:33.324205Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457673
+[2m2023-05-24T09:26:33.328147Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457674
+[2m2023-05-24T09:26:33.331653Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457675
+[2m2023-05-24T09:26:33.335587Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457676
+[2m2023-05-24T09:26:33.339590Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457677
+[2m2023-05-24T09:26:33.986981Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457678
+[2m2023-05-24T09:26:34.020623Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457679
+[2m2023-05-24T09:26:34.046541Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457680
+[2m2023-05-24T09:26:34.058094Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457681
+[2m2023-05-24T09:26:34.067854Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457682
+[2m2023-05-24T09:26:34.075759Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457683
+[2m2023-05-24T09:26:34.081259Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457684
+[2m2023-05-24T09:26:34.086746Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457685
+[2m2023-05-24T09:26:34.092978Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457686
+[2m2023-05-24T09:26:34.099920Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457687
+[2m2023-05-24T09:26:34.106137Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457688
+[2m2023-05-24T09:26:34.110174Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457689
+[2m2023-05-24T09:26:34.115936Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457690
+[2m2023-05-24T09:26:34.121255Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457691
+[2m2023-05-24T09:26:34.125513Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457692
+[2m2023-05-24T09:26:34.129980Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457693
+[2m2023-05-24T09:26:34.135273Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457694
+[2m2023-05-24T09:26:34.140179Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457695
+[2m2023-05-24T09:26:34.144106Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457696
+[2m2023-05-24T09:26:34.148674Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457697
+[2m2023-05-24T09:26:34.155850Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457698
+[2m2023-05-24T09:26:34.160377Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457699
+[2m2023-05-24T09:26:34.168502Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457700
+[2m2023-05-24T09:26:34.172258Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457701
+[2m2023-05-24T09:26:34.175976Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457702
+[2m2023-05-24T09:26:34.179955Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457703
+[2m2023-05-24T09:26:34.185330Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457704
+[2m2023-05-24T09:26:34.191197Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457705
+[2m2023-05-24T09:26:34.195320Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457706
+[2m2023-05-24T09:26:34.198325Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457707
+[2m2023-05-24T09:26:34.203438Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457708
+[2m2023-05-24T09:26:34.207107Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457709
+[2m2023-05-24T09:26:34.210523Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457710
+[2m2023-05-24T09:26:34.214754Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457711
+[2m2023-05-24T09:26:34.219551Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457712
+[2m2023-05-24T09:26:34.224018Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457713
+[2m2023-05-24T09:26:34.228652Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457714
+[2m2023-05-24T09:26:34.234281Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457715
+[2m2023-05-24T09:26:34.238915Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457716
+[2m2023-05-24T09:26:34.243709Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457717
+[2m2023-05-24T09:26:34.248604Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457718
+[2m2023-05-24T09:26:34.253174Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457719
+[2m2023-05-24T09:26:34.256808Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457720
+[2m2023-05-24T09:26:34.261639Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457721
+[2m2023-05-24T09:26:34.265956Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457722
+[2m2023-05-24T09:26:34.269917Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457723
+[2m2023-05-24T09:26:34.273007Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457724
+[2m2023-05-24T09:26:34.276804Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457725
+[2m2023-05-24T09:26:34.282234Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457726
+[2m2023-05-24T09:26:34.287180Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457727
+[2m2023-05-24T09:26:34.290397Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457728
+[2m2023-05-24T09:26:34.293575Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457729
+[2m2023-05-24T09:26:34.298616Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457730
+[2m2023-05-24T09:26:34.303645Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457731
+[2m2023-05-24T09:26:34.307576Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457732
+[2m2023-05-24T09:26:34.310613Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457733
+[2m2023-05-24T09:26:34.314001Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457734
+[2m2023-05-24T09:26:34.318297Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457735
+[2m2023-05-24T09:26:34.322717Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457736
+[2m2023-05-24T09:26:34.327238Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457737
+[2m2023-05-24T09:26:34.332184Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457738
+[2m2023-05-24T09:26:34.337317Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457739
+[2m2023-05-24T09:26:34.343043Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457740
+[2m2023-05-24T09:26:34.347587Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457741
+[2m2023-05-24T09:26:34.353202Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457742
+[2m2023-05-24T09:26:34.358979Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457743
+[2m2023-05-24T09:26:34.366433Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457744
+[2m2023-05-24T09:26:34.374018Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457745
+[2m2023-05-24T09:26:34.379366Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457746
+[2m2023-05-24T09:26:34.384022Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457747
+[2m2023-05-24T09:26:34.388427Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457748
+[2m2023-05-24T09:26:34.391579Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457749
+[2m2023-05-24T09:26:34.395446Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457750
+[2m2023-05-24T09:26:34.399476Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457751
+[2m2023-05-24T09:26:34.402394Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457752
+[2m2023-05-24T09:26:34.405831Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457753
+[2m2023-05-24T09:26:34.410595Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457754
+[2m2023-05-24T09:26:34.414561Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457755
+[2m2023-05-24T09:26:34.418555Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457756
+[2m2023-05-24T09:26:34.422929Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457757
+[2m2023-05-24T09:26:34.426452Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457758
+[2m2023-05-24T09:26:34.429331Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457759
+[2m2023-05-24T09:26:34.434944Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457760
+[2m2023-05-24T09:26:34.439930Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457761
+[2m2023-05-24T09:26:34.444171Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457762
+[2m2023-05-24T09:26:34.448370Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457763
+[2m2023-05-24T09:26:34.451274Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457764
+[2m2023-05-24T09:26:34.454910Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457765
+[2m2023-05-24T09:26:34.459750Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457766
+[2m2023-05-24T09:26:34.463279Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457767
+[2m2023-05-24T09:26:34.466667Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457768
+[2m2023-05-24T09:26:34.469780Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457769
+[2m2023-05-24T09:26:34.473411Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457770
+[2m2023-05-24T09:26:34.478152Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457771
+[2m2023-05-24T09:26:34.482384Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457772
+[2m2023-05-24T09:26:34.485517Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457773
+[2m2023-05-24T09:26:34.489492Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457774
+[2m2023-05-24T09:26:34.493485Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457775
+[2m2023-05-24T09:26:34.496871Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457776
+[2m2023-05-24T09:26:34.501405Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457777
+[2m2023-05-24T09:26:34.505737Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457778
+[2m2023-05-24T09:26:34.508951Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457779
+[2m2023-05-24T09:26:34.512311Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457780
+[2m2023-05-24T09:26:34.515540Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457781
+[2m2023-05-24T09:26:34.519269Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457782
+[2m2023-05-24T09:26:34.521606Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457783
+[2m2023-05-24T09:26:34.525618Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457784
+[2m2023-05-24T09:26:34.529056Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457785
+[2m2023-05-24T09:26:34.533822Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457786
+[2m2023-05-24T09:26:34.537221Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457787
+[2m2023-05-24T09:26:34.541364Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457788
+[2m2023-05-24T09:26:34.545190Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457789
+[2m2023-05-24T09:26:34.548584Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457790
+[2m2023-05-24T09:26:34.551900Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457791
+[2m2023-05-24T09:26:34.555435Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457792
+[2m2023-05-24T09:26:34.559190Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457793
+[2m2023-05-24T09:26:34.564978Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457794
+[2m2023-05-24T09:26:34.571526Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457795
+[2m2023-05-24T09:26:34.685722Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457796
+[2m2023-05-24T09:26:34.692679Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457797
+[2m2023-05-24T09:26:34.697573Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457798
+[2m2023-05-24T09:26:34.702120Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457799
+[2m2023-05-24T09:26:34.707888Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457800
+[2m2023-05-24T09:26:34.712839Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457801
+[2m2023-05-24T09:26:34.717103Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457802
+[2m2023-05-24T09:26:34.723680Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457803
+[2m2023-05-24T09:26:34.728366Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457804
+[2m2023-05-24T09:26:34.732028Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457805
+[2m2023-05-24T09:26:34.735360Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457806
+[2m2023-05-24T09:26:35.239414Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457807
+[2m2023-05-24T09:26:35.262430Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457808
+[2m2023-05-24T09:26:35.270489Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457809
+[2m2023-05-24T09:26:35.278796Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457810
+[2m2023-05-24T09:26:35.288477Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457811
+[2m2023-05-24T09:26:35.297442Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457812
+[2m2023-05-24T09:26:35.303628Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457813
+[2m2023-05-24T09:26:35.309259Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457814
+[2m2023-05-24T09:26:35.312939Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457815
+[2m2023-05-24T09:26:35.317761Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457816
+[2m2023-05-24T09:26:35.324330Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457817
+[2m2023-05-24T09:26:35.331010Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457818
+[2m2023-05-24T09:26:35.337507Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457819
+[2m2023-05-24T09:26:35.341914Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457820
+[2m2023-05-24T09:26:35.347254Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457821
+[2m2023-05-24T09:26:35.352311Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457822
+[2m2023-05-24T09:26:35.356117Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457823
+[2m2023-05-24T09:26:35.359691Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457824
+[2m2023-05-24T09:26:35.364304Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457825
+[2m2023-05-24T09:26:35.368821Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457826
+[2m2023-05-24T09:26:35.372630Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457827
+[2m2023-05-24T09:26:35.377436Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457828
+[2m2023-05-24T09:26:35.381382Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457829
+[2m2023-05-24T09:26:35.385602Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457830
+[2m2023-05-24T09:26:35.388731Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457831
+[2m2023-05-24T09:26:35.393437Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457832
+[2m2023-05-24T09:26:35.398349Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457833
+[2m2023-05-24T09:26:35.402938Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457834
+[2m2023-05-24T09:26:35.406172Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457835
+[2m2023-05-24T09:26:35.409763Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457836
+[2m2023-05-24T09:26:35.414997Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457837
+[2m2023-05-24T09:26:35.419623Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457838
+[2m2023-05-24T09:26:35.428358Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457839
+[2m2023-05-24T09:26:35.431748Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457840
+[2m2023-05-24T09:26:35.436329Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457841
+[2m2023-05-24T09:26:35.440230Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457842
+[2m2023-05-24T09:26:35.444917Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457843
+[2m2023-05-24T09:26:35.449794Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457844
+[2m2023-05-24T09:26:35.453488Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457845
+[2m2023-05-24T09:26:35.458724Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457846
+[2m2023-05-24T09:26:35.462777Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457847
+[2m2023-05-24T09:26:35.465134Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457848
+[2m2023-05-24T09:26:35.467826Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457849
+[2m2023-05-24T09:26:35.471010Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457850
+[2m2023-05-24T09:26:35.474861Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457851
+[2m2023-05-24T09:26:35.479042Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457852
+[2m2023-05-24T09:26:35.484725Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457853
+[2m2023-05-24T09:26:35.489095Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457854
+[2m2023-05-24T09:26:35.493362Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457855
+[2m2023-05-24T09:26:35.497667Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457856
+[2m2023-05-24T09:26:35.502256Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457857
+[2m2023-05-24T09:26:35.504703Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457858
+[2m2023-05-24T09:26:35.507814Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457859
+[2m2023-05-24T09:26:35.511277Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457860
+[2m2023-05-24T09:26:35.514701Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457861
+[2m2023-05-24T09:26:35.518768Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457862
+[2m2023-05-24T09:26:35.522060Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457863
+[2m2023-05-24T09:26:35.526096Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457864
+[2m2023-05-24T09:26:35.528917Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457865
+[2m2023-05-24T09:26:35.532770Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457866
+[2m2023-05-24T09:26:35.537455Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457867
+[2m2023-05-24T09:26:35.540319Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457868
+[2m2023-05-24T09:26:35.543914Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457869
+[2m2023-05-24T09:26:35.549561Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457870
+[2m2023-05-24T09:26:35.553783Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457871
+[2m2023-05-24T09:26:35.557639Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457872
+[2m2023-05-24T09:26:35.561096Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457873
+[2m2023-05-24T09:26:35.565205Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457874
+[2m2023-05-24T09:26:35.568369Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457875
+[2m2023-05-24T09:26:35.571942Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457876
+[2m2023-05-24T09:26:35.574969Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457877
+[2m2023-05-24T09:26:35.578217Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457878
+[2m2023-05-24T09:26:35.580867Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457879
+[2m2023-05-24T09:26:35.583939Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457880
+[2m2023-05-24T09:26:35.587573Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457881
+[2m2023-05-24T09:26:35.591399Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457882
+[2m2023-05-24T09:26:35.595512Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457883
+[2m2023-05-24T09:26:35.599510Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457884
+[2m2023-05-24T09:26:35.602540Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457885
+[2m2023-05-24T09:26:35.605134Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457886
+[2m2023-05-24T09:26:35.610561Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457887
+[2m2023-05-24T09:26:35.616411Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457888
+[2m2023-05-24T09:26:35.620085Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457889
+[2m2023-05-24T09:26:35.623978Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457890
+[2m2023-05-24T09:26:35.627904Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457891
+[2m2023-05-24T09:26:35.631919Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457892
+[2m2023-05-24T09:26:35.635157Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457893
+[2m2023-05-24T09:26:35.638379Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457894
+[2m2023-05-24T09:26:35.643729Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457895
+[2m2023-05-24T09:26:35.649448Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457896
+[2m2023-05-24T09:26:35.653718Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457897
+[2m2023-05-24T09:26:35.656573Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457898
+[2m2023-05-24T09:26:35.660487Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457899
+[2m2023-05-24T09:26:35.664446Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457900
+[2m2023-05-24T09:26:35.668708Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457901
+[2m2023-05-24T09:26:35.672589Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457902
+[2m2023-05-24T09:26:35.676093Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457903
+[2m2023-05-24T09:26:35.679073Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457904
+[2m2023-05-24T09:26:35.684045Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457905
+[2m2023-05-24T09:26:35.687142Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457906
+[2m2023-05-24T09:26:36.327299Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457907
+[2m2023-05-24T09:26:36.356353Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457908
+[2m2023-05-24T09:26:36.359898Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457909
+[2m2023-05-24T09:26:36.364961Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457910
+[2m2023-05-24T09:26:36.371158Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457911
+[2m2023-05-24T09:26:36.376410Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457912
+[2m2023-05-24T09:26:36.380437Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457913
+[2m2023-05-24T09:26:36.383234Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457914
+[2m2023-05-24T09:26:36.387117Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457915
+[2m2023-05-24T09:26:36.390985Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457916
+[2m2023-05-24T09:26:36.396605Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457917
+[2m2023-05-24T09:26:36.402740Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457918
+[2m2023-05-24T09:26:36.407523Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457919
+[2m2023-05-24T09:26:36.411812Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457920
+[2m2023-05-24T09:26:36.418926Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457921
+[2m2023-05-24T09:26:36.423515Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457922
+[2m2023-05-24T09:26:36.427605Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457923
+[2m2023-05-24T09:26:36.431618Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457924
+[2m2023-05-24T09:26:36.435335Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457925
+[2m2023-05-24T09:26:36.439863Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457926
+[2m2023-05-24T09:26:36.443547Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457927
+[2m2023-05-24T09:26:36.446827Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457928
+[2m2023-05-24T09:26:36.451167Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457929
+[2m2023-05-24T09:26:36.454785Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457930
+[2m2023-05-24T09:26:36.459539Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457931
+[2m2023-05-24T09:26:36.465435Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457932
+[2m2023-05-24T09:26:36.471203Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457933
+[2m2023-05-24T09:26:36.476343Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457934
+[2m2023-05-24T09:26:36.481168Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457935
+[2m2023-05-24T09:26:36.485041Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457936
+[2m2023-05-24T09:26:36.489591Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457937
+[2m2023-05-24T09:26:36.494593Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457938
+[2m2023-05-24T09:26:36.498550Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457939
+[2m2023-05-24T09:26:36.501987Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457940
+[2m2023-05-24T09:26:36.506558Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457941
+[2m2023-05-24T09:26:36.515348Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457942
+[2m2023-05-24T09:26:36.527558Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457943
+[2m2023-05-24T09:26:36.533980Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457944
+[2m2023-05-24T09:26:36.538673Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457945
+[2m2023-05-24T09:26:36.543627Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457946
+[2m2023-05-24T09:26:36.549613Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457947
+[2m2023-05-24T09:26:36.554706Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457948
+[2m2023-05-24T09:26:36.558458Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457949
+[2m2023-05-24T09:26:36.563394Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457950
+[2m2023-05-24T09:26:36.566652Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457951
+[2m2023-05-24T09:26:36.571524Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457952
+[2m2023-05-24T09:26:36.576301Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457953
+[2m2023-05-24T09:26:36.581822Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457954
+[2m2023-05-24T09:26:36.586306Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457955
+[2m2023-05-24T09:26:36.589959Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457956
+[2m2023-05-24T09:26:36.594737Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457957
+[2m2023-05-24T09:26:36.599307Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457958
+[2m2023-05-24T09:26:36.604343Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457959
+[2m2023-05-24T09:26:36.608251Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457960
+[2m2023-05-24T09:26:36.610337Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457961
+[2m2023-05-24T09:26:36.615770Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457962
+[2m2023-05-24T09:26:36.621241Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457963
+[2m2023-05-24T09:26:36.625571Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457964
+[2m2023-05-24T09:26:36.630056Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457965
+[2m2023-05-24T09:26:36.634220Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457966
+[2m2023-05-24T09:26:36.639787Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457967
+[2m2023-05-24T09:26:36.643401Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457968
+[2m2023-05-24T09:26:36.647281Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457969
+[2m2023-05-24T09:26:36.651424Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457970
+[2m2023-05-24T09:26:36.656988Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457971
+[2m2023-05-24T09:26:36.659841Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457972
+[2m2023-05-24T09:26:36.663622Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457973
+[2m2023-05-24T09:26:36.667503Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457974
+[2m2023-05-24T09:26:36.671782Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457975
+[2m2023-05-24T09:26:36.674983Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457976
+[2m2023-05-24T09:26:36.679874Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457977
+[2m2023-05-24T09:26:36.683972Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457978
+[2m2023-05-24T09:26:36.801432Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457979
+[2m2023-05-24T09:26:36.807857Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457980
+[2m2023-05-24T09:26:36.813718Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457981
+[2m2023-05-24T09:26:36.818605Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457982
+[2m2023-05-24T09:26:36.824287Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457983
+[2m2023-05-24T09:26:36.828523Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457984
+[2m2023-05-24T09:26:36.833211Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457985
+[2m2023-05-24T09:26:36.839600Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457986
+[2m2023-05-24T09:26:36.842677Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457987
+[2m2023-05-24T09:26:36.847530Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457988
+[2m2023-05-24T09:26:36.850259Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457989
+[2m2023-05-24T09:26:36.852425Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457990
+[2m2023-05-24T09:26:36.855282Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457991
+[2m2023-05-24T09:26:36.860599Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457992
+[2m2023-05-24T09:26:36.865227Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457993
+[2m2023-05-24T09:26:36.869295Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457994
+[2m2023-05-24T09:26:36.873073Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457995
+[2m2023-05-24T09:26:36.878463Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457996
+[2m2023-05-24T09:26:36.883015Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457997
+[2m2023-05-24T09:26:36.887038Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457998
+[2m2023-05-24T09:26:36.890472Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78457999
+[2m2023-05-24T09:26:36.895322Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458000
+[2m2023-05-24T09:26:36.899890Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458001
+[2m2023-05-24T09:26:36.904342Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458002
+[2m2023-05-24T09:26:36.907768Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458003
+[2m2023-05-24T09:26:36.911282Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458004
+[2m2023-05-24T09:26:36.914954Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458005
+[2m2023-05-24T09:26:36.917999Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458006
+[2m2023-05-24T09:26:36.922123Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458007
+[2m2023-05-24T09:26:36.927308Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458008
+[2m2023-05-24T09:26:36.931653Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458009
+[2m2023-05-24T09:26:36.936257Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458010
+[2m2023-05-24T09:26:36.941229Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458011
+[2m2023-05-24T09:26:36.947189Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458012
+[2m2023-05-24T09:26:36.950299Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458013
+[2m2023-05-24T09:26:36.953794Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458014
+[2m2023-05-24T09:26:36.956432Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458015
+[2m2023-05-24T09:26:36.959555Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458016
+[2m2023-05-24T09:26:36.963586Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458017
+[2m2023-05-24T09:26:36.970221Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458018
+[2m2023-05-24T09:26:36.975868Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458019
+[2m2023-05-24T09:26:36.979347Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458020
+[2m2023-05-24T09:26:36.982992Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458021
+[2m2023-05-24T09:26:36.987663Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458022
+[2m2023-05-24T09:26:36.991449Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458023
+[2m2023-05-24T09:26:36.995404Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458024
+[2m2023-05-24T09:26:36.999341Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458025
+[2m2023-05-24T09:26:37.004186Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458026
+[2m2023-05-24T09:26:37.008928Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458027
+[2m2023-05-24T09:26:37.014706Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458028
+[2m2023-05-24T09:26:37.561856Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458029
+[2m2023-05-24T09:26:37.588507Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458030
+[2m2023-05-24T09:26:37.608347Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458031
+[2m2023-05-24T09:26:37.616420Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458032
+[2m2023-05-24T09:26:37.623053Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458033
+[2m2023-05-24T09:26:37.630239Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458034
+[2m2023-05-24T09:26:37.637873Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458035
+[2m2023-05-24T09:26:37.642781Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458036
+[2m2023-05-24T09:26:37.648813Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458037
+[2m2023-05-24T09:26:37.654371Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458038
+[2m2023-05-24T09:26:37.659389Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458039
+[2m2023-05-24T09:26:37.664793Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458040
+[2m2023-05-24T09:26:37.669591Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458041
+[2m2023-05-24T09:26:37.676495Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458042
+[2m2023-05-24T09:26:37.681331Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458043
+[2m2023-05-24T09:26:37.687336Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458044
+[2m2023-05-24T09:26:37.695490Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458045
+[2m2023-05-24T09:26:37.699812Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458046
+[2m2023-05-24T09:26:37.704361Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458047
+[2m2023-05-24T09:26:37.708703Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458048
+[2m2023-05-24T09:26:37.712723Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458049
+[2m2023-05-24T09:26:37.716325Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458050
+[2m2023-05-24T09:26:37.719926Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458051
+[2m2023-05-24T09:26:37.724584Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458052
+[2m2023-05-24T09:26:37.730743Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458053
+[2m2023-05-24T09:26:37.735339Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458054
+[2m2023-05-24T09:26:37.739255Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458055
+[2m2023-05-24T09:26:37.743590Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458056
+[2m2023-05-24T09:26:37.748004Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458057
+[2m2023-05-24T09:26:37.752344Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458058
+[2m2023-05-24T09:26:37.754941Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458059
+[2m2023-05-24T09:26:37.758007Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458060
+[2m2023-05-24T09:26:37.761527Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458061
+[2m2023-05-24T09:26:37.765810Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458062
+[2m2023-05-24T09:26:37.770622Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458063
+[2m2023-05-24T09:26:37.773869Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458064
+[2m2023-05-24T09:26:37.778163Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458065
+[2m2023-05-24T09:26:37.781786Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458066
+[2m2023-05-24T09:26:37.785611Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458067
+[2m2023-05-24T09:26:37.793665Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458068
+[2m2023-05-24T09:26:37.798581Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458069
+[2m2023-05-24T09:26:37.801591Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458070
+[2m2023-05-24T09:26:37.804569Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458071
+[2m2023-05-24T09:26:37.807084Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458072
+[2m2023-05-24T09:26:37.810224Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458073
+[2m2023-05-24T09:26:37.815899Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458074
+[2m2023-05-24T09:26:37.819560Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458075
+[2m2023-05-24T09:26:37.822684Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458076
+[2m2023-05-24T09:26:37.825390Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458077
+[2m2023-05-24T09:26:37.827944Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458078
+[2m2023-05-24T09:26:37.830721Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458079
+[2m2023-05-24T09:26:37.835152Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458080
+[2m2023-05-24T09:26:37.838550Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458081
+[2m2023-05-24T09:26:37.841403Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458082
+[2m2023-05-24T09:26:37.844525Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458083
+[2m2023-05-24T09:26:37.849273Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458084
+[2m2023-05-24T09:26:37.853857Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458085
+[2m2023-05-24T09:26:37.859062Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458086
+[2m2023-05-24T09:26:37.863026Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458087
+[2m2023-05-24T09:26:37.866339Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458088
+[2m2023-05-24T09:26:37.870419Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458089
+[2m2023-05-24T09:26:37.875036Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458090
+[2m2023-05-24T09:26:37.879424Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458091
+[2m2023-05-24T09:26:37.886371Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458092
+[2m2023-05-24T09:26:37.890874Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458093
+[2m2023-05-24T09:26:37.895999Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458094
+[2m2023-05-24T09:26:37.899522Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458095
+[2m2023-05-24T09:26:37.902887Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458096
+[2m2023-05-24T09:26:37.905722Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458097
+[2m2023-05-24T09:26:37.908663Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458098
+[2m2023-05-24T09:26:37.914405Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458099
+[2m2023-05-24T09:26:37.917968Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458100
+[2m2023-05-24T09:26:37.922062Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458101
+[2m2023-05-24T09:26:37.926709Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458102
+[2m2023-05-24T09:26:37.929951Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458103
+[2m2023-05-24T09:26:37.935619Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458104
+[2m2023-05-24T09:26:37.940085Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458105
+[2m2023-05-24T09:26:37.944110Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458106
+[2m2023-05-24T09:26:37.949688Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458107
+[2m2023-05-24T09:26:37.954842Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458108
+[2m2023-05-24T09:26:37.958552Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458109
+[2m2023-05-24T09:26:37.961642Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458110
+[2m2023-05-24T09:26:37.966041Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458111
+[2m2023-05-24T09:26:37.968421Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458112
+[2m2023-05-24T09:26:37.971871Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458113
+[2m2023-05-24T09:26:37.975089Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458114
+[2m2023-05-24T09:26:37.979181Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458115
+[2m2023-05-24T09:26:37.983094Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458116
+[2m2023-05-24T09:26:37.986784Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458117
+[2m2023-05-24T09:26:37.992227Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458118
+[2m2023-05-24T09:26:37.996340Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458119
+[2m2023-05-24T09:26:38.002505Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458120
+[2m2023-05-24T09:26:38.007519Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458121
+[2m2023-05-24T09:26:38.010438Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458122
+[2m2023-05-24T09:26:38.013790Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458123
+[2m2023-05-24T09:26:38.017219Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458124
+[2m2023-05-24T09:26:38.022414Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458125
+[2m2023-05-24T09:26:38.027788Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458126
+[2m2023-05-24T09:26:38.032126Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458127
+[2m2023-05-24T09:26:38.035286Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458128
+[2m2023-05-24T09:26:38.287025Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458129
+[2m2023-05-24T09:26:38.312654Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458130
+[2m2023-05-24T09:26:38.323260Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458131
+[2m2023-05-24T09:26:38.336610Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458132
+[2m2023-05-24T09:26:38.347189Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458133
+[2m2023-05-24T09:26:38.355206Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458134
+[2m2023-05-24T09:26:38.648835Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458135
+[2m2023-05-24T09:26:38.686479Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458136
+[2m2023-05-24T09:26:38.693846Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458137
+[2m2023-05-24T09:26:38.699653Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458138
+[2m2023-05-24T09:26:38.707221Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458139
+[2m2023-05-24T09:26:38.713630Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458140
+[2m2023-05-24T09:26:38.717958Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458141
+[2m2023-05-24T09:26:38.722772Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458142
+[2m2023-05-24T09:26:38.730238Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458143
+[2m2023-05-24T09:26:38.735202Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458144
+[2m2023-05-24T09:26:38.745598Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458145
+[2m2023-05-24T09:26:38.750895Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458146
+[2m2023-05-24T09:26:38.753554Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458147
+[2m2023-05-24T09:26:38.759278Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458148
+[2m2023-05-24T09:26:38.763013Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458149
+[2m2023-05-24T09:26:38.766461Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458150
+[2m2023-05-24T09:26:38.769011Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458151
+[2m2023-05-24T09:26:38.771797Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458152
+[2m2023-05-24T09:26:38.774914Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458153
+[2m2023-05-24T09:26:38.778766Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458154
+[2m2023-05-24T09:26:38.781359Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458155
+[2m2023-05-24T09:26:38.784283Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458156
+[2m2023-05-24T09:26:38.786311Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458157
+[2m2023-05-24T09:26:38.790284Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458158
+[2m2023-05-24T09:26:38.794400Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458159
+[2m2023-05-24T09:26:38.797171Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458160
+[2m2023-05-24T09:26:38.801103Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458161
+[2m2023-05-24T09:26:38.805281Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458162
+[2m2023-05-24T09:26:38.809280Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458163
+[2m2023-05-24T09:26:38.813230Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458164
+[2m2023-05-24T09:26:38.816083Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458165
+[2m2023-05-24T09:26:38.818479Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458166
+[2m2023-05-24T09:26:38.821900Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458167
+[2m2023-05-24T09:26:38.825942Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458168
+[2m2023-05-24T09:26:38.830572Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458169
+[2m2023-05-24T09:26:38.835790Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458170
+[2m2023-05-24T09:26:38.842573Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458171
+[2m2023-05-24T09:26:38.846473Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458172
+[2m2023-05-24T09:26:38.849675Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458173
+[2m2023-05-24T09:26:38.852947Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458174
+[2m2023-05-24T09:26:38.856565Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458175
+[2m2023-05-24T09:26:38.859240Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458176
+[2m2023-05-24T09:26:38.862412Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458177
+[2m2023-05-24T09:26:38.867761Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458178
+[2m2023-05-24T09:26:38.873607Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458179
+[2m2023-05-24T09:26:38.878738Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458180
+[2m2023-05-24T09:26:38.882432Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458181
+[2m2023-05-24T09:26:38.886862Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458182
+[2m2023-05-24T09:26:38.892667Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458183
+[2m2023-05-24T09:26:38.896582Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458184
+[2m2023-05-24T09:26:38.899668Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458185
+[2m2023-05-24T09:26:38.902192Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458186
+[2m2023-05-24T09:26:38.907694Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458187
+[2m2023-05-24T09:26:38.911664Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458188
+[2m2023-05-24T09:26:38.915889Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458189
+[2m2023-05-24T09:26:38.919537Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458190
+[2m2023-05-24T09:26:38.924914Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458191
+[2m2023-05-24T09:26:38.927818Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458192
+[2m2023-05-24T09:26:38.931274Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458193
+[2m2023-05-24T09:26:38.934418Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458194
+[2m2023-05-24T09:26:38.937472Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458195
+[2m2023-05-24T09:26:38.942996Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458196
+[2m2023-05-24T09:26:38.946427Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458197
+[2m2023-05-24T09:26:38.949689Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458198
+[2m2023-05-24T09:26:38.953494Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458199
+[2m2023-05-24T09:26:38.957865Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458200
+[2m2023-05-24T09:26:38.961579Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458201
+[2m2023-05-24T09:26:38.971698Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458202
+[2m2023-05-24T09:26:38.975148Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458203
+[2m2023-05-24T09:26:38.978003Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458204
+[2m2023-05-24T09:26:38.982851Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458205
+[2m2023-05-24T09:26:38.986675Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458206
+[2m2023-05-24T09:26:38.990425Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458207
+[2m2023-05-24T09:26:38.994366Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458208
+[2m2023-05-24T09:26:38.997221Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458209
+[2m2023-05-24T09:26:39.000378Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458210
+[2m2023-05-24T09:26:39.005668Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458211
+[2m2023-05-24T09:26:39.009639Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458212
+[2m2023-05-24T09:26:39.014393Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458213
+[2m2023-05-24T09:26:39.017337Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458214
+[2m2023-05-24T09:26:39.020336Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458215
+[2m2023-05-24T09:26:39.024445Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458216
+[2m2023-05-24T09:26:39.027908Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458217
+[2m2023-05-24T09:26:39.032614Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458218
+[2m2023-05-24T09:26:39.036232Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458219
+[2m2023-05-24T09:26:39.040566Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458220
+[2m2023-05-24T09:26:39.043560Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458221
+[2m2023-05-24T09:26:39.046041Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458222
+[2m2023-05-24T09:26:39.049519Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458223
+[2m2023-05-24T09:26:39.054990Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458224
+[2m2023-05-24T09:26:39.058332Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458225
+[2m2023-05-24T09:26:39.061476Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458226
+[2m2023-05-24T09:26:39.064328Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458227
+[2m2023-05-24T09:26:39.069694Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458228
+[2m2023-05-24T09:26:39.074007Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458229
+[2m2023-05-24T09:26:39.078154Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458230
+[2m2023-05-24T09:26:39.081174Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458231
+[2m2023-05-24T09:26:39.083786Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458232
+[2m2023-05-24T09:26:39.087670Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458233
+[2m2023-05-24T09:26:39.091783Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458234
+[2m2023-05-24T09:26:39.095886Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458235
+[2m2023-05-24T09:26:39.098893Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458236
+[2m2023-05-24T09:26:39.101817Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458237
+[2m2023-05-24T09:26:39.106182Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458238
+[2m2023-05-24T09:26:39.111383Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458239
+[2m2023-05-24T09:26:39.115205Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458240
+[2m2023-05-24T09:26:39.118954Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458241
+[2m2023-05-24T09:26:39.126444Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458242
+[2m2023-05-24T09:26:39.130841Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458243
+[2m2023-05-24T09:26:39.133585Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458244
+[2m2023-05-24T09:26:39.136978Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458245
+[2m2023-05-24T09:26:39.614542Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458246
+[2m2023-05-24T09:26:39.647875Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458247
+[2m2023-05-24T09:26:39.660762Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458248
+[2m2023-05-24T09:26:39.670798Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458249
+[2m2023-05-24T09:26:39.829500Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458250
+[2m2023-05-24T09:26:39.849397Z[0m [32m INFO[0m [1mstate_indexer[0m[2m:[0m Block height 78458251
