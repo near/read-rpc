@@ -43,5 +43,5 @@ near-jsonrpc-client = "0.5.1"
 near-lake-framework = "0.7.1"
 
 [features]
-tracing_instrumentation = []
+tracing-instrumentation = []
 scylla_db_tracing = ["database/scylla_db_tracing"]
