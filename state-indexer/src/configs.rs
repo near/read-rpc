@@ -67,7 +67,7 @@ impl Opts {
     }
 
     pub fn rpc_url(&self) -> &str {
-        match self.chain_id {
+        match &self.chain_id {
             ChainId::Mainnet(_) => "https://rpc.mainnet.near.org",
             ChainId::Testnet(_) => "https://rpc.testnet.near.org",
         }
@@ -113,23 +113,23 @@ async fn get_start_block_height(
                 let (block_height,): (num_bigint::BigInt,) = row.into_typed::<(num_bigint::BigInt,)>()?;
                 Ok(block_height.to_u64().expect("Failed to convert BigInt to u64"))
             } else {
-                Ok(final_block_height(opts).await)
+                Ok(final_block_height(opts.rpc_url()).await?)
             }
         }
-        StartOptions::FromLatest => Ok(final_block_height(opts).await),
+        StartOptions::FromLatest => Ok(final_block_height(opts.rpc_url()).await?),
     }
 }
 
-async fn final_block_height(opts: &Opts) -> u64 {
+pub(crate) async fn final_block_height(rpc_url: &str) -> anyhow::Result<u64> {
     tracing::debug!(target: crate::INDEXER, "Fetching final block from NEAR RPC",);
-    let client = JsonRpcClient::connect(opts.rpc_url());
+    let client = JsonRpcClient::connect(rpc_url);
     let request = methods::block::RpcBlockRequest {
         block_reference: BlockReference::Finality(Finality::Final),
     };
 
-    let latest_block = client.call(request).await.unwrap();
+    let latest_block = client.call(request).await?;
 
-    latest_block.header.height
+    Ok(latest_block.header.height)
 }
 
 pub(crate) fn init_tracing() -> anyhow::Result<()> {

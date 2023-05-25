@@ -116,22 +116,22 @@ async fn get_start_block_height(
                     .to_u64()
                     .expect("Failed to convert BigInt to u64"))
             } else {
-                Ok(final_block_height(opts).await)
+                Ok(final_block_height(opts.rpc_url()).await?)
             }
         }
-        StartOptions::FromLatest => Ok(final_block_height(opts).await),
+        StartOptions::FromLatest => Ok(final_block_height(opts.rpc_url()).await?),
     }
 }
 
-async fn final_block_height(opts: &Opts) -> u64 {
-    let client = JsonRpcClient::connect(opts.rpc_url().to_string());
+pub async fn final_block_height(rpc_url: &str) -> anyhow::Result<u64> {
+    let client = JsonRpcClient::connect(rpc_url.to_string());
     let request = methods::block::RpcBlockRequest {
         block_reference: BlockReference::Finality(Finality::Final),
     };
 
     let latest_block = client.call(request).await.unwrap();
 
-    latest_block.header.height
+    Ok(latest_block.header.height)
 }
 
 pub fn init_tracing() -> anyhow::Result<()> {
