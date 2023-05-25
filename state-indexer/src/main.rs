@@ -25,7 +25,7 @@ async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
     scylla_storage: &configs::ScyllaDBManager,
     indexer_id: &str,
-    stats: std::sync::Arc<tokio::sync::RwLock<metrics::Stats>>
+    stats: std::sync::Arc<tokio::sync::RwLock<metrics::Stats>>,
 ) -> anyhow::Result<()> {
     let block_height = streamer_message.block.header.height;
     let block_hash = streamer_message.block.header.hash;
@@ -255,9 +255,10 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(metrics::state_logger(std::sync::Arc::clone(&stats), opts.rpc_url().to_string()));
 
     let mut handlers = tokio_stream::wrappers::ReceiverStream::new(stream)
-        .map(|streamer_message| handle_streamer_message(streamer_message, &scylla_storage, &opts.indexer_id, std::sync::Arc::clone(&stats)))
+        .map(|streamer_message| {
+            handle_streamer_message(streamer_message, &scylla_storage, &opts.indexer_id, std::sync::Arc::clone(&stats))
+        })
         .buffer_unordered(opts.concurrency);
-
 
     while let Some(_handle_message) = handlers.next().await {
         if let Err(err) = _handle_message {

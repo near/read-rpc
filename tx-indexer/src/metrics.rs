@@ -79,13 +79,9 @@ impl Stats {
             last_processed_block_height: 0,
         }
     }
-
 }
 
-pub async fn state_logger(
-    stats: std::sync::Arc<tokio::sync::RwLock<Stats>>,
-    rpc_url: String,
-) {
+pub async fn state_logger(stats: std::sync::Arc<tokio::sync::RwLock<Stats>>, rpc_url: String) {
     let interval_secs = 10;
     let mut prev_blocks_processed_count: u64 = 0;
 
@@ -128,5 +124,5 @@ pub async fn state_logger(
             }
         );
         prev_blocks_processed_count = stats_lock.blocks_processed_count;
-    };
+    }
 }

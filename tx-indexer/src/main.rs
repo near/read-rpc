@@ -44,7 +44,10 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(metrics::init_server(opts.port).expect("Failed to start metrics server"));
 
     let stats = std::sync::Arc::new(tokio::sync::RwLock::new(metrics::Stats::new()));
-    tokio::spawn(metrics::state_logger(std::sync::Arc::clone(&stats), opts.rpc_url().to_string()));
+    tokio::spawn(metrics::state_logger(
+        std::sync::Arc::clone(&stats),
+        opts.rpc_url().to_string(),
+    ));
 
     tracing::info!(target: INDEXER, "Starting tx indexer...",);
     let mut handlers = tokio_stream::wrappers::ReceiverStream::new(stream)
@@ -54,7 +57,7 @@ async fn main() -> anyhow::Result<()> {
                 &scylla_db_client,
                 &hash_storage,
                 &opts.indexer_id,
-                std::sync::Arc::clone(&stats)
+                std::sync::Arc::clone(&stats),
             )
         })
         .buffer_unordered(1usize);
@@ -79,16 +82,16 @@ async fn handle_streamer_message(
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
     hash_storage: &std::sync::Arc<futures_locks::RwLock<storage::HashStorage>>,
     indexer_id: &str,
-    stats: std::sync::Arc<tokio::sync::RwLock<metrics::Stats>>
+    stats: std::sync::Arc<tokio::sync::RwLock<metrics::Stats>>,
 ) -> anyhow::Result<u64> {
     let block_height = streamer_message.block.header.height;
-    tracing::info!(
-        target: INDEXER,
-        "Block {}",
-        block_height
-    );
+    tracing::info!(target: INDEXER, "Block {}", block_height);
 
-    stats.write().await.block_heights_processing.insert(block_height);
+    stats
+        .write()
+        .await
+        .block_heights_processing
+        .insert(block_height);
 
     let tx_future =
         collector::index_transactions(&streamer_message, scylla_db_client, hash_storage);
