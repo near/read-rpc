@@ -43,6 +43,9 @@ async fn main() -> anyhow::Result<()> {
     // Initiate metrics http server
     tokio::spawn(metrics::init_server(opts.port).expect("Failed to start metrics server"));
 
+    let stats = std::sync::Arc::new(tokio::sync::RwLock::new(metrics::Stats::new()));
+    tokio::spawn(metrics::state_logger(std::sync::Arc::clone(&stats), opts.rpc_url().to_string()));
+
     tracing::info!(target: INDEXER, "Starting tx indexer...",);
     let mut handlers = tokio_stream::wrappers::ReceiverStream::new(stream)
         .map(|streamer_message| {
@@ -51,6 +54,7 @@ async fn main() -> anyhow::Result<()> {
                 &scylla_db_client,
                 &hash_storage,
                 &opts.indexer_id,
+                std::sync::Arc::clone(&stats)
             )
         })
         .buffer_unordered(1usize);
@@ -75,12 +79,16 @@ async fn handle_streamer_message(
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
     hash_storage: &std::sync::Arc<futures_locks::RwLock<storage::HashStorage>>,
     indexer_id: &str,
+    stats: std::sync::Arc<tokio::sync::RwLock<metrics::Stats>>
 ) -> anyhow::Result<u64> {
+    let block_height = streamer_message.block.header.height;
     tracing::info!(
         target: INDEXER,
         "Block {}",
-        streamer_message.block.header.height
+        block_height
     );
+
+    stats.write().await.block_heights_processing.insert(block_height);
 
     let tx_future =
         collector::index_transactions(&streamer_message, scylla_db_client, hash_storage);
@@ -107,5 +115,10 @@ async fn handle_streamer_message(
     // https://github.com/tikv/rust-prometheus/issues/470
     metrics::LATEST_BLOCK_HEIGHT.set(i64::try_from(streamer_message.block.header.height)?);
 
-    Ok(streamer_message.block.header.height)
+    let mut stats_lock = stats.write().await;
+    stats_lock.block_heights_processing.remove(&block_height);
+    stats_lock.blocks_processed_count += 1;
+    stats_lock.last_processed_block_height = block_height;
+
+    Ok(block_height)
 }

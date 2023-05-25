@@ -25,10 +25,13 @@ async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
     scylla_storage: &configs::ScyllaDBManager,
     indexer_id: &str,
+    stats: std::sync::Arc<tokio::sync::RwLock<metrics::Stats>>
 ) -> anyhow::Result<()> {
     let block_height = streamer_message.block.header.height;
     let block_hash = streamer_message.block.header.hash;
     tracing::info!(target: INDEXER, "Block height {}", block_height,);
+
+    stats.write().await.block_heights_processing.insert(block_height);
 
     let handle_block_future = handle_block(
         block_height,
@@ -51,6 +54,11 @@ async fn handle_streamer_message(
     // Prometheus Gauge Metric type do not support u64
     // https://github.com/tikv/rust-prometheus/issues/470
     metrics::LATEST_BLOCK_HEIGHT.set(i64::try_from(block_height)?);
+
+    let mut stats_lock = stats.write().await;
+    stats_lock.block_heights_processing.remove(&block_height);
+    stats_lock.blocks_processed_count += 1;
+    stats_lock.last_processed_block_height = block_height;
     Ok(())
 }
 
@@ -243,9 +251,13 @@ async fn main() -> anyhow::Result<()> {
     // Initiate metrics http server
     tokio::spawn(metrics::init_server(opts.port).expect("Failed to start metrics server"));
 
+    let stats = std::sync::Arc::new(tokio::sync::RwLock::new(metrics::Stats::new()));
+    tokio::spawn(metrics::state_logger(std::sync::Arc::clone(&stats), opts.rpc_url().to_string()));
+
     let mut handlers = tokio_stream::wrappers::ReceiverStream::new(stream)
-        .map(|streamer_message| handle_streamer_message(streamer_message, &scylla_storage, &opts.indexer_id))
+        .map(|streamer_message| handle_streamer_message(streamer_message, &scylla_storage, &opts.indexer_id, std::sync::Arc::clone(&stats)))
         .buffer_unordered(opts.concurrency);
+
 
     while let Some(_handle_message) = handlers.next().await {
         if let Err(err) = _handle_message {
