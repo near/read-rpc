@@ -51,3 +51,4 @@ near-vm-logic = "0.16.1"
 tracing-instrumentation = []
 scylla_db_tracing = ["database/scylla_db_tracing"]
 shadow_data_consistency = ["dep:assert-json-diff",]
+account_access_keys = []

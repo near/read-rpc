@@ -45,3 +45,4 @@ near-lake-framework = "0.7.1"
 [features]
 tracing-instrumentation = []
 scylla_db_tracing = ["database/scylla_db_tracing"]
+account_access_keys = []

@@ -4,9 +4,11 @@ use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
 use crate::modules::blocks::CacheBlock;
 use crate::modules::queries::utils::{
     fetch_access_key_from_scylla_db, fetch_account_from_scylla_db,
-    fetch_contract_code_from_scylla_db, fetch_list_access_keys_from_scylla_db,
+    fetch_contract_code_from_scylla_db,
     fetch_state_from_scylla_db, run_contract,
 };
+#[cfg(feature = "account_access_keys")]
+use crate::modules::queries::utils::fetch_list_access_keys_from_scylla_db;
 use crate::utils::proxy_rpc_call;
 #[cfg(feature = "shadow_data_consistency")]
 use crate::utils::shadow_compare_results;
@@ -164,6 +166,7 @@ async fn view_access_key(
     })
 }
 
+#[allow(unused)]
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 async fn view_access_keys_list(
     data: &Data<ServerContext>,
@@ -175,7 +178,10 @@ async fn view_access_keys_list(
         account_id,
         block.block_height,
     );
+    #[cfg(not(feature = "account_access_keys"))]
+    anyhow::bail!("Feature `account_access_keys` is not enabled");
 
+    #[cfg(feature = "account_access_keys")]
     let access_keys = fetch_list_access_keys_from_scylla_db(
         &data.scylla_db_manager,
         account_id,
@@ -183,6 +189,7 @@ async fn view_access_keys_list(
     )
     .await?;
 
+    #[cfg(feature = "account_access_keys")]
     Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc_primitives::types::query::QueryResponseKind::AccessKeyList(
             near_primitives::views::AccessKeyList { keys: access_keys },

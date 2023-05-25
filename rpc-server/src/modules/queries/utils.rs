@@ -140,6 +140,7 @@ pub async fn fetch_access_key_from_scylla_db(
     )?)
 }
 
+#[cfg(feature = "account_access_keys")]
 #[cfg_attr(
     feature = "tracing-instrumentation",
     tracing::instrument(skip(scylla_db_manager))

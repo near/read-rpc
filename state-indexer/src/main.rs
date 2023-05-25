@@ -172,10 +172,13 @@ async fn store_state_change(
                 &data_value,
             );
 
-            // TODO: this method is a suspect to cause delays, disabling it to test the performance
+            #[cfg(feature = "account_access_keys")]
             let add_account_access_keys_future =
                 scylla_storage.add_account_access_keys(account_id, block_height, &data_key, Some(&data_value));
+            #[cfg(feature = "account_access_keys")]
             futures::try_join!(add_access_key_future, add_account_access_keys_future)?;
+            #[cfg(not(feature = "account_access_keys"))]
+            add_access_key_future.await?;
         }
         StateChangeValueView::AccessKeyDeletion { account_id, public_key } => {
             let data_key = public_key
@@ -184,11 +187,14 @@ async fn store_state_change(
             let delete_access_key_future =
                 scylla_storage.delete_access_key(account_id.clone(), block_height.clone(), block_hash, &data_key);
 
-            // TODO: this method is a suspect to cause delays, disabling it to test the performance
+            #[cfg(feature = "account_access_keys")]
             let add_account_access_keys_future =
                 scylla_storage.add_account_access_keys(account_id, block_height, &data_key, None);
-
+            #[cfg(feature = "account_access_keys")]
             futures::try_join!(delete_access_key_future, add_account_access_keys_future)?;
+
+            #[cfg(not(feature = "account_access_keys"))]
+            delete_access_key_future.await?;
         }
         StateChangeValueView::ContractCodeUpdate { account_id, code } => {
             scylla_storage

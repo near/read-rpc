@@ -4,6 +4,7 @@ use near_jsonrpc_client::{methods, JsonRpcClient};
 use near_lake_framework::near_indexer_primitives::types::{BlockReference, Finality};
 use num_traits::ToPrimitive;
 use scylla::prepared_statement::PreparedStatement;
+#[cfg(feature = "account_access_keys")]
 use std::collections::HashMap;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -179,7 +180,10 @@ pub(crate) struct ScyllaDBManager {
 
     add_access_key: PreparedStatement,
     delete_access_key: PreparedStatement,
+
+    #[cfg(feature = "account_access_keys")]
     add_account_access_keys: PreparedStatement,
+    #[cfg(feature = "account_access_keys")]
     get_account_access_keys: PreparedStatement,
 
     add_contract: PreparedStatement,
@@ -229,6 +233,7 @@ impl ScyllaStorageManager for ScyllaDBManager {
             )
             .await?;
 
+        #[cfg(feature = "account_access_keys")]
         scylla_db_session
             .query(
                 "
@@ -362,6 +367,8 @@ impl ScyllaStorageManager for ScyllaDBManager {
                     VALUES(?, ?, ?, ?, NULL)",
             )
             .await?,
+
+            #[cfg(feature = "account_access_keys")]
             add_account_access_keys: Self::prepare_query(
                 &scylla_db_session,
                 "INSERT INTO state_indexer.account_access_keys
@@ -369,6 +376,8 @@ impl ScyllaStorageManager for ScyllaDBManager {
                     VALUES(?, ?, ?)",
             )
             .await?,
+
+            #[cfg(feature = "account_access_keys")]
             get_account_access_keys: Self::prepare_query(
                 &scylla_db_session,
                 "SELECT active_access_keys FROM state_indexer.account_access_keys
@@ -527,6 +536,7 @@ impl ScyllaDBManager {
         Ok(())
     }
 
+    #[cfg(feature = "account_access_keys")]
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
     async fn get_access_keys(
         &self,
@@ -543,6 +553,7 @@ impl ScyllaDBManager {
         Ok(result)
     }
 
+    #[cfg(feature = "account_access_keys")]
     #[cfg_attr(
         feature = "tracing-instrumentation",
         tracing::instrument(skip(self, public_key, access_key))
@@ -577,6 +588,7 @@ impl ScyllaDBManager {
         Ok(())
     }
 
+    #[cfg(feature = "account_access_keys")]
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self, account_keys)))]
     async fn update_account_access_keys(
         &self,
