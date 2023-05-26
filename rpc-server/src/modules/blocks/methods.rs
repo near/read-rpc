@@ -94,7 +94,7 @@ async fn fetch_shards(
                 shard_id,
             )
         });
-    Ok(futures::future::try_join_all(fetch_shards_futures).await?)
+    futures::future::try_join_all(fetch_shards_futures).await
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
@@ -102,8 +102,8 @@ async fn fetch_changes_in_block(
     data: &Data<ServerContext>,
     block_reference: near_primitives::types::BlockReference,
 ) -> anyhow::Result<near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockByTypeResponse> {
-    let block_view = fetch_block(&data, block_reference).await?;
-    let shards = fetch_shards(&data, &block_view).await?;
+    let block_view = fetch_block(data, block_reference).await?;
+    let shards = fetch_shards(data, &block_view).await?;
 
     let trie_keys = shards
         .into_iter()
@@ -186,12 +186,12 @@ async fn fetch_changes_in_block_by_type(
     block_reference: near_primitives::types::BlockReference,
     state_changes_request: &near_primitives::views::StateChangesRequestView,
 ) -> anyhow::Result<near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockResponse> {
-    let block_view = fetch_block(&data, block_reference).await?;
-    let shards = fetch_shards(&data, &block_view).await?;
+    let block_view = fetch_block(data, block_reference).await?;
+    let shards = fetch_shards(data, &block_view).await?;
     let changes = shards
         .into_iter()
         .flat_map(|shard| shard.state_changes)
-        .filter(|change| is_matching_change(change, &state_changes_request))
+        .filter(|change| is_matching_change(change, state_changes_request))
         .collect();
     Ok(
         near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockResponse {

@@ -173,10 +173,11 @@ async fn store_state_change(
             );
 
             #[cfg(feature = "account_access_keys")]
-            let add_account_access_keys_future =
-                scylla_storage.add_account_access_keys(account_id, block_height, &data_key, Some(&data_value));
-            #[cfg(feature = "account_access_keys")]
-            futures::try_join!(add_access_key_future, add_account_access_keys_future)?;
+            {
+                let add_account_access_keys_future =
+                    scylla_storage.add_account_access_keys(account_id, block_height, &data_key, Some(&data_value));
+                futures::try_join!(add_access_key_future, add_account_access_keys_future)?;
+            }
             #[cfg(not(feature = "account_access_keys"))]
             add_access_key_future.await?;
         }
@@ -188,11 +189,11 @@ async fn store_state_change(
                 scylla_storage.delete_access_key(account_id.clone(), block_height.clone(), block_hash, &data_key);
 
             #[cfg(feature = "account_access_keys")]
-            let add_account_access_keys_future =
-                scylla_storage.add_account_access_keys(account_id, block_height, &data_key, None);
-            #[cfg(feature = "account_access_keys")]
-            futures::try_join!(delete_access_key_future, add_account_access_keys_future)?;
-
+            {
+                let delete_account_access_keys_future =
+                    scylla_storage.add_account_access_keys(account_id, block_height, &data_key, None);
+                futures::try_join!(delete_access_key_future, delete_account_access_keys_future)?;
+            }
             #[cfg(not(feature = "account_access_keys"))]
             delete_access_key_future.await?;
         }

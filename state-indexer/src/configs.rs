@@ -4,8 +4,6 @@ use near_jsonrpc_client::{methods, JsonRpcClient};
 use near_lake_framework::near_indexer_primitives::types::{BlockReference, Finality};
 use num_traits::ToPrimitive;
 use scylla::prepared_statement::PreparedStatement;
-#[cfg(feature = "account_access_keys")]
-use std::collections::HashMap;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
@@ -568,11 +566,11 @@ impl ScyllaDBManager {
         let public_key_hex = hex::encode(public_key).to_string();
 
         let mut account_keys = match self.get_access_keys(account_id.clone(), block_height.clone()).await {
-            Ok(row) => match row.into_typed::<(HashMap<String, Vec<u8>>,)>() {
+            Ok(row) => match row.into_typed::<(std::collection::HashMap<String, Vec<u8>>,)>() {
                 Ok((account_keys,)) => account_keys,
-                Err(_) => HashMap::new(),
+                Err(_) => std::collections::HashMap::new(),
             },
-            Err(_) => HashMap::new(),
+            Err(_) => std::collections::HashMap::new(),
         };
 
         match access_key {

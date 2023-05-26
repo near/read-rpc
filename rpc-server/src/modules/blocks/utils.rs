@@ -66,10 +66,9 @@ pub async fn fetch_shard_from_s3(
         .await
         .with_context(|| "Invalid data from s3")?
         .into_bytes();
-    Ok(
-        serde_json::from_slice::<near_indexer_primitives::IndexerShard>(body_bytes.as_ref())
-            .with_context(|| "Invalid serialised data")?,
-    )
+
+    serde_json::from_slice::<near_indexer_primitives::IndexerShard>(body_bytes.as_ref())
+        .with_context(|| "Invalid serialised data")
 }
 
 #[cfg_attr(
@@ -280,9 +279,7 @@ pub(crate) fn is_matching_change(
             | StateChangeValueView::DataDeletion { account_id, key } = &change.value
             {
                 account_ids.contains(account_id)
-                    && hex::encode(key)
-                        .to_string()
-                        .starts_with(&hex::encode(key_prefix).to_string())
+                    && hex::encode(key).starts_with(&hex::encode(key_prefix))
             } else {
                 false
             }

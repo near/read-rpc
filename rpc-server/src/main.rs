@@ -47,17 +47,15 @@ fn init_logging(use_tracer: bool) -> anyhow::Result<()> {
                 .with(tracing_subscriber::fmt::Layer::default().compact())
                 .try_init()?;
         };
+    } else if std::env::var("ENABLE_JSON_LOGS").is_ok() {
+        subscriber
+            .with(tracing_subscriber::fmt::Layer::default().json())
+            .try_init()?;
     } else {
-        if std::env::var("ENABLE_JSON_LOGS").is_ok() {
-            subscriber
-                .with(tracing_subscriber::fmt::Layer::default().json())
-                .try_init()?;
-        } else {
-            subscriber
-                .with(tracing_subscriber::fmt::Layer::default().compact())
-                .try_init()?;
-        };
-    }
+        subscriber
+            .with(tracing_subscriber::fmt::Layer::default().compact())
+            .try_init()?;
+    };
 
     Ok(())
 }
@@ -69,7 +67,7 @@ async fn main() -> anyhow::Result<()> {
     let opts: Opts = Opts::parse();
 
     #[cfg(feature = "tracing-instrumentation")]
-    init_logging(true);
+    init_logging(true)?;
 
     #[cfg(not(feature = "tracing-instrumentation"))]
     init_logging(false)?;
