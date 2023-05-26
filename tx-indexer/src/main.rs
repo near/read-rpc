@@ -85,7 +85,7 @@ async fn handle_streamer_message(
     stats: std::sync::Arc<tokio::sync::RwLock<metrics::Stats>>,
 ) -> anyhow::Result<u64> {
     let block_height = streamer_message.block.header.height;
-    tracing::info!(target: INDEXER, "Block {}", block_height);
+    tracing::debug!(target: INDEXER, "Block {}", block_height);
 
     stats
         .write()
