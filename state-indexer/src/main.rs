@@ -29,7 +29,7 @@ async fn handle_streamer_message(
 ) -> anyhow::Result<()> {
     let block_height = streamer_message.block.header.height;
     let block_hash = streamer_message.block.header.hash;
-    tracing::info!(target: INDEXER, "Block height {}", block_height,);
+    tracing::debug!(target: INDEXER, "Block height {}", block_height,);
 
     stats.write().await.block_heights_processing.insert(block_height);
 
