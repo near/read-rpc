@@ -57,7 +57,10 @@ impl near_vm_logic::External for CodeStorage {
         ))
     }
 
-    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
+    #[cfg_attr(
+        feature = "tracing-instrumentation",
+        tracing::instrument(skip(self, _mode))
+    )]
     fn storage_get(
         &self,
         key: &[u8],
