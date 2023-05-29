@@ -8,6 +8,7 @@ use crate::{config, storage};
 
 // TODO: Handle known TX hash collision case for mainnet
 // ref: https://github.com/near/near-indexer-for-explorer/issues/84
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 pub(crate) async fn index_transactions(
     streamer_message: &near_indexer_primitives::StreamerMessage,
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
@@ -39,6 +40,7 @@ pub(crate) async fn index_transactions(
 
 // Extracts all Transactions from the given `StreamerMessage` and pushes them to the memory storage
 // by calling the function `new_transaction_details_to_collecting_pool`.
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn extract_transactions_to_collect(
     streamer_message: &near_indexer_primitives::StreamerMessage,
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
@@ -68,6 +70,7 @@ async fn extract_transactions_to_collect(
 // Converts Transaction into CollectingTransactionDetails and puts it into memory storage.
 // Also, adds the Receipt produced by ExecutionOutcome of the given Transaction to the watching list
 // in memory storage
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn new_transaction_details_to_collecting_pool(
     transaction: &IndexerTransactionWithOutcome,
     block_height: u64,
@@ -122,6 +125,7 @@ async fn new_transaction_details_to_collecting_pool(
     Ok(())
 }
 
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn collect_receipts_and_outcomes(
     streamer_message: &near_indexer_primitives::StreamerMessage,
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
@@ -139,6 +143,7 @@ async fn collect_receipts_and_outcomes(
     Ok(())
 }
 
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn process_shard(
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
     hash_storage: &std::sync::Arc<futures_locks::RwLock<storage::HashStorage>>,
@@ -164,6 +169,7 @@ async fn process_shard(
     Ok(())
 }
 
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn push_receipt_to_watching_list(
     hash_storage: &std::sync::Arc<futures_locks::RwLock<storage::HashStorage>>,
     receipt_id: String,
@@ -177,6 +183,7 @@ async fn push_receipt_to_watching_list(
         .await
 }
 
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn process_receipt_execution_outcome(
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
     hash_storage: &std::sync::Arc<futures_locks::RwLock<storage::HashStorage>>,
@@ -249,6 +256,7 @@ async fn process_receipt_execution_outcome(
 }
 
 // Save transaction detail into the scylla db
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn save_transaction_details(
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
     tx_details: readnode_primitives::CollectingTransactionDetails,
@@ -281,6 +289,7 @@ async fn save_transaction_details(
 }
 
 // Save receipt_id, parent_transaction_hash, block_height and shard_id to the ScyllaDb
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn save_receipt(
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
     receipt_id: &str,

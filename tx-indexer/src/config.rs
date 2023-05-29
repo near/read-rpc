@@ -5,7 +5,8 @@ use near_indexer_primitives::types::{BlockReference, Finality};
 use near_jsonrpc_client::{methods, JsonRpcClient};
 use num_traits::ToPrimitive;
 use scylla::prepared_statement::PreparedStatement;
-use tracing_subscriber::EnvFilter;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
 /// NEAR Indexer for Explorer
 /// Watches for stream of blocks from the chain
@@ -135,7 +136,7 @@ pub async fn final_block_height(rpc_url: &str) -> anyhow::Result<u64> {
 }
 
 pub fn init_tracing() -> anyhow::Result<()> {
-    let mut env_filter = EnvFilter::new("near_lake_framework=info,tx_indexer=info,storage_tx=info");
+    let mut env_filter = tracing_subscriber::EnvFilter::new("tx_indexer=info");
 
     if let Ok(rust_log) = std::env::var("RUST_LOG") {
         if !rust_log.is_empty() {
@@ -151,14 +152,28 @@ pub fn init_tracing() -> anyhow::Result<()> {
         }
     }
 
-    let subscriber = tracing_subscriber::fmt::Subscriber::builder()
-        .with_env_filter(env_filter)
-        .with_writer(std::io::stderr);
+    opentelemetry::global::set_text_map_propagator(
+        opentelemetry::sdk::propagation::TraceContextPropagator::new(),
+    );
+    let tracer = opentelemetry_jaeger::new_pipeline()
+        .with_service_name("tx_indexer")
+        .with_max_packet_size(9_216)
+        .with_auto_split_batch(true)
+        .install_simple()?;
+    let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
+
+    let subscriber = tracing_subscriber::Registry::default()
+        .with(env_filter)
+        .with(telemetry);
 
     if std::env::var("ENABLE_JSON_LOGS").is_ok() {
-        subscriber.json().init();
+        subscriber
+            .with(tracing_subscriber::fmt::Layer::default().json())
+            .try_init()?;
     } else {
-        subscriber.compact().init();
+        subscriber
+            .with(tracing_subscriber::fmt::Layer::default().compact())
+            .try_init()?;
     }
 
     Ok(())
@@ -261,6 +276,7 @@ impl ScyllaDBManager {
         self.scylla_session.clone()
     }
 
+    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
     pub async fn add_transaction(
         &self,
         transaction: readnode_primitives::TransactionDetails,
@@ -283,6 +299,7 @@ impl ScyllaDBManager {
         Ok(())
     }
 
+    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
     pub async fn add_receipt(
         &self,
         receipt_id: &str,
@@ -304,6 +321,7 @@ impl ScyllaDBManager {
         Ok(())
     }
 
+    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
     pub(crate) async fn update_meta(
         &self,
         indexer_id: &str,

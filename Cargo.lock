@@ -5107,6 +5107,8 @@ dependencies = [
  "near-lake-framework",
  "num-bigint",
  "num-traits",
+ "opentelemetry",
+ "opentelemetry-jaeger",
  "prometheus",
  "readnode-primitives",
  "scylla",
@@ -5115,6 +5117,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
+ "tracing-opentelemetry",
  "tracing-subscriber",
 ]
 

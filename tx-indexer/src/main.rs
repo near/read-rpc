@@ -77,6 +77,7 @@ async fn main() -> anyhow::Result<()> {
     }
 }
 
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
