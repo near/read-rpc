@@ -566,7 +566,7 @@ impl ScyllaDBManager {
         let public_key_hex = hex::encode(public_key).to_string();
 
         let mut account_keys = match self.get_access_keys(account_id.clone(), block_height.clone()).await {
-            Ok(row) => match row.into_typed::<(std::collection::HashMap<String, Vec<u8>>,)>() {
+            Ok(row) => match row.into_typed::<(std::collections::HashMap<String, Vec<u8>>,)>() {
                 Ok((account_keys,)) => account_keys,
                 Err(_) => std::collections::HashMap::new(),
             },
@@ -592,7 +592,7 @@ impl ScyllaDBManager {
         &self,
         account_id: String,
         block_height: num_bigint::BigInt,
-        account_keys: HashMap<String, Vec<u8>>,
+        account_keys: std::collections::HashMap<String, Vec<u8>>,
     ) -> anyhow::Result<()> {
         Self::execute_prepared_query(
             &self.scylla_session,
