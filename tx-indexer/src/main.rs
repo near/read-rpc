@@ -29,6 +29,8 @@ async fn main() -> anyhow::Result<()> {
             opts.scylla_user.as_deref(),
             opts.scylla_password.as_deref(),
             None,
+            opts.max_retry,
+            opts.strict_mode,
         )
         .await?,
     );

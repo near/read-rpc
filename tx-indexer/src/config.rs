@@ -41,6 +41,14 @@ pub(crate) struct Opts {
     /// Chain ID: testnet or mainnet
     #[clap(subcommand)]
     pub chain_id: ChainId,
+    /// Max retry count for ScyllaDB if `strict_mode` is `false`
+    #[clap(long, default_value = "5", env)]
+    pub max_retry: u8,
+    /// Attempts to store data in the database should be infinite to ensure no data is missing.
+    /// Disable it to perform a limited write attempts (`max_retry`)
+    /// before skipping giving up and moving to the next piece of data
+    #[clap(long, default_value = "true", env)]
+    pub strict_mode: bool,
 }
 
 #[derive(Subcommand, Debug, Clone)]
