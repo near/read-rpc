@@ -130,7 +130,7 @@ pub async fn final_block_height(rpc_url: &str) -> anyhow::Result<u64> {
         block_reference: BlockReference::Finality(Finality::Final),
     };
 
-    let latest_block = client.call(request).await.unwrap();
+    let latest_block = client.call(request).await?;
 
     Ok(latest_block.header.height)
 }
