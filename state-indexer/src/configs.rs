@@ -157,9 +157,7 @@ pub(crate) fn init_tracing() -> anyhow::Result<()> {
     let subscriber = tracing_subscriber::Registry::default().with(env_filter).with(telemetry);
 
     if std::env::var("ENABLE_JSON_LOGS").is_ok() {
-        subscriber
-            .with(tracing_subscriber::fmt::Layer::default().json())
-            .try_init()?;
+        subscriber.with(tracing_stackdriver::layer()).try_init()?;
     } else {
         subscriber
             .with(tracing_subscriber::fmt::Layer::default().compact())
