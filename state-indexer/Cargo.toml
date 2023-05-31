@@ -34,6 +34,7 @@ tracing-subscriber = { version = "0.3.15", features = ["fmt", "env-filter", "std
 opentelemetry = { version = "0.17", features = ["rt-tokio-current-thread"] }
 opentelemetry-jaeger = { version = "0.16", features = ["rt-tokio-current-thread"] }
 tracing-opentelemetry = { version = "0.17" }
+tracing-stackdriver = "0.7.2" # GCP logs
 
 database = { path = "../database"}
 
