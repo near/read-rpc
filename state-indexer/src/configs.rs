@@ -60,8 +60,13 @@ pub enum ChainId {
 #[allow(clippy::enum_variant_names)]
 #[derive(Subcommand, Debug, Clone)]
 pub enum StartOptions {
-    FromBlock { height: u64 },
-    FromInterruption,
+    FromBlock {
+        height: u64,
+    },
+    FromInterruption {
+        /// Fallback start block height if interruption block is not found
+        height: Option<u64>,
+    },
     FromLatest,
 }
 
@@ -107,7 +112,7 @@ async fn get_start_block_height(
 ) -> anyhow::Result<u64> {
     match opts.start_options() {
         StartOptions::FromBlock { height } => Ok(*height),
-        StartOptions::FromInterruption => {
+        StartOptions::FromInterruption { height } => {
             let row = scylladb_session
                 .query(
                     "SELECT last_processed_block_height FROM state_indexer.meta WHERE indexer_id = ?",
@@ -120,6 +125,9 @@ async fn get_start_block_height(
                 let (block_height,): (num_bigint::BigInt,) = row.into_typed::<(num_bigint::BigInt,)>()?;
                 Ok(block_height.to_u64().expect("Failed to convert BigInt to u64"))
             } else {
+                if let Some(height) = height {
+                    return Ok(*height);
+                }
                 Ok(final_block_height(opts.rpc_url()).await?)
             }
         }
