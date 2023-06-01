@@ -2,4 +2,5 @@
 /.idea
 *.code-workspace
 .env
+.env.*
 *.log

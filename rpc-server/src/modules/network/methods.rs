@@ -52,6 +52,13 @@ pub async fn protocol_config(
     data: Data<ServerContext>,
     Params(params): Params<near_jsonrpc_primitives::types::config::RpcProtocolConfigRequest>,
 ) -> Result<near_jsonrpc_primitives::types::config::RpcProtocolConfigResponse, RPCError> {
+    // Increase the OPTIMISTIC_REQUESTS_TOTAL metric if the request has optimistic finality.
+    if let near_primitives::types::BlockReference::Finality(finality) = &params.block_reference {
+        // Finality::None stands for optimistic finality.
+        if finality == &near_primitives::types::Finality::None {
+            crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
+        }
+    }
     let config_view = proxy_rpc_call(&data.near_rpc_client, params).await?;
     Ok(near_jsonrpc_primitives::types::config::RpcProtocolConfigResponse { config_view })
 }

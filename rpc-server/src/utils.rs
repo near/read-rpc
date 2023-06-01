@@ -36,7 +36,15 @@ async fn get_final_block(
             near_primitives::types::Finality::Final,
         ),
     };
-    Ok(near_rpc_client.call(block_request_method).await?)
+
+    let block_response = near_rpc_client.call(block_request_method).await?;
+
+    // Updating the metric to expose the block height considered as final by the server
+    // this metric can be used to calculate the lag between the server and the network
+    // Prometheus Gauge Metric type do not support u64
+    // https://github.com/tikv/rust-prometheus/issues/470
+    crate::metrics::FINAL_BLOCK_HEIGHT.set(i64::try_from(block_response.header.height)?);
+    Ok(block_response)
 }
 
 pub async fn get_final_cache_block(

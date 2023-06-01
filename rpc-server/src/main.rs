@@ -9,8 +9,12 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use utils::{prepare_s3_client, update_final_block_height_regularly};
 
+#[macro_use]
+extern crate lazy_static;
+
 mod config;
 mod errors;
+mod metrics;
 mod modules;
 mod utils;
 
@@ -203,6 +207,7 @@ async fn main() -> anyhow::Result<()> {
                     .guard(actix_web::guard::Post())
                     .finish(rpc.into_web_service()),
             )
+            .service(metrics::get_metrics)
     })
     .bind(format!("0.0.0.0:{:0>5}", opts.server_port))?
     .run()

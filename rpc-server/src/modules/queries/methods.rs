@@ -201,6 +201,15 @@ pub async fn query(
     Params(mut params): Params<near_jsonrpc_primitives::types::query::RpcQueryRequest>,
 ) -> Result<near_jsonrpc_primitives::types::query::RpcQueryResponse, RPCError> {
     tracing::debug!("`query` call. Params: {:?}", params,);
+
+    // Increase the OPTIMISTIC_REQUESTS_TOTAL metric if the request has optimistic finality.
+    if let near_primitives::types::BlockReference::Finality(finality) = &params.block_reference {
+        // Finality::None stands for optimistic finality.
+        if finality == &near_primitives::types::Finality::None {
+            crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
+        }
+    }
+
     let block = fetch_block_from_cache_or_get(&data, params.block_reference.clone()).await;
     let result = match params.request.clone() {
         near_primitives::views::QueryRequest::ViewAccount { account_id } => {
