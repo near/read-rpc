@@ -208,6 +208,15 @@ pub async fn block(
     Params(mut params): Params<near_jsonrpc_primitives::types::blocks::RpcBlockRequest>,
 ) -> Result<near_jsonrpc_primitives::types::blocks::RpcBlockResponse, RPCError> {
     tracing::debug!("`block` called with parameters: {:?}", params);
+
+    // Increase the OPTIMISTIC_REQUESTS_TOTAL metric if the request has optimistic finality.
+    if let near_primitives::types::BlockReference::Finality(finality) = &params.block_reference {
+        // Finality::None stands for optimistic finality.
+        if finality == &near_primitives::types::Finality::None {
+            crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
+        }
+    }
+
     let block_view = match fetch_block(&data, params.block_reference.clone()).await {
         Ok(block_view) => {
             #[cfg(feature = "shadow_data_consistency")]
@@ -235,7 +244,7 @@ pub async fn block(
     Ok(near_jsonrpc_primitives::types::blocks::RpcBlockResponse { block_view })
 }
 
-#[allow(unused)]
+#[allow(unused_mut)]
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn changes_in_block(
     data: Data<ServerContext>,
@@ -244,6 +253,13 @@ pub async fn changes_in_block(
     >,
 ) -> Result<near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockByTypeResponse, RPCError>
 {
+    // Increase the OPTIMISTIC_REQUESTS_TOTAL metric if the request has optimistic finality.
+    if let near_primitives::types::BlockReference::Finality(finality) = &params.block_reference {
+        // Finality::None stands for optimistic finality.
+        if finality == &near_primitives::types::Finality::None {
+            crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
+        }
+    }
     match fetch_changes_in_block(&data, params.block_reference.clone()).await {
         Ok(changes) => {
             #[cfg(feature = "shadow_data_consistency")]
@@ -271,7 +287,7 @@ pub async fn changes_in_block(
     }
 }
 
-#[allow(unused)]
+#[allow(unused_mut)]
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn changes_in_block_by_type(
     data: Data<ServerContext>,
@@ -279,6 +295,13 @@ pub async fn changes_in_block_by_type(
         near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockByTypeRequest,
     >,
 ) -> Result<near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockResponse, RPCError> {
+    // Increase the OPTIMISTIC_REQUESTS_TOTAL metric if the request has optimistic finality.
+    if let near_primitives::types::BlockReference::Finality(finality) = &params.block_reference {
+        // Finality::None stands for optimistic finality.
+        if finality == &near_primitives::types::Finality::None {
+            crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
+        }
+    }
     match fetch_changes_in_block_by_type(
         &data,
         params.block_reference.clone(),

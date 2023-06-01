@@ -19,12 +19,12 @@ fn try_create_int_gauge(name: &str, help: &str) -> Result<IntGauge, prometheus::
 
 lazy_static! {
     pub(crate) static ref BLOCK_PROCESSED_TOTAL: IntCounter = try_create_int_counter(
-        "indexer_events_total_blocks_processed",
+        "total_blocks_processed",
         "Total number of blocks processed by indexer regardless of restarts. Used to calculate Block Processing Rate(BPS)"
     )
     .unwrap();
     pub(crate) static ref LATEST_BLOCK_HEIGHT: IntGauge = try_create_int_gauge(
-        "indexer_events_latest_block_height",
+        "latest_block_height",
         "Last seen block height by indexer"
     )
     .unwrap();
