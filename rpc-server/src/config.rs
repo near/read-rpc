@@ -45,6 +45,16 @@ pub struct Opts {
     // AWS default region
     #[clap(long, env, default_value = "8000")]
     pub server_port: u16,
+
+    /// Max retry count for ScyllaDB if `strict_mode` is `false`
+    #[clap(long, default_value = "2", env)]
+    pub max_retry: u8,
+
+    /// Attempts to store data in the database should be infinite to ensure no data is missing.
+    /// Disable it to perform a limited write attempts (`max_retry`)
+    /// before skipping giving up and moving to the next piece of data
+    #[clap(long, default_value = "false", env)]
+    pub strict_mode: bool,
 }
 
 pub struct ServerContext {

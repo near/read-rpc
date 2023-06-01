@@ -72,6 +72,175 @@
 // ).await?,
 
 use scylla::prepared_statement::PreparedStatement;
+use scylla::retry_policy::{QueryInfo, RetryDecision};
+use scylla::transport::errors::QueryError;
+
+#[derive(Debug)]
+pub struct CustomDBRetryPolicy {
+    max_retry: u8,
+    strict_mode: bool,
+}
+
+impl CustomDBRetryPolicy {
+    pub fn new(max_retry: u8, strict_mode: bool) -> CustomDBRetryPolicy {
+        CustomDBRetryPolicy {
+            max_retry,
+            strict_mode,
+        }
+    }
+}
+
+impl Default for CustomDBRetryPolicy {
+    /// By default using `strict_mode`
+    fn default() -> CustomDBRetryPolicy {
+        CustomDBRetryPolicy::new(0, true)
+    }
+}
+
+impl scylla::retry_policy::RetryPolicy for CustomDBRetryPolicy {
+    /// Called for each new query, starts a session of deciding about retries
+    fn new_session(&self) -> Box<dyn scylla::retry_policy::RetrySession> {
+        Box::new(CustomRetrySession::new(self.max_retry, self.strict_mode))
+    }
+
+    /// Used to clone this RetryPolicy
+    fn clone_boxed(&self) -> Box<dyn scylla::retry_policy::RetryPolicy> {
+        Box::new(CustomDBRetryPolicy::new(self.max_retry, self.strict_mode))
+    }
+}
+
+struct CustomRetrySession {
+    max_retry: u8,
+    max_retry_count: u8,
+    strict_mode: bool,
+}
+
+impl CustomRetrySession {
+    pub fn new(max_retry: u8, strict_mode: bool) -> CustomRetrySession {
+        CustomRetrySession {
+            max_retry,
+            max_retry_count: 0,
+            strict_mode,
+        }
+    }
+
+    /// Decide if we should retry the query
+    pub fn should_retry(&mut self) -> bool {
+        // If `strict_mode` always retry
+        if self.strict_mode {
+            return true;
+        };
+        // If `max_retry_count` is more than `max_retry` don't retry
+        if self.max_retry_count > self.max_retry {
+            return false;
+        };
+        // If `max_retry_count` is less than `max_retry` increment `max_retry_count` and retry
+        self.max_retry_count += 1;
+        true
+    }
+}
+
+impl Default for CustomRetrySession {
+    /// By default using `strict_mode`
+    fn default() -> CustomRetrySession {
+        CustomRetrySession::new(0, true)
+    }
+}
+
+impl scylla::retry_policy::RetrySession for CustomRetrySession {
+    /// Called after the query failed - decide what to do next
+    fn decide_should_retry(&mut self, query_info: QueryInfo) -> RetryDecision {
+        if let scylla::frame::types::LegacyConsistency::Serial(_) = query_info.consistency {
+            return RetryDecision::DontRetry;
+        };
+        tracing::warn!("ScyllaDB QueryError: {:?}", query_info.error);
+        match query_info.error {
+            QueryError::IoError(_)
+            | QueryError::DbError(scylla::transport::errors::DbError::Overloaded, _)
+            | QueryError::DbError(scylla::transport::errors::DbError::ServerError, _)
+            | QueryError::DbError(scylla::transport::errors::DbError::TruncateError, _) => {
+                tracing::warn!(
+                    "Basic errors - there are some problems on this node.
+                    Retry on a different one if possible"
+                );
+                RetryDecision::RetryNextNode(None)
+            }
+            QueryError::DbError(scylla::transport::errors::DbError::Unavailable { .. }, _) => {
+                tracing::warn!(
+                    "Unavailable - the current node believes that not enough nodes
+                    are alive to satisfy specified consistency requirements.
+                    Maybe this node has network problems - try a different one.
+                    Perform at most one retry - it's unlikely that two nodes
+                    have network problems at the same time"
+                );
+                if self.should_retry() {
+                    tracing::warn!("Retrying on a different node");
+                    RetryDecision::RetryNextNode(None)
+                } else {
+                    tracing::warn!("Not retrying");
+                    RetryDecision::DontRetry
+                }
+            }
+            QueryError::DbError(
+                scylla::transport::errors::DbError::ReadTimeout {
+                    received,
+                    required,
+                    data_present,
+                    ..
+                },
+                _,
+            ) => {
+                tracing::warn!(
+                    "ReadTimeout - coordinator didn't receive enough replies in time.
+                    Retry at most once and only if there were actually enough replies
+                    to satisfy consistency but they were all just checksums (data_present == false).
+                    This happens when the coordinator picked replicas that were overloaded/dying.
+                    Retried request should have some useful response because the node will detect
+                    that these replicas are dead."
+                );
+                if self.should_retry() && received >= required && !*data_present {
+                    tracing::warn!("Retrying on the same node");
+                    RetryDecision::RetrySameNode(None)
+                } else {
+                    tracing::warn!("Not retrying");
+                    RetryDecision::DontRetry
+                }
+            }
+            QueryError::DbError(scylla::transport::errors::DbError::WriteTimeout { .. }, _) => {
+                tracing::warn!(
+                    "WriteTimeout - coordinator didn't receive enough replies in time.
+                    Retry at most once and only for BatchLog write.
+                    Coordinator probably didn't detect the nodes as dead.
+                    By the time we retry they should be detected as dead."
+                );
+                if self.should_retry() {
+                    tracing::warn!("Retrying on the next node");
+                    RetryDecision::RetryNextNode(None)
+                } else {
+                    tracing::warn!("Not retrying");
+                    RetryDecision::DontRetry
+                }
+            }
+            QueryError::DbError(scylla::transport::errors::DbError::IsBootstrapping, _) => {
+                tracing::warn!("The node is still bootstrapping it can't execute the query, we should try another one");
+                RetryDecision::RetryNextNode(None)
+            }
+            QueryError::UnableToAllocStreamId => {
+                tracing::warn!("Connection to the contacted node is overloaded, try another one");
+                RetryDecision::RetryNextNode(None)
+            }
+            _ => {
+                tracing::warn!("In all other cases propagate the error to the user. Don't retry");
+                RetryDecision::DontRetry
+            }
+        }
+    }
+
+    /// Reset `max_retry_count` before using for a new query
+    fn reset(&mut self) {
+        self.max_retry_count = 0;
+    }
+}
 
 #[async_trait::async_trait]
 pub trait ScyllaStorageManager {
@@ -80,6 +249,8 @@ pub trait ScyllaStorageManager {
         scylla_user: Option<&str>,
         scylla_password: Option<&str>,
         keepalive_interval: Option<u64>,
+        max_retry: u8,
+        strict_mode: bool,
     ) -> anyhow::Result<Box<Self>> {
         let scylla_db_session = std::sync::Arc::new(
             Self::get_scylladb_session(
@@ -87,6 +258,8 @@ pub trait ScyllaStorageManager {
                 scylla_user,
                 scylla_password,
                 keepalive_interval,
+                max_retry,
+                strict_mode,
             )
             .await?,
         );
@@ -159,9 +332,17 @@ pub trait ScyllaStorageManager {
         scylla_user: Option<&str>,
         scylla_password: Option<&str>,
         keepalive_interval: Option<u64>,
+        max_retry: u8,
+        strict_mode: bool,
     ) -> anyhow::Result<scylla::Session> {
-        let mut session: scylla::SessionBuilder =
-            scylla::SessionBuilder::new().known_node(scylla_url);
+        let scylla_execution_profile_handle = scylla::transport::ExecutionProfile::builder()
+            .retry_policy(Box::new(CustomDBRetryPolicy::new(max_retry, strict_mode)))
+            .build()
+            .into_handle();
+
+        let mut session: scylla::SessionBuilder = scylla::SessionBuilder::new()
+            .known_node(scylla_url)
+            .default_execution_profile_handle(scylla_execution_profile_handle);
 
         if let Some(keepalive) = keepalive_interval {
             session = session.keepalive_interval(std::time::Duration::from_secs(keepalive));

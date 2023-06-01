@@ -100,6 +100,8 @@ async fn main() -> anyhow::Result<()> {
             opts.scylla_user.as_deref(),
             opts.scylla_password.as_deref(),
             Some(opts.scylla_keepalive_interval),
+            opts.max_retry,
+            opts.strict_mode,
         )
         .await?,
     );
