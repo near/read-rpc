@@ -201,9 +201,8 @@ pub async fn fetch_state_from_scylla_db(
         let mut values = Vec::new();
         for (key, value) in state_from_db.iter() {
             let state_item = near_primitives::views::StateItem {
-                key: key.to_vec(),
-                value: value.to_vec(),
-                proof: vec![],
+                key: key.to_vec().into(),
+                value: value.to_vec().into(),
             };
             values.push(state_item)
         }
@@ -314,7 +313,7 @@ pub async fn run_contract(
         signer_account_id: account_id.parse().unwrap(),
         signer_account_pk: vec![],
         predecessor_account_id: account_id.parse().unwrap(),
-        input: <near_primitives::types::FunctionArgs as AsRef<[u8]>>::as_ref(&args).to_vec(),
+        input: args.into(),
         block_height,
         block_timestamp: timestamp,
         epoch_height: 0, // TODO: implement indexing of epoch_height and pass it here

@@ -103,8 +103,15 @@ impl near_vm_logic::External for CodeStorage {
         ))
     }
 
-    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
-    fn storage_has_key(&mut self, key: &[u8]) -> Result<bool> {
+    #[cfg_attr(
+        feature = "tracing-instrumentation",
+        tracing::instrument(skip(self, _mode))
+    )]
+    fn storage_has_key(
+        &mut self,
+        key: &[u8],
+        _mode: near_vm_logic::StorageGetMode,
+    ) -> Result<bool> {
         let get_db_stata_keys = self.scylla_db_manager.get_state_key_value(
             &self.account_id,
             self.block_height,
