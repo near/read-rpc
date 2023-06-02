@@ -1,4 +1,4 @@
-FROM rust:1.70 AS builder
+FROM rust:1.69 AS builder
 ARG features=""
 WORKDIR /tmp/
 
