@@ -1,4 +1,5 @@
-FROM rust:1.68 AS builder
+FROM rust:1.70 AS builder
+ARG features=""
 WORKDIR /tmp/
 
 COPY Cargo.lock ./
@@ -12,7 +13,7 @@ RUN mkdir tx-indexer/src && echo 'fn main() {}' > tx-indexer/src/main.rs cargo b
 COPY tx-indexer/src ./tx-indexer/src
 
 # build for release
-RUN cargo build --release
+RUN cargo build --release --features "$features"
 
 FROM ubuntu:20.04
 RUN apt update && apt install -yy openssl ca-certificates
