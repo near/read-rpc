@@ -51,6 +51,8 @@ near-vm-runner = "0.17.0"
 near-vm-logic = "0.17.0"
 
 [features]
+default = ["submit_tx_methods"]
+submit_tx_methods = []
 tracing-instrumentation = []
 scylla_db_tracing = ["database/scylla_db_tracing"]
 shadow_data_consistency = ["dep:assert-json-diff",]
