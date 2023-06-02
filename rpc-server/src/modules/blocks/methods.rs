@@ -118,9 +118,7 @@ async fn fetch_changes_in_block(
                     account_id, key, ..
                 }
                 | StateChangeValueView::DataDeletion { account_id, key } => {
-                    let key: Vec<u8> =
-                        <near_indexer_primitives::types::StoreKey as AsRef<Vec<u8>>>::as_ref(&key)
-                            .to_vec();
+                    let key: Vec<u8> = key.into();
                     TrieKey::ContractData { account_id, key }
                 }
                 StateChangeValueView::ContractCodeUpdate { account_id, .. }

@@ -278,6 +278,8 @@ pub(crate) fn is_matching_change(
             }
             | StateChangeValueView::DataDeletion { account_id, key } = &change.value
             {
+                let key: Vec<u8> = key.clone().into();
+                let key_prefix: Vec<u8> = key_prefix.clone().into();
                 account_ids.contains(account_id)
                     && hex::encode(key).starts_with(&hex::encode(key_prefix))
             } else {
