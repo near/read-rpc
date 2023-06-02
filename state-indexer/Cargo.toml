@@ -40,8 +40,7 @@ database = { path = "../database"}
 near-primitives-core = "0.17.0"
 near-indexer-primitives = "0.17.0"
 near-jsonrpc-client = { git = "https://github.com/khorolets/near-jsonrpc-client-rs", rev = "0b6ad111307202a37028ef300a75a41f2a7947c3" }
-# near-lake-framework = "0.7.1"
-near-lake-framework = { path = "../../../near-lake-framework-rs"}
+near-lake-framework = "0.7.2"
 
 [features]
 tracing-instrumentation = []
