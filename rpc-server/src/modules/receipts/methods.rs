@@ -75,7 +75,8 @@ pub async fn receipt(
             receipts
         }
         Err(err) => {
-            tracing::debug!("Receipt not found: {:#?}", err);
+            tracing::warn!("Error in `receipt` call: {:?}", err);
+            crate::metrics::RECEIPT_PROXIES_TOTAL.inc();
             proxy_rpc_call(&data.near_rpc_client, request).await?
         }
     };

@@ -236,6 +236,7 @@ pub async fn block(
         }
         Err(err) => {
             tracing::warn!("`block` error: {:?}", err);
+            crate::metrics::BLOCK_PROXIES_TOTAL.inc();
             proxy_rpc_call(&data.near_rpc_client, params).await?
         }
     };
@@ -279,6 +280,7 @@ pub async fn changes_in_block(
         }
         Err(err) => {
             tracing::warn!("`changes_in_block` error: {:?}", err);
+            crate::metrics::CHNGES_IN_BLOCK_PROXIES_TOTAL.inc();
             let response = proxy_rpc_call(&data.near_rpc_client, params).await?;
             Ok(response)
         }
@@ -327,6 +329,7 @@ pub async fn changes_in_block_by_type(
         }
         Err(err) => {
             tracing::warn!("`changes_in_block` error: {:?}", err);
+            crate::metrics::CHNGES_IN_BLOCK_BY_TYPE_PROXIES_TOTAL.inc();
             Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
         }
     }
@@ -354,6 +357,7 @@ pub async fn chunk(
         }
         Err(err) => {
             tracing::warn!("`chunk` error: {:?}", err);
+            crate::metrics::CHUNK_PROXIES_TOTAL.inc();
             proxy_rpc_call(&data.near_rpc_client, params).await?
         }
     };

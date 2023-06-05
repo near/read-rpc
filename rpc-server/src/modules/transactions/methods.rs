@@ -130,7 +130,8 @@ pub async fn tx(
                 )
             }
             Err(err) => {
-                tracing::debug!("Transaction not found: {:#?}", err);
+                tracing::warn!("Error in `tx` call: {:?}", err);
+                crate::metrics::TX_PROXIES_TOTAL.inc();
                 let response = proxy_rpc_call(
                     &data.near_rpc_client,
                     near_jsonrpc_client::methods::tx::RpcTransactionStatusRequest {
@@ -179,7 +180,8 @@ pub async fn tx_status(
                 )
             }
             Err(err) => {
-                tracing::debug!("Transaction not found: {:#?}", err);
+                tracing::warn!("Error in `tx_status` call: {:?}", err);
+                crate::metrics::TX_STATUS_PROXIES_TOTAL.inc();
                 let response = proxy_rpc_call(
                         &data.near_rpc_client,
                         near_jsonrpc_client::methods::EXPERIMENTAL_tx_status::RpcTransactionStatusRequest{
