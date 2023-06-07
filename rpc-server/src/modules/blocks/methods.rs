@@ -214,7 +214,7 @@ pub async fn block(
             crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
         }
     }
-
+    crate::metrics::BLOCK_REQUESTS_TOTAL.inc();
     let block_view = match fetch_block(&data, params.block_reference.clone()).await {
         Ok(block_view) => {
             #[cfg(feature = "shadow_data_consistency")]
@@ -259,6 +259,7 @@ pub async fn changes_in_block(
             crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
         }
     }
+    crate::metrics::CHNGES_IN_BLOCK_REQUESTS_TOTAL.inc();
     match fetch_changes_in_block(&data, params.block_reference.clone()).await {
         Ok(changes) => {
             #[cfg(feature = "shadow_data_consistency")]
@@ -302,6 +303,7 @@ pub async fn changes_in_block_by_type(
             crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
         }
     }
+    crate::metrics::CHNGES_IN_BLOCK_BY_TYPE_REQUESTS_TOTAL.inc();
     match fetch_changes_in_block_by_type(
         &data,
         params.block_reference.clone(),
@@ -341,6 +343,7 @@ pub async fn chunk(
     Params(params): Params<near_jsonrpc_primitives::types::chunks::RpcChunkRequest>,
 ) -> Result<near_jsonrpc_primitives::types::chunks::RpcChunkResponse, RPCError> {
     tracing::debug!("`chunk` called with parameters: {:?}", params);
+    crate::metrics::CHUNK_REQUESTS_TOTAL.inc();
 
     let chunk_view = match fetch_chunk(&data, params.chunk_reference.clone()).await {
         Ok(chunk_view) => {

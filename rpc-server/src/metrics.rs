@@ -29,6 +29,68 @@ lazy_static! {
     )
     .unwrap();
 
+    // requests total counters
+    // query requests counters
+    pub(crate) static ref QUERY_VIEW_ACCOUNT_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+        "query_view_account_requests_counter",
+        "Total number requests to the query view account endpoint"
+    )
+    .unwrap();
+    pub(crate) static ref QUERY_VIEW_CODE_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+        "query_view_code_requests_counter",
+        "Total number requests to the query view code endpoint"
+    )
+    .unwrap();
+    pub(crate) static ref QUERY_VIEW_ACCESS_KEY_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+        "query_view_access_key_requests_counter",
+        "Total number requests to the query view access key endpoint"
+    ).unwrap();
+    pub(crate) static ref QUERY_VIEW_STATE_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+        "query_view_state_requests_counter",
+        "Total number requests to the query view state endpoint"
+    ).unwrap();
+    pub(crate) static ref QUERY_FUNCTION_CALL_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+        "query_function_call_requests_counter",
+        "Total number requests to the query function call endpoint"
+    ).unwrap();
+    pub(crate) static ref QUERY_VIEW_ACCESS_KEYS_LIST_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+        "query_access_keys_list_requests_counter",
+        "Total number requests to the query access keys list endpoint"
+    ).unwrap();
+
+    // blocks requests counters
+    pub(crate) static ref BLOCK_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+        "block_requests_counter",
+        "Total number requests to the block endpoint"
+    ).unwrap();
+    pub(crate) static ref CHNGES_IN_BLOCK_BY_TYPE_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+        "changes_in_block_by_type_requests_counter",
+        "Total number requests to the changes in block by type endpoint"
+    ).unwrap();
+    pub(crate) static ref CHNGES_IN_BLOCK_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+        "changes_in_block_requests_counter",
+        "Total number requests to the changes in block endpoint"
+    ).unwrap();
+    pub(crate) static ref CHUNK_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+        "chunk_requests_counter",
+        "Total number requests to the chunk endpoint"
+    ).unwrap();
+
+    // transactions requests counters
+    pub(crate) static ref TX_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+        "tx_requests_counter",
+        "Total number requests to the tx endpoint"
+    ).unwrap();
+    pub(crate) static ref TX_STATUS_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+        "tx_status_requests_counter",
+        "Total number requests to the tx status endpoint"
+    ).unwrap();
+    pub(crate) static ref RECEIPT_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+        "receipt_requests_counter",
+        "Total number requests to the receipt endpoint"
+    ).unwrap();
+
+    // Error proxies counters
     // query proxies counters
     pub(crate) static ref QUERY_VIEW_ACCOUNT_PROXIES_TOTAL: IntCounter = try_create_int_counter(
         "query_view_account_error_proxies_counter",
