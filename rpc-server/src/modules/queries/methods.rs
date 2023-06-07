@@ -213,6 +213,7 @@ pub async fn query(
     let block = fetch_block_from_cache_or_get(&data, params.block_reference.clone()).await;
     let result = match params.request.clone() {
         near_primitives::views::QueryRequest::ViewAccount { account_id } => {
+            crate::metrics::QUERY_VIEW_ACCOUNT_REQUESTS_TOTAL.inc();
             let account_result = view_account(&data, block, &account_id).await;
             if let Err(err) = &account_result {
                 tracing::warn!("Error in `view_account` call: {:?}", err);
@@ -221,6 +222,7 @@ pub async fn query(
             account_result
         }
         near_primitives::views::QueryRequest::ViewCode { account_id } => {
+            crate::metrics::QUERY_VIEW_CODE_REQUESTS_TOTAL.inc();
             let code_result = view_code(&data, block, &account_id).await;
             if let Err(err) = &code_result {
                 tracing::warn!("Error in `view_code` call: {:?}", err);
@@ -232,6 +234,7 @@ pub async fn query(
             account_id,
             public_key,
         } => {
+            crate::metrics::QUERY_VIEW_ACCESS_KEY_REQUESTS_TOTAL.inc();
             let access_key_result =
                 view_access_key(&data, block, &account_id, public_key.try_to_vec().unwrap()).await;
             if let Err(err) = &access_key_result {
@@ -245,6 +248,7 @@ pub async fn query(
             prefix,
             include_proof: _,
         } => {
+            crate::metrics::QUERY_VIEW_STATE_REQUESTS_TOTAL.inc();
             let state_result = view_state(&data, block, &account_id, prefix.as_ref()).await;
             if let Err(err) = &state_result {
                 tracing::warn!("Error in `view_state` call: {:?}", err);
@@ -257,6 +261,7 @@ pub async fn query(
             method_name,
             args,
         } => {
+            crate::metrics::QUERY_FUNCTION_CALL_REQUESTS_TOTAL.inc();
             let function_call_result =
                 function_call(&data, block, account_id, &method_name, args.clone()).await;
             if let Err(err) = &function_call_result {
@@ -266,6 +271,7 @@ pub async fn query(
             function_call_result
         }
         near_primitives::views::QueryRequest::ViewAccessKeyList { account_id } => {
+            crate::metrics::QUERY_VIEW_ACCESS_KEYS_LIST_REQUESTS_TOTAL.inc();
             #[cfg(not(feature = "account_access_keys"))]
             return Ok(proxy_rpc_call(&data.near_rpc_client, params).await?);
             #[cfg(feature = "account_access_keys")]

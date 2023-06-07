@@ -109,6 +109,7 @@ pub async fn tx(
     Params(params): Params<Value>,
 ) -> Result<near_jsonrpc_primitives::types::transactions::RpcTransactionResponse, RPCError> {
     tracing::debug!("`tx` call. Params: {:?}", params);
+    crate::metrics::TX_REQUESTS_TOTAL.inc();
     match parse_transaction_status_common_request(params.clone()).await {
         Ok(request) => match tx_status_common(&data, &request.transaction_info, false).await {
             Ok(transaction) => {
@@ -159,6 +160,7 @@ pub async fn tx_status(
     Params(params): Params<Value>,
 ) -> Result<near_jsonrpc_primitives::types::transactions::RpcTransactionResponse, RPCError> {
     tracing::debug!("`tx_status` call. Params: {:?}", params);
+    crate::metrics::TX_STATUS_REQUESTS_TOTAL.inc();
     match parse_transaction_status_common_request(params.clone()).await {
         Ok(request) => match tx_status_common(&data, &request.transaction_info, true).await {
             Ok(transaction) => {

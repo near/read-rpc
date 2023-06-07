@@ -54,6 +54,7 @@ pub async fn receipt(
     Params(params): Params<serde_json::Value>,
 ) -> Result<near_jsonrpc_primitives::types::receipts::RpcReceiptResponse, RPCError> {
     tracing::debug!("`receipt` call. Params: {:?}", params);
+    crate::metrics::RECEIPT_REQUESTS_TOTAL.inc();
 
     let request: near_jsonrpc_primitives::types::receipts::RpcReceiptRequest =
         match serde_json::from_value(params.clone()) {
