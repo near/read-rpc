@@ -20,6 +20,39 @@ The indexer built on top of Lake Framework that watches the network and stores t
 The indexer built on top of Lake Framework that watches the network and stores the `Transactions` along with all the related entities (`Receipts`, `ExecutionOutcomes`) into the Storage (ScyllaDB) using the specifically defined `TransactionDetails` structure in a dumped way (using the simplest key-value schema)
 
 
+## Docker compose
+
+**Note!** The docker compose is not fully ready yet. It's still in progress. However, you can run the entire project to play around with it. It is still not convenient for development or debugging purposes. We are working on improving it.
+
+### Run the entire project
+
+Add the `.env` file (update the credentials with your own to access the S3 bucket)
+
+```
+AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+AWS_DEFAULT_REGION=eu-central-1
+```
+
+Run the docker compose:
+
+```
+$ docker-compose up
+```
+
+This will spin up:
+- `read-rpc-server` - the JSON RPC server
+- `state-indexer` - the indexer that watches the network and stores the `StateChanges` into the Storage (ScyllaDB) using the designed data schemas.
+- `tx-indexer` - the indexer that watches the network and stores the `Transactions` along with all the related entities (`Receipts`, `ExecutionOutcomes`) into the Storage (ScyllaDB) using the specifically defined `TransactionDetails` structure in a dumped way (using the simplest key-value schema)
+- `jaeger` - the Jaeger instance for tracing (http://localhost:16686)
+
+### TODO:
+
+- [ ] Setup all the services to use volumes for the codebase and using `cargo watch` to recompile the code on the fly
+- [ ] Come up with the way of changin the configuration for the indexers in a convenient way
+- [ ] Robust documentation for the docker compose setup
+
+
 ## Development
 
 ### Check the entire product

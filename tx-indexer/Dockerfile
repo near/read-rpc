@@ -16,6 +16,6 @@ COPY tx-indexer/src ./tx-indexer/src
 RUN cargo build --release --features "$features"
 
 FROM ubuntu:20.04
-RUN apt update && apt install -yy openssl ca-certificates
+RUN apt update && apt install -yy openssl ca-certificates libcurl4
 COPY --from=builder /tmp/target/release/tx-indexer .
 ENTRYPOINT ["./tx-indexer"]

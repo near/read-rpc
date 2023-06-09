@@ -1,0 +1,89 @@
+version: '3'
+
+services:
+  rpc-server:
+    build:
+      context: .
+      dockerfile: rpc-server/Dockerfile
+      args:
+        features: "tracing-instrumentation,shadow_data_consistency"
+    environment:
+      SCYLLA_URL: scylla:9042
+      SCYLLA_USER: ${SCYLLA_USER}
+      SCYLLA_PASSWORD: ${SCYLLA_PASSWORD}
+      AWS_BUCKET_NAME: near-lake-data-mainnet
+      NEAR_RPC_URL: https://archival-rpc.mainnet.near.org
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
+      OTEL_EXPORTER_JAEGER_AGENT_HOST: jaeger
+      OTEL_EXPORTER_JAEGER_AGENT_PORT: 6831
+      SERVER_PORT: 8080
+      RUST_LOG: "read_rpc_server=debug,is_data_consistency=debug"
+    restart: on-failure
+    ports:
+      - 8080:8080
+    depends_on:
+      - scylla
+      - jaeger
+
+  state-indexer:
+    build:
+      context: .
+      dockerfile: state-indexer/Dockerfile
+      args:
+        features: tracing-instrumentation
+    environment:
+      INDEXER_ID: state-indexer-local
+      SCYLLA_URL: scylla:9042
+      SCYLLA_USER: cassandra
+      SCYLLA_PASSWORD: cassandra
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
+      OTEL_EXPORTER_JAEGER_AGENT_HOST: jaeger
+      OTEL_EXPORTER_JAEGER_AGENT_PORT: 6831
+    command: [ "mainnet", "from-interruption" ]
+    depends_on:
+      - scylla
+      - jaeger
+    restart: on-failure
+
+  tx-indexer:
+    build:
+      context: .
+      dockerfile: tx-indexer/Dockerfile
+      args:
+        features: tracing-instrumentation
+    environment:
+      INDEXER_ID: tx-indexer-local
+      SCYLLA_URL: scylla:9042
+      SCYLLA_USER: cassandra
+      SCYLLA_PASSWORD: cassandra
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
+      OTEL_EXPORTER_JAEGER_AGENT_HOST: jaeger
+      OTEL_EXPORTER_JAEGER_AGENT_PORT: 6831
+    command: [ "mainnet", "from-interruption" ]
+    depends_on:
+      - scylla
+      - jaeger
+    restart: on-failure
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.37
+    ports:
+      - 5775:5775/udp
+      - 6831:6831/udp
+      - 6832:6832/udp
+      - 5778:5778
+      - 16686:16686
+      - 14268:14268
+      - 9411:9411
+
+  scylla:
+    image: scylladb/scylla
+    expose:
+      - 9042:9042
+    command: [ "--smp", "1" ]
