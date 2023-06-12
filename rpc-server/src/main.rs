@@ -16,6 +16,7 @@ mod config;
 mod errors;
 mod metrics;
 mod modules;
+mod storage;
 mod utils;
 
 fn init_logging(use_tracer: bool) -> anyhow::Result<()> {
@@ -99,7 +100,7 @@ async fn main() -> anyhow::Result<()> {
     )));
 
     let scylla_db_manager = std::sync::Arc::new(
-        *config::ScyllaDBManager::new(
+        *storage::ScyllaDBManager::new(
             &opts.scylla_url,
             opts.scylla_user.as_deref(),
             opts.scylla_password.as_deref(),

@@ -5,14 +5,148 @@ use crate::modules::blocks::CacheBlock;
 #[cfg(feature = "account_access_keys")]
 use crate::modules::queries::utils::fetch_list_access_keys_from_scylla_db;
 use crate::modules::queries::utils::{
-    fetch_access_key_from_scylla_db, fetch_account_from_scylla_db,
-    fetch_contract_code_from_scylla_db, fetch_state_from_scylla_db, run_contract,
+    fetch_access_key_from_scylla_db, fetch_contract_code_from_scylla_db,
+    fetch_state_from_scylla_db, run_contract,
 };
 use crate::utils::proxy_rpc_call;
 #[cfg(feature = "shadow_data_consistency")]
 use crate::utils::shadow_compare_results;
 use borsh::BorshSerialize;
 use jsonrpc_v2::{Data, Params};
+
+#[allow(unused_mut)]
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
+pub async fn query(
+    data: Data<ServerContext>,
+    Params(mut params): Params<near_jsonrpc_primitives::types::query::RpcQueryRequest>,
+) -> Result<near_jsonrpc_primitives::types::query::RpcQueryResponse, RPCError> {
+    tracing::debug!("`query` call. Params: {:?}", params,);
+
+    // Increase the OPTIMISTIC_REQUESTS_TOTAL metric if the request has optimistic finality.
+    if let near_primitives::types::BlockReference::Finality(finality) = &params.block_reference {
+        // Finality::None stands for optimistic finality.
+        if finality == &near_primitives::types::Finality::None {
+            crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
+        }
+    }
+
+    let block = fetch_block_from_cache_or_get(&data, params.block_reference.clone()).await;
+    let result = match params.request.clone() {
+        near_primitives::views::QueryRequest::ViewAccount { account_id } => {
+            crate::metrics::QUERY_VIEW_ACCOUNT_REQUESTS_TOTAL.inc();
+            let account_result = view_account(&data, block, &account_id).await;
+            if let Err(err) = &account_result {
+                tracing::warn!("Error in `view_account` call: {:?}", err);
+                crate::metrics::QUERY_VIEW_ACCOUNT_PROXIES_TOTAL.inc();
+            }
+            account_result
+        }
+        near_primitives::views::QueryRequest::ViewCode { account_id } => {
+            crate::metrics::QUERY_VIEW_CODE_REQUESTS_TOTAL.inc();
+            let code_result = view_code(&data, block, &account_id).await;
+            if let Err(err) = &code_result {
+                tracing::warn!("Error in `view_code` call: {:?}", err);
+                crate::metrics::QUERY_VIEW_CODE_PROXIES_TOTAL.inc();
+            }
+            code_result
+        }
+        near_primitives::views::QueryRequest::ViewAccessKey {
+            account_id,
+            public_key,
+        } => {
+            crate::metrics::QUERY_VIEW_ACCESS_KEY_REQUESTS_TOTAL.inc();
+            let access_key_result =
+                view_access_key(&data, block, &account_id, public_key.try_to_vec().unwrap()).await;
+            if let Err(err) = &access_key_result {
+                tracing::warn!("Error in `view_access_key` call: {:?}", err);
+                crate::metrics::QUERY_VIEW_ACCESS_KEY_PROXIES_TOTAL.inc();
+            }
+            access_key_result
+        }
+        near_primitives::views::QueryRequest::ViewState {
+            account_id,
+            prefix,
+            include_proof: _,
+        } => {
+            crate::metrics::QUERY_VIEW_STATE_REQUESTS_TOTAL.inc();
+            let state_result = view_state(&data, block, &account_id, prefix.as_ref()).await;
+            if let Err(err) = &state_result {
+                tracing::warn!("Error in `view_state` call: {:?}", err);
+                crate::metrics::QUERY_VIEW_STATE_PROXIES_TOTAL.inc();
+            }
+            state_result
+        }
+        near_primitives::views::QueryRequest::CallFunction {
+            account_id,
+            method_name,
+            args,
+        } => {
+            crate::metrics::QUERY_FUNCTION_CALL_REQUESTS_TOTAL.inc();
+            let function_call_result =
+                function_call(&data, block, account_id, &method_name, args.clone()).await;
+            if let Err(err) = &function_call_result {
+                tracing::warn!("Error in `call_function` call: {:?}", err);
+                crate::metrics::QUERY_FUNCTION_CALL_PROXIES_TOTAL.inc();
+            };
+            function_call_result
+        }
+        near_primitives::views::QueryRequest::ViewAccessKeyList { account_id } => {
+            crate::metrics::QUERY_VIEW_ACCESS_KEYS_LIST_REQUESTS_TOTAL.inc();
+            #[cfg(not(feature = "account_access_keys"))]
+            return Ok(proxy_rpc_call(&data.near_rpc_client, params).await?);
+            #[cfg(feature = "account_access_keys")]
+            {
+                let access_keys_result = view_access_keys_list(&data, block, &account_id).await;
+                if let Err(err) = &access_keys_result {
+                    tracing::warn!("Error in `view_access_keys_list` call: {:?}", err);
+                    crate::metrics::QUERY_VIEW_ACCESS_KEYS_LIST_PROXIES_TOTAL.inc();
+                };
+                access_keys_result
+            }
+        }
+    };
+
+    #[cfg(feature = "shadow_data_consistency")]
+    {
+        let near_rpc_client = data.near_rpc_client.clone();
+        if let near_primitives::types::BlockReference::Finality(_) = params.block_reference {
+            params.block_reference = near_primitives::types::BlockReference::from(
+                near_primitives::types::BlockId::Height(block.block_height),
+            )
+        }
+        // TODO: the &result have to be RpcResponse or RPCError and serde serializable
+        // In order to achieve that we need to fix the underlying methods above
+        let comparison_result =
+            shadow_compare_results(serde_json::to_value(&result), near_rpc_client, params).await;
+
+        // TODO: Based on the comparison result we need to emit the log-message and respond with the original `result`
+        // Until then this this code is broken
+    }
+    // match result {
+    //     Ok(result) => {
+    //         #[cfg(feature = "shadow_data_consistency")]
+    //         {
+    //             let near_rpc_client = data.near_rpc_client.clone();
+    //             if let near_primitives::types::BlockReference::Finality(_) = params.block_reference
+    //             {
+    //                 params.block_reference = near_primitives::types::BlockReference::from(
+    //                     near_primitives::types::BlockId::Height(block.block_height),
+    //                 )
+    //             }
+    //             tokio::task::spawn(shadow_compare_results(
+    //                 serde_json::to_value(&result),
+    //                 near_rpc_client,
+    //                 params,
+    //             ));
+    //         };
+    //         Ok(result)
+    //     }
+    //     Err(e) => {
+    //         tracing::debug!("Result not found: {:?}, Params: {:?}", e, params);
+    //         Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
+    //     }
+    // }
+}
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 async fn view_account(
@@ -26,9 +160,10 @@ async fn view_account(
         block.block_height
     );
 
-    let account =
-        fetch_account_from_scylla_db(&data.scylla_db_manager, account_id, block.block_height)
-            .await?;
+    let account = data
+        .scylla_db_manager
+        .get_account(account_id, block.block_height)
+        .await?;
 
     Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc_primitives::types::query::QueryResponseKind::ViewAccount(
@@ -192,121 +327,4 @@ async fn view_access_keys_list(
         block_height: block.block_height,
         block_hash: block.block_hash,
     })
-}
-
-#[allow(unused)]
-#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
-pub async fn query(
-    data: Data<ServerContext>,
-    Params(mut params): Params<near_jsonrpc_primitives::types::query::RpcQueryRequest>,
-) -> Result<near_jsonrpc_primitives::types::query::RpcQueryResponse, RPCError> {
-    tracing::debug!("`query` call. Params: {:?}", params,);
-
-    // Increase the OPTIMISTIC_REQUESTS_TOTAL metric if the request has optimistic finality.
-    if let near_primitives::types::BlockReference::Finality(finality) = &params.block_reference {
-        // Finality::None stands for optimistic finality.
-        if finality == &near_primitives::types::Finality::None {
-            crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
-        }
-    }
-
-    let block = fetch_block_from_cache_or_get(&data, params.block_reference.clone()).await;
-    let result = match params.request.clone() {
-        near_primitives::views::QueryRequest::ViewAccount { account_id } => {
-            crate::metrics::QUERY_VIEW_ACCOUNT_REQUESTS_TOTAL.inc();
-            let account_result = view_account(&data, block, &account_id).await;
-            if let Err(err) = &account_result {
-                tracing::warn!("Error in `view_account` call: {:?}", err);
-                crate::metrics::QUERY_VIEW_ACCOUNT_PROXIES_TOTAL.inc();
-            }
-            account_result
-        }
-        near_primitives::views::QueryRequest::ViewCode { account_id } => {
-            crate::metrics::QUERY_VIEW_CODE_REQUESTS_TOTAL.inc();
-            let code_result = view_code(&data, block, &account_id).await;
-            if let Err(err) = &code_result {
-                tracing::warn!("Error in `view_code` call: {:?}", err);
-                crate::metrics::QUERY_VIEW_CODE_PROXIES_TOTAL.inc();
-            }
-            code_result
-        }
-        near_primitives::views::QueryRequest::ViewAccessKey {
-            account_id,
-            public_key,
-        } => {
-            crate::metrics::QUERY_VIEW_ACCESS_KEY_REQUESTS_TOTAL.inc();
-            let access_key_result =
-                view_access_key(&data, block, &account_id, public_key.try_to_vec().unwrap()).await;
-            if let Err(err) = &access_key_result {
-                tracing::warn!("Error in `view_access_key` call: {:?}", err);
-                crate::metrics::QUERY_VIEW_ACCESS_KEY_PROXIES_TOTAL.inc();
-            }
-            access_key_result
-        }
-        near_primitives::views::QueryRequest::ViewState {
-            account_id,
-            prefix,
-            include_proof: _,
-        } => {
-            crate::metrics::QUERY_VIEW_STATE_REQUESTS_TOTAL.inc();
-            let state_result = view_state(&data, block, &account_id, prefix.as_ref()).await;
-            if let Err(err) = &state_result {
-                tracing::warn!("Error in `view_state` call: {:?}", err);
-                crate::metrics::QUERY_VIEW_STATE_PROXIES_TOTAL.inc();
-            }
-            state_result
-        }
-        near_primitives::views::QueryRequest::CallFunction {
-            account_id,
-            method_name,
-            args,
-        } => {
-            crate::metrics::QUERY_FUNCTION_CALL_REQUESTS_TOTAL.inc();
-            let function_call_result =
-                function_call(&data, block, account_id, &method_name, args.clone()).await;
-            if let Err(err) = &function_call_result {
-                tracing::warn!("Error in `call_function` call: {:?}", err);
-                crate::metrics::QUERY_FUNCTION_CALL_PROXIES_TOTAL.inc();
-            };
-            function_call_result
-        }
-        near_primitives::views::QueryRequest::ViewAccessKeyList { account_id } => {
-            crate::metrics::QUERY_VIEW_ACCESS_KEYS_LIST_REQUESTS_TOTAL.inc();
-            #[cfg(not(feature = "account_access_keys"))]
-            return Ok(proxy_rpc_call(&data.near_rpc_client, params).await?);
-            #[cfg(feature = "account_access_keys")]
-            {
-                let access_keys_result = view_access_keys_list(&data, block, &account_id).await;
-                if let Err(err) = &access_keys_result {
-                    tracing::warn!("Error in `view_access_keys_list` call: {:?}", err);
-                    crate::metrics::QUERY_VIEW_ACCESS_KEYS_LIST_PROXIES_TOTAL.inc();
-                };
-                access_keys_result
-            }
-        }
-    };
-    match result {
-        Ok(result) => {
-            #[cfg(feature = "shadow_data_consistency")]
-            {
-                let near_rpc_client = data.near_rpc_client.clone();
-                if let near_primitives::types::BlockReference::Finality(_) = params.block_reference
-                {
-                    params.block_reference = near_primitives::types::BlockReference::from(
-                        near_primitives::types::BlockId::Height(block.block_height),
-                    )
-                }
-                tokio::task::spawn(shadow_compare_results(
-                    serde_json::to_value(&result),
-                    near_rpc_client,
-                    params,
-                ));
-            };
-            Ok(result)
-        }
-        Err(e) => {
-            tracing::debug!("Result not found: {:?}, Params: {:?}", e, params);
-            Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
-        }
-    }
 }

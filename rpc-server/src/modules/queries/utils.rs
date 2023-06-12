@@ -1,5 +1,6 @@
-use crate::config::{CompiledCodeCache, ScyllaDBManager};
+use crate::config::CompiledCodeCache;
 use crate::modules::queries::{CodeStorage, MAX_LIMIT};
+use crate::storage::ScyllaDBManager;
 use borsh::BorshDeserialize;
 use scylla::IntoTypedRows;
 use std::collections::HashMap;
@@ -57,31 +58,6 @@ pub async fn get_stata_keys_from_scylla(
         }
         Err(_) => data,
     }
-}
-
-#[cfg_attr(
-    feature = "tracing-instrumentation",
-    tracing::instrument(skip(scylla_db_manager))
-)]
-pub async fn fetch_account_from_scylla_db(
-    scylla_db_manager: &std::sync::Arc<ScyllaDBManager>,
-    account_id: &near_primitives::types::AccountId,
-    block_height: near_primitives::types::BlockHeight,
-) -> anyhow::Result<near_primitives::account::Account> {
-    tracing::debug!(
-        "`fetch_account_from_scylla_db` call. AccountID {}, block {}",
-        account_id,
-        block_height,
-    );
-
-    let row = scylla_db_manager
-        .get_account(account_id, block_height)
-        .await?;
-    let (data_value,): (Vec<u8>,) = row.into_typed::<(Vec<u8>,)>()?;
-
-    Ok(near_primitives::account::Account::try_from_slice(
-        &data_value,
-    )?)
 }
 
 #[cfg_attr(
@@ -288,8 +264,9 @@ pub async fn run_contract(
     timestamp: u64,
     latest_protocol_version: near_primitives::types::ProtocolVersion,
 ) -> anyhow::Result<near_vm_logic::VMOutcome> {
-    let contract =
-        fetch_account_from_scylla_db(&scylla_db_manager, &account_id, block_height).await?;
+    let contract = scylla_db_manager
+        .get_account(&account_id, block_height)
+        .await?;
     let code: Option<Vec<u8>> = contract_code_cache
         .write()
         .unwrap()
