@@ -19,7 +19,7 @@ erased-serde = "0.3.23"
 futures = "0.3.24"
 hex = "0.4.3"
 http = "0.2.8"
-jsonrpc-v2 = { git  = "https://github.com/kobayurii/jsonrpc-v2", rev = "95e7b1d2567ae841163af212a3f25abb6862becb" }
+jsonrpc-v2 = { git = "https://github.com/kobayurii/jsonrpc-v2", rev = "95e7b1d2567ae841163af212a3f25abb6862becb" }
 lazy_static = "1.4.0"
 lru = "0.8.1"
 num-bigint = "0.3"
@@ -28,21 +28,29 @@ prometheus = "0.13.1"
 scylla = "0.8.1"
 serde = { version = "1.0.145", features = ["derive"] }
 serde_json = "1.0.85"
+thiserror = "1.0.40"
 tokio = { version = "1.28.2", features = ["full", "tracing"] }
 tracing = { version = "0.1.36", features = ["std"] }
 tracing-actix-web = "0.6.1"
-tracing-subscriber = { version = "0.3.15", features = ["fmt", "env-filter", "std", "json"] }
+tracing-subscriber = { version = "0.3.15", features = [
+    "fmt",
+    "env-filter",
+    "std",
+    "json",
+] }
 opentelemetry = { version = "0.17", features = ["rt-tokio-current-thread"] }
-opentelemetry-jaeger = { version = "0.16", features = ["rt-tokio-current-thread"] }
+opentelemetry-jaeger = { version = "0.16", features = [
+    "rt-tokio-current-thread",
+] }
 tracing-opentelemetry = { version = "0.17" }
 tracing-stackdriver = "0.7.2" # GCP logs
 
-database = { path = "../database"}
-readnode-primitives = { path = "../readnode-primitives"}
+database = { path = "../database" }
+readnode-primitives = { path = "../readnode-primitives" }
 
 near-chain-configs = "0.17.0"
 near-crypto = "0.17.0"
-near-jsonrpc-client = { git = "https://github.com/khorolets/near-jsonrpc-client-rs", rev = "0b6ad111307202a37028ef300a75a41f2a7947c3" }
+near-jsonrpc-client = "0.6.0"
 near-jsonrpc-primitives = "0.17.0"
 near-indexer-primitives = "0.17.0"
 near-primitives = "0.17.0"
@@ -55,5 +63,5 @@ default = ["submit_tx_methods"]
 submit_tx_methods = []
 tracing-instrumentation = []
 scylla_db_tracing = ["database/scylla_db_tracing"]
-shadow_data_consistency = ["dep:assert-json-diff",]
+shadow_data_consistency = ["dep:assert-json-diff"]
 account_access_keys = []

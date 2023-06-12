@@ -3096,6 +3096,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "near-jsonrpc-client"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "118f44c02ad211db805c1370ad3ff26576af6ff554093c9fece1b835d29d233a"
+dependencies = [
+ "borsh 0.10.3",
+ "lazy_static",
+ "log",
+ "near-chain-configs",
+ "near-crypto",
+ "near-jsonrpc-primitives",
+ "near-primitives",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "near-jsonrpc-primitives"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4227,7 +4246,7 @@ dependencies = [
  "near-chain-configs",
  "near-crypto",
  "near-indexer-primitives",
- "near-jsonrpc-client",
+ "near-jsonrpc-client 0.6.0",
  "near-jsonrpc-primitives",
  "near-primitives",
  "near-primitives-core",
@@ -4242,6 +4261,7 @@ dependencies = [
  "scylla",
  "serde",
  "serde_json",
+ "thiserror",
  "tokio",
  "tracing",
  "tracing-actix-web",
@@ -5010,7 +5030,7 @@ dependencies = [
  "itertools",
  "lazy_static",
  "near-indexer-primitives",
- "near-jsonrpc-client",
+ "near-jsonrpc-client 0.0.0",
  "near-lake-framework",
  "near-primitives-core",
  "num-bigint",
@@ -5648,7 +5668,7 @@ dependencies = [
  "humantime",
  "lazy_static",
  "near-indexer-primitives",
- "near-jsonrpc-client",
+ "near-jsonrpc-client 0.0.0",
  "near-lake-framework",
  "num-bigint",
  "num-traits",

@@ -94,23 +94,28 @@ pub async fn update_final_block_height_regularly(
 /// `readrpc_response`: a `Result<serde_json::Value, serde_json::Error>` object representing the results from Read RPC.
 /// `client`: `near_jsonrpc_client::JsonRpcClient`.
 /// `params`: `near_jsonrpc_client::methods::RpcMethod` trait.
+///
+/// In case of a successful comparison, the function returns `Ok(())`.
+/// Otherwise, it returns `Err(ShadowDataConsistencyError)`.
 #[cfg(feature = "shadow_data_consistency")]
 pub async fn shadow_compare_results<M>(
     readrpc_response: Result<serde_json::Value, serde_json::Error>,
     client: near_jsonrpc_client::JsonRpcClient,
     params: M,
-) where
+) -> Result<(), ShadowDataConsistencyError>
+where
     M: near_jsonrpc_client::methods::RpcMethod + std::fmt::Debug,
     <M as near_jsonrpc_client::methods::RpcMethod>::Response: serde::ser::Serialize,
     <M as near_jsonrpc_client::methods::RpcMethod>::Error: std::fmt::Debug,
 {
-    tracing::debug!("Compare results. {:?}", params);
+    tracing::debug!(target: "shadow_data_consistency", "Compare results. {:?}", params);
 
     let readrpc_response_json = match readrpc_response {
         Ok(readrpc_response_json) => readrpc_response_json,
         Err(err) => {
-            tracing::error!(target: "is_not_consistency", "Parse hundredx response error: {:#?}", err);
-            return;
+            // TODO: remove this log record after the methods calling function `shadow_compare_results` are refactored
+            tracing::error!(target: "shadow_data_consistency", "Parse hundredx response error: {:#?}", err);
+            return Err(ShadowDataConsistencyError::ReadRpcResponseParseError(err));
         }
     };
 
@@ -118,13 +123,18 @@ pub async fn shadow_compare_results<M>(
         Ok(near_rpc_response) => match serde_json::to_value(&near_rpc_response) {
             Ok(near_rpc_response_json) => near_rpc_response_json,
             Err(err) => {
-                tracing::error!(target: "is_not_consistency", "Parse PRC response error: {:#?}", err);
-                return;
+                // TODO: remove this log record after the methods calling function `shadow_compare_results` are refactored
+                tracing::error!(target: "shadow_data_consistency", "Parse PRC response error: {:#?}", err);
+                return Err(ShadowDataConsistencyError::NearRpcResponseParseError(err));
             }
         },
         Err(err) => {
-            tracing::error!(target: "is_not_consistency", "RPC call error: {:#?}", err);
-            return;
+            // TODO: remove this log record after the methods calling function `shadow_compare_results` are refactored
+            tracing::error!(target: "shadow_data_consistency", "RPC call error: {:#?}", err);
+            return Err(ShadowDataConsistencyError::NearRpcCallError(format!(
+                "{:?}",
+                err
+            )));
         }
     };
 
@@ -133,6 +143,23 @@ pub async fn shadow_compare_results<M>(
     if let Err(err) =
         assert_json_matches_no_panic(&readrpc_response_json, &near_rpc_response_json, config)
     {
-        tracing::error!(target: "is_not_consistency", "The results don't match: {:#?}", err);
+        // TODO: remove this log record after the methods calling function `shadow_compare_results` are refactored
+        tracing::error!(target: "shadow_data_consistency", "The results don't match: {:#?}", err);
+        return Err(ShadowDataConsistencyError::ResultsDontMatch(err));
     };
+    Ok(())
+}
+
+/// Represents the error that can occur during the shadow data consistency check.
+#[cfg(feature = "shadow_data_consistency")]
+#[derive(thiserror::Error, Debug)]
+pub enum ShadowDataConsistencyError {
+    #[error("Failed to parse ReadRPC response: {0}")]
+    ReadRpcResponseParseError(serde_json::Error),
+    #[error("Failed to parse NEAR JSON RPC response: {0}")]
+    NearRpcResponseParseError(serde_json::Error),
+    #[error("NEAR RPC call error: {0}")]
+    NearRpcCallError(String),
+    #[error("Results don't match: {0}")]
+    ResultsDontMatch(String),
 }
