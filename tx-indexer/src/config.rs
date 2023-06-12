@@ -175,7 +175,7 @@ pub fn init_tracing() -> anyhow::Result<()> {
         .with_service_name("tx_indexer")
         .with_max_packet_size(9_216)
         .with_auto_split_batch(true)
-        .install_simple()?;
+        .install_batch(opentelemetry::runtime::TokioCurrentThread)?;
     let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
 
     let subscriber = tracing_subscriber::Registry::default()
