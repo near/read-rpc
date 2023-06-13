@@ -213,6 +213,7 @@ pub async fn fetch_state_from_scylla_db(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 #[cfg_attr(
     feature = "tracing-instrumentation",
     tracing::instrument(skip(
@@ -269,6 +270,7 @@ async fn run_code_in_vm_runner(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 #[cfg_attr(
     feature = "tracing-instrumentation",
     tracing::instrument(skip(scylla_db_manager, compiled_contract_code_cache))
