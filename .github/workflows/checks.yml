@@ -1,0 +1,37 @@
+name: Rust Checks
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+
+      - name: Install cargo fmt
+        run: rustup component add rustfmt
+
+      - name: Install cargo clippy
+        run: rustup component add clippy
+
+      - name: Cargo check
+        run: cargo check --all-features
+
+      - name: Cargo fmt check
+        run: cargo fmt -- --check --all-features
+
+      - name: Cargo clippy
+        run: cargo clippy --all -- -D warnings --all-features
