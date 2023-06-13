@@ -33,34 +33,18 @@ pub async fn query(
     let result = match params.request.clone() {
         near_primitives::views::QueryRequest::ViewAccount { account_id } => {
             crate::metrics::QUERY_VIEW_ACCOUNT_REQUESTS_TOTAL.inc();
-            let account_result = view_account(&data, block, &account_id).await;
-            if let Err(err) = &account_result {
-                tracing::warn!("Error in `view_account` call: {:?}", err);
-                crate::metrics::QUERY_VIEW_ACCOUNT_PROXIES_TOTAL.inc();
-            }
-            account_result
+            view_account(&data, block, &account_id).await
         }
         near_primitives::views::QueryRequest::ViewCode { account_id } => {
             crate::metrics::QUERY_VIEW_CODE_REQUESTS_TOTAL.inc();
-            let code_result = view_code(&data, block, &account_id).await;
-            if let Err(err) = &code_result {
-                tracing::warn!("Error in `view_code` call: {:?}", err);
-                crate::metrics::QUERY_VIEW_CODE_PROXIES_TOTAL.inc();
-            }
-            code_result
+            view_code(&data, block, &account_id).await
         }
         near_primitives::views::QueryRequest::ViewAccessKey {
             account_id,
             public_key,
         } => {
             crate::metrics::QUERY_VIEW_ACCESS_KEY_REQUESTS_TOTAL.inc();
-            let access_key_result =
-                view_access_key(&data, block, &account_id, public_key.try_to_vec().unwrap()).await;
-            if let Err(err) = &access_key_result {
-                tracing::warn!("Error in `view_access_key` call: {:?}", err);
-                crate::metrics::QUERY_VIEW_ACCESS_KEY_PROXIES_TOTAL.inc();
-            }
-            access_key_result
+            view_access_key(&data, block, &account_id, public_key.try_to_vec().unwrap()).await
         }
         near_primitives::views::QueryRequest::ViewState {
             account_id,
@@ -68,12 +52,7 @@ pub async fn query(
             include_proof: _,
         } => {
             crate::metrics::QUERY_VIEW_STATE_REQUESTS_TOTAL.inc();
-            let state_result = view_state(&data, block, &account_id, prefix.as_ref()).await;
-            if let Err(err) = &state_result {
-                tracing::warn!("Error in `view_state` call: {:?}", err);
-                crate::metrics::QUERY_VIEW_STATE_PROXIES_TOTAL.inc();
-            }
-            state_result
+            view_state(&data, block, &account_id, prefix.as_ref()).await
         }
         near_primitives::views::QueryRequest::CallFunction {
             account_id,
@@ -81,26 +60,15 @@ pub async fn query(
             args,
         } => {
             crate::metrics::QUERY_FUNCTION_CALL_REQUESTS_TOTAL.inc();
-            let function_call_result =
-                function_call(&data, block, account_id, &method_name, args.clone()).await;
-            if let Err(err) = &function_call_result {
-                tracing::warn!("Error in `call_function` call: {:?}", err);
-                crate::metrics::QUERY_FUNCTION_CALL_PROXIES_TOTAL.inc();
-            };
-            function_call_result
+            function_call(&data, block, account_id, &method_name, args.clone()).await
         }
         near_primitives::views::QueryRequest::ViewAccessKeyList { account_id } => {
             crate::metrics::QUERY_VIEW_ACCESS_KEYS_LIST_REQUESTS_TOTAL.inc();
             #[cfg(not(feature = "account_access_keys"))]
-            return Ok(proxy_rpc_call(&data.near_rpc_client, params).await?);
+            return Ok(crate::utils::proxy_rpc_call(&data.near_rpc_client, params).await?);
             #[cfg(feature = "account_access_keys")]
             {
-                let access_keys_result = view_access_keys_list(&data, block, &account_id).await;
-                if let Err(err) = &access_keys_result {
-                    tracing::warn!("Error in `view_access_keys_list` call: {:?}", err);
-                    crate::metrics::QUERY_VIEW_ACCESS_KEYS_LIST_PROXIES_TOTAL.inc();
-                };
-                access_keys_result
+                view_access_keys_list(&data, block, &account_id).await
             }
         }
     };
