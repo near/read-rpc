@@ -107,6 +107,7 @@ pub async fn query(
 
     #[cfg(feature = "shadow_data_consistency")]
     {
+        let request_copy = params.request.clone();
         let near_rpc_client = data.near_rpc_client.clone();
         if let near_primitives::types::BlockReference::Finality(_) = params.block_reference {
             params.block_reference = near_primitives::types::BlockReference::from(
@@ -122,7 +123,32 @@ pub async fn query(
                 tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT");
             }
             Err(err) => {
+                // When the data check fails, we want to emit the log message and increment the
+                // corresponding metric. Despite the metrics have "proxies" in their names, we
+                // are not proxying the requests anymore and respond with the error to the client.
+                // Since we already have the dashboard using these metric names, we don't want to
+                // change them and reuse them for the observability of the shadow data consistency checks.
                 tracing::warn!(target: "shadow_data_consistency", "Shadow data check: ERROR {:?}", err);
+                match request_copy {
+                    near_primitives::views::QueryRequest::ViewAccount { .. } => {
+                        crate::metrics::QUERY_VIEW_ACCOUNT_PROXIES_TOTAL.inc()
+                    }
+                    near_primitives::views::QueryRequest::ViewCode { .. } => {
+                        crate::metrics::QUERY_VIEW_CODE_PROXIES_TOTAL.inc()
+                    }
+                    near_primitives::views::QueryRequest::ViewAccessKey { .. } => {
+                        crate::metrics::QUERY_VIEW_ACCESS_KEY_PROXIES_TOTAL.inc()
+                    }
+                    near_primitives::views::QueryRequest::ViewState { .. } => {
+                        crate::metrics::QUERY_VIEW_STATE_PROXIES_TOTAL.inc()
+                    }
+                    near_primitives::views::QueryRequest::CallFunction { .. } => {
+                        crate::metrics::QUERY_FUNCTION_CALL_PROXIES_TOTAL.inc()
+                    }
+                    near_primitives::views::QueryRequest::ViewAccessKeyList { .. } => {
+                        crate::metrics::QUERY_VIEW_ACCESS_KEYS_LIST_PROXIES_TOTAL.inc()
+                    }
+                };
             }
         }
     }
