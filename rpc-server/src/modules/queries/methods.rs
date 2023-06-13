@@ -62,6 +62,8 @@ pub async fn query(
             crate::metrics::QUERY_FUNCTION_CALL_REQUESTS_TOTAL.inc();
             function_call(&data, block, account_id, &method_name, args.clone()).await
         }
+        #[allow(unused_variables)]
+        // `account_id` is used in the `#[cfg(feature = "account_access_keys")]` branch.
         near_primitives::views::QueryRequest::ViewAccessKeyList { account_id } => {
             crate::metrics::QUERY_VIEW_ACCESS_KEYS_LIST_REQUESTS_TOTAL.inc();
             #[cfg(not(feature = "account_access_keys"))]
