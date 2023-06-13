@@ -98,7 +98,7 @@ pub async fn fetch_access_key_from_scylla_db(
     scylla_db_manager: &std::sync::Arc<ScyllaDBManager>,
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
-    key_data: Vec<u8>,
+    key_data: &Vec<u8>,
 ) -> anyhow::Result<near_primitives::account::AccessKey> {
     tracing::debug!(
         "`fetch_access_key_from_scylla_db` call. AccountID {}, block {}, key_data {:?}",

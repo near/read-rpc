@@ -58,7 +58,8 @@ impl HashStorage {
     pub fn receipts_transaction_hash_count(&self, transaction_hash: &str) -> anyhow::Result<u64> {
         self.receipts_counters
             .get(transaction_hash)
-            .map(|count| *count)
+            .copied()
+            // .map(|count| *count)
             .ok_or(anyhow::anyhow!(
                 "No such transaction hash {}",
                 transaction_hash

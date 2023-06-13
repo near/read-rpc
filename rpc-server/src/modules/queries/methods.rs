@@ -8,7 +8,6 @@ use crate::modules::queries::utils::{
     fetch_access_key_from_scylla_db, fetch_contract_code_from_scylla_db,
     fetch_state_from_scylla_db, run_contract,
 };
-use crate::utils::proxy_rpc_call;
 #[cfg(feature = "shadow_data_consistency")]
 use crate::utils::shadow_compare_results;
 use borsh::BorshSerialize;
@@ -114,38 +113,21 @@ pub async fn query(
                 near_primitives::types::BlockId::Height(block.block_height),
             )
         }
-        // TODO: the &result have to be RpcResponse or RPCError and serde serializable
-        // In order to achieve that we need to fix the underlying methods above
+
         let comparison_result =
             shadow_compare_results(serde_json::to_value(&result), near_rpc_client, params).await;
 
-        // TODO: Based on the comparison result we need to emit the log-message and respond with the original `result`
-        // Until then this this code is broken
+        match comparison_result {
+            Ok(_) => {
+                tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT");
+            }
+            Err(err) => {
+                tracing::warn!(target: "shadow_data_consistency", "Shadow data check: ERROR {:?}", err);
+            }
+        }
     }
-    // match result {
-    //     Ok(result) => {
-    //         #[cfg(feature = "shadow_data_consistency")]
-    //         {
-    //             let near_rpc_client = data.near_rpc_client.clone();
-    //             if let near_primitives::types::BlockReference::Finality(_) = params.block_reference
-    //             {
-    //                 params.block_reference = near_primitives::types::BlockReference::from(
-    //                     near_primitives::types::BlockId::Height(block.block_height),
-    //                 )
-    //             }
-    //             tokio::task::spawn(shadow_compare_results(
-    //                 serde_json::to_value(&result),
-    //                 near_rpc_client,
-    //                 params,
-    //             ));
-    //         };
-    //         Ok(result)
-    //     }
-    //     Err(e) => {
-    //         tracing::debug!("Result not found: {:?}, Params: {:?}", e, params);
-    //         Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
-    //     }
-    // }
+
+    Ok(result.map_err(near_jsonrpc_primitives::errors::RpcError::from)?)
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
@@ -153,7 +135,10 @@ async fn view_account(
     data: &Data<ServerContext>,
     block: CacheBlock,
     account_id: &near_primitives::types::AccountId,
-) -> anyhow::Result<near_jsonrpc_primitives::types::query::RpcQueryResponse> {
+) -> Result<
+    near_jsonrpc_primitives::types::query::RpcQueryResponse,
+    near_jsonrpc_primitives::types::query::RpcQueryError,
+> {
     tracing::debug!(
         "`view_account` call. AccountID {}, Block {}",
         account_id,
@@ -163,7 +148,15 @@ async fn view_account(
     let account = data
         .scylla_db_manager
         .get_account(account_id, block.block_height)
-        .await?;
+        .await
+        .map_err(|err| {
+            tracing::warn!("Error in `view_account` call: {:?}", err);
+            near_jsonrpc_primitives::types::query::RpcQueryError::UnknownAccount {
+                requested_account_id: account_id.clone(),
+                block_height: block.block_height,
+                block_hash: block.block_hash,
+            }
+        })?;
 
     Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc_primitives::types::query::QueryResponseKind::ViewAccount(
@@ -179,7 +172,10 @@ async fn view_code(
     data: &Data<ServerContext>,
     block: CacheBlock,
     account_id: &near_primitives::types::AccountId,
-) -> anyhow::Result<near_jsonrpc_primitives::types::query::RpcQueryResponse> {
+) -> Result<
+    near_jsonrpc_primitives::types::query::RpcQueryResponse,
+    near_jsonrpc_primitives::types::query::RpcQueryError,
+> {
     tracing::debug!(
         "`view_code` call. AccountID {}, Block {}",
         account_id,
@@ -187,7 +183,15 @@ async fn view_code(
     );
     let code_data_from_db =
         fetch_contract_code_from_scylla_db(&data.scylla_db_manager, account_id, block.block_height)
-            .await?;
+            .await
+            .map_err(|err| {
+                tracing::warn!("Error in `view_code` call: {:?}", err);
+                near_jsonrpc_primitives::types::query::RpcQueryError::NoContractCode {
+                    contract_account_id: account_id.clone(),
+                    block_height: block.block_height,
+                    block_hash: block.block_hash,
+                }
+            })?;
     Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc_primitives::types::query::QueryResponseKind::ViewCode(
             near_primitives::views::ContractCodeView::from(
@@ -206,7 +210,10 @@ async fn function_call(
     account_id: near_primitives::types::AccountId,
     method_name: &str,
     args: near_primitives::types::FunctionArgs,
-) -> anyhow::Result<near_jsonrpc_primitives::types::query::RpcQueryResponse> {
+) -> Result<
+    near_jsonrpc_primitives::types::query::RpcQueryResponse,
+    near_jsonrpc_primitives::types::query::RpcQueryError,
+> {
     tracing::debug!(
         "`function_call` call. AccountID {}, block {}, method_name {}, args {:?}",
         account_id,
@@ -225,7 +232,13 @@ async fn function_call(
         block.block_timestamp,
         block.latest_protocol_version,
     )
-    .await?;
+    .await
+    .map_err(|err| {
+        tracing::debug!("Failed function call: {:?}", err);
+        near_jsonrpc_primitives::types::query::RpcQueryError::InternalError {
+            error_message: format!("Function call failed: {:?}", err),
+        }
+    })?;
     match call_results.return_data.as_value() {
         Some(val) => Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
             kind: near_jsonrpc_primitives::types::query::QueryResponseKind::CallResult(
@@ -237,7 +250,11 @@ async fn function_call(
             block_height: block.block_height,
             block_hash: block.block_hash,
         }),
-        None => anyhow::bail!("Invalid function call result"),
+        None => Err(
+            near_jsonrpc_primitives::types::query::RpcQueryError::InternalError {
+                error_message: "Failed function call: empty result".to_string(),
+            },
+        ),
     }
 }
 
@@ -247,7 +264,10 @@ async fn view_state(
     block: CacheBlock,
     account_id: &near_primitives::types::AccountId,
     prefix: &[u8],
-) -> anyhow::Result<near_jsonrpc_primitives::types::query::RpcQueryResponse> {
+) -> Result<
+    near_jsonrpc_primitives::types::query::RpcQueryResponse,
+    near_jsonrpc_primitives::types::query::RpcQueryError,
+> {
     tracing::debug!(
         "`view_state` call. AccountID {}, block {}, prefix {:?}",
         account_id,
@@ -260,7 +280,15 @@ async fn view_state(
         block.block_height,
         prefix,
     )
-    .await?;
+    .await
+    .map_err(|err| {
+        tracing::warn!("Error in `view_state` call: {:?}", err);
+        near_jsonrpc_primitives::types::query::RpcQueryError::UnknownAccount {
+            requested_account_id: account_id.clone(),
+            block_height: block.block_height,
+            block_hash: block.block_hash,
+        }
+    })?;
 
     Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc_primitives::types::query::QueryResponseKind::ViewState(contract_state),
@@ -275,7 +303,10 @@ async fn view_access_key(
     block: CacheBlock,
     account_id: &near_primitives::types::AccountId,
     key_data: Vec<u8>,
-) -> anyhow::Result<near_jsonrpc_primitives::types::query::RpcQueryResponse> {
+) -> Result<
+    near_jsonrpc_primitives::types::query::RpcQueryResponse,
+    near_jsonrpc_primitives::types::query::RpcQueryError,
+> {
     tracing::debug!(
         "`view_access_key` call. AccountID {}, block {}, key_data {:?}",
         account_id,
@@ -287,9 +318,24 @@ async fn view_access_key(
         &data.scylla_db_manager,
         account_id,
         block.block_height,
-        key_data,
+        &key_data,
     )
-    .await?;
+    .await
+    .map_err(|err| {
+        tracing::warn!("Error in `view_access_key` call: {:?}", err);
+        match near_crypto::ED25519PublicKey::try_from(key_data.as_slice()) {
+            Ok(public_key) => {
+                near_jsonrpc_primitives::types::query::RpcQueryError::UnknownAccessKey {
+                    public_key: public_key.into(),
+                    block_height: block.block_height,
+                    block_hash: block.block_hash,
+                }
+            }
+            Err(_) => near_jsonrpc_primitives::types::query::RpcQueryError::InternalError {
+                error_message: "Failed to parse public key".to_string(),
+            },
+        }
+    })?;
 
     Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc_primitives::types::query::QueryResponseKind::AccessKey(
@@ -306,7 +352,10 @@ async fn view_access_keys_list(
     data: &Data<ServerContext>,
     block: CacheBlock,
     account_id: &near_primitives::types::AccountId,
-) -> anyhow::Result<near_jsonrpc_primitives::types::query::RpcQueryResponse> {
+) -> Result<
+    near_jsonrpc_primitives::types::query::RpcQueryResponse,
+    near_jsonrpc_primitives::types::query::RpcQueryError,
+> {
     tracing::debug!(
         "`view_access_key` call. AccountID {}, block {}",
         account_id,
@@ -318,7 +367,14 @@ async fn view_access_keys_list(
         account_id,
         block.block_height,
     )
-    .await?;
+    .await
+    // TODO: review this once we implement the `account_access_keys` after the redesign
+    // this error has to be the same the real NEAR JSON RPC returns in this case
+    .map_err(
+        |err| near_jsonrpc_primitives::types::query::RpcQueryError::InternalError {
+            error_message: format!("Failed to fetch access keys: {}", err),
+        },
+    )?;
 
     Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc_primitives::types::query::QueryResponseKind::AccessKeyList(

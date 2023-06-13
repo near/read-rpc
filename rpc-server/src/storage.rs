@@ -221,7 +221,7 @@ impl ScyllaDBManager {
         &self,
         account_id: &near_primitives::types::AccountId,
         block_height: near_primitives::types::BlockHeight,
-        key_data: Vec<u8>,
+        key_data: &Vec<u8>,
     ) -> anyhow::Result<scylla::frame::response::result::Row> {
         let result = Self::execute_prepared_query(
             &self.scylla_session,
@@ -229,7 +229,7 @@ impl ScyllaDBManager {
             (
                 account_id.to_string(),
                 num_bigint::BigInt::from(block_height),
-                hex::encode(&key_data).to_string(),
+                hex::encode(key_data).to_string(),
             ),
         )
         .await?
