@@ -86,8 +86,13 @@ pub async fn query(
             )
         }
 
+        let read_rpc_response_json = match &result {
+            Ok(res) => serde_json::to_value(res),
+            Err(err) => serde_json::to_value(err),
+        };
+
         let comparison_result =
-            shadow_compare_results(serde_json::to_value(&result), near_rpc_client, params).await;
+            shadow_compare_results(read_rpc_response_json, near_rpc_client, params).await;
 
         match comparison_result {
             Ok(_) => {
