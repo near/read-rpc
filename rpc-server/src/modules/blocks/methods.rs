@@ -34,7 +34,6 @@ pub async fn block(
 
     #[cfg(feature = "shadow_data_consistency")]
     let result = {
-
         /// For the shadow comparison we need to be sure that the block height is the same for all requests
         let block = fetch_block_from_cache_or_get(&data, params.block_reference.clone()).await;
         if let near_primitives::types::BlockReference::Finality(_) = params.block_reference {
@@ -163,7 +162,8 @@ pub async fn changes_in_block_by_type(
     }
     crate::metrics::CHNGES_IN_BLOCK_BY_TYPE_REQUESTS_TOTAL.inc();
     let block = fetch_block_from_cache_or_get(&data, params.block_reference.clone()).await;
-    let changes_response = fetch_changes_in_block_by_type(&data, block, &params.state_changes_request).await;
+    let changes_response =
+        fetch_changes_in_block_by_type(&data, block, &params.state_changes_request).await;
 
     #[cfg(feature = "shadow_data_consistency")]
     {

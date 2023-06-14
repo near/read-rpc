@@ -131,7 +131,7 @@ pub async fn scylla_db_convert_block_hash_to_block_height(
             Some(block_height) => Ok(block_height),
             None => Err(
                 near_jsonrpc_primitives::types::blocks::RpcBlockError::InternalError {
-                    error_message: "Invalid block height".to_string()
+                    error_message: "Invalid block height".to_string(),
                 },
             ),
         }
