@@ -106,35 +106,38 @@ pub async fn shadow_compare_results<M>(
 where
     M: near_jsonrpc_client::methods::RpcMethod + std::fmt::Debug,
     <M as near_jsonrpc_client::methods::RpcMethod>::Response: serde::ser::Serialize,
-    <M as near_jsonrpc_client::methods::RpcMethod>::Error: std::fmt::Debug,
+    <M as near_jsonrpc_client::methods::RpcMethod>::Error: std::fmt::Debug + serde::ser::Serialize,
 {
     tracing::debug!(target: "shadow_data_consistency", "Compare results. {:?}", params);
 
     let readrpc_response_json = match readrpc_response {
         Ok(readrpc_response_json) => readrpc_response_json,
         Err(err) => {
-            // TODO: remove this log record after the methods calling function `shadow_compare_results` are refactored
-            tracing::error!(target: "shadow_data_consistency", "Parse hundredx response error: {:#?}", err);
             return Err(ShadowDataConsistencyError::ReadRpcResponseParseError(err));
         }
     };
 
     let near_rpc_response_json = match client.call(params).await {
-        Ok(near_rpc_response) => match serde_json::to_value(&near_rpc_response) {
+        Ok(result) => match serde_json::to_value(&result) {
             Ok(near_rpc_response_json) => near_rpc_response_json,
             Err(err) => {
-                // TODO: remove this log record after the methods calling function `shadow_compare_results` are refactored
-                tracing::error!(target: "shadow_data_consistency", "Parse PRC response error: {:#?}", err);
                 return Err(ShadowDataConsistencyError::NearRpcResponseParseError(err));
             }
         },
         Err(err) => {
-            // TODO: remove this log record after the methods calling function `shadow_compare_results` are refactored
-            tracing::error!(target: "shadow_data_consistency", "RPC call error: {:#?}", err);
-            return Err(ShadowDataConsistencyError::NearRpcCallError(format!(
-                "{:?}",
-                err
-            )));
+            if let Some(e) = err.handler_error() {
+                match serde_json::to_value(&e) {
+                    Ok(near_rpc_response_json) => near_rpc_response_json,
+                    Err(err) => {
+                        return Err(ShadowDataConsistencyError::NearRpcResponseParseError(err));
+                    }
+                }
+            } else {
+                return Err(ShadowDataConsistencyError::NearRpcCallError(format!(
+                    "{:?}",
+                    err
+                )));
+            }
         }
     };
 
@@ -143,8 +146,6 @@ where
     if let Err(err) =
         assert_json_matches_no_panic(&readrpc_response_json, &near_rpc_response_json, config)
     {
-        // TODO: remove this log record after the methods calling function `shadow_compare_results` are refactored
-        tracing::error!(target: "shadow_data_consistency", "The results don't match: {:#?}", err);
         return Err(ShadowDataConsistencyError::ResultsDontMatch(err));
     };
     Ok(())

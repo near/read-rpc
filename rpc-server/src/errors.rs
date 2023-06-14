@@ -2,7 +2,8 @@ use near_jsonrpc_client::errors::{JsonRpcError, JsonRpcServerError};
 use std::ops::{Deref, DerefMut};
 type BoxedSerialize = Box<dyn erased_serde::Serialize + Send>;
 
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize)]
+#[serde(transparent)]
 pub struct RPCError(pub(crate) near_jsonrpc_primitives::errors::RpcError);
 
 impl RPCError {
