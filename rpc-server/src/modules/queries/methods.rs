@@ -78,6 +78,7 @@ pub async fn query(
     #[cfg(feature = "shadow_data_consistency")]
     {
         let request_copy = params.request.clone();
+        let error_meta = format!("QUERY: {:?}", params);
         let near_rpc_client = data.near_rpc_client.clone();
         if let near_primitives::types::BlockReference::Finality(_) = params.block_reference {
             params.block_reference = near_primitives::types::BlockReference::from(
@@ -90,7 +91,7 @@ pub async fn query(
 
         match comparison_result {
             Ok(_) => {
-                tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT");
+                tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", error_meta);
             }
             Err(err) => {
                 // When the data check fails, we want to emit the log message and increment the
@@ -98,7 +99,7 @@ pub async fn query(
                 // are not proxying the requests anymore and respond with the error to the client.
                 // Since we already have the dashboard using these metric names, we don't want to
                 // change them and reuse them for the observability of the shadow data consistency checks.
-                tracing::warn!(target: "shadow_data_consistency", "Shadow data check: ERROR {:?}", err);
+                tracing::warn!(target: "shadow_data_consistency", "Shadow data check: ERROR\n{}\n{:?}", error_meta, err);
                 match request_copy {
                     near_primitives::views::QueryRequest::ViewAccount { .. } => {
                         crate::metrics::QUERY_VIEW_ACCOUNT_PROXIES_TOTAL.inc()
