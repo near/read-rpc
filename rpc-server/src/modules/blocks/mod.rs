@@ -7,4 +7,5 @@ pub struct CacheBlock {
     pub block_height: near_primitives::types::BlockHeight,
     pub block_timestamp: u64,
     pub latest_protocol_version: near_primitives::types::ProtocolVersion,
+    pub chunks_count: u64,
 }

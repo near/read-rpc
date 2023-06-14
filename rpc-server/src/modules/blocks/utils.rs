@@ -121,12 +121,20 @@ pub async fn scylla_db_convert_block_hash_to_block_height(
     tracing::debug!("`scylla_db_convert_block_hash_to_block_height` call");
     let result = scylla_db_manager.get_block_by_hash(block_hash).await;
     if let Ok(row) = result {
-        let (block_height,): (num_bigint::BigInt,) = row
-            .into_typed::<(num_bigint::BigInt,)>()
-            .expect("Invalid block `block_height` value from db");
-        Ok(block_height
-            .to_u64()
-            .expect("Error to convert BigInt into u64"))
+        let (block_height,): (num_bigint::BigInt,) =
+            row.into_typed::<(num_bigint::BigInt,)>().map_err(|err| {
+                near_jsonrpc_primitives::types::blocks::RpcBlockError::InternalError {
+                    error_message: err.to_string(),
+                }
+            })?;
+        match block_height.to_u64() {
+            Some(block_height) => Ok(block_height),
+            None => Err(
+                near_jsonrpc_primitives::types::blocks::RpcBlockError::InternalError {
+                    error_message: "Invalid block height".to_string()
+                },
+            ),
+        }
     } else {
         Err(
             near_jsonrpc_primitives::types::blocks::RpcBlockError::UnknownBlock {
@@ -175,30 +183,32 @@ pub async fn fetch_block_from_cache_or_get(
     data: &jsonrpc_v2::Data<ServerContext>,
     block_reference: near_primitives::types::BlockReference,
 ) -> CacheBlock {
-    let block = match block_reference.clone() {
+    let block_height = match block_reference.clone() {
         near_primitives::types::BlockReference::BlockId(block_id) => match block_id {
-            near_primitives::types::BlockId::Height(block_height) => data
-                .blocks_cache
-                .write()
-                .unwrap()
-                .get(&block_height)
-                .cloned(),
-            near_primitives::types::BlockId::Hash(_) => None,
+            near_primitives::types::BlockId::Height(block_height) => Ok(block_height),
+            near_primitives::types::BlockId::Hash(hash) => {
+                scylla_db_convert_block_hash_to_block_height(&data.scylla_db_manager, hash).await
+            }
         },
         near_primitives::types::BlockReference::Finality(_) => {
             // Returns the final_block_height for all the finalities.
-            let block_height = &data
+            Ok(data
                 .final_block_height
-                .load(std::sync::atomic::Ordering::SeqCst);
-            data.blocks_cache
-                .write()
-                .unwrap()
-                .get(block_height)
-                .cloned()
+                .load(std::sync::atomic::Ordering::SeqCst))
         }
         // TODO: return the height of the first block height from S3 (cache it once on the start)
-        near_primitives::types::BlockReference::SyncCheckpoint(_) => None,
+        near_primitives::types::BlockReference::SyncCheckpoint(_) => Err(
+            near_jsonrpc_primitives::types::blocks::RpcBlockError::UnknownBlock {
+                error_message: "Finality other than final is not supported".to_string(),
+            },
+        ),
     };
+    let block = data
+        .blocks_cache
+        .write()
+        .unwrap()
+        .get(&block_height.expect("Error to get block_height"))
+        .cloned();
     match block {
         Some(block) => block,
         None => {
@@ -206,16 +216,17 @@ pub async fn fetch_block_from_cache_or_get(
                 .await
                 .expect("Error to fetch block");
             let block = CacheBlock {
-                block_hash: block_from_s3.header.hash,
-                block_height: block_from_s3.header.height,
-                block_timestamp: block_from_s3.header.timestamp,
-                latest_protocol_version: block_from_s3.header.latest_protocol_version,
+                block_hash: block_from_s3.block_view.header.hash,
+                block_height: block_from_s3.block_view.header.height,
+                block_timestamp: block_from_s3.block_view.header.timestamp,
+                latest_protocol_version: block_from_s3.block_view.header.latest_protocol_version,
+                chunks_count: block_from_s3.block_view.chunks.len() as u64,
             };
 
             data.blocks_cache
                 .write()
                 .unwrap()
-                .put(block_from_s3.header.height, block);
+                .put(block_from_s3.block_view.header.height, block);
             block
         }
     }
