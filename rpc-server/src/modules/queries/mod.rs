@@ -1,4 +1,4 @@
-use crate::config::ScyllaDBManager;
+use crate::storage::ScyllaDBManager;
 use futures::executor::block_on;
 use std::collections::HashMap;
 

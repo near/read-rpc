@@ -131,7 +131,7 @@ async fn get_start_block_height(
                     .expect("Failed to convert BigInt to u64"))
             } else {
                 if let Some(height) = height {
-                    return Ok(height.clone());
+                    return Ok(*height);
                 }
                 Ok(final_block_height(opts.rpc_url()).await?)
             }

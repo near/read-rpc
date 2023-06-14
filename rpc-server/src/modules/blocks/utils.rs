@@ -1,6 +1,7 @@
-use crate::config::{ScyllaDBManager, ServerContext};
+use crate::config::ServerContext;
 use crate::modules::blocks::methods::fetch_block;
 use crate::modules::blocks::CacheBlock;
+use crate::storage::ScyllaDBManager;
 use anyhow::Context;
 use near_primitives::views::{StateChangeValueView, StateChangesRequestView};
 use num_traits::ToPrimitive;
