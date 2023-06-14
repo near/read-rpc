@@ -58,6 +58,7 @@ pub async fn block(
             }
             Err(err) => {
                 tracing::warn!(target: "shadow_data_consistency", "Shadow data check: ERROR\n{}\n{:?}", error_meta, err);
+                crate::metrics::BLOCK_PROXIES_TOTAL.inc()
             }
         };
         block_response
@@ -91,6 +92,7 @@ pub async fn chunk(
             }
             Err(err) => {
                 tracing::warn!(target: "shadow_data_consistency", "Shadow data check: ERROR\n{}\n{:?}", error_meta, err);
+                crate::metrics::CHUNK_PROXIES_TOTAL.inc()
             }
         }
     }
@@ -138,6 +140,7 @@ pub async fn changes_in_block(
             }
             Err(err) => {
                 tracing::warn!(target: "shadow_data_consistency", "Shadow data check: ERROR\n{}\n{:?}", error_meta, err);
+                crate::metrics::CHNGES_IN_BLOCK_PROXIES_TOTAL.inc()
             }
         }
     }
@@ -187,6 +190,7 @@ pub async fn changes_in_block_by_type(
             }
             Err(err) => {
                 tracing::warn!(target: "shadow_data_consistency", "Shadow data check: ERROR\n{}\n{:?}", error_meta, err);
+                crate::metrics::CHNGES_IN_BLOCK_BY_TYPE_PROXIES_TOTAL.inc()
             }
         }
     }
