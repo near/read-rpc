@@ -273,14 +273,19 @@ impl ScyllaDBManager {
     pub async fn get_transaction_by_hash(
         &self,
         transaction_hash: &str,
-    ) -> anyhow::Result<scylla::frame::response::result::Row> {
-        let result = Self::execute_prepared_query(
+    ) -> anyhow::Result<readnode_primitives::TransactionDetails> {
+        let row = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_transaction_by_hash,
             (transaction_hash.to_string(),),
         )
         .await?
         .single_row()?;
-        Ok(result)
+
+        let (data_value,): (Vec<u8>,) = row.into_typed::<(Vec<u8>,)>()?;
+
+        Ok(readnode_primitives::TransactionDetails::try_from_slice(
+            &data_value,
+        )?)
     }
 }

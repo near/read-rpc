@@ -5,8 +5,10 @@ use serde_json::Value;
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(value)))]
 pub async fn parse_transaction_status_common_request(
     value: Value,
-) -> anyhow::Result<near_jsonrpc_primitives::types::transactions::RpcTransactionStatusCommonRequest>
-{
+) -> Result<
+    near_jsonrpc_primitives::types::transactions::RpcTransactionStatusCommonRequest,
+    near_jsonrpc_primitives::errors::RpcError,
+> {
     tracing::debug!("`parse_transaction_status_common_request` call.");
     if let Ok((hash, account_id)) = serde_json::from_value::<(
         near_primitives::hash::CryptoHash,
@@ -24,7 +26,10 @@ pub async fn parse_transaction_status_common_request(
             },
         )
     } else {
-        let signed_transaction = parse_signed_transaction(value).await?;
+        let signed_transaction = parse_signed_transaction(value).await.map_err(|err| {
+            near_jsonrpc_primitives::errors::RpcError::parse_error(err.to_string())
+        })?;
+
         let transaction_info =
             near_jsonrpc_primitives::types::transactions::TransactionInfo::Transaction(
                 signed_transaction,
@@ -43,6 +48,6 @@ pub async fn parse_signed_transaction(
 ) -> anyhow::Result<near_primitives::transaction::SignedTransaction> {
     tracing::debug!("`parse_signed_transaction` call.");
     let (encoded,) = serde_json::from_value::<(String,)>(value)?;
-    let bytes = near_primitives::serialize::from_base64(&encoded).unwrap();
+    let bytes = near_primitives::serialize::from_base64(&encoded)?;
     Ok(near_primitives::transaction::SignedTransaction::try_from_slice(&bytes)?)
 }

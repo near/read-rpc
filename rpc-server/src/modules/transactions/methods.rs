@@ -6,12 +6,109 @@ use crate::modules::transactions::{
 use crate::utils::proxy_rpc_call;
 #[cfg(feature = "shadow_data_consistency")]
 use crate::utils::shadow_compare_results;
-use borsh::BorshDeserialize;
 use jsonrpc_v2::{Data, Params};
 use near_primitives::views::FinalExecutionOutcomeViewEnum::{
     FinalExecutionOutcome, FinalExecutionOutcomeWithReceipt,
 };
 use serde_json::Value;
+
+/// Queries status of a transaction by hash and returns the final transaction result.
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
+pub async fn tx(
+    data: Data<ServerContext>,
+    Params(params): Params<Value>,
+) -> Result<near_jsonrpc_primitives::types::transactions::RpcTransactionResponse, RPCError> {
+    tracing::debug!("`tx` call. Params: {:?}", params);
+    crate::metrics::TX_REQUESTS_TOTAL.inc();
+
+    let tx_status_request = parse_transaction_status_common_request(params.clone()).await?;
+
+    let result = tx_status_common(&data, &tx_status_request.transaction_info, false).await;
+
+    #[cfg(feature = "shadow_data_consistency")]
+    {
+        let near_rpc_client = data.near_rpc_client.clone();
+        let error_meta = format!("TX: {:?}", params);
+
+        let read_rpc_response_json = match &result {
+            Ok(res) => serde_json::to_value(res),
+            Err(err) => serde_json::to_value(err),
+        };
+
+        let comparison_result = shadow_compare_results(
+            read_rpc_response_json,
+            near_rpc_client,
+            // Note there is a difference in the implementation of the `tx` method in the `near_jsonrpc_client`
+            // The method is `near_jsonrpc_client::methods::tx::RpcTransactionStatusRequest` in the client
+            // so we can't just pass `params` there, instead we need to craft a request manually
+            near_jsonrpc_client::methods::tx::RpcTransactionStatusRequest {
+                transaction_info: tx_status_request.transaction_info,
+            },
+        )
+        .await;
+
+        match comparison_result {
+            Ok(_) => {
+                tracing::info!(target: "shadow-data-consistency", "Shadow data check: CORRECT\n{}", error_meta);
+            }
+            Err(err) => {
+                tracing::warn!(target: "shadow_data_consistency", "Shadow data check: ERROR\n{}\n{:?}", error_meta, err);
+                crate::metrics::TX_PROXIES_TOTAL.inc();
+            }
+        }
+    }
+
+    Ok(result.map_err(near_jsonrpc_primitives::errors::RpcError::from)?)
+}
+
+/// Queries status of a transaction by hash, returning the final transaction result and details of all receipts.
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
+pub async fn tx_status(
+    data: Data<ServerContext>,
+    Params(params): Params<Value>,
+) -> Result<near_jsonrpc_primitives::types::transactions::RpcTransactionResponse, RPCError> {
+    tracing::debug!("`tx_status` call. Params: {:?}", params);
+    crate::metrics::TX_STATUS_REQUESTS_TOTAL.inc();
+
+    let tx_status_request = parse_transaction_status_common_request(params.clone()).await?;
+
+    let result = tx_status_common(&data, &tx_status_request.transaction_info, true).await;
+
+    #[cfg(feature = "shadow_data_consistency")]
+    {
+        let near_rpc_client = data.near_rpc_client.clone();
+        let error_meta = format!("EXPERIMENTAL_TX_STATUS: {:?}", params);
+
+        let read_rpc_response_json = match &result {
+            Ok(res) => serde_json::to_value(res),
+            Err(err) => serde_json::to_value(err),
+        };
+
+        let comparison_result = shadow_compare_results(
+            read_rpc_response_json,
+            near_rpc_client,
+            // Note there is a difference in the implementation of the `EXPERIMENTAL_tx_status` method in the `near_jsonrpc_client`
+            // The method is `near_jsonrpc_client::methods::EXPERIMENTAL_tx_status` in the client
+            // so we can't just pass `params` there, instead we need to craft a request manually
+            near_jsonrpc_client::methods::EXPERIMENTAL_tx_status::RpcTransactionStatusRequest {
+                transaction_info: tx_status_request.transaction_info,
+            },
+        )
+        .await;
+
+        match comparison_result {
+            Ok(_) => {
+                tracing::info!(target: "shadow-data-consistency", "Shadow data check: CORRECT\n{}", error_meta);
+            }
+            Err(err) => {
+                tracing::warn!(target: "shadow_data_consistency", "Shadow data check: ERROR\n{}\n{:?}", error_meta, err);
+                crate::metrics::TX_STATUS_PROXIES_TOTAL.inc();
+            }
+        }
+    }
+
+    Ok(result.map_err(near_jsonrpc_primitives::errors::RpcError::from)?)
+}
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn send_tx_async(
@@ -69,137 +166,54 @@ pub async fn send_tx_commit(
     }
 }
 
-#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
+#[cfg_attr(
+    feature = "tracing-instrumentation",
+    tracing::instrument(skip(data, transaction_info))
+)]
 async fn tx_status_common(
     data: &Data<ServerContext>,
     transaction_info: &near_jsonrpc_primitives::types::transactions::TransactionInfo,
     fetch_receipt: bool,
-) -> anyhow::Result<near_primitives::views::FinalExecutionOutcomeViewEnum> {
+) -> Result<
+    near_jsonrpc_primitives::types::transactions::RpcTransactionResponse,
+    near_jsonrpc_primitives::types::transactions::RpcTransactionError,
+> {
     tracing::debug!("`tx_status_common` call.");
-    let (tx_hash, _account_id) = match &transaction_info {
+    let tx_hash = match &transaction_info {
         near_jsonrpc_primitives::types::transactions::TransactionInfo::Transaction(tx) => {
-            (tx.get_hash(), tx.transaction.signer_id.clone())
+            tx.get_hash()
         }
         near_jsonrpc_primitives::types::transactions::TransactionInfo::TransactionId {
             hash,
-            account_id,
-        } => (*hash, account_id.clone()),
+            ..
+        } => *hash,
     };
-    let row = data
+
+    let transaction_details = data
         .scylla_db_manager
         .get_transaction_by_hash(&tx_hash.to_string())
-        .await?;
-    let (data_value,): (Vec<u8>,) = row.into_typed::<(Vec<u8>,)>()?;
-    let transaction: readnode_primitives::TransactionDetails =
-        readnode_primitives::TransactionDetails::try_from_slice(&data_value)?;
+        .await
+        .map_err(|_err| {
+            near_jsonrpc_primitives::types::transactions::RpcTransactionError::UnknownTransaction {
+                requested_transaction_hash: tx_hash,
+            }
+        })?;
+
     if fetch_receipt {
-        Ok(FinalExecutionOutcomeWithReceipt(
-            transaction.to_final_execution_outcome_with_receipt(),
-        ))
+        Ok(
+            near_jsonrpc_primitives::types::transactions::RpcTransactionResponse {
+                final_execution_outcome: FinalExecutionOutcomeWithReceipt(
+                    transaction_details.to_final_execution_outcome_with_receipt(),
+                ),
+            },
+        )
     } else {
-        Ok(FinalExecutionOutcome(
-            transaction.to_final_execution_outcome(),
-        ))
-    }
-}
-
-#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
-pub async fn tx(
-    data: Data<ServerContext>,
-    Params(params): Params<Value>,
-) -> Result<near_jsonrpc_primitives::types::transactions::RpcTransactionResponse, RPCError> {
-    tracing::debug!("`tx` call. Params: {:?}", params);
-    crate::metrics::TX_REQUESTS_TOTAL.inc();
-    match parse_transaction_status_common_request(params.clone()).await {
-        Ok(request) => match tx_status_common(&data, &request.transaction_info, false).await {
-            Ok(transaction) => {
-                #[cfg(feature = "shadow_data_consistency")]
-                if let FinalExecutionOutcome(outcome) = &transaction {
-                    let near_rpc_client = data.near_rpc_client.clone();
-                    tokio::task::spawn(shadow_compare_results(
-                        serde_json::to_value(outcome),
-                        near_rpc_client,
-                        near_jsonrpc_client::methods::tx::RpcTransactionStatusRequest {
-                            transaction_info: request.transaction_info,
-                        },
-                    ));
-                }
-                Ok(
-                    near_jsonrpc_primitives::types::transactions::RpcTransactionResponse {
-                        final_execution_outcome: transaction,
-                    },
-                )
-            }
-            Err(err) => {
-                tracing::warn!("Error in `tx` call: {:?}", err);
-                crate::metrics::TX_PROXIES_TOTAL.inc();
-                let response = proxy_rpc_call(
-                    &data.near_rpc_client,
-                    near_jsonrpc_client::methods::tx::RpcTransactionStatusRequest {
-                        transaction_info: request.transaction_info,
-                    },
-                )
-                .await?;
-                Ok(
-                    near_jsonrpc_primitives::types::transactions::RpcTransactionResponse {
-                        final_execution_outcome: FinalExecutionOutcome(response),
-                    },
-                )
-            }
-        },
-        Err(err) => {
-            tracing::debug!("Transaction pars params error: {:#?}", err);
-            Err(RPCError::parse_error(&err.to_string()))
-        }
-    }
-}
-
-#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
-pub async fn tx_status(
-    data: Data<ServerContext>,
-    Params(params): Params<Value>,
-) -> Result<near_jsonrpc_primitives::types::transactions::RpcTransactionResponse, RPCError> {
-    tracing::debug!("`tx_status` call. Params: {:?}", params);
-    crate::metrics::TX_STATUS_REQUESTS_TOTAL.inc();
-    match parse_transaction_status_common_request(params.clone()).await {
-        Ok(request) => match tx_status_common(&data, &request.transaction_info, true).await {
-            Ok(transaction) => {
-                #[cfg(feature = "shadow_data_consistency")]
-                if let FinalExecutionOutcomeWithReceipt(outcome) = &transaction {
-                    let near_rpc_client = data.near_rpc_client.clone();
-                    tokio::task::spawn(shadow_compare_results(
-                        serde_json::to_value(outcome),
-                        near_rpc_client,
-                        near_jsonrpc_client::methods::EXPERIMENTAL_tx_status::RpcTransactionStatusRequest{
-                            transaction_info: request.transaction_info
-                        },
-                    ));
-                }
-                Ok(
-                    near_jsonrpc_primitives::types::transactions::RpcTransactionResponse {
-                        final_execution_outcome: transaction,
-                    },
-                )
-            }
-            Err(err) => {
-                tracing::warn!("Error in `tx_status` call: {:?}", err);
-                crate::metrics::TX_STATUS_PROXIES_TOTAL.inc();
-                let response = proxy_rpc_call(
-                        &data.near_rpc_client,
-                        near_jsonrpc_client::methods::EXPERIMENTAL_tx_status::RpcTransactionStatusRequest{
-                            transaction_info: request.transaction_info
-                        },
-                    ).await?;
-                Ok(
-                    near_jsonrpc_primitives::types::transactions::RpcTransactionResponse {
-                        final_execution_outcome: FinalExecutionOutcomeWithReceipt(response),
-                    },
-                )
-            }
-        },
-        Err(err) => {
-            tracing::debug!("Transaction pars params error: {:#?}", err);
-            Err(RPCError::parse_error(&err.to_string()))
-        }
+        Ok(
+            near_jsonrpc_primitives::types::transactions::RpcTransactionResponse {
+                final_execution_outcome: FinalExecutionOutcome(
+                    transaction_details.to_final_execution_outcome(),
+                ),
+            },
+        )
     }
 }
