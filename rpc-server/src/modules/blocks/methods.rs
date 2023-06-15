@@ -12,7 +12,7 @@ use jsonrpc_v2::{Data, Params};
 use near_primitives::trie_key::TrieKey;
 use near_primitives::views::StateChangeValueView;
 
-#[allow(unused)]
+#[allow(unused_mut)]
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn block(
     data: Data<ServerContext>,
@@ -28,25 +28,22 @@ pub async fn block(
         }
     }
     crate::metrics::BLOCK_REQUESTS_TOTAL.inc();
-
-    #[cfg(not(feature = "shadow_data_consistency"))]
     let result = fetch_block(&data, params.block_reference.clone()).await;
 
     #[cfg(feature = "shadow_data_consistency")]
-    let result = {
-        /// For the shadow comparison we need to be sure that the block height is the same for all requests
-        let block = fetch_block_from_cache_or_get(&data, params.block_reference.clone()).await;
-        if let near_primitives::types::BlockReference::Finality(_) = params.block_reference {
-            params.block_reference = near_primitives::types::BlockReference::from(
-                near_primitives::types::BlockId::Height(block.block_height),
-            )
-        };
-
-        let block_response = fetch_block(&data, params.block_reference.clone()).await;
+    {
         let near_rpc_client = data.near_rpc_client.clone();
         let error_meta = format!("BLOCK: {:?}", params);
-        let read_rpc_response_json = match &block_response {
-            Ok(res) => serde_json::to_value(&res.block_view),
+        let read_rpc_response_json = match &result {
+            Ok(res) => {
+                if let near_primitives::types::BlockReference::Finality(_) = params.block_reference
+                {
+                    params.block_reference = near_primitives::types::BlockReference::from(
+                        near_primitives::types::BlockId::Height(res.block_view.header.height),
+                    )
+                };
+                serde_json::to_value(&res.block_view)
+            }
             Err(err) => serde_json::to_value(err),
         };
         let comparison_result =
@@ -60,8 +57,7 @@ pub async fn block(
                 tracing::warn!(target: "shadow_data_consistency", "Shadow data check: ERROR\n{}\n{:?}", error_meta, err);
                 crate::metrics::BLOCK_PROXIES_TOTAL.inc()
             }
-        };
-        block_response
+        }
     };
 
     Ok(result.map_err(near_jsonrpc_primitives::errors::RpcError::from)?)
@@ -74,12 +70,12 @@ pub async fn chunk(
 ) -> Result<near_jsonrpc_primitives::types::chunks::RpcChunkResponse, RPCError> {
     tracing::debug!("`chunk` called with parameters: {:?}", params);
     crate::metrics::CHUNK_REQUESTS_TOTAL.inc();
-    let chunk_response = fetch_chunk(&data, params.chunk_reference.clone()).await;
+    let result = fetch_chunk(&data, params.chunk_reference.clone()).await;
     #[cfg(feature = "shadow_data_consistency")]
     {
         let near_rpc_client = data.near_rpc_client.clone();
         let error_meta = format!("CHUNK: {:?}", params);
-        let read_rpc_response_json = match &chunk_response {
+        let read_rpc_response_json = match &result {
             Ok(res) => serde_json::to_value(&res.chunk_view),
             Err(err) => serde_json::to_value(err),
         };
@@ -96,7 +92,7 @@ pub async fn chunk(
             }
         }
     }
-    Ok(chunk_response.map_err(near_jsonrpc_primitives::errors::RpcError::from)?)
+    Ok(result.map_err(near_jsonrpc_primitives::errors::RpcError::from)?)
 }
 
 #[allow(unused_mut)]
@@ -116,8 +112,10 @@ pub async fn changes_in_block(
         }
     }
     crate::metrics::CHNGES_IN_BLOCK_REQUESTS_TOTAL.inc();
-    let block = fetch_block_from_cache_or_get(&data, params.block_reference.clone()).await;
-    let changes_response = fetch_changes_in_block(&data, block).await;
+    let block = fetch_block_from_cache_or_get(&data, params.block_reference.clone())
+        .await
+        .map_err(near_jsonrpc_primitives::errors::RpcError::from)?;
+    let result = fetch_changes_in_block(&data, block).await;
     #[cfg(feature = "shadow_data_consistency")]
     {
         let near_rpc_client = data.near_rpc_client.clone();
@@ -127,7 +125,7 @@ pub async fn changes_in_block(
             )
         }
         let error_meta = format!("CHANGES_IN_BLOCK: {:?}", params);
-        let read_rpc_response_json = match &changes_response {
+        let read_rpc_response_json = match &result {
             Ok(res) => serde_json::to_value(res),
             Err(err) => serde_json::to_value(err),
         };
@@ -145,7 +143,7 @@ pub async fn changes_in_block(
         }
     }
 
-    Ok(changes_response.map_err(near_jsonrpc_primitives::errors::RpcError::from)?)
+    Ok(result.map_err(near_jsonrpc_primitives::errors::RpcError::from)?)
 }
 
 #[allow(unused_mut)]
@@ -164,9 +162,10 @@ pub async fn changes_in_block_by_type(
         }
     }
     crate::metrics::CHNGES_IN_BLOCK_BY_TYPE_REQUESTS_TOTAL.inc();
-    let block = fetch_block_from_cache_or_get(&data, params.block_reference.clone()).await;
-    let changes_response =
-        fetch_changes_in_block_by_type(&data, block, &params.state_changes_request).await;
+    let block = fetch_block_from_cache_or_get(&data, params.block_reference.clone())
+        .await
+        .map_err(near_jsonrpc_primitives::errors::RpcError::from)?;
+    let result = fetch_changes_in_block_by_type(&data, block, &params.state_changes_request).await;
 
     #[cfg(feature = "shadow_data_consistency")]
     {
@@ -177,7 +176,7 @@ pub async fn changes_in_block_by_type(
             )
         }
         let error_meta = format!("CHANGES_IN_BLOCK_BY_TYPE: {:?}", params);
-        let read_rpc_response_json = match &changes_response {
+        let read_rpc_response_json = match &result {
             Ok(res) => serde_json::to_value(res),
             Err(err) => serde_json::to_value(err),
         };
@@ -195,7 +194,7 @@ pub async fn changes_in_block_by_type(
         }
     }
 
-    Ok(changes_response.map_err(near_jsonrpc_primitives::errors::RpcError::from)?)
+    Ok(result.map_err(near_jsonrpc_primitives::errors::RpcError::from)?)
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
@@ -220,13 +219,13 @@ pub async fn fetch_block(
                 .final_block_height
                 .load(std::sync::atomic::Ordering::SeqCst)),
             _ => Err(
-                near_jsonrpc_primitives::types::blocks::RpcBlockError::UnknownBlock {
+                near_jsonrpc_primitives::types::blocks::RpcBlockError::InternalError {
                     error_message: "Finality other than final is not supported".to_string(),
                 },
             ),
         },
         near_primitives::types::BlockReference::SyncCheckpoint(_) => Err(
-            near_jsonrpc_primitives::types::blocks::RpcBlockError::UnknownBlock {
+            near_jsonrpc_primitives::types::blocks::RpcBlockError::InternalError {
                 error_message: "SyncCheckpoint is not supported".to_string(),
             },
         ),
@@ -257,7 +256,7 @@ pub async fn fetch_chunk(
                 )
                 .await
                 .map_err(|err| {
-                    near_jsonrpc_primitives::types::chunks::RpcChunkError::UnknownBlock {
+                    near_jsonrpc_primitives::types::chunks::RpcChunkError::InternalError {
                         error_message: err.to_string(),
                     }
                 })?;
@@ -401,7 +400,7 @@ async fn fetch_shards(
     data: &Data<ServerContext>,
     block: crate::modules::blocks::CacheBlock,
 ) -> anyhow::Result<Vec<near_indexer_primitives::IndexerShard>> {
-    let fetch_shards_futures = (0..block.chunks_count)
+    let fetch_shards_futures = (0..block.chunks_included)
         .collect::<Vec<u64>>()
         .into_iter()
         .map(|shard_id| {

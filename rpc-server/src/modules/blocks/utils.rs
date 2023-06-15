@@ -182,7 +182,7 @@ pub async fn scylla_db_convert_chunk_hash_to_block_height_and_shard_id(
 pub async fn fetch_block_from_cache_or_get(
     data: &jsonrpc_v2::Data<ServerContext>,
     block_reference: near_primitives::types::BlockReference,
-) -> CacheBlock {
+) -> Result<CacheBlock, near_jsonrpc_primitives::types::blocks::RpcBlockError> {
     let block_height = match block_reference.clone() {
         near_primitives::types::BlockReference::BlockId(block_id) => match block_id {
             near_primitives::types::BlockId::Height(block_height) => Ok(block_height),
@@ -198,7 +198,7 @@ pub async fn fetch_block_from_cache_or_get(
         }
         // TODO: return the height of the first block height from S3 (cache it once on the start)
         near_primitives::types::BlockReference::SyncCheckpoint(_) => Err(
-            near_jsonrpc_primitives::types::blocks::RpcBlockError::UnknownBlock {
+            near_jsonrpc_primitives::types::blocks::RpcBlockError::InternalError {
                 error_message: "Finality other than final is not supported".to_string(),
             },
         ),
@@ -207,27 +207,25 @@ pub async fn fetch_block_from_cache_or_get(
         .blocks_cache
         .write()
         .unwrap()
-        .get(&block_height.expect("Error to get block_height"))
+        .get(&block_height?)
         .cloned();
     match block {
-        Some(block) => block,
+        Some(block) => Ok(block),
         None => {
-            let block_from_s3 = fetch_block(data, block_reference)
-                .await
-                .expect("Error to fetch block");
+            let block_from_s3 = fetch_block(data, block_reference).await?;
             let block = CacheBlock {
                 block_hash: block_from_s3.block_view.header.hash,
                 block_height: block_from_s3.block_view.header.height,
                 block_timestamp: block_from_s3.block_view.header.timestamp,
                 latest_protocol_version: block_from_s3.block_view.header.latest_protocol_version,
-                chunks_count: block_from_s3.block_view.chunks.len() as u64,
+                chunks_included: block_from_s3.block_view.header.chunks_included,
             };
 
             data.blocks_cache
                 .write()
                 .unwrap()
                 .put(block_from_s3.block_view.header.height, block);
-            block
+            Ok(block)
         }
     }
 }

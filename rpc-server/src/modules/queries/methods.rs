@@ -29,7 +29,9 @@ pub async fn query(
         }
     }
 
-    let block = fetch_block_from_cache_or_get(&data, params.block_reference.clone()).await;
+    let block = fetch_block_from_cache_or_get(&data, params.block_reference.clone())
+        .await
+        .map_err(near_jsonrpc_primitives::errors::RpcError::from)?;
     let result = match params.request.clone() {
         near_primitives::views::QueryRequest::ViewAccount { account_id } => {
             crate::metrics::QUERY_VIEW_ACCOUNT_REQUESTS_TOTAL.inc();
