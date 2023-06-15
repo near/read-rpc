@@ -118,7 +118,33 @@ where
         }
     };
 
-    let near_rpc_response_json = match client.call(params).await {
+    let mut near_rpc_response = client.call(&params).await;
+
+    for _ in 0..3 {
+        if let Err(json_rpc_err) = &near_rpc_response {
+            let retry = match json_rpc_err {
+                near_jsonrpc_client::errors::JsonRpcError::TransportError(_) => true,
+                near_jsonrpc_client::errors::JsonRpcError::ServerError(server_error) => {
+                    match server_error {
+                        near_jsonrpc_client::errors::JsonRpcServerError::NonContextualError(_)
+                        | near_jsonrpc_client::errors::JsonRpcServerError::ResponseStatusError(_) => {
+                            true
+                        }
+                        _ => false,
+                    }
+                }
+            };
+            if retry {
+                near_rpc_response = client.call(&params).await;
+            } else {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+
+    let near_rpc_response_json = match near_rpc_response {
         Ok(result) => match serde_json::to_value(&result) {
             Ok(near_rpc_response_json) => near_rpc_response_json,
             Err(err) => {
