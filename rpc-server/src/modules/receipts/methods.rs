@@ -31,7 +31,7 @@ pub async fn receipt(
 
         match comparison_result {
             Ok(_) => {
-                tracing::info!(target: "shadow-data-consistency", "Shadow data check: CORRECT\n{}", error_meta);
+                tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", error_meta);
             }
             Err(err) => {
                 tracing::warn!(target: "shadow_data_consistency", "Shadow data check: ERROR\n{}\n{:?}", error_meta, err);
