@@ -278,6 +278,7 @@ pub async fn fetch_chunk(
         shard_id,
     )
     .await?;
+
     Ok(near_jsonrpc_primitives::types::chunks::RpcChunkResponse { chunk_view })
 }
 

@@ -87,7 +87,12 @@ impl TransactionDetails {
     ) -> views::FinalExecutionOutcomeWithReceiptView {
         views::FinalExecutionOutcomeWithReceiptView {
             final_outcome: self.to_final_execution_outcome(),
-            receipts: self.receipts.clone(),
+            receipts: self
+                .receipts
+                .iter()
+                .filter(|receipt| receipt.predecessor_id != receipt.receiver_id)
+                .cloned()
+                .collect(),
         }
     }
 }
