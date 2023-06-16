@@ -94,7 +94,11 @@ pub async fn fetch_chunk_from_s3(
                     .into_iter()
                     .map(|indexer_transaction| indexer_transaction.transaction)
                     .collect(),
-                receipts: chunk.receipts,
+                receipts: chunk
+                    .receipts
+                    .into_iter()
+                    .filter(|receipt| receipt.predecessor_id != receipt.receiver_id)
+                    .collect(),
             }),
             None => Err(
                 near_jsonrpc_primitives::types::chunks::RpcChunkError::InternalError {
