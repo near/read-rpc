@@ -153,14 +153,13 @@ async fn view_account(
         .scylla_db_manager
         .get_account(account_id, block.block_height)
         .await
-        .map_err(|err| {
-            tracing::warn!("Error in `view_account` call: {:?}", err);
-            near_jsonrpc_primitives::types::query::RpcQueryError::UnknownAccount {
+        .map_err(
+            |_err| near_jsonrpc_primitives::types::query::RpcQueryError::UnknownAccount {
                 requested_account_id: account_id.clone(),
                 block_height: block.block_height,
                 block_hash: block.block_hash,
-            }
-        })?;
+            },
+        )?;
 
     Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc_primitives::types::query::QueryResponseKind::ViewAccount(
@@ -188,8 +187,7 @@ async fn view_code(
     let code_data_from_db =
         fetch_contract_code_from_scylla_db(&data.scylla_db_manager, account_id, block.block_height)
             .await
-            .map_err(|err| {
-                tracing::warn!("Error in `view_code` call: {:?}", err);
+            .map_err(|_err| {
                 near_jsonrpc_primitives::types::query::RpcQueryError::NoContractCode {
                     contract_account_id: account_id.clone(),
                     block_height: block.block_height,
@@ -237,12 +235,11 @@ async fn function_call(
         block.latest_protocol_version,
     )
     .await
-    .map_err(|err| {
-        tracing::debug!("Failed function call: {:?}", err);
-        near_jsonrpc_primitives::types::query::RpcQueryError::InternalError {
+    .map_err(
+        |err| near_jsonrpc_primitives::types::query::RpcQueryError::InternalError {
             error_message: format!("Function call failed: {:?}", err),
-        }
-    })?;
+        },
+    )?;
     match call_results.return_data.as_value() {
         Some(val) => Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
             kind: near_jsonrpc_primitives::types::query::QueryResponseKind::CallResult(
@@ -285,14 +282,13 @@ async fn view_state(
         prefix,
     )
     .await
-    .map_err(|err| {
-        tracing::warn!("Error in `view_state` call: {:?}", err);
-        near_jsonrpc_primitives::types::query::RpcQueryError::UnknownAccount {
+    .map_err(
+        |_err| near_jsonrpc_primitives::types::query::RpcQueryError::UnknownAccount {
             requested_account_id: account_id.clone(),
             block_height: block.block_height,
             block_hash: block.block_hash,
-        }
-    })?;
+        },
+    )?;
 
     Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc_primitives::types::query::QueryResponseKind::ViewState(contract_state),
@@ -325,9 +321,8 @@ async fn view_access_key(
         &key_data,
     )
     .await
-    .map_err(|err| {
-        tracing::warn!("Error in `view_access_key` call: {:?}", err);
-        match near_crypto::ED25519PublicKey::try_from(key_data.as_slice()) {
+    .map_err(
+        |_err| match near_crypto::ED25519PublicKey::try_from(key_data.as_slice()) {
             Ok(public_key) => {
                 near_jsonrpc_primitives::types::query::RpcQueryError::UnknownAccessKey {
                     public_key: public_key.into(),
@@ -338,8 +333,8 @@ async fn view_access_key(
             Err(_) => near_jsonrpc_primitives::types::query::RpcQueryError::InternalError {
                 error_message: "Failed to parse public key".to_string(),
             },
-        }
-    })?;
+        },
+    )?;
 
     Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc_primitives::types::query::QueryResponseKind::AccessKey(
