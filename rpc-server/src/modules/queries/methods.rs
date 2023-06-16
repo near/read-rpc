@@ -188,8 +188,8 @@ async fn view_code(
         fetch_contract_code_from_scylla_db(&data.scylla_db_manager, account_id, block.block_height)
             .await
             .map_err(|_err| {
-                near_jsonrpc_primitives::types::query::RpcQueryError::NoContractCode {
-                    contract_account_id: account_id.clone(),
+                near_jsonrpc_primitives::types::query::RpcQueryError::UnknownAccount {
+                    requested_account_id: account_id.clone(),
                     block_height: block.block_height,
                     block_hash: block.block_hash,
                 }
