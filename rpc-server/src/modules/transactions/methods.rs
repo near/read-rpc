@@ -203,7 +203,7 @@ async fn tx_status_common(
         Ok(
             near_jsonrpc_primitives::types::transactions::RpcTransactionResponse {
                 final_execution_outcome: FinalExecutionOutcomeWithReceipt(
-                    transaction_details.to_final_execution_outcome_with_receipt(),
+                    transaction_details.to_final_execution_outcome_with_receipts(),
                 ),
             },
         )
