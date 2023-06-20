@@ -203,8 +203,8 @@ impl ScyllaDBManager {
         &self,
         account_id: &near_primitives::types::AccountId,
         block_height: near_primitives::types::BlockHeight,
-    ) -> anyhow::Result<scylla::frame::response::result::Row> {
-        let result = Self::execute_prepared_query(
+    ) -> anyhow::Result<Vec<u8>> {
+        let (result,) = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_contract_code,
             (
@@ -213,7 +213,9 @@ impl ScyllaDBManager {
             ),
         )
         .await?
-        .single_row()?;
+        .single_row()?
+        .into_typed::<(Vec<u8>,)>()?;
+
         Ok(result)
     }
 

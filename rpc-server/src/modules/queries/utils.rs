@@ -64,36 +64,6 @@ pub async fn get_stata_keys_from_scylla(
     feature = "tracing-instrumentation",
     tracing::instrument(skip(scylla_db_manager))
 )]
-pub async fn fetch_contract_code_from_scylla_db(
-    scylla_db_manager: &std::sync::Arc<ScyllaDBManager>,
-    account_id: &near_primitives::types::AccountId,
-    block_height: near_primitives::types::BlockHeight,
-) -> anyhow::Result<Vec<u8>> {
-    tracing::debug!(
-        "`fetch_contract_code_from_scylla_db` call. AccountID {}, block {}",
-        account_id,
-        block_height,
-    );
-    let row = scylla_db_manager
-        .get_contract_code(account_id, block_height)
-        .await?;
-    let (code_data_from_scylla_db,): (Vec<u8>,) = row.into_typed::<(Vec<u8>,)>()?;
-
-    if code_data_from_scylla_db.is_empty() {
-        anyhow::bail!(
-            "Contract code for {} on block height {} is not found in ScyllaDB",
-            account_id,
-            block_height
-        )
-    } else {
-        Ok(code_data_from_scylla_db)
-    }
-}
-
-#[cfg_attr(
-    feature = "tracing-instrumentation",
-    tracing::instrument(skip(scylla_db_manager))
-)]
 pub async fn fetch_access_key_from_scylla_db(
     scylla_db_manager: &std::sync::Arc<ScyllaDBManager>,
     account_id: &near_primitives::types::AccountId,
@@ -277,9 +247,9 @@ pub async fn run_contract(
             near_primitives::contract::ContractCode::new(code, Some(contract.code_hash()))
         }
         None => {
-            let code =
-                fetch_contract_code_from_scylla_db(&scylla_db_manager, &account_id, block_height)
-                    .await?;
+            let code = scylla_db_manager
+                .get_contract_code(&account_id, block_height)
+                .await?;
             contract_code_cache
                 .write()
                 .unwrap()
