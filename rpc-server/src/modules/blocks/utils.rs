@@ -86,16 +86,36 @@ pub async fn fetch_chunk_from_s3(
     tracing::debug!("`fetch_chunk_from_s3` call");
     match fetch_shard_from_s3(s3_client, s3_bucket_name, block_height, shard_id).await {
         Ok(shard) => match shard.chunk {
-            Some(chunk) => Ok(near_primitives::views::ChunkView {
-                author: chunk.author,
-                header: chunk.header,
-                transactions: chunk
+            Some(chunk) => {
+                // We collect a list of local receipt ids to filter out local receipts from the chunk
+                let local_receipt_ids: Vec<near_indexer_primitives::CryptoHash> = chunk
                     .transactions
-                    .into_iter()
-                    .map(|indexer_transaction| indexer_transaction.transaction)
-                    .collect(),
-                receipts: chunk.receipts,
-            }),
+                    .iter()
+                    .map(|indexer_tx| {
+                        *indexer_tx
+                            .outcome
+                            .execution_outcome
+                            .outcome
+                            .receipt_ids
+                            .first()
+                            .expect("Conversion receipt_id must be present in transaction outcome")
+                    })
+                    .collect();
+                Ok(near_primitives::views::ChunkView {
+                    author: chunk.author,
+                    header: chunk.header,
+                    transactions: chunk
+                        .transactions
+                        .into_iter()
+                        .map(|indexer_transaction| indexer_transaction.transaction)
+                        .collect(),
+                    receipts: chunk
+                        .receipts
+                        .into_iter()
+                        .filter(|receipt| !local_receipt_ids.contains(&receipt.receipt_id))
+                        .collect(),
+                })
+            }
             None => Err(
                 near_jsonrpc_primitives::types::chunks::RpcChunkError::InternalError {
                     error_message: "Unavailable chunk".to_string(),
