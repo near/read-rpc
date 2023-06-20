@@ -82,7 +82,7 @@ impl TransactionDetails {
         }
     }
 
-    pub fn to_final_execution_outcome_with_receipt(
+    pub fn to_final_execution_outcome_with_receipts(
         &self,
     ) -> views::FinalExecutionOutcomeWithReceiptView {
         views::FinalExecutionOutcomeWithReceiptView {
@@ -90,7 +90,15 @@ impl TransactionDetails {
             receipts: self
                 .receipts
                 .iter()
-                .filter(|receipt| receipt.predecessor_id != receipt.receiver_id)
+                // We need to filter out the local receipts (which is the receipt transaction was converted into)
+                // because NEAR JSON RPC doesn't return them. We need to filter them out because they are not
+                // expected to be present in the final response from the JSON RPC.
+                .filter(|receipt| receipt.receipt_id != *self
+                    .transaction_outcome
+                    .outcome
+                    .receipt_ids
+                    .first()
+                    .expect("Transaction ExecutionOutcome must have exactly one receipt id in `receipt_ids`"))
                 .cloned()
                 .collect(),
         }
