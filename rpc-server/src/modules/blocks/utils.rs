@@ -91,6 +91,9 @@ pub async fn fetch_chunk_from_s3(
                 let local_receipt_ids: Vec<near_indexer_primitives::CryptoHash> = chunk
                     .transactions
                     .iter()
+                    .filter(|indexer_tx| {
+                        indexer_tx.transaction.signer_id == indexer_tx.transaction.receiver_id
+                    })
                     .map(|indexer_tx| {
                         *indexer_tx
                             .outcome
