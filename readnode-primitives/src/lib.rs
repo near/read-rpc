@@ -90,15 +90,22 @@ impl TransactionDetails {
             receipts: self
                 .receipts
                 .iter()
-                // We need to filter out the local receipts (which is the receipt transaction was converted into)
+                // We need to filter out the local receipts
+                // (which is the receipt transaction was converted into if transaction's signer and receiver are the same)
                 // because NEAR JSON RPC doesn't return them. We need to filter them out because they are not
                 // expected to be present in the final response from the JSON RPC.
-                .filter(|receipt| receipt.receipt_id != *self
+                .filter(|receipt|
+                    if self.transaction.signer_id == self.transaction.receiver_id {
+                        receipt.receipt_id != *self
                     .transaction_outcome
                     .outcome
                     .receipt_ids
                     .first()
-                    .expect("Transaction ExecutionOutcome must have exactly one receipt id in `receipt_ids`"))
+                    .expect("Transaction ExecutionOutcome must have exactly one receipt id in `receipt_ids`")
+                    } else {
+                        true
+                    }
+                )
                 .cloned()
                 .collect(),
         }
