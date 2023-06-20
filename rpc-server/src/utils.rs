@@ -170,9 +170,11 @@ where
 
     let config = Config::new(CompareMode::Strict).numeric_mode(NumericMode::AssumeFloat);
 
-    if let Err(err) =
-        assert_json_matches_no_panic(&readrpc_response_json, &near_rpc_response_json, config)
-    {
+    /// Sorts the values of the JSON objects before comparing them.
+    let read_rpc_json = json_sort_value(readrpc_response_json);
+    let near_rpc_json = json_sort_value(near_rpc_response_json);
+
+    if let Err(err) = assert_json_matches_no_panic(&read_rpc_json, &near_rpc_json, config) {
         return Err(ShadowDataConsistencyError::ResultsDontMatch(err));
     };
     Ok(())
@@ -190,4 +192,65 @@ pub enum ShadowDataConsistencyError {
     NearRpcCallError(String),
     #[error("Results don't match: {0}")]
     ResultsDontMatch(String),
+}
+
+/// Sort json value
+///
+/// 1. sort object key
+/// 2. sort array
+#[cfg(feature = "shadow_data_consistency")]
+fn json_sort_value(value: serde_json::Value) -> serde_json::Value {
+    match value {
+        serde_json::Value::Array(array) => {
+            let new_value: Vec<serde_json::Value> = array
+                .into_iter()
+                .enumerate()
+                .fold(
+                    std::collections::BTreeMap::new(),
+                    |mut map, (index, val)| {
+                        let sorted_value = json_sort_value(val);
+                        let key = format!("{}_{}", generate_array_key(&sorted_value), index);
+                        map.insert(key, sorted_value);
+                        map
+                    },
+                )
+                .into_iter()
+                .map(|(_, v)| v)
+                .collect();
+            serde_json::Value::from(new_value)
+        }
+        serde_json::Value::Object(obj) => {
+            let new_obj = obj
+                .into_iter()
+                .fold(serde_json::Map::new(), |mut map, (k, v)| {
+                    map.insert(k, json_sort_value(v));
+                    map
+                });
+            serde_json::Value::from(new_obj)
+        }
+        _ => value,
+    }
+}
+
+/// Generate array key for sorting
+#[cfg(feature = "shadow_data_consistency")]
+fn generate_array_key(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::Null => "__null__".to_string(),
+        serde_json::Value::Bool(bool_val) => {
+            if *bool_val {
+                "__true__".to_string()
+            } else {
+                "__false__".to_string()
+            }
+        }
+        serde_json::Value::Number(num) => num.to_string(),
+        serde_json::Value::String(s) => s.clone(),
+        serde_json::Value::Array(arr) => arr.iter().fold(String::new(), |str_key, arr_val| {
+            str_key + &generate_array_key(arr_val)
+        }),
+        serde_json::Value::Object(obj) => obj.iter().fold(String::new(), |str_key, (key, val)| {
+            format!("{}/{}:{}", str_key, key, val)
+        }),
+    }
 }
