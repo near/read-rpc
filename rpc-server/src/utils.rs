@@ -170,7 +170,7 @@ where
 
     let config = Config::new(CompareMode::Strict).numeric_mode(NumericMode::AssumeFloat);
 
-    /// Sorts the values of the JSON objects before comparing them.
+    // Sorts the values of the JSON objects before comparing them.
     let read_rpc_json = json_sort_value(readrpc_response_json);
     let near_rpc_json = json_sort_value(near_rpc_response_json);
 

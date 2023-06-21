@@ -5,8 +5,7 @@ use crate::modules::blocks::CacheBlock;
 #[cfg(feature = "account_access_keys")]
 use crate::modules::queries::utils::fetch_list_access_keys_from_scylla_db;
 use crate::modules::queries::utils::{
-    fetch_access_key_from_scylla_db, fetch_contract_code_from_scylla_db,
-    fetch_state_from_scylla_db, run_contract,
+    fetch_access_key_from_scylla_db, fetch_state_from_scylla_db, run_contract,
 };
 #[cfg(feature = "shadow_data_consistency")]
 use crate::utils::shadow_compare_results;
@@ -184,20 +183,35 @@ async fn view_code(
         account_id,
         block.block_height
     );
-    let code_data_from_db =
-        fetch_contract_code_from_scylla_db(&data.scylla_db_manager, account_id, block.block_height)
-            .await
-            .map_err(|_err| {
-                near_jsonrpc_primitives::types::query::RpcQueryError::UnknownAccount {
-                    requested_account_id: account_id.clone(),
-                    block_height: block.block_height,
-                    block_hash: block.block_hash,
-                }
-            })?;
+    let contract = data
+        .scylla_db_manager
+        .get_account(account_id, block.block_height)
+        .await
+        .map_err(
+            |_err| near_jsonrpc_primitives::types::query::RpcQueryError::UnknownAccount {
+                requested_account_id: account_id.clone(),
+                block_height: block.block_height,
+                block_hash: block.block_hash,
+            },
+        )?;
+    let contract_code = data
+        .scylla_db_manager
+        .get_contract_code(account_id, block.block_height)
+        .await
+        .map_err(
+            |_err| near_jsonrpc_primitives::types::query::RpcQueryError::NoContractCode {
+                contract_account_id: account_id.clone(),
+                block_height: block.block_height,
+                block_hash: block.block_hash,
+            },
+        )?;
     Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc_primitives::types::query::QueryResponseKind::ViewCode(
             near_primitives::views::ContractCodeView::from(
-                near_primitives::contract::ContractCode::new(code_data_from_db, None),
+                near_primitives::contract::ContractCode::new(
+                    contract_code,
+                    Some(contract.code_hash()),
+                ),
             ),
         ),
         block_height: block.block_height,
