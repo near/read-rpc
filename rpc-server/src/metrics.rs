@@ -23,6 +23,11 @@ lazy_static! {
         "Total number of the request where finality was set to optimistic"
     )
     .unwrap();
+    pub(crate) static ref SYNC_CHECKPOINT_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+        "total_sync_checkpoint_requests",
+        "Total number of the request where set sync_checkpoint"
+    )
+    .unwrap();
     pub(crate) static ref FINAL_BLOCK_HEIGHT: IntGauge = try_create_int_gauge(
         "final_block_height",
         "The final block height from the perspective of the READ RPC server"
