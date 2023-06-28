@@ -9,24 +9,162 @@ use crate::modules::blocks::utils::{
 use crate::utils::shadow_compare_results;
 use jsonrpc_v2::{Data, Params};
 
+use crate::utils::proxy_rpc_call;
 use near_primitives::trie_key::TrieKey;
 use near_primitives::views::StateChangeValueView;
 
+/// `block` rpc method implementation
+/// calls proxy_rpc_call to get `block` from near-rpc if request parameters not supported by read-rpc
+/// as example: block_id by SyncCheckpoint is not supported by read-rpc
+/// another way to get `block` from read-rpc using `block_call`
 #[allow(unused_mut)]
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn block(
     data: Data<ServerContext>,
     Params(mut params): Params<near_jsonrpc_primitives::types::blocks::RpcBlockRequest>,
 ) -> Result<near_jsonrpc_primitives::types::blocks::RpcBlockResponse, RPCError> {
-    tracing::debug!("`block` called with parameters: {:?}", params);
-
-    // Increase the OPTIMISTIC_REQUESTS_TOTAL metric if the request has optimistic finality.
-    if let near_primitives::types::BlockReference::Finality(finality) = &params.block_reference {
-        // Finality::None stands for optimistic finality.
-        if finality == &near_primitives::types::Finality::None {
-            crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
+    match &params.block_reference {
+        near_primitives::types::BlockReference::SyncCheckpoint(_) => {
+            // Increase the SYNC_CHECKPOINT_REQUESTS_TOTAL metric if the request has
+            // genesis sync_checkpoint or earliest_available sync_checkpoint
+            // and proxy to near-rpc
+            crate::metrics::SYNC_CHECKPOINT_REQUESTS_TOTAL.inc();
+            let block_view = proxy_rpc_call(&data.near_rpc_client, params).await?;
+            Ok(near_jsonrpc_primitives::types::blocks::RpcBlockResponse { block_view })
+        }
+        near_primitives::types::BlockReference::Finality(finality) => {
+            if finality != &near_primitives::types::Finality::Final {
+                // Increase the SYNC_CHECKPOINT_REQUESTS_TOTAL metric if the request has
+                // genesis sync_checkpoint or earliest_available sync_checkpoint
+                // and proxy to near-rpc
+                crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
+                let block_view = proxy_rpc_call(&data.near_rpc_client, params).await?;
+                Ok(near_jsonrpc_primitives::types::blocks::RpcBlockResponse { block_view })
+            } else {
+                block_call(data, Params(params)).await
+            }
+        }
+        near_primitives::types::BlockReference::BlockId(_) => {
+            block_call(data, Params(params)).await
         }
     }
+}
+
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
+pub async fn chunk(
+    data: Data<ServerContext>,
+    Params(params): Params<near_jsonrpc_primitives::types::chunks::RpcChunkRequest>,
+) -> Result<near_jsonrpc_primitives::types::chunks::RpcChunkResponse, RPCError> {
+    tracing::debug!("`chunk` called with parameters: {:?}", params);
+    crate::metrics::CHUNK_REQUESTS_TOTAL.inc();
+    let result = fetch_chunk(&data, params.chunk_reference.clone()).await;
+    #[cfg(feature = "shadow_data_consistency")]
+    {
+        let near_rpc_client = data.near_rpc_client.clone();
+        let error_meta = format!("CHUNK: {:?}", params);
+        let read_rpc_response_json = match &result {
+            Ok(res) => serde_json::to_value(&res.chunk_view),
+            Err(err) => serde_json::to_value(err),
+        };
+        let comparison_result =
+            shadow_compare_results(read_rpc_response_json, near_rpc_client, params).await;
+
+        match comparison_result {
+            Ok(_) => {
+                tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", error_meta);
+            }
+            Err(err) => {
+                tracing::warn!(target: "shadow_data_consistency", "Shadow data check: ERROR\n{}\n{:?}", error_meta, err);
+                crate::metrics::CHUNK_PROXIES_TOTAL.inc()
+            }
+        }
+    }
+    Ok(result.map_err(near_jsonrpc_primitives::errors::RpcError::from)?)
+}
+
+/// `EXPERIMENTAL_changes` rpc method implementation
+/// calls proxy_rpc_call to get `EXPERIMENTAL_changes` from near-rpc if request parameters not supported by read-rpc
+/// as example: BlockReference for SyncCheckpoint is not supported by read-rpc
+/// another way to get `EXPERIMENTAL_changes` from read-rpc using `changes_in_block_by_type_call`
+#[allow(unused_mut)]
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
+pub async fn changes_in_block_by_type(
+    data: Data<ServerContext>,
+    Params(mut params): Params<
+        near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockByTypeRequest,
+    >,
+) -> Result<near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockResponse, RPCError> {
+    match &params.block_reference {
+        near_primitives::types::BlockReference::SyncCheckpoint(_) => {
+            // Increase the SYNC_CHECKPOINT_REQUESTS_TOTAL metric if the request has
+            // genesis sync_checkpoint or earliest_available sync_checkpoint
+            // and proxy to near-rpc
+            crate::metrics::SYNC_CHECKPOINT_REQUESTS_TOTAL.inc();
+            Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
+        }
+        near_primitives::types::BlockReference::Finality(finality) => {
+            if finality != &near_primitives::types::Finality::Final {
+                // Increase the OPTIMISTIC_REQUESTS_TOTAL metric if the request has
+                // optimistic finality or doom_slug finality
+                // and proxy to near-rpc
+                crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
+                Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
+            } else {
+                changes_in_block_by_type_call(data, Params(params)).await
+            }
+        }
+        near_primitives::types::BlockReference::BlockId(_) => {
+            changes_in_block_by_type_call(data, Params(params)).await
+        }
+    }
+}
+
+/// `EXPERIMENTAL_changes_in_block` rpc method implementation
+/// calls proxy_rpc_call to get `EXPERIMENTAL_changes_in_block` from near-rpc if request parameters not supported by read-rpc
+/// as example: BlockReference for SyncCheckpoint is not supported by read-rpc
+/// another way to get `EXPERIMENTAL_changes_in_block` from read-rpc using `changes_in_block_call`
+#[allow(unused_mut)]
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
+pub async fn changes_in_block(
+    data: Data<ServerContext>,
+    Params(mut params): Params<
+        near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockRequest,
+    >,
+) -> Result<near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockByTypeResponse, RPCError>
+{
+    match &params.block_reference {
+        near_primitives::types::BlockReference::SyncCheckpoint(_) => {
+            // Increase the SYNC_CHECKPOINT_REQUESTS_TOTAL metric if the request has
+            // genesis sync_checkpoint or earliest_available sync_checkpoint
+            // and proxy to near-rpc
+            crate::metrics::SYNC_CHECKPOINT_REQUESTS_TOTAL.inc();
+            Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
+        }
+        near_primitives::types::BlockReference::Finality(finality) => {
+            if finality != &near_primitives::types::Finality::Final {
+                // Increase the OPTIMISTIC_REQUESTS_TOTAL metric if the request has
+                // optimistic finality or doom_slug finality
+                // and proxy to near-rpc
+                crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
+                Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
+            } else {
+                changes_in_block_call(data, Params(params)).await
+            }
+        }
+        near_primitives::types::BlockReference::BlockId(_) => {
+            changes_in_block_call(data, Params(params)).await
+        }
+    }
+}
+
+/// fetch block from read-rpc
+#[allow(unused_mut)]
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
+async fn block_call(
+    data: Data<ServerContext>,
+    Params(mut params): Params<near_jsonrpc_primitives::types::blocks::RpcBlockRequest>,
+) -> Result<near_jsonrpc_primitives::types::blocks::RpcBlockResponse, RPCError> {
+    tracing::debug!("`block` called with parameters: {:?}", params);
     crate::metrics::BLOCK_REQUESTS_TOTAL.inc();
     let result = fetch_block(&data, params.block_reference.clone()).await;
 
@@ -63,54 +201,16 @@ pub async fn block(
     Ok(result.map_err(near_jsonrpc_primitives::errors::RpcError::from)?)
 }
 
-#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
-pub async fn chunk(
-    data: Data<ServerContext>,
-    Params(params): Params<near_jsonrpc_primitives::types::chunks::RpcChunkRequest>,
-) -> Result<near_jsonrpc_primitives::types::chunks::RpcChunkResponse, RPCError> {
-    tracing::debug!("`chunk` called with parameters: {:?}", params);
-    crate::metrics::CHUNK_REQUESTS_TOTAL.inc();
-    let result = fetch_chunk(&data, params.chunk_reference.clone()).await;
-    #[cfg(feature = "shadow_data_consistency")]
-    {
-        let near_rpc_client = data.near_rpc_client.clone();
-        let error_meta = format!("CHUNK: {:?}", params);
-        let read_rpc_response_json = match &result {
-            Ok(res) => serde_json::to_value(&res.chunk_view),
-            Err(err) => serde_json::to_value(err),
-        };
-        let comparison_result =
-            shadow_compare_results(read_rpc_response_json, near_rpc_client, params).await;
-
-        match comparison_result {
-            Ok(_) => {
-                tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", error_meta);
-            }
-            Err(err) => {
-                tracing::warn!(target: "shadow_data_consistency", "Shadow data check: ERROR\n{}\n{:?}", error_meta, err);
-                crate::metrics::CHUNK_PROXIES_TOTAL.inc()
-            }
-        }
-    }
-    Ok(result.map_err(near_jsonrpc_primitives::errors::RpcError::from)?)
-}
-
+/// fetch changes_in_block from read-rpc
 #[allow(unused_mut)]
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
-pub async fn changes_in_block(
+async fn changes_in_block_call(
     data: Data<ServerContext>,
     Params(mut params): Params<
         near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockRequest,
     >,
 ) -> Result<near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockByTypeResponse, RPCError>
 {
-    // Increase the OPTIMISTIC_REQUESTS_TOTAL metric if the request has optimistic finality.
-    if let near_primitives::types::BlockReference::Finality(finality) = &params.block_reference {
-        // Finality::None stands for optimistic finality.
-        if finality == &near_primitives::types::Finality::None {
-            crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
-        }
-    }
     crate::metrics::CHNGES_IN_BLOCK_REQUESTS_TOTAL.inc();
     let block = fetch_block_from_cache_or_get(&data, params.block_reference.clone())
         .await
@@ -146,21 +246,15 @@ pub async fn changes_in_block(
     Ok(result.map_err(near_jsonrpc_primitives::errors::RpcError::from)?)
 }
 
+/// fetch changes_in_block_by_type from read-rpc
 #[allow(unused_mut)]
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
-pub async fn changes_in_block_by_type(
+async fn changes_in_block_by_type_call(
     data: Data<ServerContext>,
     Params(mut params): Params<
         near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockByTypeRequest,
     >,
 ) -> Result<near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockResponse, RPCError> {
-    // Increase the OPTIMISTIC_REQUESTS_TOTAL metric if the request has optimistic finality.
-    if let near_primitives::types::BlockReference::Finality(finality) = &params.block_reference {
-        // Finality::None stands for optimistic finality.
-        if finality == &near_primitives::types::Finality::None {
-            crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
-        }
-    }
     crate::metrics::CHNGES_IN_BLOCK_BY_TYPE_REQUESTS_TOTAL.inc();
     let block = fetch_block_from_cache_or_get(&data, params.block_reference.clone())
         .await
