@@ -100,9 +100,10 @@ pub async fn update_final_block_height_regularly(
 /// Otherwise, it returns `Err(ShadowDataConsistencyError)`.
 #[cfg(feature = "shadow_data_consistency")]
 pub async fn shadow_compare_results<M>(
-    readrpc_response: Result<serde_json::Value, serde_json::Error>,
+    read_rpc_response: Result<serde_json::Value, serde_json::Error>,
     client: near_jsonrpc_client::JsonRpcClient,
     params: M,
+    read_rpc_response_success: bool,
 ) -> Result<(), ShadowDataConsistencyError>
 where
     M: near_jsonrpc_client::methods::RpcMethod + std::fmt::Debug,
@@ -110,9 +111,8 @@ where
     <M as near_jsonrpc_client::methods::RpcMethod>::Error: std::fmt::Debug + serde::ser::Serialize,
 {
     tracing::debug!(target: "shadow_data_consistency", "Compare results. {:?}", params);
-
-    let readrpc_response_json = match readrpc_response {
-        Ok(readrpc_response_json) => readrpc_response_json,
+    let read_rpc_response_json = match read_rpc_response {
+        Ok(read_rpc_response_json) => read_rpc_response_json,
         Err(err) => {
             return Err(ShadowDataConsistencyError::ReadRpcResponseParseError(err));
         }
@@ -120,7 +120,7 @@ where
 
     let mut near_rpc_response = client.call(&params).await;
 
-    for _ in 0..3 {
+    for _ in 0..crate::config::DEFAULT_RETRY_COUNT {
         if let Err(json_rpc_err) = &near_rpc_response {
             let retry = match json_rpc_err {
                 near_jsonrpc_client::errors::JsonRpcError::TransportError(_) => true,
@@ -144,9 +144,9 @@ where
         }
     }
 
-    let near_rpc_response_json = match near_rpc_response {
+    let (near_rpc_response_json, near_rpc_response_success) = match near_rpc_response {
         Ok(result) => match serde_json::to_value(&result) {
-            Ok(near_rpc_response_json) => near_rpc_response_json,
+            Ok(near_rpc_response_json) => (near_rpc_response_json, true),
             Err(err) => {
                 return Err(ShadowDataConsistencyError::NearRpcResponseParseError(err));
             }
@@ -154,7 +154,7 @@ where
         Err(err) => {
             if let Some(e) = err.handler_error() {
                 match serde_json::to_value(&e) {
-                    Ok(near_rpc_response_json) => near_rpc_response_json,
+                    Ok(near_rpc_response_json) => (near_rpc_response_json, false),
                     Err(err) => {
                         return Err(ShadowDataConsistencyError::NearRpcResponseParseError(err));
                     }
@@ -171,10 +171,48 @@ where
     let config = Config::new(CompareMode::Strict).numeric_mode(NumericMode::AssumeFloat);
 
     // Sorts the values of the JSON objects before comparing them.
-    let read_rpc_json = json_sort_value(readrpc_response_json);
+    let read_rpc_json = json_sort_value(read_rpc_response_json);
     let near_rpc_json = json_sort_value(near_rpc_response_json);
 
     if let Err(err) = assert_json_matches_no_panic(&read_rpc_json, &near_rpc_json, config) {
+        // separate mismatching successful and failure responses into different targets
+        // to make it easier to find reasons of the mismatching
+
+        if read_rpc_response_success && near_rpc_response_success {
+            // Both services(read_rpc and near_rpc) have a successful response
+            // if data mismatch we are logging into `shadow_data_consistency_successful_responses`
+            // both response objects for future investigation.
+            tracing::warn!(target: "shadow_data_consistency_successful_responses",
+                "Shadow data check: DATA MISMATCH\n READ_RPC_DATA: {:?}\n NEAR_RPC_DATA: {:?}\n",
+                read_rpc_json,
+                near_rpc_json,
+            );
+        } else if !read_rpc_response_success && near_rpc_response_success {
+            // read_rpc service has failure response
+            // and near_rpc has successful response we are logging into
+            // `shadow_data_consistency_read_rpc_failure_response` just message about mismatch
+            // data without objects.
+            // In the future we should be investigate why we got error in the read_rpc.
+            tracing::warn!(target: "shadow_data_consistency_read_rpc_failure_response",
+                "Shadow data check: read_rpc response failed, near_rpc response success");
+        } else if read_rpc_response_success && !near_rpc_response_success {
+            // read_rpc service has successful response
+            // and near_rpc has failure response we are logging into
+            // `shadow_data_consistency_near_failure_response` just message about mismatch
+            // data without objects. Expected that all error will be related with network issues.
+            tracing::warn!(target: "shadow_data_consistency_near_failure_response",
+                "Shadow data check: read_rpc response success, near_rpc response failed");
+        } else {
+            // Both services(read_rpc and near_rpc) have a failure response
+            // we are logging into `shadow_data_consistency_failure_responses`
+            // both response objects for future investigation.
+            // expected we will only have a difference in the error text.
+            tracing::warn!(target: "shadow_data_consistency_failure_responses",
+                "Shadow data check: DATA MISMATCH\n READ_RPC_DATA: {:?}\n NEAR_RPC_DATA: {:?}\n",
+                read_rpc_json,
+                near_rpc_json,
+            );
+        }
         return Err(ShadowDataConsistencyError::ResultsDontMatch(err));
     };
     Ok(())

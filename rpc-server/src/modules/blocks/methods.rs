@@ -62,12 +62,17 @@ pub async fn chunk(
     {
         let near_rpc_client = data.near_rpc_client.clone();
         let error_meta = format!("CHUNK: {:?}", params);
-        let read_rpc_response_json = match &result {
-            Ok(res) => serde_json::to_value(&res.chunk_view),
-            Err(err) => serde_json::to_value(err),
+        let (read_rpc_response_json, response_success) = match &result {
+            Ok(res) => (serde_json::to_value(&res.chunk_view), true),
+            Err(err) => (serde_json::to_value(err), false),
         };
-        let comparison_result =
-            shadow_compare_results(read_rpc_response_json, near_rpc_client, params).await;
+        let comparison_result = shadow_compare_results(
+            read_rpc_response_json,
+            near_rpc_client,
+            params,
+            response_success,
+        )
+        .await;
 
         match comparison_result {
             Ok(_) => {
@@ -172,7 +177,7 @@ async fn block_call(
     {
         let near_rpc_client = data.near_rpc_client.clone();
         let error_meta = format!("BLOCK: {:?}", params);
-        let read_rpc_response_json = match &result {
+        let (read_rpc_response_json, response_success) = match &result {
             Ok(res) => {
                 if let near_primitives::types::BlockReference::Finality(_) = params.block_reference
                 {
@@ -180,12 +185,17 @@ async fn block_call(
                         near_primitives::types::BlockId::Height(res.block_view.header.height),
                     )
                 };
-                serde_json::to_value(&res.block_view)
+                (serde_json::to_value(&res.block_view), true)
             }
-            Err(err) => serde_json::to_value(err),
+            Err(err) => (serde_json::to_value(err), false),
         };
-        let comparison_result =
-            shadow_compare_results(read_rpc_response_json, near_rpc_client, params).await;
+        let comparison_result = shadow_compare_results(
+            read_rpc_response_json,
+            near_rpc_client,
+            params,
+            response_success,
+        )
+        .await;
 
         match comparison_result {
             Ok(_) => {
@@ -225,12 +235,17 @@ async fn changes_in_block_call(
             )
         }
         let error_meta = format!("CHANGES_IN_BLOCK: {:?}", params);
-        let read_rpc_response_json = match &result {
-            Ok(res) => serde_json::to_value(res),
-            Err(err) => serde_json::to_value(err),
+        let (read_rpc_response_json, response_success) = match &result {
+            Ok(res) => (serde_json::to_value(res), true),
+            Err(err) => (serde_json::to_value(err), false),
         };
-        let comparison_result =
-            shadow_compare_results(read_rpc_response_json, near_rpc_client, params).await;
+        let comparison_result = shadow_compare_results(
+            read_rpc_response_json,
+            near_rpc_client,
+            params,
+            response_success,
+        )
+        .await;
 
         match comparison_result {
             Ok(_) => {
@@ -270,12 +285,17 @@ async fn changes_in_block_by_type_call(
             )
         }
         let error_meta = format!("CHANGES_IN_BLOCK_BY_TYPE: {:?}", params);
-        let read_rpc_response_json = match &result {
-            Ok(res) => serde_json::to_value(res),
-            Err(err) => serde_json::to_value(err),
+        let (read_rpc_response_json, response_success) = match &result {
+            Ok(res) => (serde_json::to_value(res), true),
+            Err(err) => (serde_json::to_value(err), false),
         };
-        let comparison_result =
-            shadow_compare_results(read_rpc_response_json, near_rpc_client, params).await;
+        let comparison_result = shadow_compare_results(
+            read_rpc_response_json,
+            near_rpc_client,
+            params,
+            response_success,
+        )
+        .await;
 
         match comparison_result {
             Ok(_) => {

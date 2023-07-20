@@ -29,10 +29,9 @@ pub async fn tx(
     {
         let near_rpc_client = data.near_rpc_client.clone();
         let error_meta = format!("TX: {:?}", params);
-
-        let read_rpc_response_json = match &result {
-            Ok(res) => serde_json::to_value(res),
-            Err(err) => serde_json::to_value(err),
+        let (read_rpc_response_json, response_success) = match &result {
+            Ok(res) => (serde_json::to_value(res), true),
+            Err(err) => (serde_json::to_value(err), false),
         };
 
         let comparison_result = shadow_compare_results(
@@ -44,12 +43,13 @@ pub async fn tx(
             near_jsonrpc_client::methods::tx::RpcTransactionStatusRequest {
                 transaction_info: tx_status_request.transaction_info,
             },
+            response_success,
         )
         .await;
 
         match comparison_result {
             Ok(_) => {
-                tracing::info!(target: "shadow-data-consistency", "Shadow data check: CORRECT\n{}", error_meta);
+                tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", error_meta);
             }
             Err(err) => {
                 tracing::warn!(target: "shadow_data_consistency", "Shadow data check: ERROR\n{}\n{:?}", error_meta, err);
@@ -79,9 +79,9 @@ pub async fn tx_status(
         let near_rpc_client = data.near_rpc_client.clone();
         let error_meta = format!("EXPERIMENTAL_TX_STATUS: {:?}", params);
 
-        let read_rpc_response_json = match &result {
-            Ok(res) => serde_json::to_value(res),
-            Err(err) => serde_json::to_value(err),
+        let (read_rpc_response_json, response_success) = match &result {
+            Ok(res) => (serde_json::to_value(res), true),
+            Err(err) => (serde_json::to_value(err), false),
         };
 
         let comparison_result = shadow_compare_results(
@@ -93,12 +93,13 @@ pub async fn tx_status(
             near_jsonrpc_client::methods::EXPERIMENTAL_tx_status::RpcTransactionStatusRequest {
                 transaction_info: tx_status_request.transaction_info,
             },
+            response_success,
         )
         .await;
 
         match comparison_result {
             Ok(_) => {
-                tracing::info!(target: "shadow-data-consistency", "Shadow data check: CORRECT\n{}", error_meta);
+                tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", error_meta);
             }
             Err(err) => {
                 tracing::warn!(target: "shadow_data_consistency", "Shadow data check: ERROR\n{}\n{:?}", error_meta, err);
