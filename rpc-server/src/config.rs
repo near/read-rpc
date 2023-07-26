@@ -1,6 +1,8 @@
 use crate::modules::blocks::CacheBlock;
 use clap::Parser;
 
+pub const DEFAULT_RETRY_COUNT: u8 = 3;
+
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
 pub struct Opts {
