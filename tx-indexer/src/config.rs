@@ -175,10 +175,8 @@ pub fn init_tracing() -> anyhow::Result<()> {
     );
     let tracer = opentelemetry_jaeger::new_collector_pipeline()
         .with_service_name("tx_indexer")
-        .with_endpoint("http://localhost:14268/api/traces")
+        .with_endpoint(std::env::var("OTEL_EXPORTER_JAEGER_ENDPOINT").unwrap_or_default())
         .with_isahc()
-        // .with_max_packet_size(9_216)
-        // .with_auto_split_batch(true)
         .with_batch_processor_config(
             opentelemetry::sdk::trace::BatchConfig::default()
                 .with_max_queue_size(10_000)
