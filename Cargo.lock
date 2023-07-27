@@ -139,7 +139,7 @@ dependencies = [
  "futures-util",
  "mio",
  "num_cpus",
- "socket2",
+ "socket2 0.4.9",
  "tokio",
  "tracing",
 ]
@@ -201,7 +201,7 @@ dependencies = [
  "serde_json",
  "serde_urlencoded",
  "smallvec",
- "socket2",
+ "socket2 0.4.9",
  "time 0.3.21",
  "url",
 ]
@@ -1594,7 +1594,7 @@ dependencies = [
  "openssl-probe",
  "openssl-sys",
  "schannel",
- "socket2",
+ "socket2 0.4.9",
  "winapi",
 ]
 
@@ -2461,7 +2461,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2",
+ "socket2 0.4.9",
  "tokio",
  "tower-service",
  "tracing",
@@ -4609,9 +4609,9 @@ dependencies = [
 
 [[package]]
 name = "scylla"
-version = "0.8.1"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "530af73ae66ea56dcc2dd6a8900b442c31da0f068923ea41e0b0f3d0703b067c"
+checksum = "53b0771b8c0333f0dadd0d3f41a5ef2df5416c0b132a1e5297dfa0b1924406ef"
 dependencies = [
  "arc-swap",
  "async-trait",
@@ -4632,6 +4632,7 @@ dependencies = [
  "scylla-macros",
  "smallvec",
  "snap",
+ "socket2 0.5.3",
  "strum 0.23.0",
  "strum_macros 0.23.1",
  "thiserror",
@@ -4642,9 +4643,9 @@ dependencies = [
 
 [[package]]
 name = "scylla-cql"
-version = "0.0.6"
+version = "0.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0fc8568c89b1d70547881610ad2423157267d57552edb4861e6bd4394e53f26c"
+checksum = "d7ed843e6c6a19c7a719f02f4d9d264beb00f2867d994442fd8b7d66f5af2781"
 dependencies = [
  "async-trait",
  "bigdecimal",
@@ -4999,6 +5000,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "socket2"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2538b18701741680e0322a2302176d3253a35388e2e62f172f64f4f16605f877"
+dependencies = [
+ "libc",
+ "windows-sys 0.48.0",
+]
+
+[[package]]
 name = "spin"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5307,7 +5318,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "pin-project-lite",
  "signal-hook-registry",
- "socket2",
+ "socket2 0.4.9",
  "tokio-macros",
  "tracing",
  "windows-sys 0.48.0",

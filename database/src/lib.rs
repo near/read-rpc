@@ -342,6 +342,7 @@ pub trait ScyllaStorageManager {
 
         let mut session: scylla::SessionBuilder = scylla::SessionBuilder::new()
             .known_node(scylla_url)
+            .write_coalescing(false) // ref: https://docs.rs/scylla/0.8.2/scylla/transport/session_builder/type.SessionBuilder.html#method.write_coalescing
             .default_execution_profile_handle(scylla_execution_profile_handle);
 
         if let Some(keepalive) = keepalive_interval {
