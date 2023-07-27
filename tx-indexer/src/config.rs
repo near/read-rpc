@@ -168,16 +168,22 @@ pub fn init_tracing() -> anyhow::Result<()> {
         }
     }
 
+    opentelemetry::global::shutdown_tracer_provider();
+
     opentelemetry::global::set_text_map_propagator(
         opentelemetry::sdk::propagation::TraceContextPropagator::new(),
     );
     let tracer = opentelemetry_jaeger::new_collector_pipeline()
         .with_service_name("tx_indexer")
+        .with_endpoint("http://localhost:14268/api/traces")
         .with_isahc()
         // .with_max_packet_size(9_216)
         // .with_auto_split_batch(true)
         .with_batch_processor_config(
-            opentelemetry::sdk::trace::BatchConfig::default().with_max_queue_size(100),
+            opentelemetry::sdk::trace::BatchConfig::default()
+                .with_max_queue_size(10_000)
+                .with_max_export_batch_size(10_000)
+                .with_max_concurrent_exports(100),
         )
         .install_batch(opentelemetry::runtime::TokioCurrentThread)?;
     let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
@@ -193,9 +199,6 @@ pub fn init_tracing() -> anyhow::Result<()> {
             .with(tracing_subscriber::fmt::Layer::default().compact())
             .try_init()?;
     }
-
-    #[cfg(feature = "tracing-instrumentation")]
-    opentelemetry::global::shutdown_tracer_provider();
 
     Ok(())
 }
