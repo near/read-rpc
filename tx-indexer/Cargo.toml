@@ -37,13 +37,13 @@ tracing-subscriber = { version = "0.3.15", features = [
     "std",
     "json",
 ] }
-opentelemetry = { version = "0.17", features = ["rt-tokio-current-thread"] }
-opentelemetry-jaeger = { version = "0.16", features = [
+opentelemetry = { version = "0.19", features = ["rt-tokio-current-thread"] }
+opentelemetry-jaeger = { version = "0.18", features = [
     "rt-tokio-current-thread",
     "collector_client",
     "isahc_collector_client",
 ] }
-tracing-opentelemetry = { version = "0.17" }
+tracing-opentelemetry = { version = "0.19" }
 tracing-stackdriver = "0.7.2" # GCP logs
 
 database = { path = "../database" }
