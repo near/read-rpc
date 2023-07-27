@@ -99,7 +99,10 @@ async fn handle_streamer_message(
     let tx_future =
         collector::index_transactions(&streamer_message, scylla_db_client, hash_storage);
 
-    match futures::try_join!(tx_future) {
+    let update_meta_future =
+        scylla_db_client.update_meta(indexer_id, streamer_message.block.header.height);
+
+    match futures::try_join!(tx_future, update_meta_future) {
         Ok(_) => tracing::debug!(
             target: INDEXER,
             "#{} collecting transaction details successful",
@@ -112,9 +115,6 @@ async fn handle_streamer_message(
             e
         ),
     };
-    scylla_db_client
-        .update_meta(indexer_id, streamer_message.block.header.height)
-        .await?;
 
     metrics::BLOCK_PROCESSED_TOTAL.inc();
     // Prometheus Gauge Metric type do not support u64
