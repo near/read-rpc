@@ -350,7 +350,7 @@ pub trait ScyllaStorageManager {
         let mut session: scylla::SessionBuilder = scylla::SessionBuilder::new()
             .known_nodes(
                 scylla_url
-                    .split(",")
+                    .split(',')
                     .map(|s| s.trim().to_string())
                     .collect::<Vec<_>>(),
             )
