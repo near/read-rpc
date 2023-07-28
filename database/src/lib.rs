@@ -348,7 +348,12 @@ pub trait ScyllaStorageManager {
             .into_handle();
 
         let mut session: scylla::SessionBuilder = scylla::SessionBuilder::new()
-            .known_node(scylla_url)
+            .known_nodes(
+                scylla_url
+                    .split(",")
+                    .map(|s| s.trim().to_string())
+                    .collect::<Vec<_>>(),
+            )
             .write_coalescing(false) // ref: https://docs.rs/scylla/0.8.2/scylla/transport/session_builder/type.SessionBuilder.html#method.write_coalescing
             .default_execution_profile_handle(scylla_execution_profile_handle);
 
