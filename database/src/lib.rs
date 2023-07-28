@@ -75,7 +75,8 @@ use scylla::prepared_statement::PreparedStatement;
 use scylla::retry_policy::{QueryInfo, RetryDecision};
 use scylla::transport::errors::QueryError;
 use scylla::transport::host_filter::AllowListHostFilter;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::SocketAddr;
+use std::str::FromStr;
 
 #[derive(Debug)]
 pub struct CustomDBRetryPolicy {
@@ -343,8 +344,11 @@ pub trait ScyllaStorageManager {
             .into_handle();
 
         // let allowed_hosts: Vec<IpAddr> = vec!["172.31.0.22".parse().unwrap()];
+        // let allowed_host =
+        //     AllowListHostFilter::new(vec!["172.31.0.22".to_string().parse::<String>().unwrap()])
+        //         .unwrap();
         let allowed_host =
-            AllowListHostFilter::new(vec!["172.31.0.22".to_string().parse::<String>().unwrap()])
+            AllowListHostFilter::new(vec![SocketAddr::from_str("172.31.0.22:9042").unwrap()])
                 .unwrap();
 
         let mut session: scylla::SessionBuilder = scylla::SessionBuilder::new()
