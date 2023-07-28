@@ -74,6 +74,7 @@
 use scylla::prepared_statement::PreparedStatement;
 use scylla::retry_policy::{QueryInfo, RetryDecision};
 use scylla::transport::errors::QueryError;
+use std::net::{IpAddr, Ipv4Addr};
 
 #[derive(Debug)]
 pub struct CustomDBRetryPolicy {
@@ -342,6 +343,16 @@ pub trait ScyllaStorageManager {
 
         let mut session: scylla::SessionBuilder = scylla::SessionBuilder::new()
             .known_node(scylla_url)
+            .host_filter(std::sync::Arc::new(
+                <dyn scylla::transport::host_filter::HostFilter>::AllowListHostFilter::new([
+                    "172.31.0.22",
+                ]),
+            ))
+            // .host_filter(std::sync::Arc::new(
+            //     scylla::transport::host_filter::AllowListHostFilter::new(IpAddr::V4(
+            //         Ipv4Addr::new(172, 31, 0, 22),
+            //     )),
+            // ))
             .default_execution_profile_handle(scylla_execution_profile_handle);
 
         if let Some(keepalive) = keepalive_interval {
