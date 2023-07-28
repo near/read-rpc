@@ -30,58 +30,69 @@ impl ScyllaStorageManager for ScyllaDBManager {
             get_block_by_hash: Self::prepare_query(
                 &scylla_db_session,
                 "SELECT block_height FROM state_indexer.chunks WHERE block_hash = ? LIMIT 1",
+                None,
             ).await?,
 
             get_block_by_chunk_id: Self::prepare_query(
                 &scylla_db_session,
                 "SELECT block_height, shard_id FROM state_indexer.chunks WHERE chunk_hash = ? LIMIT 1",
+                None,
             ).await?,
 
             get_all_state_keys: Self::prepare_query(
                 &scylla_db_session,
-                "SELECT data_key FROM state_indexer.account_state WHERE account_id = ?"
+                "SELECT data_key FROM state_indexer.account_state WHERE account_id = ?",
+                None,
             ).await?,
 
             get_state_keys_by_prefix: Self::prepare_query(
                 &scylla_db_session,
-                "SELECT data_key FROM state_indexer.account_state WHERE account_id = ? AND data_key LIKE ?"
+                "SELECT data_key FROM state_indexer.account_state WHERE account_id = ? AND data_key LIKE ?",
+                None,
             ).await?,
 
             get_state_key_value: Self::prepare_query(
                 &scylla_db_session,
-                "SELECT data_value FROM state_indexer.state_changes_data WHERE account_id = ? AND block_height <= ? AND data_key = ? LIMIT 1"
+                "SELECT data_value FROM state_indexer.state_changes_data WHERE account_id = ? AND block_height <= ? AND data_key = ? LIMIT 1",
+                None,
             ).await?,
 
             get_account: Self::prepare_query(
                 &scylla_db_session,
-                "SELECT data_value FROM state_indexer.state_changes_account WHERE account_id = ? AND block_height <= ? LIMIT 1"
+                "SELECT data_value FROM state_indexer.state_changes_account WHERE account_id = ? AND block_height <= ? LIMIT 1",
+                None,
             ).await?,
 
             get_contract_code: Self::prepare_query(
                 &scylla_db_session,
-                "SELECT data_value FROM state_indexer.state_changes_contract WHERE account_id = ? AND block_height <= ? LIMIT 1"
+                "SELECT data_value FROM state_indexer.state_changes_contract WHERE account_id = ? AND block_height <= ? LIMIT 1",
+                None,
             ).await?,
 
             get_access_key: Self::prepare_query(
                 &scylla_db_session,
-                "SELECT data_value FROM state_indexer.state_changes_access_key WHERE account_id = ? AND block_height <= ? AND data_key = ? LIMIT 1"
+                "SELECT data_value FROM state_indexer.state_changes_access_key WHERE account_id = ? AND block_height <= ? AND data_key = ? LIMIT 1",
+                None,
             ).await?,
             #[cfg(feature = "account_access_keys")]
             get_account_access_keys: Self::prepare_query(
                 &scylla_db_session,
-                "SELECT active_access_keys FROM state_indexer.account_access_keys WHERE account_id = ? AND block_height <= ? LIMIT 1"
+                "SELECT active_access_keys FROM state_indexer.account_access_keys WHERE account_id = ? AND block_height <= ? LIMIT 1",
+                None,
             ).await?,
 
             get_receipt: Self::prepare_query(
                 &scylla_db_session,
-                "SELECT receipt_id, parent_transaction_hash, block_height, shard_id FROM tx_indexer.receipts_map WHERE receipt_id = ?"
+                "SELECT receipt_id, parent_transaction_hash, block_height, shard_id FROM tx_indexer.receipts_map WHERE receipt_id = ?",
+                None,
             ).await?,
 
             // Using LIMIT 1 here as transactions is expected to be ordered by block_height but we know about hash collisions
             // ref: https://github.com/near/near-indexer-for-explorer/issues/84
             get_transaction_by_hash: Self::prepare_query(
                 &scylla_db_session,
-                "SELECT transaction_details FROM tx_indexer.transactions_details WHERE transaction_hash = ? LIMIT 1"
+                "SELECT transaction_details FROM tx_indexer.transactions_details WHERE transaction_hash = ? LIMIT 1",
+                None,
             ).await?,
         }))
     }

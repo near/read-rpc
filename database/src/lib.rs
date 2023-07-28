@@ -309,9 +309,16 @@ pub trait ScyllaStorageManager {
     async fn prepare_query(
         scylla_db_session: &std::sync::Arc<scylla::Session>,
         query_text: &str,
+        consistency: Option<scylla::frame::types::Consistency>,
     ) -> anyhow::Result<PreparedStatement> {
         let mut query = scylla::statement::query::Query::new(query_text);
-        query.set_consistency(scylla::frame::types::Consistency::LocalQuorum);
+
+        // If `consistency` is not set use `LocalQuorum`
+        if let Some(consistency) = consistency {
+            query.set_consistency(consistency);
+        } else {
+            query.set_consistency(scylla::frame::types::Consistency::LocalQuorum);
+        }
 
         #[cfg(not(feature = "scylla_db_tracing"))]
         {

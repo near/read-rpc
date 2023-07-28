@@ -273,6 +273,7 @@ impl ScyllaStorageManager for ScyllaDBManager {
                 "INSERT INTO tx_indexer.transactions_details
                     (transaction_hash, block_height, account_id, transaction_details)
                     VALUES(?, ?, ?, ?)",
+                Some(scylla::frame::types::Consistency::Any),
             )
             .await?,
             add_receipt: Self::prepare_query(
@@ -280,6 +281,7 @@ impl ScyllaStorageManager for ScyllaDBManager {
                 "INSERT INTO tx_indexer.receipts_map
                     (receipt_id, block_height, parent_transaction_hash, shard_id)
                     VALUES(?, ?, ?, ?)",
+                Some(scylla::frame::types::Consistency::Any),
             )
             .await?,
             update_meta: Self::prepare_query(
@@ -287,6 +289,7 @@ impl ScyllaStorageManager for ScyllaDBManager {
                 "INSERT INTO tx_indexer.meta
                     (indexer_id, last_processed_block_height)
                     VALUES (?, ?)",
+                Some(scylla::frame::types::Consistency::Any),
             )
             .await?,
         }))
