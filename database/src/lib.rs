@@ -248,6 +248,7 @@ pub trait ScyllaStorageManager {
         scylla_url: &str,
         scylla_user: Option<&str>,
         scylla_password: Option<&str>,
+        scylla_dc_host_filter: Option<&str>,
         keepalive_interval: Option<u64>,
         max_retry: u8,
         strict_mode: bool,
@@ -257,6 +258,7 @@ pub trait ScyllaStorageManager {
                 scylla_url,
                 scylla_user,
                 scylla_password,
+                scylla_dc_host_filter,
                 keepalive_interval,
                 max_retry,
                 strict_mode,
@@ -338,6 +340,7 @@ pub trait ScyllaStorageManager {
         scylla_url: &str,
         scylla_user: Option<&str>,
         scylla_password: Option<&str>,
+        scylla_dc_host_filter: Option<&str>,
         keepalive_interval: Option<u64>,
         max_retry: u8,
         strict_mode: bool,
@@ -349,13 +352,15 @@ pub trait ScyllaStorageManager {
 
         let mut session: scylla::SessionBuilder = scylla::SessionBuilder::new()
             .known_node(scylla_url)
-            .host_filter(std::sync::Arc::new(
-                scylla::transport::host_filter::AllowListHostFilter::new(vec![
-                    scylla_url.to_string()
-                ])
-                .expect("Failed to create scylla host filter"),
-            ))
             .default_execution_profile_handle(scylla_execution_profile_handle);
+
+        if let Some(scylla_dc_host_filter) = scylla_dc_host_filter {
+            session = session.host_filter(std::sync::Arc::new(
+                scylla::transport::host_filter::DcHostFilter::new(
+                    scylla_dc_host_filter.to_string(),
+                ),
+            ));
+        }
 
         if let Some(keepalive) = keepalive_interval {
             session = session.keepalive_interval(std::time::Duration::from_secs(keepalive));

@@ -24,6 +24,12 @@ pub struct Opts {
     #[clap(long, env)]
     pub scylla_password: Option<String>,
 
+    /// ScyllaDB DataCenter Host Filter
+    /// Accepts the DC name of the ScyllaDB to filter the connection to that DC only.
+    /// If you connect to multi-DC cluter, you might experience big latencies while working with the DB. This is due to the fact that ScyllaDB driver tries to connect to any of the nodes in the cluster disregarding of the location of the DC. This option allows to filter the connection to the DC you need. Example: "DC1" where DC1 is located in the same region as the application.
+    #[clap(long, env)]
+    pub scylla_dc_host_filter: Option<String>,
+
     /// ScyllaDB keepalive interval
     #[clap(long, env, default_value = "60")]
     pub scylla_keepalive_interval: u64,
