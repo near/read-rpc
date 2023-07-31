@@ -116,7 +116,7 @@ async fn query_call(
             )
         }
 
-        let (read_rpc_response_json, response_success) = match &result {
+        let (read_rpc_response_json, is_response_ok) = match &result {
             Ok(res) => (serde_json::to_value(res), true),
             Err(err) => (serde_json::to_value(err), false),
         };
@@ -125,7 +125,7 @@ async fn query_call(
             read_rpc_response_json,
             near_rpc_client,
             params,
-            response_success,
+            is_response_ok,
         )
         .await;
 

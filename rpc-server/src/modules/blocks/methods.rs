@@ -62,7 +62,7 @@ pub async fn chunk(
     {
         let near_rpc_client = data.near_rpc_client.clone();
         let error_meta = format!("CHUNK: {:?}", params);
-        let (read_rpc_response_json, response_success) = match &result {
+        let (read_rpc_response_json, is_response_ok) = match &result {
             Ok(res) => (serde_json::to_value(&res.chunk_view), true),
             Err(err) => (serde_json::to_value(err), false),
         };
@@ -70,7 +70,7 @@ pub async fn chunk(
             read_rpc_response_json,
             near_rpc_client,
             params,
-            response_success,
+            is_response_ok,
         )
         .await;
 
@@ -177,7 +177,7 @@ async fn block_call(
     {
         let near_rpc_client = data.near_rpc_client.clone();
         let error_meta = format!("BLOCK: {:?}", params);
-        let (read_rpc_response_json, response_success) = match &result {
+        let (read_rpc_response_json, is_response_ok) = match &result {
             Ok(res) => {
                 if let near_primitives::types::BlockReference::Finality(_) = params.block_reference
                 {
@@ -193,7 +193,7 @@ async fn block_call(
             read_rpc_response_json,
             near_rpc_client,
             params,
-            response_success,
+            is_response_ok,
         )
         .await;
 
@@ -235,7 +235,7 @@ async fn changes_in_block_call(
             )
         }
         let error_meta = format!("CHANGES_IN_BLOCK: {:?}", params);
-        let (read_rpc_response_json, response_success) = match &result {
+        let (read_rpc_response_json, is_response_ok) = match &result {
             Ok(res) => (serde_json::to_value(res), true),
             Err(err) => (serde_json::to_value(err), false),
         };
@@ -243,7 +243,7 @@ async fn changes_in_block_call(
             read_rpc_response_json,
             near_rpc_client,
             params,
-            response_success,
+            is_response_ok,
         )
         .await;
 
@@ -285,7 +285,7 @@ async fn changes_in_block_by_type_call(
             )
         }
         let error_meta = format!("CHANGES_IN_BLOCK_BY_TYPE: {:?}", params);
-        let (read_rpc_response_json, response_success) = match &result {
+        let (read_rpc_response_json, is_response_ok) = match &result {
             Ok(res) => (serde_json::to_value(res), true),
             Err(err) => (serde_json::to_value(err), false),
         };
@@ -293,7 +293,7 @@ async fn changes_in_block_by_type_call(
             read_rpc_response_json,
             near_rpc_client,
             params,
-            response_success,
+            is_response_ok,
         )
         .await;
 
