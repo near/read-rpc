@@ -248,7 +248,7 @@ pub trait ScyllaStorageManager {
         scylla_url: &str,
         scylla_user: Option<&str>,
         scylla_password: Option<&str>,
-        scylla_dc_host_filter: Option<&str>,
+        scylla_preferred_dc: Option<&str>,
         keepalive_interval: Option<u64>,
         max_retry: u8,
         strict_mode: bool,
@@ -258,7 +258,7 @@ pub trait ScyllaStorageManager {
                 scylla_url,
                 scylla_user,
                 scylla_password,
-                scylla_dc_host_filter,
+                scylla_preferred_dc,
                 keepalive_interval,
                 max_retry,
                 strict_mode,
@@ -340,27 +340,28 @@ pub trait ScyllaStorageManager {
         scylla_url: &str,
         scylla_user: Option<&str>,
         scylla_password: Option<&str>,
-        scylla_dc_host_filter: Option<&str>,
+        scylla_preferred_dc: Option<&str>,
         keepalive_interval: Option<u64>,
         max_retry: u8,
         strict_mode: bool,
     ) -> anyhow::Result<scylla::Session> {
+        let mut load_balancing_policy_builder =
+            scylla::transport::load_balancing::DefaultPolicy::builder();
+
+        if let Some(scylla_preferred_dc) = scylla_preferred_dc {
+            load_balancing_policy_builder =
+                load_balancing_policy_builder.prefer_datacenter(scylla_preferred_dc.to_string());
+        }
+
         let scylla_execution_profile_handle = scylla::transport::ExecutionProfile::builder()
             .retry_policy(Box::new(CustomDBRetryPolicy::new(max_retry, strict_mode)))
+            .load_balancing_policy(load_balancing_policy_builder.build())
             .build()
             .into_handle();
 
         let mut session: scylla::SessionBuilder = scylla::SessionBuilder::new()
             .known_node(scylla_url)
             .default_execution_profile_handle(scylla_execution_profile_handle);
-
-        if let Some(scylla_dc_host_filter) = scylla_dc_host_filter {
-            session = session.host_filter(std::sync::Arc::new(
-                scylla::transport::host_filter::DcHostFilter::new(
-                    scylla_dc_host_filter.to_string(),
-                ),
-            ));
-        }
 
         if let Some(keepalive) = keepalive_interval {
             session = session.keepalive_interval(std::time::Duration::from_secs(keepalive));

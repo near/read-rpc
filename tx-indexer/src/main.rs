@@ -28,7 +28,7 @@ async fn main() -> anyhow::Result<()> {
             &opts.scylla_url,
             opts.scylla_user.as_deref(),
             opts.scylla_password.as_deref(),
-            opts.scylla_dc_host_filter.as_deref(),
+            opts.scylla_preferred_dc.as_deref(),
             None,
             opts.max_retry,
             opts.strict_mode,
