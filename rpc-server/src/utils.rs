@@ -229,7 +229,7 @@ where
             )
         };
         return Err(ShadowDataConsistencyError::ResultsDontMatch(format!(
-            "{err}. Reason: {reason}. Description {description}"
+            "{err}.\n Reason: {reason}.\n Description: {description}"
         )));
     };
     Ok(())
