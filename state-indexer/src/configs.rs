@@ -355,115 +355,102 @@ impl ScyllaStorageManager for ScyllaDBManager {
     async fn prepare(scylla_db_session: std::sync::Arc<scylla::Session>) -> anyhow::Result<Box<Self>> {
         Ok(Box::new(Self {
             scylla_session: scylla_db_session.clone(),
-            add_state_changes: Self::prepare_query(
+            add_state_changes: Self::prepare_write_query(
                 &scylla_db_session,
                 "INSERT INTO state_indexer.state_changes_data
                     (account_id, block_height, block_hash, data_key, data_value)
                     VALUES(?, ?, ?, ?, ?)",
-                None,
             )
             .await?,
-            delete_state_changes: Self::prepare_query(
+            delete_state_changes: Self::prepare_write_query(
                 &scylla_db_session,
                 "INSERT INTO state_indexer.state_changes_data
                     (account_id, block_height, block_hash, data_key, data_value)
                     VALUES(?, ?, ?, ?, NULL)",
-                None,
             )
             .await?,
 
-            add_access_key: Self::prepare_query(
+            add_access_key: Self::prepare_write_query(
                 &scylla_db_session,
                 "INSERT INTO state_indexer.state_changes_access_key
                     (account_id, block_height, block_hash, data_key, data_value)
                     VALUES(?, ?, ?, ?, ?)",
-                None,
             )
             .await?,
-            delete_access_key: Self::prepare_query(
+            delete_access_key: Self::prepare_write_query(
                 &scylla_db_session,
                 "INSERT INTO state_indexer.state_changes_access_key
                     (account_id, block_height, block_hash, data_key, data_value)
                     VALUES(?, ?, ?, ?, NULL)",
-                None,
             )
             .await?,
 
             #[cfg(feature = "account_access_keys")]
-            add_account_access_keys: Self::prepare_query(
+            add_account_access_keys: Self::prepare_write_query(
                 &scylla_db_session,
                 "INSERT INTO state_indexer.account_access_keys
                     (account_id, block_height, active_access_keys)
                     VALUES(?, ?, ?)",
-                None,
             )
             .await?,
 
             #[cfg(feature = "account_access_keys")]
-            get_account_access_keys: Self::prepare_query(
+            get_account_access_keys: Self::prepare_write_query(
                 &scylla_db_session,
                 "SELECT active_access_keys FROM state_indexer.account_access_keys
                     WHERE account_id = ? AND block_height < ? LIMIT 1",
-                None,
             )
             .await?,
 
-            add_contract: Self::prepare_query(
+            add_contract: Self::prepare_write_query(
                 &scylla_db_session,
                 "INSERT INTO state_indexer.state_changes_contract
                     (account_id, block_height, block_hash, data_value)
                     VALUES(?, ?, ?, ?)",
-                None,
             )
             .await?,
-            delete_contract: Self::prepare_query(
+            delete_contract: Self::prepare_write_query(
                 &scylla_db_session,
                 "INSERT INTO state_indexer.state_changes_contract
                     (account_id, block_height, block_hash, data_value)
                     VALUES(?, ?, ?, NULL)",
-                None,
             )
             .await?,
 
-            add_account: Self::prepare_query(
+            add_account: Self::prepare_write_query(
                 &scylla_db_session,
                 "INSERT INTO state_indexer.state_changes_account
                     (account_id, block_height, block_hash, data_value)
                     VALUES(?, ?, ?, ?)",
-                None,
             )
             .await?,
-            delete_account: Self::prepare_query(
+            delete_account: Self::prepare_write_query(
                 &scylla_db_session,
                 "INSERT INTO state_indexer.state_changes_account
                     (account_id, block_height, block_hash, data_value)
                     VALUES(?, ?, ?, NULL)",
-                None,
             )
             .await?,
 
-            add_chunk: Self::prepare_query(
+            add_chunk: Self::prepare_write_query(
                 &scylla_db_session,
                 "INSERT INTO state_indexer.chunks
                     (block_height, block_hash, chunk_hash, shard_id)
                     VALUES (?, ?, ?, ?)",
-                None,
             )
             .await?,
-            add_account_state: Self::prepare_query(
+            add_account_state: Self::prepare_write_query(
                 &scylla_db_session,
                 "INSERT INTO state_indexer.account_state
                     (account_id, data_key)
                     VALUES(?, ?)",
-                None,
             )
             .await?,
-            update_meta: Self::prepare_query(
+            update_meta: Self::prepare_write_query(
                 &scylla_db_session,
                 "INSERT INTO state_indexer.meta
                     (indexer_id, last_processed_block_height)
                     VALUES (?, ?)",
-                None,
             )
             .await?,
         }))

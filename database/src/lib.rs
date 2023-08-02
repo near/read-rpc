@@ -336,6 +336,36 @@ pub trait ScyllaStorageManager {
         }
     }
 
+    /// Wrapper to prepare read queries
+    /// Just a simpler way to prepare a query with `Consistency::LocalQuorum`
+    /// we use it as a default consistency for read queries
+    async fn prepare_read_query(
+        scylla_db_session: &std::sync::Arc<scylla::Session>,
+        query_text: &str,
+    ) -> anyhow::Result<PreparedStatement> {
+        Self::prepare_query(
+            scylla_db_session,
+            query_text,
+            Some(scylla::frame::types::Consistency::LocalQuorum),
+        )
+        .await
+    }
+
+    /// Wrapper to prepare write queries
+    /// Just a simpler way to prepare a query with `Consistency::Any`
+    /// we use it as a default consistency for write queries
+    async fn prepare_write_query(
+        scylla_db_session: &std::sync::Arc<scylla::Session>,
+        query_text: &str,
+    ) -> anyhow::Result<PreparedStatement> {
+        Self::prepare_query(
+            scylla_db_session,
+            query_text,
+            Some(scylla::frame::types::Consistency::Any),
+        )
+        .await
+    }
+
     async fn get_scylladb_session(
         scylla_url: &str,
         scylla_user: Option<&str>,

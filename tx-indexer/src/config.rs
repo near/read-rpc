@@ -273,28 +273,25 @@ impl ScyllaStorageManager for ScyllaDBManager {
     ) -> anyhow::Result<Box<Self>> {
         Ok(Box::new(Self {
             scylla_session: scylla_db_session.clone(),
-            add_transaction: Self::prepare_query(
+            add_transaction: Self::prepare_write_query(
                 &scylla_db_session,
                 "INSERT INTO tx_indexer.transactions_details
                     (transaction_hash, block_height, account_id, transaction_details)
                     VALUES(?, ?, ?, ?)",
-                Some(scylla::frame::types::Consistency::Any),
             )
             .await?,
-            add_receipt: Self::prepare_query(
+            add_receipt: Self::prepare_write_query(
                 &scylla_db_session,
                 "INSERT INTO tx_indexer.receipts_map
                     (receipt_id, block_height, parent_transaction_hash, shard_id)
                     VALUES(?, ?, ?, ?)",
-                Some(scylla::frame::types::Consistency::Any),
             )
             .await?,
-            update_meta: Self::prepare_query(
+            update_meta: Self::prepare_write_query(
                 &scylla_db_session,
                 "INSERT INTO tx_indexer.meta
                     (indexer_id, last_processed_block_height)
                     VALUES (?, ?)",
-                Some(scylla::frame::types::Consistency::Any),
             )
             .await?,
         }))

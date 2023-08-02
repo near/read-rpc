@@ -96,3 +96,7 @@ cargo run --release
 ```
 
 **In this case** you would want to have an `.env` file in the package folder.
+
+### Tracing
+
+See the tracing documentation [here](./docs/TRACING.md)
