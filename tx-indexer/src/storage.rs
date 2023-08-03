@@ -21,7 +21,7 @@ impl HashStorage {
         }
     }
 
-    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
+    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
     pub fn push_receipt_to_watching_list(
         &mut self,
         receipt_id: String,
@@ -38,7 +38,7 @@ impl HashStorage {
         Ok(())
     }
 
-    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
+    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
     pub fn remove_receipt_from_watching_list(
         &mut self,
         receipt_id: &str,
@@ -54,7 +54,7 @@ impl HashStorage {
         }
     }
 
-    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
+    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
     pub fn receipts_transaction_hash_count(&self, transaction_hash: &str) -> anyhow::Result<u64> {
         self.receipts_counters
             .get(transaction_hash)
@@ -66,7 +66,7 @@ impl HashStorage {
             ))
     }
 
-    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
+    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
     pub fn set_tx(
         &mut self,
         transaction_details: readnode_primitives::CollectingTransactionDetails,
@@ -80,7 +80,7 @@ impl HashStorage {
         Ok(())
     }
 
-    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
+    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
     pub fn get_tx(
         &self,
         transaction_hash: &str,
@@ -88,7 +88,7 @@ impl HashStorage {
         self.transactions.get(transaction_hash).cloned()
     }
 
-    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
+    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
     pub fn push_tx_to_save(
         &mut self,
         transaction_details: readnode_primitives::CollectingTransactionDetails,
@@ -100,7 +100,7 @@ impl HashStorage {
         Ok(())
     }
 
-    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
+    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
     pub fn get_transaction_hash_by_receipt_id(
         &self,
         receipt_id: &str,
@@ -108,7 +108,7 @@ impl HashStorage {
         Ok(self.receipts_watching_list.get(receipt_id).cloned())
     }
 
-    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
+    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
     pub fn transactions_to_save(
         &mut self,
     ) -> anyhow::Result<Vec<readnode_primitives::CollectingTransactionDetails>> {
@@ -124,7 +124,7 @@ impl HashStorage {
         Ok(transactions)
     }
 
-    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
+    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
     pub fn push_outcome_and_receipt(
         &mut self,
         transaction_hash: &str,

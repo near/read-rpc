@@ -38,6 +38,11 @@ pub(crate) struct Opts {
     /// ScyllaDB password
     #[clap(long, env)]
     pub scylla_password: Option<String>,
+    /// ScyllaDB preferred DataCenter
+    /// Accepts the DC name of the ScyllaDB to filter the connection to that DC only (preferrably).
+    /// If you connect to multi-DC cluter, you might experience big latencies while working with the DB. This is due to the fact that ScyllaDB driver tries to connect to any of the nodes in the cluster disregarding of the location of the DC. This option allows to filter the connection to the DC you need. Example: "DC1" where DC1 is located in the same region as the application.
+    #[clap(long, env)]
+    pub scylla_preferred_dc: Option<String>,
     /// Chain ID: testnet or mainnet
     #[clap(subcommand)]
     pub chain_id: ChainId,
@@ -168,13 +173,21 @@ pub fn init_tracing() -> anyhow::Result<()> {
         }
     }
 
+    opentelemetry::global::shutdown_tracer_provider();
+
     opentelemetry::global::set_text_map_propagator(
         opentelemetry::sdk::propagation::TraceContextPropagator::new(),
     );
-    let tracer = opentelemetry_jaeger::new_pipeline()
+    let tracer = opentelemetry_jaeger::new_collector_pipeline()
         .with_service_name("tx_indexer")
-        .with_max_packet_size(9_216)
-        .with_auto_split_batch(true)
+        .with_endpoint(std::env::var("OTEL_EXPORTER_JAEGER_ENDPOINT").unwrap_or_default())
+        .with_isahc()
+        .with_batch_processor_config(
+            opentelemetry::sdk::trace::BatchConfig::default()
+                .with_max_queue_size(10_000)
+                .with_max_export_batch_size(10_000)
+                .with_max_concurrent_exports(100),
+        )
         .install_batch(opentelemetry::runtime::TokioCurrentThread)?;
     let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
 
@@ -260,21 +273,21 @@ impl ScyllaStorageManager for ScyllaDBManager {
     ) -> anyhow::Result<Box<Self>> {
         Ok(Box::new(Self {
             scylla_session: scylla_db_session.clone(),
-            add_transaction: Self::prepare_query(
+            add_transaction: Self::prepare_write_query(
                 &scylla_db_session,
                 "INSERT INTO tx_indexer.transactions_details
                     (transaction_hash, block_height, account_id, transaction_details)
                     VALUES(?, ?, ?, ?)",
             )
             .await?,
-            add_receipt: Self::prepare_query(
+            add_receipt: Self::prepare_write_query(
                 &scylla_db_session,
                 "INSERT INTO tx_indexer.receipts_map
                     (receipt_id, block_height, parent_transaction_hash, shard_id)
                     VALUES(?, ?, ?, ?)",
             )
             .await?,
-            update_meta: Self::prepare_query(
+            update_meta: Self::prepare_write_query(
                 &scylla_db_session,
                 "INSERT INTO tx_indexer.meta
                     (indexer_id, last_processed_block_height)

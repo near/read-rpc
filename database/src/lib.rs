@@ -248,6 +248,7 @@ pub trait ScyllaStorageManager {
         scylla_url: &str,
         scylla_user: Option<&str>,
         scylla_password: Option<&str>,
+        scylla_preferred_dc: Option<&str>,
         keepalive_interval: Option<u64>,
         max_retry: u8,
         strict_mode: bool,
@@ -257,6 +258,7 @@ pub trait ScyllaStorageManager {
                 scylla_url,
                 scylla_user,
                 scylla_password,
+                scylla_preferred_dc,
                 keepalive_interval,
                 max_retry,
                 strict_mode,
@@ -309,9 +311,16 @@ pub trait ScyllaStorageManager {
     async fn prepare_query(
         scylla_db_session: &std::sync::Arc<scylla::Session>,
         query_text: &str,
+        consistency: Option<scylla::frame::types::Consistency>,
     ) -> anyhow::Result<PreparedStatement> {
         let mut query = scylla::statement::query::Query::new(query_text);
-        query.set_consistency(scylla::frame::types::Consistency::LocalQuorum);
+
+        // If `consistency` is not set use `LocalQuorum`
+        if let Some(consistency) = consistency {
+            query.set_consistency(consistency);
+        } else {
+            query.set_consistency(scylla::frame::types::Consistency::LocalQuorum);
+        }
 
         #[cfg(not(feature = "scylla_db_tracing"))]
         {
@@ -327,16 +336,56 @@ pub trait ScyllaStorageManager {
         }
     }
 
+    /// Wrapper to prepare read queries
+    /// Just a simpler way to prepare a query with `Consistency::LocalQuorum`
+    /// we use it as a default consistency for read queries
+    async fn prepare_read_query(
+        scylla_db_session: &std::sync::Arc<scylla::Session>,
+        query_text: &str,
+    ) -> anyhow::Result<PreparedStatement> {
+        Self::prepare_query(
+            scylla_db_session,
+            query_text,
+            Some(scylla::frame::types::Consistency::LocalQuorum),
+        )
+        .await
+    }
+
+    /// Wrapper to prepare write queries
+    /// Just a simpler way to prepare a query with `Consistency::Any`
+    /// we use it as a default consistency for write queries
+    async fn prepare_write_query(
+        scylla_db_session: &std::sync::Arc<scylla::Session>,
+        query_text: &str,
+    ) -> anyhow::Result<PreparedStatement> {
+        Self::prepare_query(
+            scylla_db_session,
+            query_text,
+            Some(scylla::frame::types::Consistency::Any),
+        )
+        .await
+    }
+
     async fn get_scylladb_session(
         scylla_url: &str,
         scylla_user: Option<&str>,
         scylla_password: Option<&str>,
+        scylla_preferred_dc: Option<&str>,
         keepalive_interval: Option<u64>,
         max_retry: u8,
         strict_mode: bool,
     ) -> anyhow::Result<scylla::Session> {
+        let mut load_balancing_policy_builder =
+            scylla::transport::load_balancing::DefaultPolicy::builder();
+
+        if let Some(scylla_preferred_dc) = scylla_preferred_dc {
+            load_balancing_policy_builder =
+                load_balancing_policy_builder.prefer_datacenter(scylla_preferred_dc.to_string());
+        }
+
         let scylla_execution_profile_handle = scylla::transport::ExecutionProfile::builder()
             .retry_policy(Box::new(CustomDBRetryPolicy::new(max_retry, strict_mode)))
+            .load_balancing_policy(load_balancing_policy_builder.build())
             .build()
             .into_handle();
 
