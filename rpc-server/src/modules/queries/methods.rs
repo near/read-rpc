@@ -116,13 +116,18 @@ async fn query_call(
             )
         }
 
-        let read_rpc_response_json = match &result {
-            Ok(res) => serde_json::to_value(res),
-            Err(err) => serde_json::to_value(err),
+        let (read_rpc_response_json, is_response_ok) = match &result {
+            Ok(res) => (serde_json::to_value(res), true),
+            Err(err) => (serde_json::to_value(err), false),
         };
 
-        let comparison_result =
-            shadow_compare_results(read_rpc_response_json, near_rpc_client, params).await;
+        let comparison_result = shadow_compare_results(
+            read_rpc_response_json,
+            near_rpc_client,
+            params,
+            is_response_ok,
+        )
+        .await;
 
         match comparison_result {
             Ok(_) => {
