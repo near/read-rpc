@@ -25,7 +25,7 @@ services:
       <<: *common-variables
       AWS_BUCKET_NAME: near-lake-data-mainnet
       SERVER_PORT: 8080
-      RUST_LOG: "read_rpc_server=debug,is_data_consistency=debug"
+      RUST_LOG: "read_rpc_server=debug,shadow_data_consistency=debug"
     restart: on-failure
     ports:
       - 8080:8080

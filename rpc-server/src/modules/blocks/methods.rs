@@ -78,10 +78,7 @@ pub async fn chunk(
             Ok(_) => {
                 tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", error_meta);
             }
-            Err(err) => {
-                tracing::warn!(target: "shadow_data_consistency", "Shadow data check: ERROR\n{}\n{:?}", error_meta, err);
-                crate::metrics::CHUNK_PROXIES_TOTAL.inc()
-            }
+            Err(err) => crate::utils::capture_shadow_consistency_error!(err, error_meta, "CHUNK"),
         }
     }
     Ok(result.map_err(near_jsonrpc_primitives::errors::RpcError::from)?)
@@ -201,10 +198,7 @@ async fn block_call(
             Ok(_) => {
                 tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", error_meta);
             }
-            Err(err) => {
-                tracing::warn!(target: "shadow_data_consistency", "Shadow data check: ERROR\n{}\n{:?}", error_meta, err);
-                crate::metrics::BLOCK_PROXIES_TOTAL.inc()
-            }
+            Err(err) => crate::utils::capture_shadow_consistency_error!(err, error_meta, "BLOCK"),
         }
     };
 
@@ -252,8 +246,7 @@ async fn changes_in_block_call(
                 tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", error_meta);
             }
             Err(err) => {
-                tracing::warn!(target: "shadow_data_consistency", "Shadow data check: ERROR\n{}\n{:?}", error_meta, err);
-                crate::metrics::CHNGES_IN_BLOCK_PROXIES_TOTAL.inc()
+                crate::utils::capture_shadow_consistency_error!(err, error_meta, "CHANGES_IN_BLOCK")
             }
         }
     }
@@ -302,8 +295,11 @@ async fn changes_in_block_by_type_call(
                 tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", error_meta);
             }
             Err(err) => {
-                tracing::warn!(target: "shadow_data_consistency", "Shadow data check: ERROR\n{}\n{:?}", error_meta, err);
-                crate::metrics::CHNGES_IN_BLOCK_BY_TYPE_PROXIES_TOTAL.inc()
+                crate::utils::capture_shadow_consistency_error!(
+                    err,
+                    error_meta,
+                    "CHANGES_IN_BLOCK_BY_TYPE"
+                )
             }
         }
     }

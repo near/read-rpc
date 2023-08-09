@@ -19,7 +19,7 @@ pub async fn receipt(
     #[cfg(feature = "shadow_data_consistency")]
     {
         let near_rpc_client = data.near_rpc_client.clone();
-        let error_meta = format!("TX: {:?}", params);
+        let error_meta = format!("RECEIPT: {:?}", params);
         let (read_rpc_response_json, is_response_ok) = match &result {
             Ok(res) => (serde_json::to_value(res), true),
             Err(err) => (serde_json::to_value(err), false),
@@ -38,8 +38,7 @@ pub async fn receipt(
                 tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", error_meta);
             }
             Err(err) => {
-                tracing::warn!(target: "shadow_data_consistency", "Shadow data check: ERROR\n{}\n{:?}", error_meta, err);
-                crate::metrics::RECEIPT_PROXIES_TOTAL.inc();
+                crate::utils::capture_shadow_consistency_error!(err, error_meta, "RECEIPT");
             }
         }
     }

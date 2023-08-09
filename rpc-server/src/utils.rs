@@ -174,63 +174,47 @@ where
     let read_rpc_json = json_sort_value(read_rpc_response_json);
     let near_rpc_json = json_sort_value(near_rpc_response_json);
 
-    if let Err(err) = assert_json_matches_no_panic(&read_rpc_json, &near_rpc_json, config) {
+    if let Err(_err) = assert_json_matches_no_panic(&read_rpc_json, &near_rpc_json, config) {
         // separate mismatching successful and failure responses into different targets
         // to make it easier to find reasons of the mismatching
-        // let reason = String::new();
-        // let description = String::new();
-        let (reason, description) = if read_rpc_response_is_ok && near_rpc_response_is_ok {
-            // Both services(read_rpc and near_rpc) have a successful response
-            // if data mismatch we are logging into `shadow_data_consistency_successful_responses`
-            // both response objects for future investigation.
-            (
-                "shadow_data_consistency_successful_responses",
-                format!(
-                    "Shadow data check: DATA MISMATCH\n READ_RPC_DATA: {:?}\n NEAR_RPC_DATA: {:?}\n",
-                    read_rpc_json,
-                    near_rpc_json,
-                )
-            )
+        let results_dont_match_error = if read_rpc_response_is_ok && near_rpc_response_is_ok {
+            // Both services(read_rpc and near_rpc) have a successful response but the data mismatch
+            // both response objects included for future investigation
+            ShadowDataConsistencyError::ResultsDontMatch {
+                error_message: format!("Success results don't match"),
+                reason: DataMismatchReason::ReadRpcSuccessNearRpcSuccess,
+                read_rpc_response: read_rpc_json,
+                near_rpc_response: near_rpc_json,
+            }
         } else if !read_rpc_response_is_ok && near_rpc_response_is_ok {
-            // read_rpc service has failure response
-            // and near_rpc has successful response we are logging into
-            // `shadow_data_consistency_read_rpc_failure_response` just message about mismatch
-            // data without objects.
-            // In the future we should be investigate why we got error in the read_rpc.
-            (
-                "shadow_data_consistency_read_rpc_failure_response",
-                String::from(
-                    "Shadow data check: read_rpc response failed, near_rpc response success",
-                ),
-            )
+            // read_rpc service has error response and near_rpc has successful response
+            ShadowDataConsistencyError::ResultsDontMatch {
+                error_message: format!("ReadRPC failed, NearRPC success"),
+                reason: DataMismatchReason::ReadRpcErrorNearRpcSuccess,
+                read_rpc_response: read_rpc_json,
+                near_rpc_response: near_rpc_json,
+            }
         } else if read_rpc_response_is_ok && !near_rpc_response_is_ok {
-            // read_rpc service has successful response
-            // and near_rpc has failure response we are logging into
-            // `shadow_data_consistency_near_failure_response` just message about mismatch
-            // data without objects. Expected that all error will be related with network issues.
-            (
-                "shadow_data_consistency_near_failure_response",
-                String::from(
-                    "Shadow data check: read_rpc response success, near_rpc response failed",
-                ),
-            )
+            // read_rpc service has successful response and near_rpc has error response
+            // Expected that all error will be related with network issues.
+            ShadowDataConsistencyError::ResultsDontMatch {
+                error_message: format!("ReadRPC success, NearRPC failed"),
+                reason: DataMismatchReason::ReadRpcSuccessNearRpcError,
+                read_rpc_response: read_rpc_json,
+                near_rpc_response: near_rpc_json,
+            }
         } else {
-            // Both services(read_rpc and near_rpc) have a failure response
-            // we are logging into `shadow_data_consistency_failure_responses`
-            // both response objects for future investigation.
-            // expected we will only have a difference in the error text.
-            (
-                "shadow_data_consistency_failure_responses",
-                format!(
-                    "Shadow data check: DATA MISMATCH\n READ_RPC_DATA: {:?}\n NEAR_RPC_DATA: {:?}\n",
-                    read_rpc_json,
-                    near_rpc_json,
-                ),
-            )
+            // Both services(read_rpc and near_rpc) have an error response
+            // both response objects included for future investigation.
+            // Expected we will only have a difference in the error text.
+            ShadowDataConsistencyError::ResultsDontMatch {
+                error_message: format!("Both services failed, but results don't match"),
+                reason: DataMismatchReason::ReadRpcErrorNearRpcError,
+                read_rpc_response: read_rpc_json,
+                near_rpc_response: near_rpc_json,
+            }
         };
-        return Err(ShadowDataConsistencyError::ResultsDontMatch(format!(
-            "{err}.\n Reason: {reason}.\n Description: {description}"
-        )));
+        return Err(results_dont_match_error);
     };
     Ok(())
 }
@@ -245,8 +229,60 @@ pub enum ShadowDataConsistencyError {
     NearRpcResponseParseError(serde_json::Error),
     #[error("NEAR RPC call error: {0}")]
     NearRpcCallError(String),
-    #[error("Results don't match: {0}")]
-    ResultsDontMatch(String),
+    #[error("Results don't match: {error_message}")]
+    ResultsDontMatch {
+        error_message: String,
+        reason: DataMismatchReason,
+        read_rpc_response: serde_json::Value,
+        near_rpc_response: serde_json::Value,
+    },
+}
+
+/// This enum is used to track the mismatch between the data returned by the READ RPC server and
+/// the data returned by the NEAR RPC server. The mismatch can be caused by a limited number of
+/// reasons, and this enum is used to track them.
+#[cfg(feature = "shadow_data_consistency")]
+#[derive(Debug)]
+pub enum DataMismatchReason {
+    /// ReadRPC returns success result and NEAR RPC returns success result but the results mismatch
+    ReadRpcSuccessNearRpcSuccess,
+    /// ReadRPC returns success result and NEAR RPC returns error result
+    ReadRpcSuccessNearRpcError,
+    /// ReadRPC returns error result and NEAR RPC returns success result
+    ReadRpcErrorNearRpcSuccess,
+    /// ReadRPC returns error result and NEAR RPC returns error result but the results mismatch
+    ReadRpcErrorNearRpcError,
+}
+
+#[cfg(feature = "shadow_data_consistency")]
+impl DataMismatchReason {
+    /// This method converts the reason into a number from 0 to 3. These numbers are used in the
+    /// metrics like BLOCK_ERROR_0, BLOCK_ERROR_1, BLOCK_ERROR_2, BLOCK_ERROR_3 etc.
+    pub fn code(&self) -> usize {
+        match self {
+            DataMismatchReason::ReadRpcSuccessNearRpcSuccess => 0,
+            DataMismatchReason::ReadRpcSuccessNearRpcError => 1,
+            DataMismatchReason::ReadRpcErrorNearRpcSuccess => 2,
+            DataMismatchReason::ReadRpcErrorNearRpcError => 3,
+        }
+    }
+
+    /// This method converts the reason into a string. These strings are used in the logs to include the
+    /// human readable reason for the mismatch.
+    pub fn reason(&self) -> &'static str {
+        match self {
+            DataMismatchReason::ReadRpcSuccessNearRpcSuccess => {
+                "Read RPC success, and NEAR RPC success"
+            }
+            DataMismatchReason::ReadRpcSuccessNearRpcError => {
+                "Read RPC success, but NEAR RPC error"
+            }
+            DataMismatchReason::ReadRpcErrorNearRpcSuccess => {
+                "Read RPC error, but NEAR RPC success"
+            }
+            DataMismatchReason::ReadRpcErrorNearRpcError => "Read RPC error, and NEAR RPC error",
+        }
+    }
 }
 
 /// Sort json value
@@ -309,3 +345,55 @@ fn generate_array_key(value: &serde_json::Value) -> String {
         }),
     }
 }
+
+#[cfg(feature = "shadow_data_consistency")]
+macro_rules! capture_shadow_consistency_error {
+    ($err:ident, $error_meta:ident, $method_metric_name:expr) => {
+        match $err {
+            crate::utils::ShadowDataConsistencyError::ResultsDontMatch {
+                reason,
+                read_rpc_response,
+                near_rpc_response,
+                ..
+            } => {
+                tracing::warn!(
+                    target: "shadow_data_consistency",
+                    "Shadow data check: ERROR\n{}\n{}",
+                    $error_meta,
+                    format!("{}, ReadRPC: {:?}, NearRPC: {:?}", reason.reason(), read_rpc_response, near_rpc_response),
+                );
+                match reason.code() {
+                    0 => {
+                        paste::paste!{
+                            crate::metrics::[<$method_metric_name _ERROR_0>].inc();
+                        }
+                    },
+                    1 => {
+                        paste::paste!{
+                            crate::metrics::[<$method_metric_name _ERROR_1>].inc();
+                        }
+                    },
+                    2 => {
+                        paste::paste!{
+                            crate::metrics::[<$method_metric_name _ERROR_2>].inc();
+                        }
+                    },
+                    3 => {
+                        paste::paste!{
+                            crate::metrics::[<$method_metric_name _ERROR_3>].inc();
+                        }
+                    },
+                    _ => panic!("Received unexpected reason code: {}", reason.code()),
+                };
+            },
+            _ => {
+                tracing::warn!(target: "shadow_data_consistency", "Shadow data check: ERROR\n{}\n{:?}", $error_meta, $err);
+                paste::paste!{
+                    crate::metrics::[<$method_metric_name _ERROR_4>].inc();
+                }
+            }
+        }
+    };
+}
+#[cfg(feature = "shadow_data_consistency")]
+pub(crate) use capture_shadow_consistency_error;

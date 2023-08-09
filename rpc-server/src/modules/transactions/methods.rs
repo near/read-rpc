@@ -52,8 +52,7 @@ pub async fn tx(
                 tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", error_meta);
             }
             Err(err) => {
-                tracing::warn!(target: "shadow_data_consistency", "Shadow data check: ERROR\n{}\n{:?}", error_meta, err);
-                crate::metrics::TX_PROXIES_TOTAL.inc();
+                crate::utils::capture_shadow_consistency_error!(err, error_meta, "TX");
             }
         }
     }
@@ -102,8 +101,11 @@ pub async fn tx_status(
                 tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", error_meta);
             }
             Err(err) => {
-                tracing::warn!(target: "shadow_data_consistency", "Shadow data check: ERROR\n{}\n{:?}", error_meta, err);
-                crate::metrics::TX_STATUS_PROXIES_TOTAL.inc();
+                crate::utils::capture_shadow_consistency_error!(
+                    err,
+                    error_meta,
+                    "EXPERIMENTAL_TX_STATUS"
+                );
             }
         }
     }
