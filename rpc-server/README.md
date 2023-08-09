@@ -91,8 +91,16 @@ All the metrics are defined in `src/metrics.rs` file. Two main categories of met
 
 The latter is split by the suffix code to differentiate the reason for the error when possible:
 
-- **0** - ReadRPC returns Success result and NEAR RPC returns Success result but results don't match
-- **1** - ReadRPC returns Success result and NEAR RPC returns Error result
-- **2** - ReadRPC returns Error result and NEAR RPC returns Success result
-- **3** - ReadRPC returns Error result and NEAR RPC returns Error result but results don't match
-- **4** - Could not perform consistency check because of the error (either network, or parsing the results)
+- **0** - ReadRPC returns a Success result, and NEAR RPC returns a Success result, but the results don't match
+- **1** - ReadRPC returns Success result, and NEAR RPC returns an Error result
+- **2** - ReadRPC returns an Error result, and NEAR RPC returns Success result
+- **3** - ReadRPC returns an Error result, and NEAR RPC returns an Error result, but the results don't match
+- **4** - Could not perform consistency check because of the error (either network or parsing the results)
+
+For example, method `block` will have these metrics:
+
+- `BLOCK_REQUESTS_TOTAL`
+- `BLOCK_ERROR_0`
+- `BLOCK_ERROR_1`
+- `BLOCK_ERROR_2`
+- `BLOCK_ERROR_3`
