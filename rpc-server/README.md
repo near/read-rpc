@@ -104,3 +104,4 @@ For example, method `block` will have these metrics:
 - `BLOCK_ERROR_1`
 - `BLOCK_ERROR_2`
 - `BLOCK_ERROR_3`
+- `BLOCK_ERROR_4`
