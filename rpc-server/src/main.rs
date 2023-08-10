@@ -76,6 +76,8 @@ async fn main() -> anyhow::Result<()> {
     init_logging(false)?;
 
     let near_rpc_client = near_jsonrpc_client::JsonRpcClient::connect(opts.rpc_url.to_string());
+    // We want to set a custom referer to let NEAR JSON RPC nodes know that we are a read-rpc instance
+    let near_rpc_client = near_rpc_client.header(("Referer", "read-rpc"))?; // TODO: make it configurable
     let blocks_cache = std::sync::Arc::new(std::sync::RwLock::new(lru::LruCache::new(
         std::num::NonZeroUsize::new(100000).unwrap(),
     )));
