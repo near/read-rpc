@@ -139,25 +139,48 @@ async fn query_call(
                 // are not proxying the requests anymore and respond with the error to the client.
                 // Since we already have the dashboard using these metric names, we don't want to
                 // change them and reuse them for the observability of the shadow data consistency checks.
-                tracing::warn!(target: "shadow_data_consistency", "Shadow data check: ERROR\n{}\n{:?}", error_meta, err);
                 match request_copy {
                     near_primitives::views::QueryRequest::ViewAccount { .. } => {
-                        crate::metrics::QUERY_VIEW_ACCOUNT_PROXIES_TOTAL.inc()
+                        crate::utils::capture_shadow_consistency_error!(
+                            err,
+                            error_meta,
+                            "QUERY_VIEW_ACCOUNT"
+                        );
                     }
                     near_primitives::views::QueryRequest::ViewCode { .. } => {
-                        crate::metrics::QUERY_VIEW_CODE_PROXIES_TOTAL.inc()
+                        crate::utils::capture_shadow_consistency_error!(
+                            err,
+                            error_meta,
+                            "QUERY_VIEW_CODE"
+                        );
                     }
                     near_primitives::views::QueryRequest::ViewAccessKey { .. } => {
-                        crate::metrics::QUERY_VIEW_ACCESS_KEY_PROXIES_TOTAL.inc()
+                        crate::utils::capture_shadow_consistency_error!(
+                            err,
+                            error_meta,
+                            "QUERY_VIEW_ACCESS_KEY"
+                        );
                     }
                     near_primitives::views::QueryRequest::ViewState { .. } => {
-                        crate::metrics::QUERY_VIEW_STATE_PROXIES_TOTAL.inc()
+                        crate::utils::capture_shadow_consistency_error!(
+                            err,
+                            error_meta,
+                            "QUERY_VIEW_STATE"
+                        );
                     }
                     near_primitives::views::QueryRequest::CallFunction { .. } => {
-                        crate::metrics::QUERY_FUNCTION_CALL_PROXIES_TOTAL.inc()
+                        crate::utils::capture_shadow_consistency_error!(
+                            err,
+                            error_meta,
+                            "QUERY_FUNCTION_CALL"
+                        );
                     }
                     near_primitives::views::QueryRequest::ViewAccessKeyList { .. } => {
-                        crate::metrics::QUERY_VIEW_ACCESS_KEYS_LIST_PROXIES_TOTAL.inc()
+                        crate::utils::capture_shadow_consistency_error!(
+                            err,
+                            error_meta,
+                            "QUERY_VIEW_ACCESS_KEY_LIST"
+                        );
                     }
                 };
             }
