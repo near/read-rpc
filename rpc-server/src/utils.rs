@@ -310,7 +310,13 @@ fn json_sort_value(value: serde_json::Value) -> serde_json::Value {
                 .collect();
             serde_json::Value::from(new_value)
         }
-        serde_json::Value::Object(obj) => {
+        serde_json::Value::Object(mut obj) => {
+            // When comparing the response for methods `tx` and `EXPERIMENTAL_tx_status` the response
+            // contains the field `receipts_outcome.outcome.metadata` which is not backward compatible
+            // on the `nearcore` side. Different NEAR RPC nodes return different values for this field.
+            // We don't want it to affect the comparison of the responses, so we remove it on the fly.
+            // This field not expected to be present in other responses.
+            obj.remove("metadata");
             let new_obj = obj
                 .into_iter()
                 .fold(serde_json::Map::new(), |mut map, (k, v)| {
