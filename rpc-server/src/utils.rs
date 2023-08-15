@@ -154,7 +154,15 @@ where
         Err(err) => {
             if let Some(e) = err.handler_error() {
                 match serde_json::to_value(&e) {
-                    Ok(near_rpc_response_json) => (near_rpc_response_json, false),
+                    Ok(near_rpc_response_json) => {
+                        if near_rpc_response_json["name"] == "TIMEOUT_ERROR" {
+                            return Err(ShadowDataConsistencyError::NearRpcCallError(format!(
+                                "{:?}",
+                                err
+                            )));
+                        }
+                        (near_rpc_response_json, false)
+                    }
                     Err(err) => {
                         return Err(ShadowDataConsistencyError::NearRpcResponseParseError(err));
                     }
