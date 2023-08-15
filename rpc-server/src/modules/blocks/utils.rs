@@ -109,7 +109,11 @@ pub async fn fetch_chunk_from_s3(
     shard_id: near_primitives::types::ShardId,
 ) -> Result<near_primitives::views::ChunkView, near_jsonrpc_primitives::types::chunks::RpcChunkError>
 {
-    tracing::debug!("`fetch_chunk_from_s3` call");
+    tracing::debug!(
+        "`fetch_chunk_from_s3` call: block_height {}, shard_id {}",
+        block_height,
+        shard_id
+    );
     match fetch_shard_from_s3(s3_client, s3_bucket_name, block_height, shard_id).await {
         Ok(shard) => match shard.chunk {
             Some(chunk) => {
@@ -225,6 +229,37 @@ pub async fn scylla_db_convert_chunk_hash_to_block_height_and_shard_id(
             },
         )
     }
+}
+
+#[cfg_attr(
+    feature = "tracing-instrumentation",
+    tracing::instrument(skip(scylla_db_manager))
+)]
+pub async fn scylla_db_convert_block_height_and_shard_id_to_height_included_and_shard_id(
+    scylla_db_manager: &std::sync::Arc<ScyllaDBManager>,
+    block_height: near_primitives::types::BlockHeight,
+    shard_id: near_primitives::types::ShardId,
+) -> Result<
+    (
+        near_primitives::types::BlockHeight,
+        near_primitives::types::ShardId,
+    ),
+    near_jsonrpc_primitives::types::chunks::RpcChunkError,
+> {
+    tracing::debug!(
+        "`scylla_db_convert_block_height_and_shard_id_to_height_included_and_shard_id` call"
+    );
+    Ok(scylla_db_manager
+        .get_block_by_height_and_shard_id(block_height, shard_id)
+        .await
+        .map_err(
+            |_err| near_jsonrpc_primitives::types::chunks::RpcChunkError::InternalError {
+                error_message: format!(
+                    "Unknown block height: {} and shard_id: {}",
+                    block_height, shard_id
+                ),
+            },
+        ))?
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
