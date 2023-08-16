@@ -259,7 +259,8 @@ pub async fn scylla_db_convert_block_height_and_shard_id_to_height_included_and_
                     block_height, shard_id
                 ),
             },
-        ))?
+        )
+        .map(|block_height_shard_id| (block_height_shard_id.0, block_height_shard_id.1)))?
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]

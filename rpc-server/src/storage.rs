@@ -1,9 +1,30 @@
-use num_traits::ToPrimitive;
+use std::convert::TryFrom;
 
 use borsh::BorshDeserialize;
+use num_traits::ToPrimitive;
 use scylla::{prepared_statement::PreparedStatement, IntoTypedRows};
 
 use database::ScyllaStorageManager;
+
+pub struct BlockHeightShardId(pub u64, pub u64);
+
+impl TryFrom<(num_bigint::BigInt, num_bigint::BigInt)> for BlockHeightShardId {
+    type Error = anyhow::Error;
+
+    fn try_from(value: (num_bigint::BigInt, num_bigint::BigInt)) -> Result<Self, Self::Error> {
+        let height_included = value
+            .0
+            .to_u64()
+            .ok_or_else(|| anyhow::anyhow!("Failed to parse `height_included` to u64"))?;
+
+        let parsed_shard_id = value
+            .1
+            .to_u64()
+            .ok_or_else(|| anyhow::anyhow!("Failed to parse `shard_id` to u64"))?;
+
+        Ok(BlockHeightShardId(height_included, parsed_shard_id))
+    }
+}
 
 pub struct ScyllaDBManager {
     scylla_session: std::sync::Arc<scylla::Session>,
@@ -303,7 +324,7 @@ impl ScyllaDBManager {
         &self,
         block_height: near_primitives::types::BlockHeight,
         shard_id: near_primitives::types::ShardId,
-    ) -> anyhow::Result<(u64, u64)> {
+    ) -> anyhow::Result<BlockHeightShardId> {
         let rows = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_height_included_and_shard_id_by_block_height,
@@ -314,29 +335,17 @@ impl ScyllaDBManager {
 
         let height_included_and_shard_id = rows
             .into_typed::<(num_bigint::BigInt, num_bigint::BigInt)>()
-            .filter_map(|row| row.ok())
-            .find(|row| row.1 == num_bigint::BigInt::from(shard_id));
+            .filter_map(Result::ok)
+            .find(|(_, shard)| shard == &num_bigint::BigInt::from(shard_id));
 
-        match height_included_and_shard_id {
-            Some(row) => {
-                // We want to return Err if there is an error parsing the BigInt to u64
-                // that's why we convert Option<u64> (we got from .to_u64()) into a Result.
-                // Thus we avoid `.unwrap()` and `.expect()` which would panic.
-                let height_included = row
-                    .0
-                    .to_u64()
-                    .ok_or_else(|| anyhow::anyhow!("Failed to parse `height_included` to u64"))?;
-                let shard_id = row
-                    .1
-                    .to_u64()
-                    .ok_or_else(|| anyhow::anyhow!("Failed to parse `shard_id` to u64"))?;
-                Ok((height_included, shard_id))
-            }
-            None => Err(anyhow::anyhow!(
-                "Block height {} and shard id {} not found",
-                block_height,
-                shard_id
-            )),
-        }
+        height_included_and_shard_id
+            .map(BlockHeightShardId::try_from)
+            .unwrap_or_else(|| {
+                Err(anyhow::anyhow!(
+                    "Block height {} and shard id {} not found",
+                    block_height,
+                    shard_id
+                ))
+            })
     }
 }
