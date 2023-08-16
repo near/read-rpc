@@ -178,22 +178,29 @@ pub fn init_tracing() -> anyhow::Result<()> {
     opentelemetry::global::set_text_map_propagator(
         opentelemetry::sdk::propagation::TraceContextPropagator::new(),
     );
-    let tracer = opentelemetry_jaeger::new_collector_pipeline()
-        .with_service_name("tx_indexer")
-        .with_endpoint(std::env::var("OTEL_EXPORTER_JAEGER_ENDPOINT").unwrap_or_default())
-        .with_isahc()
-        .with_batch_processor_config(
-            opentelemetry::sdk::trace::BatchConfig::default()
-                .with_max_queue_size(10_000)
-                .with_max_export_batch_size(10_000)
-                .with_max_concurrent_exports(100),
-        )
-        .install_batch(opentelemetry::runtime::TokioCurrentThread)?;
-    let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
 
-    let subscriber = tracing_subscriber::Registry::default()
-        .with(env_filter)
-        .with(telemetry);
+    #[cfg(feature = "tracing-instrumentation")]
+    let subscriber = {
+        let tracer = opentelemetry_jaeger::new_collector_pipeline()
+            .with_service_name("tx_indexer")
+            .with_endpoint(std::env::var("OTEL_EXPORTER_JAEGER_ENDPOINT").unwrap_or_default())
+            .with_isahc()
+            .with_batch_processor_config(
+                opentelemetry::sdk::trace::BatchConfig::default()
+                    .with_max_queue_size(10_000)
+                    .with_max_export_batch_size(10_000)
+                    .with_max_concurrent_exports(100),
+            )
+            .install_batch(opentelemetry::runtime::TokioCurrentThread)?;
+        let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
+
+        tracing_subscriber::Registry::default()
+            .with(env_filter)
+            .with(telemetry)
+    };
+
+    #[cfg(not(feature = "tracing-instrumentation"))]
+    let subscriber = tracing_subscriber::Registry::default().with(env_filter);
 
     if std::env::var("ENABLE_JSON_LOGS").is_ok() {
         subscriber.with(tracing_stackdriver::layer()).try_init()?;
