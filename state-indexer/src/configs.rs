@@ -320,7 +320,7 @@ impl ScyllaStorageManager for ScyllaDBManager {
                     chunk_hash varchar,
                     block_height varint,
                     shard_id varint,
-                    height_included varint,
+                    stored_at_block_height varint,
                     PRIMARY KEY (chunk_hash, block_height)
                 )
             ",
@@ -459,7 +459,7 @@ impl ScyllaStorageManager for ScyllaDBManager {
             add_chunk: Self::prepare_write_query(
                 &scylla_db_session,
                 "INSERT INTO state_indexer.chunks
-                    (chunk_hash, block_height, shard_id, height_included)
+                    (chunk_hash, block_height, shard_id, stored_at_block_height)
                     VALUES (?, ?, ?, ?)",
             )
             .await?,
