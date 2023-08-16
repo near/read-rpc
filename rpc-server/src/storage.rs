@@ -53,7 +53,7 @@ impl ScyllaStorageManager for ScyllaDBManager {
 
             get_block_by_hash: Self::prepare_read_query(
                 &scylla_db_session,
-                "SELECT block_height FROM state_indexer.blocks WHERE block_hash = ? LIMIT 1",
+                "SELECT block_height FROM state_indexer.blocks WHERE block_hash = ?",
             ).await?,
 
             get_block_by_chunk_id: Self::prepare_read_query(
