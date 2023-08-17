@@ -1,7 +1,30 @@
+use std::convert::TryFrom;
+
 use borsh::BorshDeserialize;
-use scylla::prepared_statement::PreparedStatement;
+use num_traits::ToPrimitive;
+use scylla::{prepared_statement::PreparedStatement, IntoTypedRows};
 
 use database::ScyllaStorageManager;
+
+pub struct BlockHeightShardId(pub u64, pub u64);
+
+impl TryFrom<(num_bigint::BigInt, num_bigint::BigInt)> for BlockHeightShardId {
+    type Error = anyhow::Error;
+
+    fn try_from(value: (num_bigint::BigInt, num_bigint::BigInt)) -> Result<Self, Self::Error> {
+        let stored_at_block_height = value
+            .0
+            .to_u64()
+            .ok_or_else(|| anyhow::anyhow!("Failed to parse `stored_at_block_height` to u64"))?;
+
+        let parsed_shard_id = value
+            .1
+            .to_u64()
+            .ok_or_else(|| anyhow::anyhow!("Failed to parse `shard_id` to u64"))?;
+
+        Ok(BlockHeightShardId(stored_at_block_height, parsed_shard_id))
+    }
+}
 
 pub struct ScyllaDBManager {
     scylla_session: std::sync::Arc<scylla::Session>,
@@ -17,6 +40,7 @@ pub struct ScyllaDBManager {
     get_account_access_keys: PreparedStatement,
     get_receipt: PreparedStatement,
     get_transaction_by_hash: PreparedStatement,
+    get_stored_at_block_height_and_shard_id_by_block_height: PreparedStatement,
 }
 
 #[async_trait::async_trait]
@@ -29,12 +53,12 @@ impl ScyllaStorageManager for ScyllaDBManager {
 
             get_block_by_hash: Self::prepare_read_query(
                 &scylla_db_session,
-                "SELECT block_height FROM state_indexer.chunks WHERE block_hash = ? LIMIT 1",
+                "SELECT block_height FROM state_indexer.blocks WHERE block_hash = ?",
             ).await?,
 
             get_block_by_chunk_id: Self::prepare_read_query(
                 &scylla_db_session,
-                "SELECT block_height, shard_id FROM state_indexer.chunks WHERE chunk_hash = ? LIMIT 1",
+                "SELECT stored_at_block_height, shard_id FROM state_indexer.chunks WHERE chunk_hash = ? LIMIT 1",
             ).await?,
 
             get_all_state_keys: Self::prepare_read_query(
@@ -82,6 +106,11 @@ impl ScyllaStorageManager for ScyllaDBManager {
             get_transaction_by_hash: Self::prepare_read_query(
                 &scylla_db_session,
                 "SELECT transaction_details FROM tx_indexer.transactions_details WHERE transaction_hash = ? LIMIT 1",
+            ).await?,
+
+            get_stored_at_block_height_and_shard_id_by_block_height: Self::prepare_read_query(
+                &scylla_db_session,
+                "SELECT stored_at_block_height, shard_id FROM state_indexer.chunks WHERE block_height = ?",
             ).await?,
         }))
     }
@@ -289,5 +318,34 @@ impl ScyllaDBManager {
         Ok(readnode_primitives::TransactionDetails::try_from_slice(
             &data_value,
         )?)
+    }
+
+    pub async fn get_block_by_height_and_shard_id(
+        &self,
+        block_height: near_primitives::types::BlockHeight,
+        shard_id: near_primitives::types::ShardId,
+    ) -> anyhow::Result<BlockHeightShardId> {
+        let rows = Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.get_stored_at_block_height_and_shard_id_by_block_height,
+            (num_bigint::BigInt::from(block_height),),
+        )
+        .await?
+        .rows()?;
+
+        let block_height_and_shard_id = rows
+            .into_typed::<(num_bigint::BigInt, num_bigint::BigInt)>()
+            .filter_map(Result::ok)
+            .find(|(_, shard)| shard == &num_bigint::BigInt::from(shard_id));
+
+        block_height_and_shard_id
+            .map(BlockHeightShardId::try_from)
+            .unwrap_or_else(|| {
+                Err(anyhow::anyhow!(
+                    "Block height {} and shard id {} not found",
+                    block_height,
+                    shard_id
+                ))
+            })
     }
 }

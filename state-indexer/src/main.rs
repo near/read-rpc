@@ -40,7 +40,7 @@ async fn handle_streamer_message(
             .block
             .chunks
             .iter()
-            .map(|c| c.chunk_hash.to_string())
+            .map(|chunk| (chunk.chunk_hash.to_string(), chunk.shard_id, chunk.height_included))
             .collect(),
         scylla_storage,
     );
@@ -66,12 +66,14 @@ async fn handle_streamer_message(
 async fn handle_block(
     block_height: u64,
     block_hash: CryptoHash,
-    chunks: Vec<String>,
+    chunks: Vec<(configs::ChunkHash, configs::ShardId, configs::HeightIncluded)>,
     scylla_storage: &configs::ScyllaDBManager,
 ) -> anyhow::Result<()> {
-    scylla_storage
-        .add_block(num_bigint::BigInt::from(block_height), block_hash, chunks)
-        .await
+    let add_block_future = scylla_storage.add_block(num_bigint::BigInt::from(block_height), block_hash);
+    let add_chunks_future = scylla_storage.add_chunks(num_bigint::BigInt::from(block_height), chunks);
+
+    futures::try_join!(add_block_future, add_chunks_future)?;
+    Ok(())
 }
 
 /// This function will iterate over all StateChangesWithCauseViews in order to collect

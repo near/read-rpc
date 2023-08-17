@@ -7,6 +7,10 @@ use scylla::prepared_statement::PreparedStatement;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
+pub type ChunkHash = String;
+pub type HeightIncluded = u64;
+pub type ShardId = u64;
+
 /// NEAR Indexer for Explorer
 /// Watches for stream of blocks from the chain
 #[derive(Parser, Debug)]
@@ -226,6 +230,7 @@ pub(crate) struct ScyllaDBManager {
     add_account: PreparedStatement,
     delete_account: PreparedStatement,
 
+    add_block: PreparedStatement,
     add_chunk: PreparedStatement,
     add_account_state: PreparedStatement,
     update_meta: PreparedStatement,
@@ -315,12 +320,25 @@ impl ScyllaStorageManager for ScyllaDBManager {
         scylla_db_session
             .query(
                 "
-                CREATE TABLE IF NOT EXISTS chunks (
-                    block_height varint,
+                CREATE TABLE IF NOT EXISTS blocks (
                     block_hash varchar,
+                    block_height varint,
+                    PRIMARY KEY (block_hash)
+                )
+                ",
+                &[],
+            )
+            .await?;
+
+        scylla_db_session
+            .query(
+                "
+                CREATE TABLE IF NOT EXISTS chunks (
                     chunk_hash varchar,
+                    block_height varint,
                     shard_id varint,
-                    PRIMARY KEY (chunk_hash)
+                    stored_at_block_height varint,
+                    PRIMARY KEY (chunk_hash, block_height)
                 )
             ",
                 &[],
@@ -329,7 +347,7 @@ impl ScyllaStorageManager for ScyllaDBManager {
         scylla_db_session
             .query(
                 "
-                CREATE INDEX IF NOT EXISTS block_by_hash ON chunks (block_hash);
+                CREATE INDEX IF NOT EXISTS chunk_block_height ON chunks (block_height);
             ",
                 &[],
             )
@@ -448,11 +466,17 @@ impl ScyllaStorageManager for ScyllaDBManager {
                     VALUES(?, ?, ?, NULL)",
             )
             .await?,
-
+            add_block: Self::prepare_write_query(
+                &scylla_db_session,
+                "INSERT INTO state_indexer.blocks
+                    (block_hash, block_height)
+                    VALUES (?, ?)",
+            )
+            .await?,
             add_chunk: Self::prepare_write_query(
                 &scylla_db_session,
                 "INSERT INTO state_indexer.chunks
-                    (block_height, block_hash, chunk_hash, shard_id)
+                    (chunk_hash, block_height, shard_id, stored_at_block_height)
                     VALUES (?, ?, ?, ?)",
             )
             .await?,
@@ -710,13 +734,28 @@ impl ScyllaDBManager {
         &self,
         block_height: num_bigint::BigInt,
         block_hash: near_indexer_primitives::CryptoHash,
-        chunks: Vec<String>,
     ) -> anyhow::Result<()> {
-        let save_chunks_futures = chunks.iter().enumerate().map(|(shard_id, chunk)| {
+        Self::execute_prepared_query(&self.scylla_session, &self.add_block, (block_hash.to_string(), block_height))
+            .await?;
+        Ok(())
+    }
+
+    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
+    pub(crate) async fn add_chunks(
+        &self,
+        block_height: num_bigint::BigInt,
+        chunks: Vec<(String, ShardId, HeightIncluded)>,
+    ) -> anyhow::Result<()> {
+        let save_chunks_futures = chunks.iter().map(|(chunk_hash, shard_id, height_included)| {
             Self::execute_prepared_query(
                 &self.scylla_session,
                 &self.add_chunk,
-                (block_height.clone(), block_hash.to_string(), chunk.to_string(), num_bigint::BigInt::from(shard_id)),
+                (
+                    chunk_hash,
+                    block_height.clone(),
+                    num_bigint::BigInt::from(*shard_id),
+                    num_bigint::BigInt::from(*height_included),
+                ),
             )
         });
         futures::future::try_join_all(save_chunks_futures).await?;
