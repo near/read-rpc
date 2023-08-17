@@ -10,6 +10,7 @@ dotenv = "0.15"
 futures = "0.3.28"
 rand = "0.8"
 tokio = { version = "1.28.2", features = ["full", "tracing"] }
+tracing = "0.1.34"
 
 near-jsonrpc-client = "0.6.0"
 near-jsonrpc-primitives = "0.17.0"
