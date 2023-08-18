@@ -1,5 +1,6 @@
 mod chunks;
 mod query_accounts;
+mod query_call_functions;
 mod transactions;
 
 use std::iter::zip;
@@ -28,7 +29,7 @@ struct TxInfo {
     sender_id: AccountId,
 }
 
-const RUNS_COUNT: i32 = 3;
+const RUNS_COUNT: usize = 100;
 const TARGET: &str = "rpc_load_test";
 
 fn collect_perf_test_results(name: &str, results: &[anyhow::Result<Duration>]) -> TestResult {
@@ -40,6 +41,12 @@ fn collect_perf_test_results(name: &str, results: &[anyhow::Result<Duration>]) -
         median: elapsed_timings[elapsed_timings.len() / 2].as_millis(),
         errors_count: results.len() - elapsed_timings.len(),
     }
+}
+
+fn generate_heights(from_height: BlockHeight, to_height: BlockHeight, n: usize) -> Vec<u64> {
+    (0..n)
+        .map(|_| rand::thread_rng().gen_range(from_height..to_height))
+        .collect()
 }
 
 async fn test(rpc_url: &str) -> Vec<TestResult> {
@@ -70,9 +77,8 @@ async fn test(rpc_url: &str) -> Vec<TestResult> {
         "Cold storage has block range [{}, {}]",
         genesis_block_height, final_cold_storage_block
     );
-    let cold_storage_heights: Vec<u64> = (0..RUNS_COUNT)
-        .map(|_| rand::thread_rng().gen_range(genesis_block_height..final_cold_storage_block))
-        .collect();
+    let cold_storage_heights: Vec<u64> =
+        generate_heights(genesis_block_height, final_cold_storage_block, RUNS_COUNT);
 
     // I'm microoptimising and preparing data for next tests during running the other tests
     // (OFK it does not affect the benchmarks)
@@ -95,6 +101,16 @@ async fn test(rpc_url: &str) -> Vec<TestResult> {
         )
         .await,
     );
+    results.push(
+        query_call_functions::test_call_functions(
+            "Cold storage function calls",
+            &rpc_client,
+            genesis_block_height,
+            final_cold_storage_block,
+            RUNS_COUNT,
+        )
+        .await,
+    );
 
     // Hot storage contains 5 last epochs, but I will ignore 2 boundary epochs to be sure the results are not spoiled
     let first_hot_storage_block = final_block.header.height - epoch_len * 4;
@@ -102,9 +118,11 @@ async fn test(rpc_url: &str) -> Vec<TestResult> {
         "Hot storage has block range [{}, {}]",
         first_hot_storage_block, final_block.header.height
     );
-    let hot_storage_heights: Vec<u64> = (0..RUNS_COUNT)
-        .map(|_| rand::thread_rng().gen_range(first_hot_storage_block..final_block.header.height))
-        .collect();
+    let hot_storage_heights: Vec<u64> = generate_heights(
+        first_hot_storage_block,
+        final_block.header.height,
+        RUNS_COUNT,
+    );
 
     let (hot_storage_chunks_result, hot_storage_transactions) =
         chunks::test_chunks("Hot storage chunks", &rpc_client, &hot_storage_heights).await;
@@ -122,6 +140,16 @@ async fn test(rpc_url: &str) -> Vec<TestResult> {
             "Hot storage accounts",
             &rpc_client,
             &hot_storage_transactions,
+        )
+        .await,
+    );
+    results.push(
+        query_call_functions::test_call_functions(
+            "Hot storage function calls",
+            &rpc_client,
+            first_hot_storage_block,
+            final_block.header.height,
+            RUNS_COUNT,
         )
         .await,
     );
