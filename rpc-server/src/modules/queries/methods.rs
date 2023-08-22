@@ -4,9 +4,7 @@ use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
 use crate::modules::blocks::CacheBlock;
 #[cfg(feature = "account_access_keys")]
 use crate::modules::queries::utils::fetch_list_access_keys_from_scylla_db;
-use crate::modules::queries::utils::{
-    fetch_access_key_from_scylla_db, fetch_state_from_scylla_db, run_contract,
-};
+use crate::modules::queries::utils::{fetch_state_from_scylla_db, run_contract};
 use crate::utils::proxy_rpc_call;
 #[cfg(feature = "shadow_data_consistency")]
 use crate::utils::shadow_compare_results;
@@ -219,9 +217,9 @@ async fn view_account(
 
     Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc_primitives::types::query::QueryResponseKind::ViewAccount(
-            near_primitives::views::AccountView::from(account),
+            near_primitives::views::AccountView::from(account.data),
         ),
-        block_height: block.block_height,
+        block_height: account.block_height,
         block_hash: block.block_hash,
     })
 }
@@ -266,8 +264,8 @@ async fn view_code(
         kind: near_jsonrpc_primitives::types::query::QueryResponseKind::ViewCode(
             near_primitives::views::ContractCodeView::from(
                 near_primitives::contract::ContractCode::new(
-                    contract_code,
-                    Some(contract.code_hash()),
+                    contract_code.data,
+                    Some(contract.data.code_hash()),
                 ),
             ),
         ),
@@ -385,31 +383,28 @@ async fn view_access_key(
         key_data,
     );
 
-    let access_key = fetch_access_key_from_scylla_db(
-        &data.scylla_db_manager,
-        account_id,
-        block.block_height,
-        &key_data,
-    )
-    .await
-    .map_err(
-        |_err| match near_crypto::ED25519PublicKey::try_from(key_data.as_slice()) {
-            Ok(public_key) => {
-                near_jsonrpc_primitives::types::query::RpcQueryError::UnknownAccessKey {
-                    public_key: public_key.into(),
-                    block_height: block.block_height,
-                    block_hash: block.block_hash,
+    let access_key = data
+        .scylla_db_manager
+        .get_access_key(account_id, block.block_height, &key_data)
+        .await
+        .map_err(
+            |_err| match near_crypto::ED25519PublicKey::try_from(key_data.as_slice()) {
+                Ok(public_key) => {
+                    near_jsonrpc_primitives::types::query::RpcQueryError::UnknownAccessKey {
+                        public_key: public_key.into(),
+                        block_height: block.block_height,
+                        block_hash: block.block_hash,
+                    }
                 }
-            }
-            Err(_) => near_jsonrpc_primitives::types::query::RpcQueryError::InternalError {
-                error_message: "Failed to parse public key".to_string(),
+                Err(_) => near_jsonrpc_primitives::types::query::RpcQueryError::InternalError {
+                    error_message: "Failed to parse public key".to_string(),
+                },
             },
-        },
-    )?;
+        )?;
 
     Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc_primitives::types::query::QueryResponseKind::AccessKey(
-            near_primitives::views::AccessKeyView::from(access_key),
+            near_primitives::views::AccessKeyView::from(access_key.data),
         ),
         block_height: block.block_height,
         block_hash: block.block_hash,

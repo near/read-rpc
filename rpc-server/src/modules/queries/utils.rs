@@ -1,11 +1,14 @@
+use std::collections::HashMap;
+use std::ops::Deref;
+
+#[cfg(feature = "account_access_keys")]
+use borsh::BorshDeserialize;
+use scylla::IntoTypedRows;
+use tokio::task;
+
 use crate::config::CompiledCodeCache;
 use crate::modules::queries::{CodeStorage, MAX_LIMIT};
 use crate::storage::ScyllaDBManager;
-use borsh::BorshDeserialize;
-use scylla::IntoTypedRows;
-use std::collections::HashMap;
-use std::ops::Deref;
-use tokio::task;
 
 #[cfg_attr(
     feature = "tracing-instrumentation",
@@ -58,32 +61,6 @@ pub async fn get_stata_keys_from_scylla(
         }
         Err(_) => data,
     }
-}
-
-#[cfg_attr(
-    feature = "tracing-instrumentation",
-    tracing::instrument(skip(scylla_db_manager))
-)]
-pub async fn fetch_access_key_from_scylla_db(
-    scylla_db_manager: &std::sync::Arc<ScyllaDBManager>,
-    account_id: &near_primitives::types::AccountId,
-    block_height: near_primitives::types::BlockHeight,
-    key_data: &Vec<u8>,
-) -> anyhow::Result<near_primitives::account::AccessKey> {
-    tracing::debug!(
-        "`fetch_access_key_from_scylla_db` call. AccountID {}, block {}, key_data {:?}",
-        account_id,
-        block_height,
-        key_data,
-    );
-    let row = scylla_db_manager
-        .get_access_key(account_id, block_height, key_data)
-        .await?;
-    let (data_value,): (Vec<u8>,) = row.into_typed::<(Vec<u8>,)>()?;
-
-    Ok(near_primitives::account::AccessKey::try_from_slice(
-        &data_value,
-    )?)
 }
 
 #[cfg(feature = "account_access_keys")]
@@ -240,11 +217,11 @@ pub async fn run_contract(
     let code: Option<Vec<u8>> = contract_code_cache
         .write()
         .unwrap()
-        .get(&contract.code_hash())
+        .get(&contract.data.code_hash())
         .cloned();
     let contract_code = match code {
         Some(code) => {
-            near_primitives::contract::ContractCode::new(code, Some(contract.code_hash()))
+            near_primitives::contract::ContractCode::new(code, Some(contract.data.code_hash()))
         }
         None => {
             let code = scylla_db_manager
@@ -253,8 +230,8 @@ pub async fn run_contract(
             contract_code_cache
                 .write()
                 .unwrap()
-                .put(contract.code_hash(), code.clone());
-            near_primitives::contract::ContractCode::new(code, Some(contract.code_hash()))
+                .put(contract.data.code_hash(), code.data.clone());
+            near_primitives::contract::ContractCode::new(code.data, Some(contract.data.code_hash()))
         }
     };
     let context = near_vm_logic::VMContext {
@@ -266,9 +243,9 @@ pub async fn run_contract(
         block_height,
         block_timestamp: timestamp,
         epoch_height: 0, // TODO: implement indexing of epoch_height and pass it here
-        account_balance: contract.amount(),
-        account_locked_balance: contract.locked(),
-        storage_usage: contract.storage_usage(),
+        account_balance: contract.data.amount(),
+        account_locked_balance: contract.data.locked(),
+        storage_usage: contract.data.storage_usage(),
         attached_deposit: 0,
         prepaid_gas: 0,
         random_seed: vec![], // TODO: test the contracts where random is used.
