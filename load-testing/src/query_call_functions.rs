@@ -19,7 +19,6 @@ async fn send_random_fn_call(
     block_height: BlockHeight,
     client: &JsonRpcClient,
 ) -> anyhow::Result<Duration> {
-    println!("debug: {} {:?}", block_height, function);
     let now = Instant::now();
     let _ = client
         .call(methods::query::RpcQueryRequest {

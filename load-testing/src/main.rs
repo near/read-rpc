@@ -36,6 +36,12 @@ fn collect_perf_test_results(name: &str, results: &[anyhow::Result<Duration>]) -
     let mut elapsed_timings: Vec<&Duration> =
         results.iter().filter_map(|r| r.as_ref().ok()).collect();
     elapsed_timings.sort();
+    println!(
+        "Finalising results for {}: {} out of {} requests are successful",
+        name,
+        elapsed_timings.len(),
+        results.len()
+    );
     TestResult {
         name: name.to_string(),
         median: elapsed_timings[elapsed_timings.len() / 2].as_millis(),
@@ -49,7 +55,7 @@ fn generate_heights(from_height: BlockHeight, to_height: BlockHeight, n: usize) 
         .collect()
 }
 
-async fn test(rpc_url: &str) -> Vec<TestResult> {
+async fn test(rpc_url: &str, name: &str) -> Vec<TestResult> {
     let mut results = vec![];
     let rpc_client = JsonRpcClient::connect(rpc_url);
 
@@ -60,34 +66,39 @@ async fn test(rpc_url: &str) -> Vec<TestResult> {
             block_reference: BlockReference::Finality(Finality::Final),
         })
         .await
-        .unwrap_or_else(|_| panic!("Unable to query final block from {}", rpc_url));
+        .unwrap_or_else(|_| panic!("Unable to query final block from {}", name));
     let epoch_len = 43200;
 
     let final_block_dt =
         NaiveDateTime::from_timestamp_micros(final_block.header.timestamp as i64 / 1000)
-            .expect("Unable to parse final block timestamp");
+            .unwrap_or_else(|| panic!("Unable to parse final block timestamp from {}", name));
+
     println!(
-        "Current block_height {} ({:?})\n",
-        final_block.header.height, final_block_dt
+        "{} current block_height {} ({:?})\n",
+        name, final_block.header.height, final_block_dt
     );
 
     // Hot storage contains 5 last epochs, but I will ignore 2 boundary epochs to be sure the results are not spoiled
     let final_cold_storage_block = final_block.header.height - epoch_len * 6;
     println!(
-        "Cold storage has block range [{}, {}]",
-        genesis_block_height, final_cold_storage_block
+        "{} cold storage has block range [{}, {}]",
+        name, genesis_block_height, final_cold_storage_block
     );
     let cold_storage_heights: Vec<u64> =
         generate_heights(genesis_block_height, final_cold_storage_block, RUNS_COUNT);
 
     // I'm microoptimising and preparing data for next tests during running the other tests
     // (OFK it does not affect the benchmarks)
-    let (cold_storage_chunks_result, cold_storage_transactions) =
-        chunks::test_chunks("Cold storage chunks", &rpc_client, &cold_storage_heights).await;
+    let (cold_storage_chunks_result, cold_storage_transactions) = chunks::test_chunks(
+        &format!("{} cold storage chunks", name),
+        &rpc_client,
+        &cold_storage_heights,
+    )
+    .await;
     results.push(cold_storage_chunks_result);
     results.push(
         transactions::test_transactions(
-            "Cold storage transactions",
+            &format!("{} cold storage transactions", name),
             &rpc_client,
             &cold_storage_transactions,
         )
@@ -95,7 +106,7 @@ async fn test(rpc_url: &str) -> Vec<TestResult> {
     );
     results.push(
         query_accounts::test_accounts(
-            "Cold storage accounts",
+            &format!("{} cold storage accounts", name),
             &rpc_client,
             &cold_storage_transactions,
         )
@@ -103,7 +114,7 @@ async fn test(rpc_url: &str) -> Vec<TestResult> {
     );
     results.push(
         query_call_functions::test_call_functions(
-            "Cold storage function calls",
+            &format!("{} cold storage function calls", name),
             &rpc_client,
             genesis_block_height,
             final_cold_storage_block,
@@ -115,8 +126,8 @@ async fn test(rpc_url: &str) -> Vec<TestResult> {
     // Hot storage contains 5 last epochs, but I will ignore 2 boundary epochs to be sure the results are not spoiled
     let first_hot_storage_block = final_block.header.height - epoch_len * 4;
     println!(
-        "Hot storage has block range [{}, {}]",
-        first_hot_storage_block, final_block.header.height
+        "{} hot storage has block range [{}, {}]",
+        name, first_hot_storage_block, final_block.header.height
     );
     let hot_storage_heights: Vec<u64> = generate_heights(
         first_hot_storage_block,
@@ -124,12 +135,16 @@ async fn test(rpc_url: &str) -> Vec<TestResult> {
         RUNS_COUNT,
     );
 
-    let (hot_storage_chunks_result, hot_storage_transactions) =
-        chunks::test_chunks("Hot storage chunks", &rpc_client, &hot_storage_heights).await;
+    let (hot_storage_chunks_result, hot_storage_transactions) = chunks::test_chunks(
+        &format!("{} hot storage chunks", name),
+        &rpc_client,
+        &hot_storage_heights,
+    )
+    .await;
     results.push(hot_storage_chunks_result);
     results.push(
         transactions::test_transactions(
-            "Hot storage transactions",
+            &format!("{} hot storage transactions", name),
             &rpc_client,
             &hot_storage_transactions,
         )
@@ -137,7 +152,7 @@ async fn test(rpc_url: &str) -> Vec<TestResult> {
     );
     results.push(
         query_accounts::test_accounts(
-            "Hot storage accounts",
+            &format!("{} hot storage accounts", name),
             &rpc_client,
             &hot_storage_transactions,
         )
@@ -145,7 +160,7 @@ async fn test(rpc_url: &str) -> Vec<TestResult> {
     );
     results.push(
         query_call_functions::test_call_functions(
-            "Hot storage function calls",
+            &format!("{} hot storage function calls", name),
             &rpc_client,
             first_hot_storage_block,
             final_block.header.height,
@@ -163,7 +178,7 @@ async fn main() -> anyhow::Result<()> {
     let read_rpc_url = std::env::var("READ_RPC_URL").expect("READ_RPC_URL env var expected");
     let archival_rpc_url =
         std::env::var("ARCHIVAL_RPC_URL").expect("ARCHIVAL_RPC_URL env var expected");
-    let (rr_results, ar_results) = join!(test(&read_rpc_url), test(&archival_rpc_url));
+    let (rr_results, ar_results) = join!(test(&read_rpc_url, "RR"), test(&archival_rpc_url, "AR"));
     println!("Read RPC (errors)\tArchival RPC (errors)");
     for (rr_result, ar_result) in zip(rr_results, ar_results) {
         assert_eq!(rr_result.name, ar_result.name);
