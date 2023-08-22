@@ -42,9 +42,14 @@ fn collect_perf_test_results(name: &str, results: &[anyhow::Result<Duration>]) -
         elapsed_timings.len(),
         results.len()
     );
+    let median = if elapsed_timings.is_empty() {
+        u128::MAX
+    } else {
+        elapsed_timings[elapsed_timings.len() / 2].as_millis()
+    };
     TestResult {
         name: name.to_string(),
-        median: elapsed_timings[elapsed_timings.len() / 2].as_millis(),
+        median,
         errors_count: results.len() - elapsed_timings.len(),
     }
 }
