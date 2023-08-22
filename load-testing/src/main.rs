@@ -186,14 +186,14 @@ async fn main() -> anyhow::Result<()> {
     let (rr_results, ar_results) = join!(test(&read_rpc_url, "RR"), test(&archival_rpc_url, "AR"));
     println!("Read RPC (errors)\tArchival RPC (errors)");
     for (rr_result, ar_result) in zip(rr_results, ar_results) {
-        assert_eq!(rr_result.name, ar_result.name);
         println!(
-            "{} ms ({}) \t\t\t {} ms ({})\t\t\t\t{}",
+            "{} ms ({}) \t\t\t {} ms ({})\t\t\t\t{}/{}",
             rr_result.median,
             rr_result.errors_count,
             ar_result.median,
             ar_result.errors_count,
-            rr_result.name
+            rr_result.name,
+            ar_result.name,
         );
     }
     Ok(())
