@@ -125,7 +125,7 @@ pub async fn fetch_state_from_scylla_db(
         }
         Ok(near_primitives::views::ViewStateResult {
             values,
-            proof: vec![],
+            proof: vec![], // TODO: this is hardcoded empty value since we don't support proofs yet
         })
     }
 }
