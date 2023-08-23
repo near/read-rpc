@@ -3,7 +3,6 @@ use std::ops::Deref;
 
 #[cfg(feature = "account_access_keys")]
 use borsh::BorshDeserialize;
-use scylla::IntoTypedRows;
 use tokio::task;
 
 use crate::config::CompiledCodeCache;
@@ -14,19 +13,19 @@ use crate::storage::ScyllaDBManager;
     feature = "tracing-instrumentation",
     tracing::instrument(skip(scylla_db_manager))
 )]
-pub async fn get_stata_keys_from_scylla(
+pub async fn get_state_keys_from_scylla(
     scylla_db_manager: &std::sync::Arc<ScyllaDBManager>,
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
     prefix: &[u8],
 ) -> HashMap<Vec<u8>, Vec<u8>> {
     tracing::debug!(
-        "`get_stata_keys_from_scylla` call. AccountId {}, block {}, prefix {:?}",
+        "`get_state_keys_from_scylla` call. AccountId {}, block {}, prefix {:?}",
         account_id,
         block_height,
         prefix,
     );
-    let mut data: HashMap<Vec<u8>, Vec<u8>> = HashMap::new();
+    let mut data: HashMap<crate::storage::StateKey, crate::storage::StateValue> = HashMap::new();
     let result = {
         if !prefix.is_empty() {
             scylla_db_manager
@@ -37,19 +36,14 @@ pub async fn get_stata_keys_from_scylla(
         }
     };
     match result {
-        Ok(rows) => {
-            for row in rows.into_typed::<(String,)>() {
-                let (hex_data_key,): (String,) = row.expect("Invalid data");
-                let data_key = hex::decode(hex_data_key).unwrap();
-                let data_row = scylla_db_manager
-                    .get_state_key_value(account_id, block_height, data_key.clone())
+        Ok(state_keys) => {
+            for state_key in state_keys {
+                let state_value_result = scylla_db_manager
+                    .get_state_key_value(account_id, block_height, state_key.clone())
                     .await;
-                if let Ok(row) = data_row {
-                    if let Ok(value) = row.into_typed::<(Vec<u8>,)>() {
-                        let (data_value,): (Vec<u8>,) = value;
-                        if !data_value.is_empty() {
-                            data.insert(data_key, data_value);
-                        }
+                if let Ok(state_value) = state_value_result {
+                    if !state_value.is_empty() {
+                        data.insert(state_key, state_value);
                     }
                 };
                 let keys_count = data.keys().len() as u8;
@@ -117,7 +111,7 @@ pub async fn fetch_state_from_scylla_db(
         prefix,
     );
     let state_from_db =
-        get_stata_keys_from_scylla(scylla_db_manager, account_id, block_height, prefix).await;
+        get_state_keys_from_scylla(scylla_db_manager, account_id, block_height, prefix).await;
     if state_from_db.is_empty() {
         anyhow::bail!("Data not found in db")
     } else {

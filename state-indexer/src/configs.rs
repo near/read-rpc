@@ -352,6 +352,24 @@ impl ScyllaStorageManager for ScyllaDBManager {
                 &[],
             )
             .await?;
+
+        // This index is used for the cases where we need to fetch the block hash by block height
+        // Most of the cases this is required to serve `query` requests since the response includes the
+        // so-called block reference which is represented by `block_height` and `block_hash`
+        // We want to include the block reference pointing to the data we have in the database.
+        // But we don't have a field `block_hash` there, so it's currently impossible to fetch the block hash
+        // from the `state_*` tables.
+        // We might want to consider denormalizing those tables and adding `block_hash` there, but for now
+        // it doesn't look like a good reason for recollecting all the data.
+        scylla_db_session
+            .query(
+                "
+                CREATE INDEX IF NOT EXISTS blocks_block_height ON blocks (block_height);
+            ",
+                &[],
+            )
+            .await?;
+
         scylla_db_session
             .query(
                 "

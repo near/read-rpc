@@ -72,12 +72,8 @@ impl near_vm_logic::External for CodeStorage {
             key.to_vec(),
         );
         match block_on(get_db_data) {
-            Ok(row) => Ok(if let Ok((data,)) = row.into_typed::<(Vec<u8>,)>() {
-                if !data.is_empty() {
-                    Some(Box::new(StorageValuePtr { value: data }) as Box<_>)
-                } else {
-                    None
-                }
+            Ok(data) => Ok(if !data.is_empty() {
+                Some(Box::new(StorageValuePtr { value: data }) as Box<_>)
             } else {
                 None
             }),
@@ -118,11 +114,7 @@ impl near_vm_logic::External for CodeStorage {
             key.to_vec(),
         );
         match block_on(get_db_stata_keys) {
-            Ok(row) => Ok(if let Ok((data,)) = row.into_typed::<(Vec<u8>,)>() {
-                !data.is_empty()
-            } else {
-                false
-            }),
+            Ok(data) => Ok(!data.is_empty()),
             Err(_) => Ok(false),
         }
     }
