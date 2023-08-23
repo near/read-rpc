@@ -1,4 +1,5 @@
 mod chunks;
+mod config;
 mod query_accounts;
 mod query_call_functions;
 mod transactions;
@@ -7,20 +8,21 @@ use std::iter::zip;
 use std::time::Duration;
 
 use chrono::prelude::*;
+use clap::Parser;
 use dotenv::dotenv;
 use futures::join;
 use rand::Rng;
 
+use crate::config::Opts;
 use near_jsonrpc_client::{methods, JsonRpcClient};
 use near_primitives::hash::CryptoHash;
 use near_primitives::types::{AccountId, BlockHeight, BlockReference, Finality};
 
-// TODO fn call
-
 struct TestResult {
     name: String,
     median: u128,
-    errors_count: usize,
+    success_count: usize,
+    total_count: usize,
 }
 
 struct TxInfo {
@@ -29,7 +31,6 @@ struct TxInfo {
     sender_id: AccountId,
 }
 
-const RUNS_COUNT: usize = 100;
 const TARGET: &str = "rpc_load_test";
 
 fn collect_perf_test_results(name: &str, results: &[anyhow::Result<Duration>]) -> TestResult {
@@ -50,7 +51,8 @@ fn collect_perf_test_results(name: &str, results: &[anyhow::Result<Duration>]) -
     TestResult {
         name: name.to_string(),
         median,
-        errors_count: results.len() - elapsed_timings.len(),
+        success_count: elapsed_timings.len(),
+        total_count: results.len(),
     }
 }
 
@@ -60,9 +62,9 @@ fn generate_heights(from_height: BlockHeight, to_height: BlockHeight, n: usize) 
         .collect()
 }
 
-async fn test(rpc_url: &str, name: &str) -> Vec<TestResult> {
+async fn test(rpc_url: &http::Uri, name: &str, queries_count: usize) -> Vec<TestResult> {
     let mut results = vec![];
-    let rpc_client = JsonRpcClient::connect(rpc_url);
+    let rpc_client = JsonRpcClient::connect(rpc_url.to_string());
 
     // Hardcoding mainnet first after genesis block
     let genesis_block_height = 9820214;
@@ -79,7 +81,7 @@ async fn test(rpc_url: &str, name: &str) -> Vec<TestResult> {
             .unwrap_or_else(|| panic!("Unable to parse final block timestamp from {}", name));
 
     println!(
-        "{} current block_height {} ({:?})\n",
+        "{} current block_height {} ({:?})",
         name, final_block.header.height, final_block_dt
     );
 
@@ -89,46 +91,11 @@ async fn test(rpc_url: &str, name: &str) -> Vec<TestResult> {
         "{} cold storage has block range [{}, {}]",
         name, genesis_block_height, final_cold_storage_block
     );
-    let cold_storage_heights: Vec<u64> =
-        generate_heights(genesis_block_height, final_cold_storage_block, RUNS_COUNT);
-
-    // I'm microoptimising and preparing data for next tests during running the other tests
-    // (OFK it does not affect the benchmarks)
-    let (cold_storage_chunks_result, cold_storage_transactions) = chunks::test_chunks(
-        &format!("{} cold storage chunks", name),
-        &rpc_client,
-        &cold_storage_heights,
-    )
-    .await;
-    results.push(cold_storage_chunks_result);
-    results.push(
-        transactions::test_transactions(
-            &format!("{} cold storage transactions", name),
-            &rpc_client,
-            &cold_storage_transactions,
-        )
-        .await,
+    let cold_storage_heights: Vec<u64> = generate_heights(
+        genesis_block_height,
+        final_cold_storage_block,
+        queries_count,
     );
-    results.push(
-        query_accounts::test_accounts(
-            &format!("{} cold storage accounts", name),
-            &rpc_client,
-            &cold_storage_transactions,
-        )
-        .await,
-    );
-    results.push(
-        query_call_functions::test_call_functions(
-            &format!("{} cold storage function calls", name),
-            &rpc_client,
-            genesis_block_height,
-            final_cold_storage_block,
-            RUNS_COUNT,
-        )
-        .await,
-    );
-
-    // Hot storage contains 5 last epochs, but I will ignore 2 boundary epochs to be sure the results are not spoiled
     let first_hot_storage_block = final_block.header.height - epoch_len * 4;
     println!(
         "{} hot storage has block range [{}, {}]",
@@ -137,42 +104,50 @@ async fn test(rpc_url: &str, name: &str) -> Vec<TestResult> {
     let hot_storage_heights: Vec<u64> = generate_heights(
         first_hot_storage_block,
         final_block.header.height,
-        RUNS_COUNT,
+        queries_count,
     );
 
-    let (hot_storage_chunks_result, hot_storage_transactions) = chunks::test_chunks(
-        &format!("{} hot storage chunks", name),
-        &rpc_client,
-        &hot_storage_heights,
-    )
-    .await;
-    results.push(hot_storage_chunks_result);
-    results.push(
-        transactions::test_transactions(
-            &format!("{} hot storage transactions", name),
-            &rpc_client,
-            &hot_storage_transactions,
-        )
-        .await,
+    // I'm microoptimising and preparing data for next tests during running the other tests
+    // (OFK it does not affect the benchmarks)
+    let ((chunks_cold, transactions_cold), (chunks_hot, transactions_hot)) = join!(
+        chunks::test_chunks("cold chunks", &rpc_client, &cold_storage_heights,),
+        chunks::test_chunks("hot chunks", &rpc_client, &hot_storage_heights,)
     );
-    results.push(
-        query_accounts::test_accounts(
-            &format!("{} hot storage accounts", name),
-            &rpc_client,
-            &hot_storage_transactions,
-        )
-        .await,
+    results.push(chunks_cold);
+    results.push(chunks_hot);
+
+    let (tx_cold, tx_hot) = join!(
+        transactions::test_transactions("cold transactions", &rpc_client, &transactions_cold,),
+        transactions::test_transactions("hot transactions", &rpc_client, &transactions_hot,)
     );
-    results.push(
+    results.push(tx_cold);
+    results.push(tx_hot);
+
+    let (accounts_cold, accounts_hot) = join!(
+        query_accounts::test_accounts("cold accounts", &rpc_client, &transactions_cold,),
+        query_accounts::test_accounts("hot accounts", &rpc_client, &transactions_hot,)
+    );
+    results.push(accounts_cold);
+    results.push(accounts_hot);
+
+    let (fn_cold, fn_hot) = join!(
         query_call_functions::test_call_functions(
-            &format!("{} hot storage function calls", name),
+            "cold function calls",
+            &rpc_client,
+            genesis_block_height,
+            final_cold_storage_block,
+            queries_count,
+        ),
+        query_call_functions::test_call_functions(
+            "hot function calls",
             &rpc_client,
             first_hot_storage_block,
             final_block.header.height,
-            RUNS_COUNT,
+            queries_count,
         )
-        .await,
     );
+    results.push(fn_cold);
+    results.push(fn_hot);
 
     results
 }
@@ -180,21 +155,29 @@ async fn test(rpc_url: &str, name: &str) -> Vec<TestResult> {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenv().ok();
-    let read_rpc_url = std::env::var("READ_RPC_URL").expect("READ_RPC_URL env var expected");
-    let archival_rpc_url =
-        std::env::var("ARCHIVAL_RPC_URL").expect("ARCHIVAL_RPC_URL env var expected");
-    let (rr_results, ar_results) = join!(test(&read_rpc_url, "RR"), test(&archival_rpc_url, "AR"));
-    println!("Read RPC (errors)\tArchival RPC (errors)");
+    let opts: Opts = Opts::parse();
+
+    let (rr_results, ar_results) = join!(
+        test(&opts.read_rpc_url, "RR", opts.queries_count_per_command),
+        test(&opts.near_rpc_url, "AR", opts.queries_count_per_command)
+    );
+    println!("Read RPC (success/total)\tArchival RPC (success/total)");
+    println!("-------------------------------------------");
     for (rr_result, ar_result) in zip(rr_results, ar_results) {
+        assert_eq!(rr_result.name, ar_result.name);
         println!(
-            "{} ms ({}) \t\t\t {} ms ({})\t\t\t\t{}/{}",
+            "{} ms ({}/{}) \t\t\t\t {} ms ({}/{})\t\t\t\t{}",
             rr_result.median,
-            rr_result.errors_count,
+            rr_result.success_count,
+            rr_result.total_count,
             ar_result.median,
-            ar_result.errors_count,
+            ar_result.success_count,
+            ar_result.total_count,
             rr_result.name,
-            ar_result.name,
         );
+        if rr_result.name.starts_with("hot") {
+            println!("-------------------------------------------");
+        }
     }
     Ok(())
 }

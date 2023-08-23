@@ -1,9 +1,9 @@
 use crate::TestResult;
 use futures::future::join_all;
 use near_jsonrpc_client::{methods, JsonRpcClient};
-use near_primitives::borsh::BorshSerialize;
 use near_primitives::types::{AccountId, BlockHeight, BlockId, BlockReference, FunctionArgs};
 use near_primitives::views::QueryRequest::CallFunction;
+use serde_json::json;
 use std::time::{Duration, Instant};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -53,25 +53,37 @@ pub(crate) async fn test_call_functions(
             contract_id: "wrap.near".parse().unwrap(),
             start_block_height: 30000000,
             method_name: "ft_balance_of".to_string(),
-            args: "{\"account_id\": \"olga.near\"}"
-                .try_to_vec()
-                .unwrap()
-                .into(),
+            args: FunctionArgs::from(
+                json!({
+                    "account_id": "olga.near",
+                })
+                .to_string()
+                .into_bytes(),
+            ),
         },
         CallFnInfo {
             contract_id: "qbit.poolv1.near".parse().unwrap(),
             start_block_height: 60000000,
             method_name: "get_account_total_balance".to_string(),
-            args: "{\"account_id\": \"frol.near\"}"
-                .try_to_vec()
-                .unwrap()
-                .into(),
+            args: FunctionArgs::from(
+                json!({
+                "account_id": "frol.near",
+                })
+                .to_string()
+                .into_bytes(),
+            ),
         },
         CallFnInfo {
             contract_id: "thebullishbulls.near".parse().unwrap(),
             start_block_height: 70000000,
             method_name: "nft_token".to_string(),
-            args: "{\"token_id\": \"1394\"}".try_to_vec().unwrap().into(),
+            args: FunctionArgs::from(
+                json!({
+                "token_id": "1394",
+                })
+                .to_string()
+                .into_bytes(),
+            ),
         },
     ];
     let fn_calls_elapsed: Vec<anyhow::Result<Duration>> = join_all(items.iter().map(|f| async {

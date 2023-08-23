@@ -1219,24 +1219,23 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.3.0"
+version = "4.3.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "93aae7a4192245f70fe75dd9157fc7b4a5bf53e88d30bd4396f7d8f9284d5acc"
+checksum = "03aef18ddf7d879c15ce20f04826ef8418101c7e528014c3eeea13321047dca3"
 dependencies = [
  "clap_builder",
- "clap_derive 4.3.0",
+ "clap_derive 4.3.12",
  "once_cell",
 ]
 
 [[package]]
 name = "clap_builder"
-version = "4.3.0"
+version = "4.3.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f423e341edefb78c9caba2d9c7f7687d0e72e89df3ce3394554754393ac3990"
+checksum = "f8ce6fffb678c9b80a70b6b6de0aad31df727623a70fd9a842c30cd573e2fa98"
 dependencies = [
  "anstream",
  "anstyle",
- "bitflags",
  "clap_lex 0.5.0",
  "strsim",
 ]
@@ -1256,9 +1255,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "4.3.0"
+version = "4.3.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "191d9573962933b4027f932c600cd252ce27a8ad5979418fe78e43c07996f27b"
+checksum = "54a9bb5758fc5dfe728d1019941681eccaf0cf8a4189b692a0ee2f2ecf90a050"
 dependencies = [
  "heck 0.4.1",
  "proc-macro2",
@@ -2757,12 +2756,15 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "clap 4.3.23",
  "dotenv",
  "futures",
+ "http",
  "near-jsonrpc-client 0.6.0",
  "near-jsonrpc-primitives",
  "near-primitives",
  "rand 0.8.5",
+ "serde_json",
  "tokio",
  "tracing",
 ]
@@ -3187,7 +3189,7 @@ checksum = "af7d35397b02b131c188c72f3885e97daeccab134ec2fc8cc0073a94cf1cfe19"
 dependencies = [
  "actix",
  "atty",
- "clap 4.3.0",
+ "clap 4.3.23",
  "near-crypto",
  "near-primitives-core",
  "once_cell",
@@ -3842,9 +3844,9 @@ dependencies = [
 
 [[package]]
 name = "os_str_bytes"
-version = "6.5.0"
+version = "6.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ceedf44fb00f2d1984b0bc98102627ce622e083e49a5bacdb3e514fa4238e267"
+checksum = "4d5d9eb14b174ee9aa2ef96dc2b94637a2d4b6e7cb873c7e171f0c20c6cf3eac"
 
 [[package]]
 name = "outref"
