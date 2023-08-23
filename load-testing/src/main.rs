@@ -166,7 +166,7 @@ async fn main() -> anyhow::Result<()> {
     for (rr_result, ar_result) in zip(rr_results, ar_results) {
         assert_eq!(rr_result.name, ar_result.name);
         println!(
-            "{} ms ({}/{}) \t\t\t\t {} ms ({}/{})\t\t\t\t{}",
+            "{} ms ({}/{})\t\t{} ms ({}/{})\t\t{}",
             rr_result.median,
             rr_result.success_count,
             rr_result.total_count,
