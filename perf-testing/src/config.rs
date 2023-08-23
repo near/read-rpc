@@ -7,6 +7,6 @@ pub struct Opts {
     pub near_rpc_url: http::Uri,
     #[clap(long, env = "READ_RPC_URL")]
     pub read_rpc_url: http::Uri,
-    #[clap(long, env, default_value = "100")]
+    #[clap(long, env, default_value = "30")]
     pub queries_count_per_command: usize,
 }

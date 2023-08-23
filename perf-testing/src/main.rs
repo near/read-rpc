@@ -31,18 +31,12 @@ struct TxInfo {
     sender_id: AccountId,
 }
 
-const TARGET: &str = "rpc_load_test";
+const TARGET: &str = "rpc_perf_test";
 
 fn collect_perf_test_results(name: &str, results: &[anyhow::Result<Duration>]) -> TestResult {
     let mut elapsed_timings: Vec<&Duration> =
         results.iter().filter_map(|r| r.as_ref().ok()).collect();
     elapsed_timings.sort();
-    println!(
-        "Finalising results for {}: {} out of {} requests are successful",
-        name,
-        elapsed_timings.len(),
-        results.len()
-    );
     let median = if elapsed_timings.is_empty() {
         u128::MAX
     } else {
