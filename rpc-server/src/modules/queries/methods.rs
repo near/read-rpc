@@ -292,7 +292,7 @@ async fn function_call(
         method_name,
         args,
     );
-    // TODO: receive a real block reference here
+
     let call_results = run_contract(
         account_id,
         method_name,
@@ -310,17 +310,16 @@ async fn function_call(
             error_message: format!("Function call failed: {:?}", err),
         },
     )?;
-    match call_results.return_data.as_value() {
+    match call_results.result.return_data.as_value() {
         Some(val) => Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
             kind: near_jsonrpc_primitives::types::query::QueryResponseKind::CallResult(
                 near_primitives::views::CallResult {
                     result: val,
-                    logs: call_results.logs,
+                    logs: call_results.result.logs,
                 },
             ),
-            // TODO: This is not honest block reference, but the request one
-            block_height: block.block_height,
-            block_hash: block.block_hash,
+            block_height: call_results.block_height,
+            block_hash: call_results.block_hash,
         }),
         None => Err(
             near_jsonrpc_primitives::types::query::RpcQueryError::InternalError {
@@ -346,7 +345,7 @@ async fn view_state(
         block.block_height,
         prefix,
     );
-    // TODO: receive block reference here
+
     let contract_state = fetch_state_from_scylla_db(
         &data.scylla_db_manager,
         account_id,
@@ -364,7 +363,9 @@ async fn view_state(
 
     Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc_primitives::types::query::QueryResponseKind::ViewState(contract_state),
-        // TODO: this block reference is not related to the response but to the request
+        // We cannot return the block height and hash for the state, since different state keys
+        // can be from different blocks.
+        // We return the block height and hash for the requested block instead.
         block_height: block.block_height,
         block_hash: block.block_hash,
     })

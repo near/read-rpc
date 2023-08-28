@@ -9,6 +9,12 @@ use crate::config::CompiledCodeCache;
 use crate::modules::queries::{CodeStorage, MAX_LIMIT};
 use crate::storage::ScyllaDBManager;
 
+pub struct RunContractResponse {
+    pub result: near_vm_logic::VMOutcome,
+    pub block_height: near_primitives::types::BlockHeight,
+    pub block_hash: near_primitives::hash::CryptoHash,
+}
+
 #[cfg_attr(
     feature = "tracing-instrumentation",
     tracing::instrument(skip(scylla_db_manager))
@@ -204,15 +210,17 @@ pub async fn run_contract(
     block_height: near_primitives::types::BlockHeight,
     timestamp: u64,
     latest_protocol_version: near_primitives::types::ProtocolVersion,
-) -> anyhow::Result<near_vm_logic::VMOutcome> {
+) -> anyhow::Result<RunContractResponse> {
     let contract = scylla_db_manager
         .get_account(&account_id, block_height)
         .await?;
+
     let code: Option<Vec<u8>> = contract_code_cache
         .write()
         .unwrap()
         .get(&contract.data.code_hash())
         .cloned();
+
     let contract_code = match code {
         Some(code) => {
             near_primitives::contract::ContractCode::new(code, Some(contract.data.code_hash()))
@@ -248,7 +256,8 @@ pub async fn run_contract(
         }),
         output_data_receivers: vec![],
     };
-    run_code_in_vm_runner(
+
+    let result = run_code_in_vm_runner(
         contract_code,
         method_name,
         context,
@@ -258,5 +267,11 @@ pub async fn run_contract(
         latest_protocol_version,
         compiled_contract_code_cache,
     )
-    .await
+    .await?;
+
+    Ok(RunContractResponse {
+        result,
+        block_height: contract.block_height,
+        block_hash: contract.block_hash,
+    })
 }
