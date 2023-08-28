@@ -2,6 +2,7 @@
 
 members = [
     "database",
+    "perf-testing",
     "readnode-primitives",
     "rpc-server",
     "state-indexer",
