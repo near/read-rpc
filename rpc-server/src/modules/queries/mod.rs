@@ -108,12 +108,12 @@ impl near_vm_logic::External for CodeStorage {
         key: &[u8],
         _mode: near_vm_logic::StorageGetMode,
     ) -> Result<bool> {
-        let get_db_stata_keys = self.scylla_db_manager.get_state_key_value(
+        let get_db_state_keys = self.scylla_db_manager.get_state_key_value(
             &self.account_id,
             self.block_height,
             key.to_vec(),
         );
-        match block_on(get_db_stata_keys) {
+        match block_on(get_db_state_keys) {
             Ok(data) => Ok(!data.is_empty()),
             Err(_) => Ok(false),
         }
