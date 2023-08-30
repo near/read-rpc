@@ -109,8 +109,19 @@ async fn query_call(
         let error_meta = format!("QUERY: {:?}", params);
         let near_rpc_client = data.near_rpc_client.clone();
         if let near_primitives::types::BlockReference::Finality(_) = params.block_reference {
+            // Final block is a bit tricky from the ReadRPC perspective.
+            // Since we do queries with the clause WHERE block_height <= X, we need to
+            // make sure that the block we are doing a shadow data consistency check for
+            // matches the one we got the result for.
+            // That's why we are using the block_height from the result.
+            let block_height = match &result {
+                Ok(res) => res.block_height,
+                // If the result is an error it does not contain the block_height, so we
+                // will use the block_height considered as final from the cache.
+                Err(_err) => block.block_height,
+            };
             params.block_reference = near_primitives::types::BlockReference::from(
-                near_primitives::types::BlockId::Height(block.block_height),
+                near_primitives::types::BlockId::Height(block_height),
             )
         }
 
