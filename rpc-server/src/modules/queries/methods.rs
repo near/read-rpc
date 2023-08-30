@@ -118,7 +118,7 @@ async fn query_call(
                 Ok(res) => res.block_height,
                 // If the result is an error it does not contain the block_height, so we
                 // will use the block_height considered as final from the cache.
-                Err(err) => block.block_height,
+                Err(_err) => block.block_height,
             };
             params.block_reference = near_primitives::types::BlockReference::from(
                 near_primitives::types::BlockId::Height(block_height),
