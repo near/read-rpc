@@ -56,26 +56,19 @@ async fn fetch_receipt(
 > {
     let receipt_id = request.receipt_reference.receipt_id;
 
-    let (_receipt_id, tx_hash, _block_height, _shard_id) = data
+    let receipt_record = data
         .scylla_db_manager
         .get_receipt_by_id(receipt_id)
         .await
         .map_err(|err| {
             tracing::warn!("Error in `receipt` call: {:?}", err);
             near_jsonrpc_primitives::types::receipts::RpcReceiptError::UnknownReceipt { receipt_id }
-        })?
-        .into_typed::<(String, String, num_bigint::BigInt, num_bigint::BigInt)>()
-        .map_err(|err| {
-            tracing::warn!("Error in `receipt` call: {:?}", err);
-            near_jsonrpc_primitives::types::receipts::RpcReceiptError::InternalError {
-                error_message: format!("Failed to read receipt data from the database:\n{:?}", err),
-            }
         })?;
 
     // Getting the raw Vec<u8> of the TransactionDetails from ScyllaDB
     let transaction_details = data
         .scylla_db_manager
-        .get_transaction_by_hash(&tx_hash)
+        .get_transaction_by_hash(&receipt_record.parent_transaction_hash.to_string())
         .await
         .map_err(|err| {
             tracing::warn!("Error in `receipt` call: {:?}", err);
@@ -89,7 +82,7 @@ async fn fetch_receipt(
         .ok_or_else(|| {
             tracing::warn!(
                 "Receipt is not found in the TransactionDetails. tx hash: {}, receipt_id: {}",
-                tx_hash,
+                &receipt_record.parent_transaction_hash.to_string(),
                 receipt_id
             );
 

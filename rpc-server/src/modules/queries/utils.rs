@@ -1,29 +1,37 @@
+use std::collections::HashMap;
+use std::ops::Deref;
+
+#[cfg(feature = "account_access_keys")]
+use borsh::BorshDeserialize;
+use tokio::task;
+
 use crate::config::CompiledCodeCache;
 use crate::modules::queries::{CodeStorage, MAX_LIMIT};
 use crate::storage::ScyllaDBManager;
-use borsh::BorshDeserialize;
-use scylla::IntoTypedRows;
-use std::collections::HashMap;
-use std::ops::Deref;
-use tokio::task;
+
+pub struct RunContractResponse {
+    pub result: near_vm_logic::VMOutcome,
+    pub block_height: near_primitives::types::BlockHeight,
+    pub block_hash: near_primitives::hash::CryptoHash,
+}
 
 #[cfg_attr(
     feature = "tracing-instrumentation",
     tracing::instrument(skip(scylla_db_manager))
 )]
-pub async fn get_stata_keys_from_scylla(
+pub async fn get_state_keys_from_scylla(
     scylla_db_manager: &std::sync::Arc<ScyllaDBManager>,
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
     prefix: &[u8],
 ) -> HashMap<Vec<u8>, Vec<u8>> {
     tracing::debug!(
-        "`get_stata_keys_from_scylla` call. AccountId {}, block {}, prefix {:?}",
+        "`get_state_keys_from_scylla` call. AccountId {}, block {}, prefix {:?}",
         account_id,
         block_height,
         prefix,
     );
-    let mut data: HashMap<Vec<u8>, Vec<u8>> = HashMap::new();
+    let mut data: HashMap<crate::storage::StateKey, crate::storage::StateValue> = HashMap::new();
     let result = {
         if !prefix.is_empty() {
             scylla_db_manager
@@ -34,19 +42,14 @@ pub async fn get_stata_keys_from_scylla(
         }
     };
     match result {
-        Ok(rows) => {
-            for row in rows.into_typed::<(String,)>() {
-                let (hex_data_key,): (String,) = row.expect("Invalid data");
-                let data_key = hex::decode(hex_data_key).unwrap();
-                let data_row = scylla_db_manager
-                    .get_state_key_value(account_id, block_height, data_key.clone())
+        Ok(state_keys) => {
+            for state_key in state_keys {
+                let state_value_result = scylla_db_manager
+                    .get_state_key_value(account_id, block_height, state_key.clone())
                     .await;
-                if let Ok(row) = data_row {
-                    if let Ok(value) = row.into_typed::<(Vec<u8>,)>() {
-                        let (data_value,): (Vec<u8>,) = value;
-                        if !data_value.is_empty() {
-                            data.insert(data_key, data_value);
-                        }
+                if let Ok(state_value) = state_value_result {
+                    if !state_value.is_empty() {
+                        data.insert(state_key, state_value);
                     }
                 };
                 let keys_count = data.keys().len() as u8;
@@ -58,32 +61,6 @@ pub async fn get_stata_keys_from_scylla(
         }
         Err(_) => data,
     }
-}
-
-#[cfg_attr(
-    feature = "tracing-instrumentation",
-    tracing::instrument(skip(scylla_db_manager))
-)]
-pub async fn fetch_access_key_from_scylla_db(
-    scylla_db_manager: &std::sync::Arc<ScyllaDBManager>,
-    account_id: &near_primitives::types::AccountId,
-    block_height: near_primitives::types::BlockHeight,
-    key_data: &Vec<u8>,
-) -> anyhow::Result<near_primitives::account::AccessKey> {
-    tracing::debug!(
-        "`fetch_access_key_from_scylla_db` call. AccountID {}, block {}, key_data {:?}",
-        account_id,
-        block_height,
-        key_data,
-    );
-    let row = scylla_db_manager
-        .get_access_key(account_id, block_height, key_data)
-        .await?;
-    let (data_value,): (Vec<u8>,) = row.into_typed::<(Vec<u8>,)>()?;
-
-    Ok(near_primitives::account::AccessKey::try_from_slice(
-        &data_value,
-    )?)
 }
 
 #[cfg(feature = "account_access_keys")]
@@ -140,7 +117,7 @@ pub async fn fetch_state_from_scylla_db(
         prefix,
     );
     let state_from_db =
-        get_stata_keys_from_scylla(scylla_db_manager, account_id, block_height, prefix).await;
+        get_state_keys_from_scylla(scylla_db_manager, account_id, block_height, prefix).await;
     if state_from_db.is_empty() {
         anyhow::bail!("Data not found in db")
     } else {
@@ -154,7 +131,7 @@ pub async fn fetch_state_from_scylla_db(
         }
         Ok(near_primitives::views::ViewStateResult {
             values,
-            proof: vec![],
+            proof: vec![], // TODO: this is hardcoded empty value since we don't support proofs yet
         })
     }
 }
@@ -233,18 +210,20 @@ pub async fn run_contract(
     block_height: near_primitives::types::BlockHeight,
     timestamp: u64,
     latest_protocol_version: near_primitives::types::ProtocolVersion,
-) -> anyhow::Result<near_vm_logic::VMOutcome> {
+) -> anyhow::Result<RunContractResponse> {
     let contract = scylla_db_manager
         .get_account(&account_id, block_height)
         .await?;
+
     let code: Option<Vec<u8>> = contract_code_cache
         .write()
         .unwrap()
-        .get(&contract.code_hash())
+        .get(&contract.data.code_hash())
         .cloned();
+
     let contract_code = match code {
         Some(code) => {
-            near_primitives::contract::ContractCode::new(code, Some(contract.code_hash()))
+            near_primitives::contract::ContractCode::new(code, Some(contract.data.code_hash()))
         }
         None => {
             let code = scylla_db_manager
@@ -253,8 +232,8 @@ pub async fn run_contract(
             contract_code_cache
                 .write()
                 .unwrap()
-                .put(contract.code_hash(), code.clone());
-            near_primitives::contract::ContractCode::new(code, Some(contract.code_hash()))
+                .put(contract.data.code_hash(), code.data.clone());
+            near_primitives::contract::ContractCode::new(code.data, Some(contract.data.code_hash()))
         }
     };
     let context = near_vm_logic::VMContext {
@@ -266,9 +245,9 @@ pub async fn run_contract(
         block_height,
         block_timestamp: timestamp,
         epoch_height: 0, // TODO: implement indexing of epoch_height and pass it here
-        account_balance: contract.amount(),
-        account_locked_balance: contract.locked(),
-        storage_usage: contract.storage_usage(),
+        account_balance: contract.data.amount(),
+        account_locked_balance: contract.data.locked(),
+        storage_usage: contract.data.storage_usage(),
         attached_deposit: 0,
         prepaid_gas: 0,
         random_seed: vec![], // TODO: test the contracts where random is used.
@@ -277,7 +256,8 @@ pub async fn run_contract(
         }),
         output_data_receivers: vec![],
     };
-    run_code_in_vm_runner(
+
+    let result = run_code_in_vm_runner(
         contract_code,
         method_name,
         context,
@@ -287,5 +267,11 @@ pub async fn run_contract(
         latest_protocol_version,
         compiled_contract_code_cache,
     )
-    .await
+    .await?;
+
+    Ok(RunContractResponse {
+        result,
+        block_height: contract.block_height,
+        block_hash: contract.block_hash,
+    })
 }

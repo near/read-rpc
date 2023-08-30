@@ -3,7 +3,6 @@ use crate::modules::blocks::methods::fetch_block;
 use crate::modules::blocks::CacheBlock;
 use crate::storage::ScyllaDBManager;
 use near_primitives::views::{StateChangeValueView, StateChangesRequestView};
-use num_traits::ToPrimitive;
 
 /// Fetch object from s3 with retry
 /// Try to get 3 times if we have some problems with network
@@ -172,28 +171,13 @@ pub async fn scylla_db_convert_block_hash_to_block_height(
     block_hash: near_primitives::hash::CryptoHash,
 ) -> Result<u64, near_jsonrpc_primitives::types::blocks::RpcBlockError> {
     tracing::debug!("`scylla_db_convert_block_hash_to_block_height` call");
-    let result = scylla_db_manager.get_block_by_hash(block_hash).await;
-    if let Ok(row) = result {
-        let (block_height,): (num_bigint::BigInt,) =
-            row.into_typed::<(num_bigint::BigInt,)>().map_err(|err| {
-                near_jsonrpc_primitives::types::blocks::RpcBlockError::InternalError {
-                    error_message: err.to_string(),
-                }
-            })?;
-        match block_height.to_u64() {
-            Some(block_height) => Ok(block_height),
-            None => Err(
-                near_jsonrpc_primitives::types::blocks::RpcBlockError::InternalError {
-                    error_message: "Invalid block height".to_string(),
-                },
-            ),
-        }
-    } else {
-        Err(
+    match scylla_db_manager.get_block_by_hash(block_hash).await {
+        Ok(block_height) => Ok(block_height),
+        Err(err) => Err(
             near_jsonrpc_primitives::types::blocks::RpcBlockError::UnknownBlock {
-                error_message: "Unknown block hash".to_string(),
+                error_message: err.to_string(),
             },
-        )
+        ),
     }
 }
 
@@ -203,7 +187,7 @@ pub async fn scylla_db_convert_block_hash_to_block_height(
 )]
 pub async fn scylla_db_convert_chunk_hash_to_block_height_and_shard_id(
     scylla_db_manager: &std::sync::Arc<ScyllaDBManager>,
-    chunk_id: near_primitives::hash::CryptoHash,
+    chunk_hash: near_primitives::hash::CryptoHash,
 ) -> Result<
     (
         near_primitives::types::BlockHeight,
@@ -212,22 +196,13 @@ pub async fn scylla_db_convert_chunk_hash_to_block_height_and_shard_id(
     near_jsonrpc_primitives::types::chunks::RpcChunkError,
 > {
     tracing::debug!("`scylla_db_convert_chunk_hash_to_block_height_and_shard_id` call");
-    let result = scylla_db_manager.get_block_by_chunk_id(chunk_id).await;
-    if let Ok(row) = result {
-        let (block_height, shard_id): (num_bigint::BigInt, num_bigint::BigInt) = row
-            .into_typed::<(num_bigint::BigInt, num_bigint::BigInt)>()
-            .expect("Invalid value from db");
-        let block_height = block_height
-            .to_u64()
-            .expect("Error to convert BigInt into u64");
-        let shard_id = shard_id.to_u64().expect("Error to convert BigInt into u64");
-        Ok((block_height, shard_id))
-    } else {
-        Err(
+    match scylla_db_manager.get_block_by_chunk_hash(chunk_hash).await {
+        Ok(block_id_shard_id) => Ok((block_id_shard_id.0, block_id_shard_id.1)),
+        Err(_err) => Err(
             near_jsonrpc_primitives::types::chunks::RpcChunkError::InternalError {
-                error_message: format!("Unknown chunk hash: {chunk_id}"),
+                error_message: format!("Unknown chunk hash: {chunk_hash}"),
             },
-        )
+        ),
     }
 }
 
