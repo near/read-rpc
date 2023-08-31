@@ -60,7 +60,7 @@ impl ScyllaStorageManager for ScyllaDBManager {
 
             get_block_by_height: Self::prepare_read_query(
                 &scylla_db_session,
-                "SELECT block_hash FROM state_indexer.blocks WHERE block_height = ?",
+                "SELECT block_hash, block_height FROM state_indexer.blocks WHERE block_height = ?",
             ).await?,
 
             get_block_by_chunk_id: Self::prepare_read_query(
@@ -250,19 +250,19 @@ impl ScyllaDBManager {
     pub async fn get_account(
         &self,
         account_id: &near_primitives::types::AccountId,
-        block_height: near_primitives::types::BlockHeight,
+        request_block_height: near_primitives::types::BlockHeight,
     ) -> anyhow::Result<QueryData<near_primitives::account::Account>> {
-        let (data_blob, block_height) = Self::execute_prepared_query(
+        let (block_height, data_blob) = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_account,
             (
                 account_id.to_string(),
-                num_bigint::BigInt::from(block_height),
+                num_bigint::BigInt::from(request_block_height),
             ),
         )
         .await?
         .single_row()?
-        .into_typed::<(Vec<u8>, num_bigint::BigInt)>()?;
+        .into_typed::<(num_bigint::BigInt, Vec<u8>)>()?;
 
         let block = self.get_block_by_height(block_height).await?;
 
@@ -277,19 +277,19 @@ impl ScyllaDBManager {
     pub async fn get_contract_code(
         &self,
         account_id: &near_primitives::types::AccountId,
-        block_height: near_primitives::types::BlockHeight,
+        request_block_height: near_primitives::types::BlockHeight,
     ) -> anyhow::Result<QueryData<Vec<u8>>> {
-        let (contract_code, block_height) = Self::execute_prepared_query(
+        let (block_height, contract_code) = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_contract_code,
             (
                 account_id.to_string(),
-                num_bigint::BigInt::from(block_height),
+                num_bigint::BigInt::from(request_block_height),
             ),
         )
         .await?
         .single_row()?
-        .into_typed::<(Vec<u8>, num_bigint::BigInt)>()?;
+        .into_typed::<(num_bigint::BigInt, Vec<u8>)>()?;
 
         let block = self.get_block_by_height(block_height).await?;
 
@@ -304,26 +304,26 @@ impl ScyllaDBManager {
     pub async fn get_access_key(
         &self,
         account_id: &near_primitives::types::AccountId,
-        block_height: near_primitives::types::BlockHeight,
+        request_block_height: near_primitives::types::BlockHeight,
         key_data: &Vec<u8>,
     ) -> anyhow::Result<QueryData<near_primitives::account::AccessKey>> {
-        let result = Self::execute_prepared_query(
+        let (block_height, data_blob) = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_access_key,
             (
                 account_id.to_string(),
-                num_bigint::BigInt::from(block_height),
+                num_bigint::BigInt::from(request_block_height),
                 hex::encode(key_data).to_string(),
             ),
         )
         .await?
         .single_row()?
-        .into_typed::<(Vec<u8>, num_bigint::BigInt)>()?;
+        .into_typed::<(num_bigint::BigInt, Vec<u8>)>()?;
 
-        let block = self.get_block_by_height(result.1).await?;
+        let block = self.get_block_by_height(block_height).await?;
 
         QueryData::<near_primitives::account::AccessKey>::try_from((
-            result.0,
+            data_blob,
             block.height,
             block.hash,
         ))
