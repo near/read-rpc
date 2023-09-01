@@ -106,7 +106,7 @@ async fn query_call(
     #[cfg(feature = "shadow_data_consistency")]
     {
         let request_copy = params.request.clone();
-        let error_meta = format!("QUERY: {:?}", params);
+        let meta_data = format!("{:?}", params);
         let near_rpc_client = data.near_rpc_client.clone();
         if let near_primitives::types::BlockReference::Finality(_) = params.block_reference {
             // Final block is a bit tricky from the ReadRPC perspective.
@@ -140,7 +140,11 @@ async fn query_call(
 
         match comparison_result {
             Ok(_) => {
-                tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", error_meta);
+                tracing::info!(
+                    target: "shadow_data_consistency",
+                    "Shadow data check: CORRECT\n{}",
+                    format!("QUERY: {:?}", meta_data)
+                );
             }
             Err(err) => {
                 // When the data check fails, we want to emit the log message and increment the
@@ -150,6 +154,7 @@ async fn query_call(
                 // change them and reuse them for the observability of the shadow data consistency checks.
                 match request_copy {
                     near_primitives::views::QueryRequest::ViewAccount { .. } => {
+                        let error_meta = format!("QUERY:VIEW_ACCOUNT: {:?}", meta_data);
                         crate::utils::capture_shadow_consistency_error!(
                             err,
                             error_meta,
@@ -157,6 +162,7 @@ async fn query_call(
                         );
                     }
                     near_primitives::views::QueryRequest::ViewCode { .. } => {
+                        let error_meta = format!("QUERY:VIEW_CODE: {:?}", meta_data);
                         crate::utils::capture_shadow_consistency_error!(
                             err,
                             error_meta,
@@ -164,6 +170,7 @@ async fn query_call(
                         );
                     }
                     near_primitives::views::QueryRequest::ViewAccessKey { .. } => {
+                        let error_meta = format!("QUERY:VIEW_ACCESS_KEY: {:?}", meta_data);
                         crate::utils::capture_shadow_consistency_error!(
                             err,
                             error_meta,
@@ -171,6 +178,7 @@ async fn query_call(
                         );
                     }
                     near_primitives::views::QueryRequest::ViewState { .. } => {
+                        let error_meta = format!("QUERY:VIEW_STATE: {:?}", meta_data);
                         crate::utils::capture_shadow_consistency_error!(
                             err,
                             error_meta,
@@ -178,6 +186,7 @@ async fn query_call(
                         );
                     }
                     near_primitives::views::QueryRequest::CallFunction { .. } => {
+                        let error_meta = format!("QUERY:FUNCTION_CALL: {:?}", meta_data);
                         crate::utils::capture_shadow_consistency_error!(
                             err,
                             error_meta,
@@ -185,6 +194,7 @@ async fn query_call(
                         );
                     }
                     near_primitives::views::QueryRequest::ViewAccessKeyList { .. } => {
+                        let error_meta = format!("QUERY:VIEW_ACCESS_KEY_LIST: {:?}", meta_data);
                         crate::utils::capture_shadow_consistency_error!(
                             err,
                             error_meta,
