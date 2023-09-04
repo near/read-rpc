@@ -30,7 +30,6 @@ pub struct BlockRecord {
 pub struct ScyllaDBManager {
     scylla_session: std::sync::Arc<scylla::Session>,
     get_block_by_hash: PreparedStatement,
-    get_block_by_height: PreparedStatement,
     get_block_by_chunk_id: PreparedStatement,
     get_all_state_keys: PreparedStatement,
     get_state_keys_by_prefix: PreparedStatement,
@@ -58,11 +57,6 @@ impl ScyllaStorageManager for ScyllaDBManager {
                 "SELECT block_height FROM state_indexer.blocks WHERE block_hash = ?",
             ).await?,
 
-            get_block_by_height: Self::prepare_read_query(
-                &scylla_db_session,
-                "SELECT block_hash, block_height FROM state_indexer.blocks WHERE block_height = ?",
-            ).await?,
-
             get_block_by_chunk_id: Self::prepare_read_query(
                 &scylla_db_session,
                 "SELECT stored_at_block_height, shard_id FROM state_indexer.chunks WHERE chunk_hash = ? LIMIT 1",
@@ -85,17 +79,17 @@ impl ScyllaStorageManager for ScyllaDBManager {
 
             get_account: Self::prepare_read_query(
                 &scylla_db_session,
-                "SELECT block_height, data_value FROM state_indexer.state_changes_account WHERE account_id = ? AND block_height <= ? LIMIT 1",
+                "SELECT block_height, block_hash, data_value FROM state_indexer.state_changes_account WHERE account_id = ? AND block_height <= ? LIMIT 1",
             ).await?,
 
             get_contract_code: Self::prepare_read_query(
                 &scylla_db_session,
-                "SELECT block_height, data_value FROM state_indexer.state_changes_contract WHERE account_id = ? AND block_height <= ? LIMIT 1",
+                "SELECT block_height, block_hash, data_value FROM state_indexer.state_changes_contract WHERE account_id = ? AND block_height <= ? LIMIT 1",
             ).await?,
 
             get_access_key: Self::prepare_read_query(
                 &scylla_db_session,
-                "SELECT block_height, data_value FROM state_indexer.state_changes_access_key WHERE account_id = ? AND block_height <= ? AND data_key = ? LIMIT 1",
+                "SELECT block_height, block_hash, data_value FROM state_indexer.state_changes_access_key WHERE account_id = ? AND block_height <= ? AND data_key = ? LIMIT 1",
             ).await?,
             #[cfg(feature = "account_access_keys")]
             get_account_access_keys: Self::prepare_read_query(
@@ -141,23 +135,6 @@ impl ScyllaDBManager {
         result
             .to_u64()
             .ok_or_else(|| anyhow::anyhow!("Failed to parse `block_height` to u64"))
-    }
-
-    /// Searches for the block hash by the given block height
-    pub async fn get_block_by_height(
-        &self,
-        block_height: num_bigint::BigInt,
-    ) -> anyhow::Result<BlockRecord> {
-        let (block_hash, block_height) = Self::execute_prepared_query(
-            &self.scylla_session,
-            &self.get_block_by_height,
-            (block_height,),
-        )
-        .await?
-        .single_row()?
-        .into_typed::<(String, num_bigint::BigInt)>()?;
-
-        BlockRecord::try_from((block_hash, block_height))
     }
 
     /// Searches the block height and shard id by the given chunk hash
@@ -252,7 +229,7 @@ impl ScyllaDBManager {
         account_id: &near_primitives::types::AccountId,
         request_block_height: near_primitives::types::BlockHeight,
     ) -> anyhow::Result<QueryData<near_primitives::account::Account>> {
-        let (block_height, data_blob) = Self::execute_prepared_query(
+        let (block_height, block_hash, data_blob) = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_account,
             (
@@ -262,9 +239,9 @@ impl ScyllaDBManager {
         )
         .await?
         .single_row()?
-        .into_typed::<(num_bigint::BigInt, Vec<u8>)>()?;
+        .into_typed::<(num_bigint::BigInt, String, Vec<u8>)>()?;
 
-        let block = self.get_block_by_height(block_height).await?;
+        let block = BlockRecord::try_from((block_hash, block_height))?;
 
         QueryData::<near_primitives::account::Account>::try_from((
             data_blob,
@@ -279,7 +256,7 @@ impl ScyllaDBManager {
         account_id: &near_primitives::types::AccountId,
         request_block_height: near_primitives::types::BlockHeight,
     ) -> anyhow::Result<QueryData<Vec<u8>>> {
-        let (block_height, contract_code) = Self::execute_prepared_query(
+        let (block_height, block_hash, contract_code) = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_contract_code,
             (
@@ -289,9 +266,9 @@ impl ScyllaDBManager {
         )
         .await?
         .single_row()?
-        .into_typed::<(num_bigint::BigInt, Vec<u8>)>()?;
+        .into_typed::<(num_bigint::BigInt, String, Vec<u8>)>()?;
 
-        let block = self.get_block_by_height(block_height).await?;
+        let block = BlockRecord::try_from((block_hash, block_height))?;
 
         Ok(QueryData {
             data: contract_code,
@@ -307,7 +284,7 @@ impl ScyllaDBManager {
         request_block_height: near_primitives::types::BlockHeight,
         key_data: &Vec<u8>,
     ) -> anyhow::Result<QueryData<near_primitives::account::AccessKey>> {
-        let (block_height, data_blob) = Self::execute_prepared_query(
+        let (block_height, block_hash, data_blob) = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_access_key,
             (
@@ -318,9 +295,9 @@ impl ScyllaDBManager {
         )
         .await?
         .single_row()?
-        .into_typed::<(num_bigint::BigInt, Vec<u8>)>()?;
+        .into_typed::<(num_bigint::BigInt, String, Vec<u8>)>()?;
 
-        let block = self.get_block_by_height(block_height).await?;
+        let block = BlockRecord::try_from((block_hash, block_height))?;
 
         QueryData::<near_primitives::account::AccessKey>::try_from((
             data_blob,
