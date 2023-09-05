@@ -152,50 +152,44 @@ async fn query_call(
                 // change them and reuse them for the observability of the shadow data consistency checks.
                 match request_copy {
                     near_primitives::views::QueryRequest::ViewAccount { .. } => {
-                        let error_meta = format!("QUERY:VIEW_ACCOUNT: {:?}", meta_data);
                         crate::utils::capture_shadow_consistency_error!(
                             err,
-                            error_meta,
+                            meta_data,
                             "QUERY_VIEW_ACCOUNT"
                         );
                     }
                     near_primitives::views::QueryRequest::ViewCode { .. } => {
-                        let error_meta = format!("QUERY:VIEW_CODE: {:?}", meta_data);
                         crate::utils::capture_shadow_consistency_error!(
                             err,
-                            error_meta,
+                            meta_data,
                             "QUERY_VIEW_CODE"
                         );
                     }
                     near_primitives::views::QueryRequest::ViewAccessKey { .. } => {
-                        let error_meta = format!("QUERY:VIEW_ACCESS_KEY: {:?}", meta_data);
                         crate::utils::capture_shadow_consistency_error!(
                             err,
-                            error_meta,
+                            meta_data,
                             "QUERY_VIEW_ACCESS_KEY"
                         );
                     }
                     near_primitives::views::QueryRequest::ViewState { .. } => {
-                        let error_meta = format!("QUERY:VIEW_STATE: {:?}", meta_data);
                         crate::utils::capture_shadow_consistency_error!(
                             err,
-                            error_meta,
+                            meta_data,
                             "QUERY_VIEW_STATE"
                         );
                     }
                     near_primitives::views::QueryRequest::CallFunction { .. } => {
-                        let error_meta = format!("QUERY:FUNCTION_CALL: {:?}", meta_data);
                         crate::utils::capture_shadow_consistency_error!(
                             err,
-                            error_meta,
+                            meta_data,
                             "QUERY_FUNCTION_CALL"
                         );
                     }
                     near_primitives::views::QueryRequest::ViewAccessKeyList { .. } => {
-                        let error_meta = format!("QUERY:VIEW_ACCESS_KEY_LIST: {:?}", meta_data);
                         crate::utils::capture_shadow_consistency_error!(
                             err,
-                            error_meta,
+                            meta_data,
                             "QUERY_VIEW_ACCESS_KEY_LIST"
                         );
                     }

@@ -62,7 +62,7 @@ pub async fn chunk(
     #[cfg(feature = "shadow_data_consistency")]
     {
         let near_rpc_client = data.near_rpc_client.clone();
-        let error_meta = format!("CHUNK: {:?}", params);
+        let meta_data = format!("{:?}", params);
         let (read_rpc_response_json, is_response_ok) = match &result {
             Ok(res) => (serde_json::to_value(&res.chunk_view), true),
             Err(err) => (serde_json::to_value(err), false),
@@ -77,9 +77,9 @@ pub async fn chunk(
 
         match comparison_result {
             Ok(_) => {
-                tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", error_meta);
+                tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", meta_data);
             }
-            Err(err) => crate::utils::capture_shadow_consistency_error!(err, error_meta, "CHUNK"),
+            Err(err) => crate::utils::capture_shadow_consistency_error!(err, meta_data, "CHUNK"),
         }
     }
     Ok(result.map_err(near_jsonrpc_primitives::errors::RpcError::from)?)
@@ -174,7 +174,7 @@ async fn block_call(
     #[cfg(feature = "shadow_data_consistency")]
     {
         let near_rpc_client = data.near_rpc_client.clone();
-        let error_meta = format!("BLOCK: {:?}", params);
+        let meta_data = format!("{:?}", params);
         let (read_rpc_response_json, is_response_ok) = match &result {
             Ok(res) => {
                 if let near_primitives::types::BlockReference::Finality(_) = params.block_reference
@@ -197,9 +197,9 @@ async fn block_call(
 
         match comparison_result {
             Ok(_) => {
-                tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", error_meta);
+                tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", meta_data);
             }
-            Err(err) => crate::utils::capture_shadow_consistency_error!(err, error_meta, "BLOCK"),
+            Err(err) => crate::utils::capture_shadow_consistency_error!(err, meta_data, "BLOCK"),
         }
     };
 
@@ -229,7 +229,7 @@ async fn changes_in_block_call(
                 near_primitives::types::BlockId::Height(block.block_height),
             )
         }
-        let error_meta = format!("CHANGES_IN_BLOCK: {:?}", params);
+        let meta_data = format!("{:?}", params);
         let (read_rpc_response_json, is_response_ok) = match &result {
             Ok(res) => (serde_json::to_value(res), true),
             Err(err) => (serde_json::to_value(err), false),
@@ -244,10 +244,10 @@ async fn changes_in_block_call(
 
         match comparison_result {
             Ok(_) => {
-                tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", error_meta);
+                tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", meta_data);
             }
             Err(err) => {
-                crate::utils::capture_shadow_consistency_error!(err, error_meta, "CHANGES_IN_BLOCK")
+                crate::utils::capture_shadow_consistency_error!(err, meta_data, "CHANGES_IN_BLOCK")
             }
         }
     }
@@ -278,7 +278,7 @@ async fn changes_in_block_by_type_call(
                 near_primitives::types::BlockId::Height(block.block_height),
             )
         }
-        let error_meta = format!("CHANGES_IN_BLOCK_BY_TYPE: {:?}", params);
+        let meta_data = format!("{:?}", params);
         let (read_rpc_response_json, is_response_ok) = match &result {
             Ok(res) => (serde_json::to_value(res), true),
             Err(err) => (serde_json::to_value(err), false),
@@ -293,12 +293,12 @@ async fn changes_in_block_by_type_call(
 
         match comparison_result {
             Ok(_) => {
-                tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", error_meta);
+                tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", meta_data);
             }
             Err(err) => {
                 crate::utils::capture_shadow_consistency_error!(
                     err,
-                    error_meta,
+                    meta_data,
                     "CHANGES_IN_BLOCK_BY_TYPE"
                 )
             }

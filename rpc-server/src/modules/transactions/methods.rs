@@ -28,7 +28,7 @@ pub async fn tx(
     #[cfg(feature = "shadow_data_consistency")]
     {
         let near_rpc_client = data.near_rpc_client.clone();
-        let error_meta = format!("TX: {:?}", params);
+        let meta_data = format!("{:?}", params);
         let (read_rpc_response_json, is_response_ok) = match &result {
             Ok(res) => (serde_json::to_value(res), true),
             Err(err) => (serde_json::to_value(err), false),
@@ -49,10 +49,10 @@ pub async fn tx(
 
         match comparison_result {
             Ok(_) => {
-                tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", error_meta);
+                tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", meta_data);
             }
             Err(err) => {
-                crate::utils::capture_shadow_consistency_error!(err, error_meta, "TX");
+                crate::utils::capture_shadow_consistency_error!(err, meta_data, "TX");
             }
         }
     }
@@ -76,7 +76,7 @@ pub async fn tx_status(
     #[cfg(feature = "shadow_data_consistency")]
     {
         let near_rpc_client = data.near_rpc_client.clone();
-        let error_meta = format!("EXPERIMENTAL_TX_STATUS: {:?}", params);
+        let meta_data = format!("{:?}", params);
 
         let (read_rpc_response_json, is_response_ok) = match &result {
             Ok(res) => (serde_json::to_value(res), true),
@@ -98,12 +98,12 @@ pub async fn tx_status(
 
         match comparison_result {
             Ok(_) => {
-                tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", error_meta);
+                tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", meta_data);
             }
             Err(err) => {
                 crate::utils::capture_shadow_consistency_error!(
                     err,
-                    error_meta,
+                    meta_data,
                     "EXPERIMENTAL_TX_STATUS"
                 );
             }
