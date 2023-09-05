@@ -362,7 +362,7 @@ fn generate_array_key(value: &serde_json::Value) -> String {
 
 #[cfg(feature = "shadow_data_consistency")]
 macro_rules! capture_shadow_consistency_error {
-    ($err:ident, $error_meta:ident, $method_metric_name:expr) => {
+    ($err:ident, $meta_data:ident, $method_metric_name:expr) => {
         match $err {
             crate::utils::ShadowDataConsistencyError::ResultsDontMatch {
                 reason,
@@ -372,8 +372,10 @@ macro_rules! capture_shadow_consistency_error {
             } => {
                 tracing::warn!(
                     target: "shadow_data_consistency",
-                    "Shadow data check: ERROR\n{}\n{}",
-                    $error_meta,
+                    "Shadow data check: ERROR\n{}:{}: {}\n{}",
+                    $method_metric_name,
+                    reason.code(),
+                    $meta_data,
                     format!("{}, ReadRPC: {:?}, NearRPC: {:?}", reason.reason(), read_rpc_response, near_rpc_response),
                 );
                 match reason.code() {
@@ -401,7 +403,7 @@ macro_rules! capture_shadow_consistency_error {
                 };
             },
             _ => {
-                tracing::warn!(target: "shadow_data_consistency", "Shadow data check: ERROR\n{}\n{:?}", $error_meta, $err);
+                tracing::warn!(target: "shadow_data_consistency", "Shadow data check: ERROR\n{}: {}\n{:?}", $method_metric_name, $meta_data, $err);
                 paste::paste!{
                     crate::metrics::[<$method_metric_name _ERROR_4>].inc();
                 }
