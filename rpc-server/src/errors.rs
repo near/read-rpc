@@ -92,3 +92,56 @@ where
         }
     }
 }
+
+#[derive(thiserror::Error, Debug, Clone)]
+pub enum CallFunctionError {
+    #[error("Account ID \"{requested_account_id}\" is invalid")]
+    InvalidAccountId {
+        requested_account_id: near_primitives::types::AccountId,
+    },
+    #[error("Account ID #{requested_account_id} does not exist")]
+    AccountDoesNotExist {
+        requested_account_id: near_primitives::types::AccountId,
+    },
+    #[error("Internal error: #{error_message}")]
+    InternalError { error_message: String },
+    #[error("VM error occurred: #{error_message}")]
+    VMError { error_message: String },
+}
+
+impl CallFunctionError {
+    pub fn to_rpc_query_error(
+        &self,
+        block_height: near_primitives::types::BlockHeight,
+        block_hash: near_primitives::hash::CryptoHash,
+    ) -> near_jsonrpc_primitives::types::query::RpcQueryError {
+        match self.clone() {
+            Self::InvalidAccountId {
+                requested_account_id,
+            } => near_jsonrpc_primitives::types::query::RpcQueryError::InvalidAccount {
+                requested_account_id,
+                block_height,
+                block_hash,
+            },
+            Self::AccountDoesNotExist {
+                requested_account_id,
+            } => near_jsonrpc_primitives::types::query::RpcQueryError::UnknownAccount {
+                requested_account_id,
+                block_height,
+                block_hash,
+            },
+            Self::InternalError { error_message } => {
+                near_jsonrpc_primitives::types::query::RpcQueryError::InternalError {
+                    error_message,
+                }
+            }
+            Self::VMError { error_message } => {
+                near_jsonrpc_primitives::types::query::RpcQueryError::ContractExecutionError {
+                    vm_error: error_message,
+                    block_height,
+                    block_hash,
+                }
+            }
+        }
+    }
+}

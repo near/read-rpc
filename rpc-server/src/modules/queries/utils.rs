@@ -6,11 +6,13 @@ use borsh::BorshDeserialize;
 use tokio::task;
 
 use crate::config::CompiledCodeCache;
+use crate::errors::CallFunctionError;
 use crate::modules::queries::{CodeStorage, MAX_LIMIT};
 use crate::storage::ScyllaDBManager;
 
 pub struct RunContractResponse {
-    pub result: near_vm_logic::VMOutcome,
+    pub result: Vec<u8>,
+    pub logs: Vec<String>,
     pub block_height: near_primitives::types::BlockHeight,
     pub block_hash: near_primitives::hash::CryptoHash,
 }
@@ -155,7 +157,7 @@ async fn run_code_in_vm_runner(
     scylla_db_manager: std::sync::Arc<ScyllaDBManager>,
     latest_protocol_version: near_primitives::types::ProtocolVersion,
     compiled_contract_code_cache: &std::sync::Arc<CompiledCodeCache>,
-) -> anyhow::Result<near_vm_logic::VMOutcome> {
+) -> Result<near_vm_logic::VMOutcome, near_primitives::errors::RuntimeError> {
     let contract_method_name = String::from(method_name);
     let mut external = CodeStorage::init(scylla_db_manager.clone(), account_id, block_height);
     let code_cache = std::sync::Arc::clone(compiled_contract_code_cache);
@@ -186,10 +188,47 @@ async fn run_code_in_vm_runner(
             Some(code_cache.deref()),
         )
     })
-    .await?;
+    .await;
     match results {
-        Ok(result) => Ok(result),
-        Err(err) => anyhow::bail!("Run contract abort! \n{:#?}", err),
+        Ok(result) => {
+            // There are many specific errors that the runtime can encounter.
+            // Some can be translated to the more general `RuntimeError`, which allows to pass
+            // the error up to the caller. For all other cases, panicking here is better
+            // than leaking the exact details further up.
+            // Note that this does not include errors caused by user code / input, those are
+            // stored in outcome.aborted.
+            result.map_err(|e| match e {
+                near_vm_errors::VMRunnerError::ExternalError(any_err) => {
+                    let err = any_err
+                        .downcast()
+                        .expect("Downcasting AnyError should not fail");
+                    near_primitives::errors::RuntimeError::ValidatorError(err)
+                }
+                near_vm_errors::VMRunnerError::InconsistentStateError(
+                    err @ near_vm_errors::InconsistentStateError::IntegerOverflow,
+                ) => {
+                    near_primitives::errors::StorageError::StorageInconsistentState(err.to_string())
+                        .into()
+                }
+                near_vm_errors::VMRunnerError::CacheError(err) => {
+                    near_primitives::errors::StorageError::StorageInconsistentState(err.to_string())
+                        .into()
+                }
+                near_vm_errors::VMRunnerError::LoadingError(msg) => {
+                    panic!("Contract runtime failed to load a contract: {msg}")
+                }
+                near_vm_errors::VMRunnerError::Nondeterministic(msg) => {
+                    panic!(
+                        "Contract runner returned non-deterministic error '{}', aborting",
+                        msg
+                    )
+                }
+                near_vm_errors::VMRunnerError::WasmUnknownError { debug_message } => {
+                    panic!("Wasmer returned unknown message: {}", debug_message)
+                }
+            })
+        }
+        Err(_) => Err(near_primitives::errors::RuntimeError::UnexpectedIntegerOverflow),
     }
 }
 
@@ -210,10 +249,13 @@ pub async fn run_contract(
     block_height: near_primitives::types::BlockHeight,
     timestamp: u64,
     latest_protocol_version: near_primitives::types::ProtocolVersion,
-) -> anyhow::Result<RunContractResponse> {
+) -> Result<RunContractResponse, CallFunctionError> {
     let contract = scylla_db_manager
         .get_account(&account_id, block_height)
-        .await?;
+        .await
+        .map_err(|_| CallFunctionError::AccountDoesNotExist {
+            requested_account_id: account_id.clone(),
+        })?;
 
     let code: Option<Vec<u8>> = contract_code_cache
         .write()
@@ -228,7 +270,10 @@ pub async fn run_contract(
         None => {
             let code = scylla_db_manager
                 .get_contract_code(&account_id, block_height)
-                .await?;
+                .await
+                .map_err(|_| CallFunctionError::InvalidAccountId {
+                    requested_account_id: account_id.clone(),
+                })?;
             contract_code_cache
                 .write()
                 .unwrap()
@@ -267,11 +312,27 @@ pub async fn run_contract(
         latest_protocol_version,
         compiled_contract_code_cache,
     )
-    .await?;
+    .await
+    .map_err(|e| CallFunctionError::InternalError {
+        error_message: e.to_string(),
+    })?;
 
-    Ok(RunContractResponse {
-        result,
-        block_height: contract.block_height,
-        block_hash: contract.block_hash,
-    })
+    if let Some(err) = result.aborted {
+        let message = format!("wasm execution failed with error: {:?}", err);
+        Err(CallFunctionError::VMError {
+            error_message: message,
+        })
+    } else {
+        let logs = result.logs;
+        let result = match result.return_data {
+            near_vm_logic::ReturnData::Value(buf) => buf,
+            near_vm_logic::ReturnData::ReceiptIndex(_) | near_vm_logic::ReturnData::None => vec![],
+        };
+        Ok(RunContractResponse {
+            result,
+            logs,
+            block_height: contract.block_height,
+            block_hash: contract.block_hash,
+        })
+    }
 }
