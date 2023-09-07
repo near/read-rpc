@@ -3,10 +3,13 @@ use std::ops::Deref;
 
 #[cfg(feature = "account_access_keys")]
 use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
+use near_crypto::{KeyType, PublicKey};
+use near_primitives::utils::create_random_seed;
 use tokio::task;
 
 use crate::config::CompiledCodeCache;
-use crate::errors::CallFunctionError;
+use crate::errors::FunctionCallError;
 use crate::modules::queries::{CodeStorage, MAX_LIMIT};
 use crate::storage::ScyllaDBManager;
 
@@ -246,14 +249,13 @@ pub async fn run_contract(
     contract_code_cache: &std::sync::Arc<
         std::sync::RwLock<lru::LruCache<near_primitives::hash::CryptoHash, Vec<u8>>>,
     >,
-    block_height: near_primitives::types::BlockHeight,
-    timestamp: u64,
-    latest_protocol_version: near_primitives::types::ProtocolVersion,
-) -> Result<RunContractResponse, CallFunctionError> {
+    block: crate::modules::blocks::CacheBlock,
+    max_gas_burnt: near_primitives_core::types::Gas,
+) -> Result<RunContractResponse, FunctionCallError> {
     let contract = scylla_db_manager
-        .get_account(&account_id, block_height)
+        .get_account(&account_id, block.block_height)
         .await
-        .map_err(|_| CallFunctionError::AccountDoesNotExist {
+        .map_err(|_| FunctionCallError::AccountDoesNotExist {
             requested_account_id: account_id.clone(),
         })?;
 
@@ -269,9 +271,9 @@ pub async fn run_contract(
         }
         None => {
             let code = scylla_db_manager
-                .get_contract_code(&account_id, block_height)
+                .get_contract_code(&account_id, block.block_height)
                 .await
-                .map_err(|_| CallFunctionError::InvalidAccountId {
+                .map_err(|_| FunctionCallError::InvalidAccountId {
                     requested_account_id: account_id.clone(),
                 })?;
             contract_code_cache
@@ -281,24 +283,28 @@ pub async fn run_contract(
             near_primitives::contract::ContractCode::new(code.data, Some(contract.data.code_hash()))
         }
     };
+    let public_key = PublicKey::empty(KeyType::ED25519);
+    let random_seed = create_random_seed(
+        block.latest_protocol_version,
+        near_primitives_core::hash::CryptoHash::default(),
+        block.state_root,
+    );
     let context = near_vm_logic::VMContext {
         current_account_id: account_id.parse().unwrap(),
         signer_account_id: account_id.parse().unwrap(),
-        signer_account_pk: vec![],
+        signer_account_pk: public_key.try_to_vec().expect("Failed to serialize"),
         predecessor_account_id: account_id.parse().unwrap(),
         input: args.into(),
-        block_height,
-        block_timestamp: timestamp,
+        block_height: block.block_height,
+        block_timestamp: block.block_timestamp,
         epoch_height: 0, // TODO: implement indexing of epoch_height and pass it here
         account_balance: contract.data.amount(),
         account_locked_balance: contract.data.locked(),
         storage_usage: contract.data.storage_usage(),
         attached_deposit: 0,
-        prepaid_gas: 0,
-        random_seed: vec![], // TODO: test the contracts where random is used.
-        view_config: Some(near_primitives::config::ViewConfig {
-            max_gas_burnt: 300_000_000_000_000, // TODO: extract it into a configuration option
-        }),
+        prepaid_gas: max_gas_burnt,
+        random_seed,
+        view_config: Some(near_primitives::config::ViewConfig { max_gas_burnt }),
         output_data_receivers: vec![],
     };
 
@@ -307,19 +313,18 @@ pub async fn run_contract(
         method_name,
         context,
         account_id,
-        block_height,
+        block.block_height,
         scylla_db_manager.clone(),
-        latest_protocol_version,
+        block.latest_protocol_version,
         compiled_contract_code_cache,
     )
     .await
-    .map_err(|e| CallFunctionError::InternalError {
+    .map_err(|e| FunctionCallError::InternalError {
         error_message: e.to_string(),
     })?;
-
     if let Some(err) = result.aborted {
         let message = format!("wasm execution failed with error: {:?}", err);
-        Err(CallFunctionError::VMError {
+        Err(FunctionCallError::VMError {
             error_message: message,
         })
     } else {
@@ -331,8 +336,8 @@ pub async fn run_contract(
         Ok(RunContractResponse {
             result,
             logs,
-            block_height: contract.block_height,
-            block_hash: contract.block_hash,
+            block_height: block.block_height,
+            block_hash: block.block_hash,
         })
     }
 }

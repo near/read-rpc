@@ -94,7 +94,7 @@ where
 }
 
 #[derive(thiserror::Error, Debug, Clone)]
-pub enum CallFunctionError {
+pub enum FunctionCallError {
     #[error("Account ID \"{requested_account_id}\" is invalid")]
     InvalidAccountId {
         requested_account_id: near_primitives::types::AccountId,
@@ -109,7 +109,7 @@ pub enum CallFunctionError {
     VMError { error_message: String },
 }
 
-impl CallFunctionError {
+impl FunctionCallError {
     pub fn to_rpc_query_error(
         &self,
         block_height: near_primitives::types::BlockHeight,

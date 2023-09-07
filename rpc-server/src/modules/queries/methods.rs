@@ -313,9 +313,8 @@ async fn function_call(
         data.scylla_db_manager.clone(),
         &data.compiled_contract_code_cache,
         &data.contract_code_cache,
-        block.block_height,
-        block.block_timestamp,
-        block.latest_protocol_version,
+        block,
+        data.max_gas_burnt,
     )
     .await
     .map_err(|err| err.to_rpc_query_error(block.block_height, block.block_hash))?;
