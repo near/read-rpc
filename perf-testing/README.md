@@ -3,17 +3,17 @@
 ```
 Read RPC (success/total)	Archival RPC (success/total)
 -------------------------------------------
-667 ms (20/20)		3400 ms (20/20)		cold chunks
-790 ms (20/20)		3016 ms (20/20)		hot chunks
+628 ms (10/10)		518 ms (10/10)		cold chunks
+642 ms (10/10)		383 ms (10/10)		hot chunks
 -------------------------------------------
-121 ms (23/23)		1976 ms (26/26)		cold transactions
-218 ms (148/148)	6251 ms (59/174)	hot transactions
+116 ms (17/17)		2211 ms (10/10)		cold transactions
+141 ms (37/37)		3778 ms (39/39)		hot transactions
 -------------------------------------------
-321 ms (23/23)		7158 ms (26/26)		cold accounts
-520 ms (148/148)	10069 ms (174/174)	hot accounts
+283 ms (17/17)		2312 ms (10/10)		cold accounts
+405 ms (37/37)		162 ms (39/39)		hot accounts
 -------------------------------------------
-2851 ms (18/18)		21062 ms (18/18)	cold function calls
-2944 ms (18/18)		20794 ms (18/18)	hot function calls
+1281 ms (9/9)		7333 ms (9/9)		cold function calls
+1074 ms (9/9)		268 ms (9/9)		hot function calls
 -------------------------------------------
 ```
 
