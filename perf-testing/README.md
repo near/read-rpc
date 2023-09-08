@@ -1,5 +1,7 @@
 # Performance test of Read RPC and Archival RPC
 
+### Low load
+
 ```
 Read RPC (success/total)	Archival RPC (success/total)
 -------------------------------------------
@@ -15,6 +17,24 @@ Read RPC (success/total)	Archival RPC (success/total)
 1281 ms (9/9)		7333 ms (9/9)		cold function calls
 1074 ms (9/9)		268 ms (9/9)		hot function calls
 -------------------------------------------
+```
+
+### Higher load
+
+```
+Read RPC (success/total)	Archival RPC (success/total)
+-------------------------------------------
+763 ms (100/100)	2703 ms (99/100)	cold chunks
+911 ms (100/100)	4723 ms (100/100)	hot chunks
+-------------------------------------------
+168 ms (146/146)	4784 ms (87/167)	cold transactions
+475 ms (533/533)	∞ ms (0/590)		hot transactions
+-------------------------------------------
+341 ms (146/146)	32262 ms (166/167)	cold accounts
+7285 ms (530/533)	51959 ms (150/590)	hot accounts
+-------------------------------------------
+4560 ms (99/99)		31069 ms (55/99)	cold function calls
+3006 ms (99/99)		∞ ms (0/99)		hot function calls
 ```
 
 ### The goals of this repo is to:
