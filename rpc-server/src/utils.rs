@@ -57,6 +57,7 @@ pub async fn get_final_cache_block(
             block_timestamp: block_view.header.timestamp,
             latest_protocol_version: block_view.header.latest_protocol_version,
             chunks_included: block_view.header.chunks_included,
+            state_root: block_view.header.prev_state_root,
         }),
         Err(_) => None,
     }

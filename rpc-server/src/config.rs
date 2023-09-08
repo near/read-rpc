@@ -61,6 +61,11 @@ pub struct Opts {
     /// before skipping giving up and moving to the next piece of data
     #[clap(long, default_value = "false", env)]
     pub strict_mode: bool,
+
+    /// Max gas burnt for contract function call
+    /// Default value is 300_000_000_000_000
+    #[clap(long, env, default_value = "300000000000000")]
+    pub max_gas_burnt: near_primitives_core::types::Gas,
 }
 
 pub struct ServerContext {
@@ -75,6 +80,7 @@ pub struct ServerContext {
     pub contract_code_cache: std::sync::Arc<
         std::sync::RwLock<lru::LruCache<near_primitives::hash::CryptoHash, Vec<u8>>>,
     >,
+    pub max_gas_burnt: near_primitives_core::types::Gas,
 }
 
 pub struct CompiledCodeCache {

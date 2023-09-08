@@ -58,6 +58,7 @@ near-primitives = "0.17.0"
 near-primitives-core = "0.17.0"
 near-vm-runner = "0.17.0"
 near-vm-logic = "0.17.0"
+near-vm-errors = "0.17.0"
 
 [features]
 default = ["submit_tx_methods"]

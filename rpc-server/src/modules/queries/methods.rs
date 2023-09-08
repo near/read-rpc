@@ -313,33 +313,21 @@ async fn function_call(
         data.scylla_db_manager.clone(),
         &data.compiled_contract_code_cache,
         &data.contract_code_cache,
-        block.block_height,
-        block.block_timestamp,
-        block.latest_protocol_version,
+        block,
+        data.max_gas_burnt,
     )
     .await
-    .map_err(
-        |err| near_jsonrpc_primitives::types::query::RpcQueryError::InternalError {
-            error_message: format!("Function call failed: {:?}", err),
-        },
-    )?;
-    match call_results.result.return_data.as_value() {
-        Some(val) => Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
-            kind: near_jsonrpc_primitives::types::query::QueryResponseKind::CallResult(
-                near_primitives::views::CallResult {
-                    result: val,
-                    logs: call_results.result.logs,
-                },
-            ),
-            block_height: call_results.block_height,
-            block_hash: call_results.block_hash,
-        }),
-        None => Err(
-            near_jsonrpc_primitives::types::query::RpcQueryError::InternalError {
-                error_message: "Failed function call: empty result".to_string(),
+    .map_err(|err| err.to_rpc_query_error(block.block_height, block.block_hash))?;
+    Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
+        kind: near_jsonrpc_primitives::types::query::QueryResponseKind::CallResult(
+            near_primitives::views::CallResult {
+                result: call_results.result,
+                logs: call_results.logs,
             },
         ),
-    }
+        block_height: call_results.block_height,
+        block_hash: call_results.block_hash,
+    })
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]

@@ -4360,6 +4360,7 @@ dependencies = [
  "near-jsonrpc-primitives",
  "near-primitives",
  "near-primitives-core",
+ "near-vm-errors",
  "near-vm-logic",
  "near-vm-runner",
  "num-bigint",

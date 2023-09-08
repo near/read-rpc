@@ -134,6 +134,7 @@ async fn main() -> anyhow::Result<()> {
         final_block_height: std::sync::Arc::clone(&final_block_height),
         compiled_contract_code_cache,
         contract_code_cache,
+        max_gas_burnt: opts.max_gas_burnt,
     };
 
     let shutdown = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));

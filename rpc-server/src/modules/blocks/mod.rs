@@ -8,4 +8,5 @@ pub struct CacheBlock {
     pub block_timestamp: u64,
     pub latest_protocol_version: near_primitives::types::ProtocolVersion,
     pub chunks_included: u64,
+    pub state_root: near_primitives::hash::CryptoHash,
 }
