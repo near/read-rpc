@@ -1,19 +1,19 @@
 # Performance test of Read RPC and Archival RPC
 
-```bash
+```
 Read RPC (success/total)	Archival RPC (success/total)
 -------------------------------------------
-945 ms (25/30)		975 ms (30/30)		cold chunks
-929 ms (30/30)		1433 ms (30/30)		hot chunks
+667 ms (20/20)		3400 ms (20/20)		cold chunks
+790 ms (20/20)		3016 ms (20/20)		hot chunks
 -------------------------------------------
-1637 ms (36/36)		3666 ms (47/47)		cold transactions
-1857 ms (55/55)		8177 ms (36/42)		hot transactions
+121 ms (23/23)		1976 ms (26/26)		cold transactions
+218 ms (148/148)	6251 ms (59/174)	hot transactions
 -------------------------------------------
-7201 ms (36/36)		11149 ms (47/47)	cold accounts
-6627 ms (55/55)		19401 ms (42/42)	hot accounts
+321 ms (23/23)		7158 ms (26/26)		cold accounts
+520 ms (148/148)	10069 ms (174/174)	hot accounts
 -------------------------------------------
-18477 ms (30/30)	23256 ms (30/30)	cold function calls
-8269 ms (30/30)		23549 ms (30/30)	hot function calls
+2851 ms (18/18)		21062 ms (18/18)	cold function calls
+2944 ms (18/18)		20794 ms (18/18)	hot function calls
 -------------------------------------------
 ```
 
