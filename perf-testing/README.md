@@ -1,20 +1,40 @@
 # Performance test of Read RPC and Archival RPC
 
-```bash
+### Low load
+
+```
 Read RPC (success/total)	Archival RPC (success/total)
 -------------------------------------------
-945 ms (25/30)		975 ms (30/30)		cold chunks
-929 ms (30/30)		1433 ms (30/30)		hot chunks
+628 ms (10/10)		518 ms (10/10)		cold chunks
+642 ms (10/10)		383 ms (10/10)		hot chunks
 -------------------------------------------
-1637 ms (36/36)		3666 ms (47/47)		cold transactions
-1857 ms (55/55)		8177 ms (36/42)		hot transactions
+116 ms (17/17)		2211 ms (10/10)		cold transactions
+141 ms (37/37)		3778 ms (39/39)		hot transactions
 -------------------------------------------
-7201 ms (36/36)		11149 ms (47/47)	cold accounts
-6627 ms (55/55)		19401 ms (42/42)	hot accounts
+283 ms (17/17)		2312 ms (10/10)		cold accounts
+405 ms (37/37)		162 ms (39/39)		hot accounts
 -------------------------------------------
-18477 ms (30/30)	23256 ms (30/30)	cold function calls
-8269 ms (30/30)		23549 ms (30/30)	hot function calls
+1281 ms (9/9)		7333 ms (9/9)		cold function calls
+1074 ms (9/9)		268 ms (9/9)		hot function calls
 -------------------------------------------
+```
+
+### Higher load
+
+```
+Read RPC (success/total)	Archival RPC (success/total)
+-------------------------------------------
+763 ms (100/100)	2703 ms (99/100)	cold chunks
+911 ms (100/100)	4723 ms (100/100)	hot chunks
+-------------------------------------------
+168 ms (146/146)	4784 ms (87/167)	cold transactions
+475 ms (533/533)	∞ ms (0/590)		hot transactions
+-------------------------------------------
+341 ms (146/146)	32262 ms (166/167)	cold accounts
+7285 ms (530/533)	51959 ms (150/590)	hot accounts
+-------------------------------------------
+4560 ms (99/99)		31069 ms (55/99)	cold function calls
+3006 ms (99/99)		∞ ms (0/99)		hot function calls
 ```
 
 ### The goals of this repo is to:
