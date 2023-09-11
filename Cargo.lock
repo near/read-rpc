@@ -3140,9 +3140,9 @@ dependencies = [
 
 [[package]]
 name = "near-lake-framework"
-version = "0.7.2"
+version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5cecf2ccd79657f523b24218241e5620fab876ea346d1aa2802f19e5fa4f8529"
+checksum = "5fbfc3d7c294aa144c3a1817452931e91ce045ee1cf2e34b7b439d4695073634"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -4358,6 +4358,7 @@ dependencies = [
  "near-indexer-primitives",
  "near-jsonrpc-client 0.6.0",
  "near-jsonrpc-primitives",
+ "near-lake-framework",
  "near-primitives",
  "near-primitives-core",
  "near-vm-errors",
@@ -4375,6 +4376,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
+ "tokio-stream",
  "tracing",
  "tracing-actix-web",
  "tracing-opentelemetry 0.17.4",

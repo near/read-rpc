@@ -31,6 +31,7 @@ serde = { version = "1.0.145", features = ["derive"] }
 serde_json = "1.0.85"
 thiserror = "1.0.40"
 tokio = { version = "1.28.2", features = ["full", "tracing"] }
+tokio-stream = { version = "0.1.12" }
 tracing = { version = "0.1.36", features = ["std"] }
 tracing-actix-web = "0.6.1"
 tracing-subscriber = { version = "0.3.15", features = [
@@ -54,11 +55,13 @@ near-crypto = "0.17.0"
 near-jsonrpc-client = "0.6.0"
 near-jsonrpc-primitives = "0.17.0"
 near-indexer-primitives = "0.17.0"
+near-lake-framework = "0.7.3"
 near-primitives = "0.17.0"
 near-primitives-core = "0.17.0"
 near-vm-runner = "0.17.0"
 near-vm-logic = "0.17.0"
 near-vm-errors = "0.17.0"
+
 
 [features]
 default = ["submit_tx_methods"]

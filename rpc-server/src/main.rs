@@ -7,7 +7,7 @@ use dotenv::dotenv;
 use jsonrpc_v2::{Data, Server};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use utils::{prepare_s3_client, update_final_block_height_regularly};
+use utils::update_final_block_height_regularly;
 
 #[macro_use]
 extern crate lazy_static;
@@ -118,14 +118,13 @@ async fn main() -> anyhow::Result<()> {
     let genesis_config = near_rpc_client
         .call(near_jsonrpc_client::methods::EXPERIMENTAL_genesis_config::RpcGenesisConfigRequest)
         .await?;
+    let lake_config = opts.to_lake_config(final_block.block_height).await?;
+    let s3_config = opts.to_s3_config().await;
 
     let state = ServerContext {
-        s3_client: prepare_s3_client(
-            &opts.access_key_id,
-            &opts.secret_access_key,
-            opts.region.clone(),
-        )
-        .await,
+        s3_client: near_lake_framework::s3_fetchers::LakeS3Client::new(
+            aws_sdk_s3::Client::from_conf(s3_config),
+        ),
         scylla_db_manager,
         near_rpc_client: near_rpc_client.clone(),
         s3_bucket_name: opts.s3_bucket_name,
@@ -137,17 +136,9 @@ async fn main() -> anyhow::Result<()> {
         max_gas_burnt: opts.max_gas_burnt,
     };
 
-    let shutdown = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let shutdown_task = std::sync::Arc::clone(&shutdown);
-
     tokio::spawn(async move {
-        update_final_block_height_regularly(
-            final_block_height.clone(),
-            blocks_cache,
-            near_rpc_client,
-            shutdown_task,
-        )
-        .await
+        update_final_block_height_regularly(final_block_height.clone(), blocks_cache, lake_config)
+            .await
     });
 
     let rpc = Server::new()
@@ -217,8 +208,6 @@ async fn main() -> anyhow::Result<()> {
     .bind(format!("0.0.0.0:{:0>5}", opts.server_port))?
     .run()
     .await?;
-
-    shutdown.store(true, std::sync::atomic::Ordering::Relaxed);
 
     Ok(())
 }

@@ -1,8 +1,8 @@
 use crate::config::ServerContext;
 use crate::errors::RPCError;
 use crate::modules::blocks::utils::{
-    fetch_block_from_cache_or_get, fetch_block_from_s3, fetch_chunk_from_s3, fetch_shard_from_s3,
-    is_matching_change, scylla_db_convert_block_hash_to_block_height,
+    fetch_block_from_cache_or_get, fetch_chunk_from_s3, is_matching_change,
+    scylla_db_convert_block_hash_to_block_height,
     scylla_db_convert_block_height_and_shard_id_to_height_included_and_shard_id,
     scylla_db_convert_chunk_hash_to_block_height_and_shard_id,
 };
@@ -341,8 +341,17 @@ pub async fn fetch_block(
             },
         ),
     };
-    let block_view =
-        fetch_block_from_s3(&data.s3_client, &data.s3_bucket_name, block_height?).await?;
+    let block_view = near_lake_framework::s3_fetchers::fetch_block_or_retry(
+        &data.s3_client,
+        &data.s3_bucket_name,
+        block_height?,
+    )
+    .await
+    .map_err(
+        |err| near_jsonrpc_primitives::types::blocks::RpcBlockError::UnknownBlock {
+            error_message: err.to_string(),
+        },
+    )?;
     Ok(near_jsonrpc_primitives::types::blocks::RpcBlockResponse { block_view })
 }
 
@@ -523,12 +532,20 @@ async fn fetch_shards(
         .collect::<Vec<u64>>()
         .into_iter()
         .map(|shard_id| {
-            fetch_shard_from_s3(
+            near_lake_framework::s3_fetchers::fetch_shard_or_retry(
                 &data.s3_client,
                 &data.s3_bucket_name,
                 block.block_height,
                 shard_id,
             )
         });
-    futures::future::try_join_all(fetch_shards_futures).await
+    futures::future::try_join_all(fetch_shards_futures)
+        .await
+        .map_err(|err| {
+            anyhow::anyhow!(
+                "Failed to fetch shards for block {} with error: {}",
+                block.block_height,
+                err
+            )
+        })
 }

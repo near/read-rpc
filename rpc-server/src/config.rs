@@ -1,8 +1,6 @@
 use crate::modules::blocks::CacheBlock;
 use clap::Parser;
 
-pub const DEFAULT_RETRY_COUNT: u8 = 3;
-
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
 pub struct Opts {
@@ -68,8 +66,38 @@ pub struct Opts {
     pub max_gas_burnt: near_primitives_core::types::Gas,
 }
 
+impl Opts {
+    pub async fn to_s3_config(&self) -> aws_sdk_s3::Config {
+        let credentials = aws_credential_types::Credentials::new(
+            &self.access_key_id,
+            &self.secret_access_key,
+            None,
+            None,
+            "",
+        );
+        aws_sdk_s3::Config::builder()
+            .credentials_provider(credentials)
+            .region(aws_sdk_s3::Region::new(self.region.clone()))
+            .build()
+    }
+
+    pub async fn to_lake_config(
+        &self,
+        start_block_height: near_primitives_core::types::BlockHeight,
+    ) -> anyhow::Result<near_lake_framework::LakeConfig> {
+        let config_builder = near_lake_framework::LakeConfigBuilder::default();
+        Ok(config_builder
+            .s3_config(self.to_s3_config().await)
+            .s3_region_name(&self.region)
+            .s3_bucket_name(&self.s3_bucket_name)
+            .start_block_height(start_block_height)
+            .build()
+            .expect("Failed to build LakeConfig"))
+    }
+}
+
 pub struct ServerContext {
-    pub s3_client: aws_sdk_s3::Client,
+    pub s3_client: near_lake_framework::s3_fetchers::LakeS3Client,
     pub scylla_db_manager: std::sync::Arc<crate::storage::ScyllaDBManager>,
     pub near_rpc_client: near_jsonrpc_client::JsonRpcClient,
     pub s3_bucket_name: String,
