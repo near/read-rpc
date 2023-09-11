@@ -1,20 +1,10 @@
 use crate::modules::blocks::CacheBlock;
 #[cfg(feature = "shadow_data_consistency")]
 use assert_json_diff::{assert_json_matches_no_panic, CompareMode, Config, NumericMode};
+use futures::StreamExt;
 
-pub async fn prepare_s3_client(
-    access_key_id: &str,
-    secret_access_key: &str,
-    region: String,
-) -> aws_sdk_s3::Client {
-    let credentials =
-        aws_credential_types::Credentials::new(access_key_id, secret_access_key, None, None, "");
-    let s3_config = aws_sdk_s3::Config::builder()
-        .credentials_provider(credentials)
-        .region(aws_sdk_s3::Region::new(region))
-        .build();
-    aws_sdk_s3::Client::from_conf(s3_config)
-}
+#[cfg(feature = "shadow_data_consistency")]
+const DEFAULT_RETRY_COUNT: u8 = 3;
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(params)))]
 pub async fn proxy_rpc_call<M>(
@@ -28,60 +18,85 @@ where
     client.call(params).await
 }
 
-async fn get_final_block(
+pub async fn get_final_cache_block(
     near_rpc_client: &near_jsonrpc_client::JsonRpcClient,
-) -> anyhow::Result<near_jsonrpc_client::methods::block::RpcBlockResponse> {
+) -> Option<CacheBlock> {
     let block_request_method = near_jsonrpc_client::methods::block::RpcBlockRequest {
         block_reference: near_primitives::types::BlockReference::Finality(
             near_primitives::types::Finality::Final,
         ),
     };
+    match near_rpc_client.call(block_request_method).await {
+        Ok(block_view) => {
+            // Updating the metric to expose the block height considered as final by the server
+            // this metric can be used to calculate the lag between the server and the network
+            // Prometheus Gauge Metric type do not support u64
+            // https://github.com/tikv/rust-prometheus/issues/470
+            crate::metrics::FINAL_BLOCK_HEIGHT
+                .set(i64::try_from(block_view.header.height).unwrap());
 
-    let block_response = near_rpc_client.call(block_request_method).await?;
-
-    // Updating the metric to expose the block height considered as final by the server
-    // this metric can be used to calculate the lag between the server and the network
-    // Prometheus Gauge Metric type do not support u64
-    // https://github.com/tikv/rust-prometheus/issues/470
-    crate::metrics::FINAL_BLOCK_HEIGHT.set(i64::try_from(block_response.header.height)?);
-    Ok(block_response)
-}
-
-pub async fn get_final_cache_block(
-    near_rpc_client: &near_jsonrpc_client::JsonRpcClient,
-) -> Option<CacheBlock> {
-    match get_final_block(near_rpc_client).await {
-        Ok(block_view) => Some(CacheBlock {
-            block_hash: block_view.header.hash,
-            block_height: block_view.header.height,
-            block_timestamp: block_view.header.timestamp,
-            latest_protocol_version: block_view.header.latest_protocol_version,
-            chunks_included: block_view.header.chunks_included,
-            state_root: block_view.header.prev_state_root,
-        }),
+            Some(CacheBlock {
+                block_hash: block_view.header.hash,
+                block_height: block_view.header.height,
+                block_timestamp: block_view.header.timestamp,
+                latest_protocol_version: block_view.header.latest_protocol_version,
+                chunks_included: block_view.header.chunks_included,
+                state_root: block_view.header.prev_state_root,
+            })
+        }
         Err(_) => None,
     }
+}
+
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
+async fn handle_streamer_message(
+    streamer_message: near_indexer_primitives::StreamerMessage,
+    blocks_cache: std::sync::Arc<std::sync::RwLock<lru::LruCache<u64, CacheBlock>>>,
+    final_block_height: std::sync::Arc<std::sync::atomic::AtomicU64>,
+) -> anyhow::Result<()> {
+    let block = CacheBlock {
+        block_hash: streamer_message.block.header.hash,
+        block_height: streamer_message.block.header.height,
+        block_timestamp: streamer_message.block.header.timestamp,
+        latest_protocol_version: streamer_message.block.header.latest_protocol_version,
+        chunks_included: streamer_message.block.header.chunks_included,
+        state_root: streamer_message.block.header.prev_state_root,
+    };
+    final_block_height.store(block.block_height, std::sync::atomic::Ordering::SeqCst);
+    blocks_cache.write().unwrap().put(block.block_height, block);
+    crate::metrics::FINAL_BLOCK_HEIGHT.set(i64::try_from(block.block_height)?);
+    Ok(())
 }
 
 pub async fn update_final_block_height_regularly(
     final_block_height: std::sync::Arc<std::sync::atomic::AtomicU64>,
     blocks_cache: std::sync::Arc<std::sync::RwLock<lru::LruCache<u64, CacheBlock>>>,
-    near_rpc_client: near_jsonrpc_client::JsonRpcClient,
-    shutdown: std::sync::Arc<std::sync::atomic::AtomicBool>,
-) {
+    lake_config: near_lake_framework::LakeConfig,
+) -> anyhow::Result<()> {
     tracing::info!("Task to get and store final block in the cache started");
-    loop {
-        match get_final_cache_block(&near_rpc_client).await {
-            Some(block) => {
-                final_block_height.store(block.block_height, std::sync::atomic::Ordering::SeqCst);
-                blocks_cache.write().unwrap().put(block.block_height, block);
-            }
-            None => tracing::warn!("Error to get final block!"),
-        };
-        std::thread::sleep(std::time::Duration::from_secs(1));
-        if shutdown.load(std::sync::atomic::Ordering::Relaxed) {
-            break;
+    let (sender, stream) = near_lake_framework::streamer(lake_config);
+    let mut handlers = tokio_stream::wrappers::ReceiverStream::new(stream)
+        .map(|streamer_message| {
+            handle_streamer_message(
+                streamer_message,
+                std::sync::Arc::clone(&blocks_cache),
+                std::sync::Arc::clone(&final_block_height),
+            )
+        })
+        .buffer_unordered(1usize);
+
+    while let Some(_handle_message) = handlers.next().await {
+        if let Err(err) = _handle_message {
+            tracing::warn!("{:?}", err);
         }
+    }
+    drop(handlers); // close the channel so the sender will stop
+
+    // propagate errors from the sender
+    match sender.await {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(e)) => Err(e),
+        Err(e) => Err(anyhow::Error::from(e)), // JoinError
     }
 }
 
@@ -121,7 +136,7 @@ where
 
     let mut near_rpc_response = client.call(&params).await;
 
-    for _ in 0..crate::config::DEFAULT_RETRY_COUNT {
+    for _ in 0..DEFAULT_RETRY_COUNT {
         if let Err(json_rpc_err) = &near_rpc_response {
             let retry = match json_rpc_err {
                 near_jsonrpc_client::errors::JsonRpcError::TransportError(_) => true,

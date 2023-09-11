@@ -4,105 +4,12 @@ use crate::modules::blocks::CacheBlock;
 use crate::storage::ScyllaDBManager;
 use near_primitives::views::{StateChangeValueView, StateChangesRequestView};
 
-/// Fetch object from s3 with retry
-/// Try to get 3 times if we have some problems with network
-async fn fetch_object_from_s3_with_retry<T>(
-    s3_client: &aws_sdk_s3::Client,
-    s3_bucket_name: &str,
-    key: String,
-) -> anyhow::Result<T>
-where
-    T: serde::de::DeserializeOwned,
-{
-    let mut retry_count: u8 = 0;
-    let s3_response = loop {
-        match s3_client
-            .get_object()
-            .bucket(s3_bucket_name)
-            .key(&key)
-            .send()
-            .await
-        {
-            Ok(response) => break Ok(response),
-            Err(err) => match err {
-                // Do retry on network errors
-                aws_sdk_s3::types::SdkError::ConstructionFailure(_)
-                | aws_sdk_s3::types::SdkError::TimeoutError(_)
-                | aws_sdk_s3::types::SdkError::DispatchFailure(_)
-                | aws_sdk_s3::types::SdkError::ResponseError(_) => {
-                    tracing::debug!("Error to get object from s3, Retry");
-                    if retry_count < crate::config::DEFAULT_RETRY_COUNT {
-                        retry_count += 1;
-                        continue;
-                    } else {
-                        // Stop retrying after 3 times
-                        break Err(err);
-                    }
-                }
-                // Stop retrying if we get response from s3 with error related to object
-                _ => break Err(err),
-            },
-        }
-    }?;
-    let body_bytes = s3_response.body.collect().await?.into_bytes();
-
-    Ok(serde_json::from_slice::<T>(body_bytes.as_ref())?)
-}
-
-#[cfg_attr(
-    feature = "tracing-instrumentation",
-    tracing::instrument(skip(s3_client))
-)]
-pub async fn fetch_block_from_s3(
-    s3_client: &aws_sdk_s3::Client,
-    s3_bucket_name: &str,
-    block_height: near_primitives::types::BlockHeight,
-) -> Result<near_primitives::views::BlockView, near_jsonrpc_primitives::types::blocks::RpcBlockError>
-{
-    tracing::debug!("`fetch_block_from_s3` call");
-
-    match fetch_object_from_s3_with_retry::<near_primitives::views::BlockView>(
-        s3_client,
-        s3_bucket_name,
-        format!("{:0>12}/block.json", block_height), // path to the block in the bucket
-    )
-    .await
-    {
-        Ok(block) => Ok(block),
-        Err(err) => Err(
-            near_jsonrpc_primitives::types::blocks::RpcBlockError::UnknownBlock {
-                error_message: err.to_string(),
-            },
-        ),
-    }
-}
-
-#[cfg_attr(
-    feature = "tracing-instrumentation",
-    tracing::instrument(skip(s3_client))
-)]
-pub async fn fetch_shard_from_s3(
-    s3_client: &aws_sdk_s3::Client,
-    s3_bucket_name: &str,
-    block_height: near_primitives::types::BlockHeight,
-    shard_id: near_primitives::types::ShardId,
-) -> anyhow::Result<near_indexer_primitives::IndexerShard> {
-    tracing::debug!("`fetch_shard_from_s3` call");
-
-    fetch_object_from_s3_with_retry::<near_indexer_primitives::IndexerShard>(
-        s3_client,
-        s3_bucket_name,
-        format!("{:0>12}/shard_{shard_id}.json", block_height), // path to the shard in the bucket
-    )
-    .await
-}
-
 #[cfg_attr(
     feature = "tracing-instrumentation",
     tracing::instrument(skip(s3_client))
 )]
 pub async fn fetch_chunk_from_s3(
-    s3_client: &aws_sdk_s3::Client,
+    s3_client: &near_lake_framework::s3_fetchers::LakeS3Client,
     s3_bucket_name: &str,
     block_height: near_primitives::types::BlockHeight,
     shard_id: near_primitives::types::ShardId,
@@ -113,7 +20,14 @@ pub async fn fetch_chunk_from_s3(
         block_height,
         shard_id
     );
-    match fetch_shard_from_s3(s3_client, s3_bucket_name, block_height, shard_id).await {
+    match near_lake_framework::s3_fetchers::fetch_shard_or_retry(
+        s3_client,
+        s3_bucket_name,
+        block_height,
+        shard_id,
+    )
+    .await
+    {
         Ok(shard) => match shard.chunk {
             Some(chunk) => {
                 // We collect a list of local receipt ids to filter out local receipts from the chunk
