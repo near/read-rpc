@@ -282,7 +282,7 @@ impl ScyllaDBManager {
         &self,
         account_id: &near_primitives::types::AccountId,
         request_block_height: near_primitives::types::BlockHeight,
-        key_data: &Vec<u8>,
+        key_data: &[u8],
     ) -> anyhow::Result<QueryData<near_primitives::account::AccessKey>> {
         let (block_height, block_hash, data_blob) = Self::execute_prepared_query(
             &self.scylla_session,
