@@ -8,7 +8,6 @@ use crate::modules::queries::utils::{fetch_state_from_scylla_db, run_contract};
 use crate::utils::proxy_rpc_call;
 #[cfg(feature = "shadow_data_consistency")]
 use crate::utils::shadow_compare_results;
-use borsh::BorshSerialize;
 use jsonrpc_v2::{Data, Params};
 
 /// `query` rpc method implementation
@@ -72,7 +71,7 @@ async fn query_call(
             public_key,
         } => {
             crate::metrics::QUERY_VIEW_ACCESS_KEY_REQUESTS_TOTAL.inc();
-            view_access_key(&data, block, &account_id, public_key.try_to_vec().unwrap()).await
+            view_access_key(&data, block, &account_id, public_key).await
         }
         near_primitives::views::QueryRequest::ViewState {
             account_id,
@@ -377,7 +376,7 @@ async fn view_access_key(
     data: &Data<ServerContext>,
     block: CacheBlock,
     account_id: &near_primitives::types::AccountId,
-    key_data: Vec<u8>,
+    public_key: near_crypto::PublicKey,
 ) -> Result<
     near_jsonrpc_primitives::types::query::RpcQueryResponse,
     near_jsonrpc_primitives::types::query::RpcQueryError,
@@ -386,25 +385,18 @@ async fn view_access_key(
         "`view_access_key` call. AccountID {}, block {}, key_data {:?}",
         account_id,
         block.block_height,
-        key_data,
+        public_key.to_string(),
     );
 
     let access_key = data
         .scylla_db_manager
-        .get_access_key(account_id, block.block_height, &key_data)
+        .get_access_key(account_id, block.block_height, public_key.key_data())
         .await
         .map_err(
-            |_err| match near_crypto::ED25519PublicKey::try_from(key_data.as_slice()) {
-                Ok(public_key) => {
-                    near_jsonrpc_primitives::types::query::RpcQueryError::UnknownAccessKey {
-                        public_key: public_key.into(),
-                        block_height: block.block_height,
-                        block_hash: block.block_hash,
-                    }
-                }
-                Err(_) => near_jsonrpc_primitives::types::query::RpcQueryError::InternalError {
-                    error_message: "Failed to parse public key".to_string(),
-                },
+            |_err| near_jsonrpc_primitives::types::query::RpcQueryError::UnknownAccessKey {
+                public_key,
+                block_height: block.block_height,
+                block_hash: block.block_hash,
             },
         )?;
 
