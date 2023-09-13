@@ -1,4 +1,4 @@
-use near_indexer_primitives::IndexerExecutionOutcomeWithReceipt;
+use crate::base_storage::TxCollectingStorage;
 
 const STORAGE: &str = "storage_tx";
 
@@ -20,9 +20,12 @@ impl HashStorage {
             transactions_to_save: std::collections::HashMap::new(),
         }
     }
+}
 
+#[async_trait::async_trait]
+impl TxCollectingStorage for HashStorage {
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
-    pub fn push_receipt_to_watching_list(
+    async fn push_receipt_to_watching_list(
         &mut self,
         receipt_id: String,
         transaction_hash: String,
@@ -39,7 +42,7 @@ impl HashStorage {
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
-    pub fn remove_receipt_from_watching_list(
+    async fn remove_receipt_from_watching_list(
         &mut self,
         receipt_id: &str,
     ) -> anyhow::Result<Option<String>> {
@@ -55,11 +58,10 @@ impl HashStorage {
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
-    pub fn receipts_transaction_hash_count(&self, transaction_hash: &str) -> anyhow::Result<u64> {
+    async fn receipts_transaction_hash_count(&self, transaction_hash: &str) -> anyhow::Result<u64> {
         self.receipts_counters
             .get(transaction_hash)
             .copied()
-            // .map(|count| *count)
             .ok_or(anyhow::anyhow!(
                 "No such transaction hash {}",
                 transaction_hash
@@ -67,7 +69,7 @@ impl HashStorage {
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
-    pub fn set_tx(
+    async fn set_tx(
         &mut self,
         transaction_details: readnode_primitives::CollectingTransactionDetails,
     ) -> anyhow::Result<()> {
@@ -81,7 +83,7 @@ impl HashStorage {
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
-    pub fn get_tx(
+    async fn get_tx(
         &self,
         transaction_hash: &str,
     ) -> Option<readnode_primitives::CollectingTransactionDetails> {
@@ -89,7 +91,7 @@ impl HashStorage {
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
-    pub fn push_tx_to_save(
+    async fn push_tx_to_save(
         &mut self,
         transaction_details: readnode_primitives::CollectingTransactionDetails,
     ) -> anyhow::Result<()> {
@@ -101,7 +103,7 @@ impl HashStorage {
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
-    pub fn get_transaction_hash_by_receipt_id(
+    async fn get_transaction_hash_by_receipt_id(
         &self,
         receipt_id: &str,
     ) -> anyhow::Result<Option<String>> {
@@ -109,7 +111,7 @@ impl HashStorage {
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
-    pub fn transactions_to_save(
+    async fn transactions_to_save(
         &mut self,
     ) -> anyhow::Result<Vec<readnode_primitives::CollectingTransactionDetails>> {
         let mut transactions = vec![];
@@ -125,33 +127,35 @@ impl HashStorage {
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
-    pub fn push_outcome_and_receipt(
+    async fn push_outcome_and_receipt(
         &mut self,
         transaction_hash: &str,
-        indexer_execution_outcome_with_receipt: IndexerExecutionOutcomeWithReceipt,
+        indexer_execution_outcome_with_receipt: near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
     ) -> anyhow::Result<()> {
-        if let Some(mut transaction_details) = self.get_tx(transaction_hash) {
+        if let Some(mut transaction_details) = self.get_tx(transaction_hash).await {
             self.remove_receipt_from_watching_list(
                 &indexer_execution_outcome_with_receipt
                     .receipt
                     .receipt_id
                     .to_string(),
-            )?;
+            )
+            .await?;
             transaction_details
                 .receipts
                 .push(indexer_execution_outcome_with_receipt.receipt);
             transaction_details
                 .execution_outcomes
                 .push(indexer_execution_outcome_with_receipt.execution_outcome);
-            let transaction_receipts_watching_count =
-                self.receipts_transaction_hash_count(transaction_hash)?;
+            let transaction_receipts_watching_count = self
+                .receipts_transaction_hash_count(transaction_hash)
+                .await?;
             if transaction_receipts_watching_count == 0 {
-                self.push_tx_to_save(transaction_details.clone())?;
+                self.push_tx_to_save(transaction_details.clone()).await?;
                 self.transactions.remove(transaction_hash);
                 self.receipts_counters.remove(transaction_hash);
                 tracing::debug!(target: STORAGE, "-T {}", transaction_hash);
             } else {
-                self.set_tx(transaction_details.clone())?;
+                self.set_tx(transaction_details.clone()).await?;
             }
         } else {
             tracing::error!(

@@ -53,6 +53,8 @@ near-indexer-primitives = "0.17.0"
 near-jsonrpc-client = { git = "https://github.com/khorolets/near-jsonrpc-client-rs", rev = "0b6ad111307202a37028ef300a75a41f2a7947c3" }
 near-lake-framework = "0.7.2"
 
+redis = { version = "0.21.5", features = ["tokio-comp", "connection-manager"] }
+
 [features]
 tracing-instrumentation = []
 scylla_db_tracing = ["database/scylla_db_tracing"]

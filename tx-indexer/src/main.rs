@@ -2,10 +2,12 @@ use crate::config::{init_tracing, Opts};
 use clap::Parser;
 use database::ScyllaStorageManager;
 use futures::StreamExt;
+mod base_storage;
 mod collector;
 mod config;
+mod hash_storage;
 mod metrics;
-mod storage;
+mod radis_storage;
 
 #[macro_use]
 extern crate lazy_static;
@@ -20,7 +22,8 @@ async fn main() -> anyhow::Result<()> {
 
     let opts: Opts = Opts::parse();
     tracing::info!(target: INDEXER, "Creating hash storage...");
-    let hash_storage = std::sync::Arc::new(futures_locks::RwLock::new(storage::HashStorage::new()));
+    let tx_collecting_storage =
+        std::sync::Arc::new(futures_locks::RwLock::new(hash_storage::HashStorage::new()));
 
     tracing::info!(target: INDEXER, "Connecting to scylla db...");
     let scylla_db_client: std::sync::Arc<config::ScyllaDBManager> = std::sync::Arc::new(
@@ -58,7 +61,7 @@ async fn main() -> anyhow::Result<()> {
             handle_streamer_message(
                 streamer_message,
                 &scylla_db_client,
-                &hash_storage,
+                &tx_collecting_storage,
                 &opts.indexer_id,
                 std::sync::Arc::clone(&stats),
             )
@@ -84,7 +87,7 @@ async fn main() -> anyhow::Result<()> {
 async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
-    hash_storage: &std::sync::Arc<futures_locks::RwLock<storage::HashStorage>>,
+    tx_collecting_storage: &std::sync::Arc<futures_locks::RwLock<hash_storage::HashStorage>>,
     indexer_id: &str,
     stats: std::sync::Arc<tokio::sync::RwLock<metrics::Stats>>,
 ) -> anyhow::Result<u64> {
@@ -98,7 +101,7 @@ async fn handle_streamer_message(
         .insert(block_height);
 
     let tx_future =
-        collector::index_transactions(&streamer_message, scylla_db_client, hash_storage);
+        collector::index_transactions(&streamer_message, scylla_db_client, tx_collecting_storage);
 
     let update_meta_future =
         scylla_db_client.update_meta(indexer_id, streamer_message.block.header.height);
