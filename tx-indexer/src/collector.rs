@@ -1,11 +1,11 @@
 use futures::{
     future::{join_all, try_join_all},
-    FutureExt, StreamExt,
+    StreamExt,
 };
 use near_indexer_primitives::IndexerTransactionWithOutcome;
 
-use crate::base_storage::TxCollectingStorage;
 use crate::config;
+use crate::storage::base::TxCollectingStorage;
 
 // TODO: Handle known TX hash collision case for mainnet
 // ref: https://github.com/near/near-indexer-for-explorer/issues/84
@@ -13,17 +13,14 @@ use crate::config;
 pub(crate) async fn index_transactions(
     streamer_message: &near_indexer_primitives::StreamerMessage,
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
-    tx_collecting_storage: &std::sync::Arc<futures_locks::RwLock<impl TxCollectingStorage>>,
+    tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
 ) -> anyhow::Result<()> {
     extract_transactions_to_collect(streamer_message, scylla_db_client, tx_collecting_storage)
         .await?;
     collect_receipts_and_outcomes(streamer_message, scylla_db_client, tx_collecting_storage)
         .await?;
 
-    let finished_transaction_details = tx_collecting_storage
-        .try_write()?
-        .transactions_to_save()
-        .await?;
+    let finished_transaction_details = tx_collecting_storage.transactions_to_save().await?;
 
     if !finished_transaction_details.is_empty() {
         let scylla_db_client = scylla_db_client.clone();
@@ -47,7 +44,7 @@ pub(crate) async fn index_transactions(
 async fn extract_transactions_to_collect(
     streamer_message: &near_indexer_primitives::StreamerMessage,
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
-    tx_collecting_storage: &std::sync::Arc<futures_locks::RwLock<impl TxCollectingStorage>>,
+    tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
 ) -> anyhow::Result<()> {
     let block_height = streamer_message.block.header.height;
 
@@ -79,7 +76,7 @@ async fn new_transaction_details_to_collecting_pool(
     block_height: u64,
     shard_id: u64,
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
-    tx_collecting_storage: &std::sync::Arc<futures_locks::RwLock<impl TxCollectingStorage>>,
+    tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
 ) -> anyhow::Result<()> {
     let converted_into_receipt_id = transaction
         .outcome
@@ -102,14 +99,9 @@ async fn new_transaction_details_to_collecting_pool(
 
     let transaction_details =
         readnode_primitives::CollectingTransactionDetails::from_indexer_tx(transaction.clone());
-    match tx_collecting_storage
-        .try_write()?
-        .set_tx(transaction_details)
-        .await
-    {
+    match tx_collecting_storage.set_tx(transaction_details).await {
         Ok(_) => {
             tx_collecting_storage
-                .try_write()?
                 .push_receipt_to_watching_list(
                     converted_into_receipt_id,
                     transaction.transaction.hash.to_string(),
@@ -130,7 +122,7 @@ async fn new_transaction_details_to_collecting_pool(
 async fn collect_receipts_and_outcomes(
     streamer_message: &near_indexer_primitives::StreamerMessage,
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
-    tx_collecting_storage: &std::sync::Arc<futures_locks::RwLock<impl TxCollectingStorage>>,
+    tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
 ) -> anyhow::Result<()> {
     let block_height = streamer_message.block.header.height;
 
@@ -147,7 +139,7 @@ async fn collect_receipts_and_outcomes(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn process_shard(
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
-    tx_collecting_storage: &std::sync::Arc<futures_locks::RwLock<impl TxCollectingStorage>>,
+    tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
     block_height: u64,
     shard: &near_indexer_primitives::IndexerShard,
 ) -> anyhow::Result<()> {
@@ -172,12 +164,11 @@ async fn process_shard(
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn push_receipt_to_watching_list(
-    tx_collecting_storage: &std::sync::Arc<futures_locks::RwLock<impl TxCollectingStorage>>,
+    tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
     receipt_id: String,
     transaction_hash: String,
 ) -> anyhow::Result<()> {
     tx_collecting_storage
-        .try_write()?
         .push_receipt_to_watching_list(receipt_id, transaction_hash)
         .await
 }
@@ -185,13 +176,12 @@ async fn push_receipt_to_watching_list(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn process_receipt_execution_outcome(
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
-    tx_collecting_storage: &std::sync::Arc<futures_locks::RwLock<impl TxCollectingStorage>>,
+    tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
     block_height: u64,
     shard_id: u64,
     receipt_execution_outcome: &near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
 ) -> anyhow::Result<()> {
     if let Ok(Some(transaction_hash)) = tx_collecting_storage
-        .try_write()?
         .get_transaction_hash_by_receipt_id(
             &receipt_execution_outcome.receipt.receipt_id.to_string(),
         )
@@ -234,11 +224,7 @@ async fn process_receipt_execution_outcome(
         }
 
         tx_collecting_storage
-            .write()
-            .map(move |mut tx_collecting_storage| {
-                tx_collecting_storage
-                    .push_outcome_and_receipt(&transaction_hash, receipt_execution_outcome.clone())
-            })
+            .push_outcome_and_receipt(&transaction_hash, receipt_execution_outcome.clone())
             .await
             .map_err(|err| {
                 tracing::error!(

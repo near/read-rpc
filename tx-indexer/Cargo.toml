@@ -54,6 +54,7 @@ near-jsonrpc-client = { git = "https://github.com/khorolets/near-jsonrpc-client-
 near-lake-framework = "0.7.2"
 
 redis = { version = "0.21.5", features = ["tokio-comp", "connection-manager"] }
+hex = "0.4.3"
 
 [features]
 tracing-instrumentation = []

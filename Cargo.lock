@@ -5909,6 +5909,7 @@ dependencies = [
  "dotenv",
  "futures",
  "futures-locks",
+ "hex",
  "humantime",
  "lazy_static",
  "near-indexer-primitives",

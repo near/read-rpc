@@ -2,12 +2,10 @@ use crate::config::{init_tracing, Opts};
 use clap::Parser;
 use database::ScyllaStorageManager;
 use futures::StreamExt;
-mod base_storage;
 mod collector;
 mod config;
-mod hash_storage;
 mod metrics;
-mod radis_storage;
+mod storage;
 
 #[macro_use]
 extern crate lazy_static;
@@ -22,8 +20,10 @@ async fn main() -> anyhow::Result<()> {
 
     let opts: Opts = Opts::parse();
     tracing::info!(target: INDEXER, "Creating hash storage...");
-    let tx_collecting_storage =
-        std::sync::Arc::new(futures_locks::RwLock::new(hash_storage::HashStorage::new()));
+    // let tx_collecting_storage = std::sync::Arc::new(storage::hash::HashStorage::new());
+    let tx_collecting_storage = std::sync::Arc::new(
+        storage::scylla_redis_api::ScyllaDBRedisAPIStorage::new("redis://127.0.0.1").await,
+    );
 
     tracing::info!(target: INDEXER, "Connecting to scylla db...");
     let scylla_db_client: std::sync::Arc<config::ScyllaDBManager> = std::sync::Arc::new(
@@ -87,7 +87,7 @@ async fn main() -> anyhow::Result<()> {
 async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
-    tx_collecting_storage: &std::sync::Arc<futures_locks::RwLock<hash_storage::HashStorage>>,
+    tx_collecting_storage: &std::sync::Arc<impl storage::base::TxCollectingStorage>,
     indexer_id: &str,
     stats: std::sync::Arc<tokio::sync::RwLock<metrics::Stats>>,
 ) -> anyhow::Result<u64> {
