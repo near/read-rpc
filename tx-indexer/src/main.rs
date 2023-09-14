@@ -22,7 +22,16 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(target: INDEXER, "Creating hash storage...");
     // let tx_collecting_storage = std::sync::Arc::new(storage::hash::HashStorage::new());
     let tx_collecting_storage = std::sync::Arc::new(
-        storage::scylla_redis_api::ScyllaDBRedisAPIStorage::new("redis://127.0.0.1").await,
+        *storage::scylla::ScyllaStorage::new(
+            &opts.scylla_url,
+            opts.scylla_user.as_deref(),
+            opts.scylla_password.as_deref(),
+            opts.scylla_preferred_dc.as_deref(),
+            None,
+            opts.max_retry,
+            opts.strict_mode,
+        )
+        .await?,
     );
 
     tracing::info!(target: INDEXER, "Connecting to scylla db...");

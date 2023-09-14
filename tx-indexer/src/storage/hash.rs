@@ -48,10 +48,7 @@ impl TxCollectingStorage for HashStorage {
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
-    async fn remove_receipt_from_watching_list(
-        &self,
-        receipt_id: &str,
-    ) -> anyhow::Result<Option<String>> {
+    async fn remove_receipt_from_watching_list(&self, receipt_id: &str, _transaction_hash: &str) -> anyhow::Result<()> {
         if let Some(transaction_hash) = self.receipts_watching_list.write().await.remove(receipt_id)
         {
             if let Some(receipts_counter) = self
@@ -63,10 +60,8 @@ impl TxCollectingStorage for HashStorage {
                 *receipts_counter -= 1;
             }
             tracing::debug!(target: STORAGE, "-R {} - {}", receipt_id, transaction_hash);
-            Ok(Some(transaction_hash))
-        } else {
-            Ok(None)
-        }
+        };
+        Ok(())
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
@@ -100,37 +95,53 @@ impl TxCollectingStorage for HashStorage {
     async fn get_tx(
         &self,
         transaction_hash: &str,
-    ) -> Option<readnode_primitives::CollectingTransactionDetails> {
-        self.transactions
+    ) -> anyhow::Result<readnode_primitives::CollectingTransactionDetails> {
+        match self
+            .transactions
             .read()
             .await
             .get(transaction_hash)
             .cloned()
+        {
+            Some(transaction_details) => Ok(transaction_details),
+            None => Err(anyhow::anyhow!(
+                "No such transaction hash {}",
+                transaction_hash
+            )),
+        }
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
-    async fn push_tx_to_save(
+    async fn move_tx_to_save(
         &self,
         transaction_details: readnode_primitives::CollectingTransactionDetails,
     ) -> anyhow::Result<()> {
-        self.transactions_to_save.write().await.insert(
-            transaction_details.transaction.hash.to_string(),
-            transaction_details,
-        );
+        let transaction_hash = transaction_details.transaction.hash.to_string();
+        self.transactions_to_save
+            .write()
+            .await
+            .insert(transaction_hash.clone(), transaction_details);
+        self.transactions.write().await.remove(&transaction_hash);
+        self.receipts_counters
+            .write()
+            .await
+            .remove(&transaction_hash);
+        tracing::debug!(target: STORAGE, "-T {}", transaction_hash);
         Ok(())
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
-    async fn get_transaction_hash_by_receipt_id(
-        &self,
-        receipt_id: &str,
-    ) -> anyhow::Result<Option<String>> {
-        Ok(self
+    async fn get_transaction_hash_by_receipt_id(&self, receipt_id: &str) -> anyhow::Result<String> {
+        match self
             .receipts_watching_list
             .read()
             .await
             .get(receipt_id)
-            .cloned())
+            .cloned()
+        {
+            Some(transaction_hash) => Ok(transaction_hash),
+            None => Err(anyhow::anyhow!("No such receipt id {}", receipt_id)),
+        }
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
@@ -159,12 +170,13 @@ impl TxCollectingStorage for HashStorage {
         transaction_hash: &str,
         indexer_execution_outcome_with_receipt: near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
     ) -> anyhow::Result<()> {
-        if let Some(mut transaction_details) = self.get_tx(transaction_hash).await {
+        if let Ok(mut transaction_details) = self.get_tx(transaction_hash).await {
             self.remove_receipt_from_watching_list(
                 &indexer_execution_outcome_with_receipt
                     .receipt
                     .receipt_id
                     .to_string(),
+                transaction_hash,
             )
             .await?;
             transaction_details
@@ -177,19 +189,13 @@ impl TxCollectingStorage for HashStorage {
                 .receipts_transaction_hash_count(transaction_hash)
                 .await?;
             if transaction_receipts_watching_count == 0 {
-                self.push_tx_to_save(transaction_details.clone()).await?;
-                self.transactions.write().await.remove(transaction_hash);
-                self.receipts_counters
-                    .write()
-                    .await
-                    .remove(transaction_hash);
-                tracing::debug!(target: STORAGE, "-T {}", transaction_hash);
+                self.move_tx_to_save(transaction_details.clone()).await?;
             } else {
                 self.set_tx(transaction_details.clone()).await?;
             }
         } else {
             tracing::error!(
-                target: STORAGE,
+                target: crate::storage::STORAGE,
                 "No such transaction hash {}",
                 transaction_hash
             );

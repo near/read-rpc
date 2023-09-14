@@ -6,10 +6,7 @@ pub trait TxCollectingStorage {
         transaction_hash: String,
     ) -> anyhow::Result<()>;
 
-    async fn remove_receipt_from_watching_list(
-        &self,
-        receipt_id: &str,
-    ) -> anyhow::Result<Option<String>>;
+    async fn remove_receipt_from_watching_list(&self, receipt_id: &str, transaction_hash: &str) -> anyhow::Result<()>;
 
     async fn receipts_transaction_hash_count(&self, transaction_hash: &str) -> anyhow::Result<u64>;
 
@@ -21,17 +18,14 @@ pub trait TxCollectingStorage {
     async fn get_tx(
         &self,
         transaction_hash: &str,
-    ) -> Option<readnode_primitives::CollectingTransactionDetails>;
+    ) -> anyhow::Result<readnode_primitives::CollectingTransactionDetails>;
 
-    async fn push_tx_to_save(
+    async fn move_tx_to_save(
         &self,
         transaction_details: readnode_primitives::CollectingTransactionDetails,
     ) -> anyhow::Result<()>;
 
-    async fn get_transaction_hash_by_receipt_id(
-        &self,
-        receipt_id: &str,
-    ) -> anyhow::Result<Option<String>>;
+    async fn get_transaction_hash_by_receipt_id(&self, receipt_id: &str) -> anyhow::Result<String>;
 
     async fn transactions_to_save(
         &self,

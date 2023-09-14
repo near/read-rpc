@@ -1,3 +1,5 @@
 pub mod base;
 pub mod hash;
-pub mod scylla_redis_api;
+pub mod scylla;
+
+pub const STORAGE: &str = "storage_tx";

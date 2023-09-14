@@ -181,7 +181,7 @@ async fn process_receipt_execution_outcome(
     shard_id: u64,
     receipt_execution_outcome: &near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
 ) -> anyhow::Result<()> {
-    if let Ok(Some(transaction_hash)) = tx_collecting_storage
+    if let Ok(transaction_hash) = tx_collecting_storage
         .get_transaction_hash_by_receipt_id(
             &receipt_execution_outcome.receipt.receipt_id.to_string(),
         )
@@ -250,7 +250,8 @@ async fn save_transaction_details(
         Err(err) => {
             tracing::error!(
                 target: crate::INDEXER,
-                "Failed to get final transaction \n{:#?}",
+                "Failed to get final transaction {} \n{:#?}",
+                tx_details.transaction.hash,
                 err
             );
             return false;
