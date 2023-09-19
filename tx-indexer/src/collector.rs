@@ -163,17 +163,6 @@ async fn process_shard(
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
-async fn push_receipt_to_watching_list(
-    tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
-    receipt_id: String,
-    transaction_hash: String,
-) -> anyhow::Result<()> {
-    tx_collecting_storage
-        .push_receipt_to_watching_list(receipt_id, transaction_hash)
-        .await
-}
-
-#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn process_receipt_execution_outcome(
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
     tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
@@ -206,11 +195,11 @@ async fn process_receipt_execution_outcome(
                 .receipt_ids
                 .iter()
                 .map(|receipt_id| {
-                    push_receipt_to_watching_list(
-                        tx_collecting_storage,
-                        receipt_id.to_string(),
-                        transaction_hash.clone(),
-                    )
+                    tx_collecting_storage
+                        .push_receipt_to_watching_list(
+                            receipt_id.to_string(),
+                            transaction_hash.clone()
+                        )
                 }),
         );
         while let Some(result) = tasks.next().await {

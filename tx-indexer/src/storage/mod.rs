@@ -1,5 +1,5 @@
 pub mod base;
-pub mod hash;
-pub mod scylla;
+pub mod memory;
+pub mod database;
 
 pub const STORAGE: &str = "storage_tx";

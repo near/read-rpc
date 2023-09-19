@@ -22,7 +22,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(target: INDEXER, "Creating hash storage...");
     // let tx_collecting_storage = std::sync::Arc::new(storage::hash::HashStorage::new());
     let tx_collecting_storage = std::sync::Arc::new(
-        *storage::scylla::ScyllaStorage::new(
+        *storage::database::ScyllaStorage::new(
             &opts.scylla_url,
             opts.scylla_user.as_deref(),
             opts.scylla_password.as_deref(),
