@@ -195,11 +195,10 @@ async fn process_receipt_execution_outcome(
                 .receipt_ids
                 .iter()
                 .map(|receipt_id| {
-                    tx_collecting_storage
-                        .push_receipt_to_watching_list(
-                            receipt_id.to_string(),
-                            transaction_hash.clone()
-                        )
+                    tx_collecting_storage.push_receipt_to_watching_list(
+                        receipt_id.to_string(),
+                        transaction_hash.clone(),
+                    )
                 }),
         );
         while let Some(result) = tasks.next().await {
@@ -246,19 +245,28 @@ async fn save_transaction_details(
             return false;
         }
     };
-
-    let result = scylla_db_client
+    let transaction_hash = transaction_details.transaction.hash.to_string();
+    match scylla_db_client
         .add_transaction(transaction_details, block_height)
         .await
-        .map_err(|err| {
+    {
+        Ok(_) => {
+            scylla_db_client
+                .delete_transaction_process(&transaction_hash)
+                .await
+                .expect("Failed to delete transaction from memory storage");
+            true
+        }
+        Err(err) => {
             tracing::error!(
                 target: crate::INDEXER,
-                "Failed to save transaction \n{:#?}",
+                "Failed to save transaction {} \n{:#?}",
+                tx_details.transaction.hash,
                 err
             );
-        });
-
-    result.is_ok()
+            false
+        }
+    }
 }
 
 // Save receipt_id, parent_transaction_hash, block_height and shard_id to the ScyllaDb

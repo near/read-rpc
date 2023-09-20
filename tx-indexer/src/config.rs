@@ -1,6 +1,8 @@
-use borsh::BorshSerialize;
+use borsh::{BorshDeserialize, BorshSerialize};
 pub use clap::{Parser, Subcommand};
 use database::ScyllaStorageManager;
+use futures::StreamExt;
+use near_indexer_primitives::near_primitives;
 use near_indexer_primitives::types::{BlockReference, Finality};
 use near_jsonrpc_client::{methods, JsonRpcClient};
 use num_traits::ToPrimitive;
@@ -218,6 +220,11 @@ pub(crate) struct ScyllaDBManager {
     add_transaction: PreparedStatement,
     add_receipt: PreparedStatement,
     update_meta: PreparedStatement,
+
+    add_transaction_process: PreparedStatement,
+    delete_transaction_process: PreparedStatement,
+    add_receipt_process: PreparedStatement,
+    delete_receipts_process: PreparedStatement,
 }
 
 #[async_trait::async_trait]
@@ -264,12 +271,45 @@ impl ScyllaStorageManager for ScyllaDBManager {
             )
             .await?;
 
+        scylla_db_session
+            .use_keyspace("tx_indexer_process", false)
+            .await?;
+        scylla_db_session
+            .query(
+                "CREATE TABLE IF NOT EXISTS transactions (
+                transaction_hash varchar,
+                transaction_details BLOB,
+                PRIMARY KEY (transaction_hash)
+            )
+            ",
+                &[],
+            )
+            .await?;
+
+        scylla_db_session
+            .query(
+                "CREATE TABLE IF NOT EXISTS receipts_outcomes (
+                transaction_hash varchar,
+                receipt_id varchar,
+                receipt BLOB,
+                outcome BLOB,
+                PRIMARY KEY (transaction_hash, receipt_id)
+            )
+            ",
+                &[],
+            )
+            .await?;
+
         Ok(())
     }
 
     async fn create_keyspace(scylla_db_session: &scylla::Session) -> anyhow::Result<()> {
         scylla_db_session.query(
             "CREATE KEYSPACE IF NOT EXISTS tx_indexer WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 1}",
+            &[]
+        ).await?;
+        scylla_db_session.query(
+            "CREATE KEYSPACE IF NOT EXISTS tx_indexer_process WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 1}",
             &[]
         ).await?;
         Ok(())
@@ -299,6 +339,31 @@ impl ScyllaStorageManager for ScyllaDBManager {
                 "INSERT INTO tx_indexer.meta
                     (indexer_id, last_processed_block_height)
                     VALUES (?, ?)",
+            )
+            .await?,
+
+            add_transaction_process: Self::prepare_write_query(
+                &scylla_db_session,
+                "INSERT INTO tx_indexer_process.transactions
+                    (transaction_hash, transaction_details)
+                    VALUES(?, ?)",
+            )
+            .await?,
+            delete_transaction_process: Self::prepare_write_query(
+                &scylla_db_session,
+                "DELETE FROM tx_indexer_process.transactions WHERE transaction_hash = ?",
+            )
+            .await?,
+            add_receipt_process: Self::prepare_write_query(
+                &scylla_db_session,
+                "INSERT INTO tx_indexer_process.receipts_outcomes
+                    (transaction_hash, receipt_id, receipt, outcome)
+                    VALUES(?, ?, ?, ?)",
+            )
+            .await?,
+            delete_receipts_process: Self::prepare_write_query(
+                &scylla_db_session,
+                "DELETE FROM tx_indexer_process.receipts_outcomes WHERE transaction_hash = ?",
             )
             .await?,
         }))
@@ -367,6 +432,118 @@ impl ScyllaDBManager {
             (indexer_id, num_bigint::BigInt::from(block_height)),
         )
         .await?;
+        Ok(())
+    }
+
+    pub(crate) async fn add_transaction_process(
+        &self,
+        transaction_details: readnode_primitives::CollectingTransactionDetails,
+    ) -> anyhow::Result<()> {
+        let transaction_hash = transaction_details.transaction.hash.clone().to_string();
+        let transaction_details = transaction_details.try_to_vec()?;
+        Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.add_transaction_process,
+            (transaction_hash, transaction_details),
+        )
+        .await?;
+        Ok(())
+    }
+    pub(crate) async fn add_receipt_process(
+        &self,
+        transaction_hash: &str,
+        indexer_execution_outcome_with_receipt: near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
+    ) -> anyhow::Result<()> {
+        Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.add_receipt_process,
+            (
+                transaction_hash,
+                indexer_execution_outcome_with_receipt
+                    .receipt
+                    .receipt_id
+                    .to_string(),
+                indexer_execution_outcome_with_receipt
+                    .receipt
+                    .try_to_vec()?,
+                indexer_execution_outcome_with_receipt
+                    .execution_outcome
+                    .try_to_vec()?,
+            ),
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub(crate) async fn get_transactions_in_process(
+        &self,
+    ) -> anyhow::Result<
+        std::collections::HashMap<String, readnode_primitives::CollectingTransactionDetails>,
+    > {
+        let mut result = std::collections::HashMap::new();
+        let mut rows_stream = self
+            .scylla_session
+            .query_iter(
+                "SELECT transaction_hash, transaction_details FROM tx_indexer_process.transactions",
+                &[],
+            )
+            .await?
+            .into_typed::<(String, Vec<u8>)>();
+        while let Some(next_row_res) = rows_stream.next().await {
+            let (transaction_hash, transaction_details) = next_row_res?;
+            result.insert(
+                transaction_hash.clone(),
+                readnode_primitives::CollectingTransactionDetails::try_from_slice(
+                    &transaction_details,
+                )?,
+            );
+        }
+        Ok(result)
+    }
+
+    pub(crate) async fn get_receipts_in_process(
+        &self,
+        transaction_hash: &str,
+    ) -> anyhow::Result<Vec<near_indexer_primitives::IndexerExecutionOutcomeWithReceipt>> {
+        let mut result = vec![];
+        let mut rows_stream = self
+            .scylla_session
+            .query_iter(
+                "SELECT receipt, outcome FROM tx_indexer_process.receipts_outcomes WHERE transaction_hash = ?",
+                (transaction_hash,),
+            )
+            .await?
+            .into_typed::<(Vec<u8>, Vec<u8>)>();
+        while let Some(next_row_res) = rows_stream.next().await {
+            let (receipt, outcome) = next_row_res?;
+            let receipt = near_primitives::views::ReceiptView::try_from_slice(&receipt)?;
+            let execution_outcome =
+                near_primitives::views::ExecutionOutcomeWithIdView::try_from_slice(&outcome)?;
+            result.push(
+                near_indexer_primitives::IndexerExecutionOutcomeWithReceipt {
+                    receipt,
+                    execution_outcome,
+                },
+            );
+        }
+        Ok(result)
+    }
+
+    pub(crate) async fn delete_transaction_process(
+        &self,
+        transaction_hash: &str,
+    ) -> anyhow::Result<()> {
+        let delete_transaction_feature = Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.delete_transaction_process,
+            (transaction_hash,),
+        );
+        let delete_receipts_feature = Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.delete_receipts_process,
+            (transaction_hash,),
+        );
+        futures::try_join!(delete_transaction_feature, delete_receipts_feature)?;
         Ok(())
     }
 }

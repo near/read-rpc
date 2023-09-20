@@ -48,7 +48,11 @@ impl TxCollectingStorage for HashStorage {
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
-    async fn remove_receipt_from_watching_list(&self, receipt_id: &str, _transaction_hash: &str) -> anyhow::Result<()> {
+    async fn remove_receipt_from_watching_list(
+        &self,
+        receipt_id: &str,
+        _transaction_hash: &str,
+    ) -> anyhow::Result<()> {
         if let Some(transaction_hash) = self.receipts_watching_list.write().await.remove(receipt_id)
         {
             if let Some(receipts_counter) = self
@@ -75,6 +79,13 @@ impl TxCollectingStorage for HashStorage {
                 "No such transaction hash {}",
                 transaction_hash
             ))
+    }
+
+    async fn update_tx(
+        &self,
+        transaction_details: readnode_primitives::CollectingTransactionDetails,
+    ) -> anyhow::Result<()> {
+        self.set_tx(transaction_details).await
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]

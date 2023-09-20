@@ -244,6 +244,14 @@ impl scylla::retry_policy::RetrySession for CustomRetrySession {
 
 #[async_trait::async_trait]
 pub trait ScyllaStorageManager {
+    async fn new_from_session(
+        scylla_db_session: std::sync::Arc<scylla::Session>,
+    ) -> anyhow::Result<Box<Self>> {
+        tracing::info!("Running migrations into the scylla database...");
+        Self::migrate(&scylla_db_session).await?;
+        Self::prepare(scylla_db_session).await
+    }
+
     async fn new(
         scylla_url: &str,
         scylla_user: Option<&str>,
@@ -265,10 +273,7 @@ pub trait ScyllaStorageManager {
             )
             .await?,
         );
-
-        tracing::info!("Running migrations into the scylla database...");
-        Self::migrate(&scylla_db_session).await?;
-        Self::prepare(scylla_db_session).await
+        Self::new_from_session(scylla_db_session).await
     }
 
     async fn migrate(scylla_db_session: &scylla::Session) -> anyhow::Result<()> {

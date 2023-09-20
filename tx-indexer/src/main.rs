@@ -19,20 +19,6 @@ async fn main() -> anyhow::Result<()> {
     init_tracing()?;
 
     let opts: Opts = Opts::parse();
-    tracing::info!(target: INDEXER, "Creating hash storage...");
-    // let tx_collecting_storage = std::sync::Arc::new(storage::hash::HashStorage::new());
-    let tx_collecting_storage = std::sync::Arc::new(
-        *storage::database::ScyllaStorage::new(
-            &opts.scylla_url,
-            opts.scylla_user.as_deref(),
-            opts.scylla_password.as_deref(),
-            opts.scylla_preferred_dc.as_deref(),
-            None,
-            opts.max_retry,
-            opts.strict_mode,
-        )
-        .await?,
-    );
 
     tracing::info!(target: INDEXER, "Connecting to scylla db...");
     let scylla_db_client: std::sync::Arc<config::ScyllaDBManager> = std::sync::Arc::new(
@@ -47,10 +33,16 @@ async fn main() -> anyhow::Result<()> {
         )
         .await?,
     );
+    let scylla_session = scylla_db_client.scylla_session().await;
 
     tracing::info!(target: INDEXER, "Generating LakeConfig...");
-    let scylla_session = scylla_db_client.scylla_session().await;
     let config: near_lake_framework::LakeConfig = opts.to_lake_config(&scylla_session).await?;
+
+    tracing::info!(target: INDEXER, "Creating hash storage...");
+    // let tx_collecting_storage = std::sync::Arc::new(storage::hash::HashStorage::new());
+    let tx_collecting_storage = std::sync::Arc::new(
+        storage::database::HashStorageWithDB::init_storage(scylla_db_client.clone()).await?,
+    );
 
     tracing::info!(target: INDEXER, "Instantiating the stream...",);
     let (sender, stream) = near_lake_framework::streamer(config);
