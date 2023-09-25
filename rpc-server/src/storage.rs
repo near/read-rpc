@@ -1,7 +1,7 @@
 use std::convert::TryFrom;
 use std::str::FromStr;
 
-use borsh::BorshDeserialize;
+use borsh::{BorshDeserialize, BorshSerialize};
 use num_traits::ToPrimitive;
 use scylla::{prepared_statement::PreparedStatement, IntoTypedRows};
 
@@ -282,15 +282,16 @@ impl ScyllaDBManager {
         &self,
         account_id: &near_primitives::types::AccountId,
         request_block_height: near_primitives::types::BlockHeight,
-        key_data: &[u8],
+        public_key: near_crypto::PublicKey,
     ) -> anyhow::Result<QueryData<near_primitives::account::AccessKey>> {
+        let key_data = public_key.try_to_vec()?;
         let (block_height, block_hash, data_blob) = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_access_key,
             (
                 account_id.to_string(),
                 num_bigint::BigInt::from(request_block_height),
-                hex::encode(key_data).to_string(),
+                hex::encode(&key_data).to_string(),
             ),
         )
         .await?
