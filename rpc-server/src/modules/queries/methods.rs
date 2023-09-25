@@ -390,7 +390,7 @@ async fn view_access_key(
 
     let access_key = data
         .scylla_db_manager
-        .get_access_key(account_id, block.block_height, public_key.key_data())
+        .get_access_key(account_id, block.block_height, public_key.clone())
         .await
         .map_err(
             |_err| near_jsonrpc_primitives::types::query::RpcQueryError::UnknownAccessKey {
