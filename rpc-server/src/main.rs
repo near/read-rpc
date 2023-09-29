@@ -1,5 +1,4 @@
-use crate::config::CompiledCodeCache;
-use crate::utils::get_final_cache_block;
+use crate::utils::{get_final_cache_block, update_final_block_height_regularly};
 use clap::Parser;
 use config::{Opts, ServerContext};
 use database::ScyllaStorageManager;
@@ -7,7 +6,6 @@ use dotenv::dotenv;
 use jsonrpc_v2::{Data, Server};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use utils::update_final_block_height_regularly;
 
 #[macro_use]
 extern crate lazy_static;
@@ -78,13 +76,24 @@ async fn main() -> anyhow::Result<()> {
     let near_rpc_client = near_jsonrpc_client::JsonRpcClient::connect(opts.rpc_url.to_string());
     // We want to set a custom referer to let NEAR JSON RPC nodes know that we are a read-rpc instance
     let near_rpc_client = near_rpc_client.header(("Referer", "read-rpc"))?; // TODO: make it configurable
-    let blocks_cache = std::sync::Arc::new(std::sync::RwLock::new(lru::LruCache::new(
-        std::num::NonZeroUsize::new(100000).unwrap(),
-    )));
 
     let final_block = get_final_cache_block(&near_rpc_client)
         .await
         .expect("Error to get final block");
+
+    let (blocks_cache_size, contract_code_cache_size) = utils::calculate_cache_sizes(
+        opts.max_contract_size,
+        opts.reserved_memory,
+        opts.block_cache_size,
+        opts.limit_memory_cache,
+        &final_block,
+    )
+    .await;
+
+    let blocks_cache = std::sync::Arc::new(std::sync::RwLock::new(lru::LruCache::new(
+        std::num::NonZeroUsize::new(blocks_cache_size as usize).unwrap(),
+    )));
+
     let final_block_height =
         std::sync::Arc::new(std::sync::atomic::AtomicU64::new(final_block.block_height));
     blocks_cache
@@ -92,13 +101,13 @@ async fn main() -> anyhow::Result<()> {
         .unwrap()
         .put(final_block.block_height, final_block);
 
-    let compiled_contract_code_cache = std::sync::Arc::new(CompiledCodeCache {
+    let compiled_contract_code_cache = std::sync::Arc::new(config::CompiledCodeCache {
         local_cache: std::sync::Arc::new(std::sync::RwLock::new(lru::LruCache::new(
-            std::num::NonZeroUsize::new(128).unwrap(),
+            std::num::NonZeroUsize::new(contract_code_cache_size as usize).unwrap(),
         ))),
     });
     let contract_code_cache = std::sync::Arc::new(std::sync::RwLock::new(lru::LruCache::new(
-        std::num::NonZeroUsize::new(128).unwrap(),
+        std::num::NonZeroUsize::new(contract_code_cache_size as usize).unwrap(),
     )));
 
     let scylla_db_manager = std::sync::Arc::new(

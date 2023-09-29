@@ -2,6 +2,7 @@ use crate::modules::blocks::CacheBlock;
 #[cfg(feature = "shadow_data_consistency")]
 use assert_json_diff::{assert_json_matches_no_panic, CompareMode, Config, NumericMode};
 use futures::StreamExt;
+use sysinfo::{System, SystemExt};
 
 #[cfg(feature = "shadow_data_consistency")]
 const DEFAULT_RETRY_COUNT: u8 = 3;
@@ -98,6 +99,44 @@ pub async fn update_final_block_height_regularly(
         Ok(Err(e)) => Err(e),
         Err(e) => Err(anyhow::Error::from(e)), // JoinError
     }
+}
+
+/// Calculate the cache size based on the available memory.
+/// For caching we use the limit or if it is not set then all available memory.
+/// We divide the memory equally between the 3 caches: blocks, compiled_contracts, contract_code.
+/// The size of the blocks cache is calculated based on the size of the `CacheBlock` struct.
+/// The size of the contracts cache is calculated based on the limit of the contract size.
+/// If the installed limit exceeds the size of the available memory, we get a panic.
+pub(crate) async fn calculate_cache_sizes(
+    max_contract_size: u64,
+    reserved_memory: u64,
+    block_cache_size: u64,
+    limit_memory_cache: Option<u64>,
+    final_cache_block: &CacheBlock,
+) -> (u64, u64) {
+    let cache_block_size = std::mem::size_of_val(final_cache_block) as u64; // Size of the CacheBlock struct in bytes
+
+    let sys = System::new_all();
+    let total_memory = sys.total_memory(); // Total memory in bytes
+    let used_memory = sys.used_memory(); // Used memory in bytes
+    let available_memory = total_memory - used_memory - reserved_memory; // Available memory in bytes
+
+    let mem_cache_size = if let Some(limit) = limit_memory_cache {
+        if limit >= available_memory {
+            panic!("Not enough memory to run the server. Available memory: {} bytes, required memory: {} bytes", available_memory, limit);
+        } else {
+            limit
+        }
+    } else {
+        available_memory
+    };
+
+    let code_cache_size = (mem_cache_size - block_cache_size) / 2; // divide on 2 because we have 2 caches: compiled_contracts and contract_code
+
+    (
+        (block_cache_size / cache_block_size),
+        (code_cache_size / max_contract_size),
+    )
 }
 
 /// The `shadow_compare_results` is a function that compares

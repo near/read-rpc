@@ -1,16 +1,56 @@
 use crate::config::ServerContext;
 use crate::errors::RPCError;
-use crate::modules::network::parse_validator_request;
+use crate::modules::network::{
+    friendly_memory_size_format, parse_validator_request, StatusResponse,
+};
 use crate::utils::proxy_rpc_call;
 use jsonrpc_v2::{Data, Params};
 use serde_json::Value;
+use sysinfo::{System, SystemExt};
 
 pub async fn status(
+    data: Data<ServerContext>,
     Params(_params): Params<Value>,
-) -> Result<near_jsonrpc_primitives::types::status::RpcStatusResponse, RPCError> {
-    Err(RPCError::unimplemented_error(
-        "Method is not implemented on this type of node. Please send a request to NEAR JSON RPC instead.",
-    ))
+) -> Result<StatusResponse, RPCError> {
+    let sys = System::new_all();
+    let total_memory = sys.total_memory();
+    let used_memory = sys.used_memory();
+    let blocks_cache = data.blocks_cache.read().unwrap();
+    let contract_code_cache = data.contract_code_cache.read().unwrap();
+    let compiled_contract_code_cache = data
+        .compiled_contract_code_cache
+        .local_cache
+        .read()
+        .unwrap();
+    let status = StatusResponse {
+        total_memory: friendly_memory_size_format(total_memory as usize),
+        used_memory: friendly_memory_size_format(used_memory as usize),
+        available_memory: friendly_memory_size_format((total_memory - used_memory) as usize),
+
+        blocks_cache_size: blocks_cache.cap(),
+        blocks_in_cache: blocks_cache.len(),
+        memory_blocks_cache_size: friendly_memory_size_format(
+            std::mem::size_of_val(&blocks_cache.peek_lru()) * blocks_cache.len(),
+        ),
+
+        contracts_codes_cache_size: contract_code_cache.cap(),
+        contracts_codes_in_cache: contract_code_cache.len(),
+        memory_contracts_codes_cache_size: friendly_memory_size_format(
+            std::mem::size_of_val(&contract_code_cache.peek_lru()) * contract_code_cache.len(),
+        ),
+
+        compiled_contracts_codes_cache_size: compiled_contract_code_cache.cap(),
+        compiled_contracts_codes_in_cache: compiled_contract_code_cache.len(),
+        memory_compiled_contracts_codes_cache_size: friendly_memory_size_format(
+            std::mem::size_of_val(&compiled_contract_code_cache.peek_lru())
+                * compiled_contract_code_cache.len(),
+        ),
+
+        final_block_height: data
+            .final_block_height
+            .load(std::sync::atomic::Ordering::SeqCst),
+    };
+    Ok(status)
 }
 
 pub async fn network_info(
