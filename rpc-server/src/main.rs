@@ -10,6 +10,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 #[macro_use]
 extern crate lazy_static;
 
+mod cache;
 mod config;
 mod errors;
 mod metrics;
@@ -81,17 +82,15 @@ async fn main() -> anyhow::Result<()> {
         .await
         .expect("Error to get final block");
 
-    let (blocks_cache_size, contract_code_cache_size) = utils::calculate_cache_sizes(
-        opts.max_contract_size,
+    let contract_code_cache_size = utils::calculate_contract_code_cache_sizes(
         opts.reserved_memory,
         opts.block_cache_size,
         opts.limit_memory_cache,
-        &final_block,
     )
     .await;
 
-    let blocks_cache = std::sync::Arc::new(std::sync::RwLock::new(lru::LruCache::new(
-        std::num::NonZeroUsize::new(blocks_cache_size as usize).unwrap(),
+    let blocks_cache = std::sync::Arc::new(std::sync::RwLock::new(cache::LruMemoryCache::new(
+        opts.block_cache_size,
     )));
 
     let final_block_height =
@@ -102,13 +101,13 @@ async fn main() -> anyhow::Result<()> {
         .put(final_block.block_height, final_block);
 
     let compiled_contract_code_cache = std::sync::Arc::new(config::CompiledCodeCache {
-        local_cache: std::sync::Arc::new(std::sync::RwLock::new(lru::LruCache::new(
-            std::num::NonZeroUsize::new(contract_code_cache_size as usize).unwrap(),
+        local_cache: std::sync::Arc::new(std::sync::RwLock::new(cache::LruMemoryCache::new(
+            contract_code_cache_size,
         ))),
     });
-    let contract_code_cache = std::sync::Arc::new(std::sync::RwLock::new(lru::LruCache::new(
-        std::num::NonZeroUsize::new(contract_code_cache_size as usize).unwrap(),
-    )));
+    let contract_code_cache = std::sync::Arc::new(std::sync::RwLock::new(
+        cache::LruMemoryCache::new(contract_code_cache_size),
+    ));
 
     let scylla_db_manager = std::sync::Arc::new(
         *storage::ScyllaDBManager::new(

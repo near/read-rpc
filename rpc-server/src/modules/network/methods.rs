@@ -27,23 +27,22 @@ pub async fn status(
         used_memory: friendly_memory_size_format(used_memory as usize),
         available_memory: friendly_memory_size_format((total_memory - used_memory) as usize),
 
-        blocks_cache_size: blocks_cache.cap(),
         blocks_in_cache: blocks_cache.len(),
-        memory_blocks_cache_size: friendly_memory_size_format(
-            std::mem::size_of_val(&blocks_cache.peek_lru()) * blocks_cache.len(),
-        ),
+        max_blocks_cache_size: friendly_memory_size_format(blocks_cache.max_size()),
+        current_blocks_cache_size: friendly_memory_size_format(blocks_cache.current_size()),
 
-        contracts_codes_cache_size: contract_code_cache.cap(),
         contracts_codes_in_cache: contract_code_cache.len(),
-        memory_contracts_codes_cache_size: friendly_memory_size_format(
-            std::mem::size_of_val(&contract_code_cache.peek_lru()) * contract_code_cache.len(),
+        max_contracts_codes_cache_size: friendly_memory_size_format(contract_code_cache.max_size()),
+        current_contracts_codes_cache_size: friendly_memory_size_format(
+            contract_code_cache.current_size(),
         ),
 
-        compiled_contracts_codes_cache_size: compiled_contract_code_cache.cap(),
         compiled_contracts_codes_in_cache: compiled_contract_code_cache.len(),
-        memory_compiled_contracts_codes_cache_size: friendly_memory_size_format(
-            std::mem::size_of_val(&compiled_contract_code_cache.peek_lru())
-                * compiled_contract_code_cache.len(),
+        max_compiled_contracts_codes_cache_size: friendly_memory_size_format(
+            compiled_contract_code_cache.max_size(),
+        ),
+        current_compiled_contracts_codes_cache_size: friendly_memory_size_format(
+            compiled_contract_code_cache.current_size(),
         ),
 
         final_block_height: data

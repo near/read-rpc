@@ -52,7 +52,7 @@ pub async fn get_final_cache_block(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
-    blocks_cache: std::sync::Arc<std::sync::RwLock<lru::LruCache<u64, CacheBlock>>>,
+    blocks_cache: std::sync::Arc<std::sync::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>>,
     final_block_height: std::sync::Arc<std::sync::atomic::AtomicU64>,
 ) -> anyhow::Result<()> {
     let block = CacheBlock {
@@ -71,7 +71,7 @@ async fn handle_streamer_message(
 
 pub async fn update_final_block_height_regularly(
     final_block_height: std::sync::Arc<std::sync::atomic::AtomicU64>,
-    blocks_cache: std::sync::Arc<std::sync::RwLock<lru::LruCache<u64, CacheBlock>>>,
+    blocks_cache: std::sync::Arc<std::sync::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>>,
     lake_config: near_lake_framework::LakeConfig,
 ) -> anyhow::Result<()> {
     tracing::info!("Task to get and store final block in the cache started");
@@ -104,21 +104,15 @@ pub async fn update_final_block_height_regularly(
 /// Calculate the cache size based on the available memory.
 /// For caching we use the limit or if it is not set then all available memory.
 /// We divide the memory equally between the 3 caches: blocks, compiled_contracts, contract_code.
-/// The size of the blocks cache is calculated based on the size of the `CacheBlock` struct.
-/// The size of the contracts cache is calculated based on the limit of the contract size.
 /// If the installed limit exceeds the size of the available memory, we get a panic.
-pub(crate) async fn calculate_cache_sizes(
-    max_contract_size: u64,
-    reserved_memory: u64,
-    block_cache_size: u64,
-    limit_memory_cache: Option<u64>,
-    final_cache_block: &CacheBlock,
-) -> (u64, u64) {
-    let cache_block_size = std::mem::size_of_val(final_cache_block) as u64; // Size of the CacheBlock struct in bytes
-
+pub(crate) async fn calculate_contract_code_cache_sizes(
+    reserved_memory: usize,
+    block_cache_size: usize,
+    limit_memory_cache: Option<usize>,
+) -> usize {
     let sys = System::new_all();
-    let total_memory = sys.total_memory(); // Total memory in bytes
-    let used_memory = sys.used_memory(); // Used memory in bytes
+    let total_memory = sys.total_memory() as usize; // Total memory in bytes
+    let used_memory = sys.used_memory() as usize; // Used memory in bytes
     let available_memory = total_memory - used_memory - reserved_memory; // Available memory in bytes
 
     let mem_cache_size = if let Some(limit) = limit_memory_cache {
@@ -131,12 +125,7 @@ pub(crate) async fn calculate_cache_sizes(
         available_memory
     };
 
-    let code_cache_size = (mem_cache_size - block_cache_size) / 2; // divide on 2 because we have 2 caches: compiled_contracts and contract_code
-
-    (
-        (block_cache_size / cache_block_size),
-        (code_cache_size / max_contract_size),
-    )
+    (mem_cache_size - block_cache_size) / 2 // divide on 2 because we have 2 caches: compiled_contracts and contract_code
 }
 
 /// The `shadow_compare_results` is a function that compares

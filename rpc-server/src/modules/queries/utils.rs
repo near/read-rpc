@@ -238,7 +238,11 @@ async fn run_code_in_vm_runner(
 #[allow(clippy::too_many_arguments)]
 #[cfg_attr(
     feature = "tracing-instrumentation",
-    tracing::instrument(skip(scylla_db_manager, compiled_contract_code_cache))
+    tracing::instrument(skip(
+        scylla_db_manager,
+        compiled_contract_code_cache,
+        contract_code_cache
+    ))
 )]
 pub async fn run_contract(
     account_id: near_primitives::types::AccountId,
@@ -247,7 +251,7 @@ pub async fn run_contract(
     scylla_db_manager: std::sync::Arc<ScyllaDBManager>,
     compiled_contract_code_cache: &std::sync::Arc<CompiledCodeCache>,
     contract_code_cache: &std::sync::Arc<
-        std::sync::RwLock<lru::LruCache<near_primitives::hash::CryptoHash, Vec<u8>>>,
+        std::sync::RwLock<crate::cache::LruMemoryCache<near_primitives::hash::CryptoHash, Vec<u8>>>,
     >,
     block: crate::modules::blocks::CacheBlock,
     max_gas_burnt: near_primitives_core::types::Gas,

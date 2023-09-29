@@ -65,28 +65,23 @@ pub struct Opts {
     #[clap(long, env, default_value = "300000000000000")]
     pub max_gas_burnt: near_primitives_core::types::Gas,
 
-    /// Max contract size is limited 4MB
-    /// Configured in the near-core
-    #[clap(long, env, default_value = "4194304")]
-    pub max_contract_size: u64,
-
     /// Max available memory for `block_cache` and `contract_code_cache` in bytes
     /// By default we use all available memory
     /// Example: 1GB = 1073741824 bytes
     #[clap(long, env)]
-    pub limit_memory_cache: Option<u64>,
+    pub limit_memory_cache: Option<usize>,
 
     /// Reserved memory for running the application in bytes
     /// By default we use 256MB (268_435_456 bytes
     #[clap(long, env, default_value = "268435456")]
-    pub reserved_memory: u64,
+    pub reserved_memory: usize,
 
     /// Block cache size in bytes
     /// By default we use 128MB (134_217_728 bytes)
     /// One cache_block size is ≈ 96 bytes
     /// In 128MB we can put 1_398_101 cache_blocks
     #[clap(long, env, default_value = "134217728")]
-    pub block_cache_size: u64,
+    pub block_cache_size: usize,
 }
 
 impl Opts {
@@ -125,11 +120,12 @@ pub struct ServerContext {
     pub near_rpc_client: near_jsonrpc_client::JsonRpcClient,
     pub s3_bucket_name: String,
     pub genesis_config: near_chain_configs::GenesisConfig,
-    pub blocks_cache: std::sync::Arc<std::sync::RwLock<lru::LruCache<u64, CacheBlock>>>,
+    pub blocks_cache:
+        std::sync::Arc<std::sync::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>>,
     pub final_block_height: std::sync::Arc<std::sync::atomic::AtomicU64>,
     pub compiled_contract_code_cache: std::sync::Arc<CompiledCodeCache>,
     pub contract_code_cache: std::sync::Arc<
-        std::sync::RwLock<lru::LruCache<near_primitives::hash::CryptoHash, Vec<u8>>>,
+        std::sync::RwLock<crate::cache::LruMemoryCache<near_primitives::hash::CryptoHash, Vec<u8>>>,
     >,
     pub max_gas_burnt: near_primitives_core::types::Gas,
 }
@@ -137,7 +133,7 @@ pub struct ServerContext {
 pub struct CompiledCodeCache {
     pub local_cache: std::sync::Arc<
         std::sync::RwLock<
-            lru::LruCache<
+            crate::cache::LruMemoryCache<
                 near_primitives::hash::CryptoHash,
                 near_primitives::types::CompiledContract,
             >,
@@ -163,6 +159,6 @@ impl near_primitives::types::CompiledContractCache for CompiledCodeCache {
     }
 
     fn has(&self, key: &near_primitives::hash::CryptoHash) -> std::io::Result<bool> {
-        Ok(self.local_cache.write().unwrap().get(key).is_some())
+        Ok(self.local_cache.write().unwrap().contains(key))
     }
 }

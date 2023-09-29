@@ -19,17 +19,17 @@ pub struct StatusResponse {
     used_memory: String,
     available_memory: String,
 
-    blocks_cache_size: std::num::NonZeroUsize,
     blocks_in_cache: usize,
-    memory_blocks_cache_size: String,
+    max_blocks_cache_size: String,
+    current_blocks_cache_size: String,
 
-    contracts_codes_cache_size: std::num::NonZeroUsize,
     contracts_codes_in_cache: usize,
-    memory_contracts_codes_cache_size: String,
+    max_contracts_codes_cache_size: String,
+    current_contracts_codes_cache_size: String,
 
-    compiled_contracts_codes_cache_size: std::num::NonZeroUsize,
     compiled_contracts_codes_in_cache: usize,
-    memory_compiled_contracts_codes_cache_size: String,
+    max_compiled_contracts_codes_cache_size: String,
+    current_compiled_contracts_codes_cache_size: String,
 
     final_block_height: u64,
 }
