@@ -21,7 +21,7 @@ hex = "0.4.3"
 http = "0.2.8"
 jsonrpc-v2 = { git = "https://github.com/kobayurii/jsonrpc-v2", rev = "95e7b1d2567ae841163af212a3f25abb6862becb" }
 lazy_static = "1.4.0"
-lru = "0.8.1"
+lru = "0.11.1"
 num-bigint = "0.3"
 num-traits = "0.2.15"
 paste = "1.0.14"
@@ -44,6 +44,7 @@ opentelemetry = { version = "0.17", features = ["rt-tokio-current-thread"] }
 opentelemetry-jaeger = { version = "0.16", features = [
     "rt-tokio-current-thread",
 ] }
+sysinfo = "0.29.10"
 tracing-opentelemetry = { version = "0.17" }
 tracing-stackdriver = "0.7.2" # GCP logs
 

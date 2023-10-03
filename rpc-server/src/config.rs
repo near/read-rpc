@@ -64,6 +64,23 @@ pub struct Opts {
     /// Default value is 300_000_000_000_000
     #[clap(long, env, default_value = "300000000000000")]
     pub max_gas_burnt: near_primitives_core::types::Gas,
+
+    /// Max available memory for `block_cache` and `contract_code_cache` in gigabytes
+    /// By default we use all available memory
+    #[clap(long, env)]
+    pub limit_memory_cache: Option<f64>,
+
+    /// Reserved memory for running the application in gigabytes
+    /// By default we use 0.25 gigabyte (256MB or 268_435_456 bytes)
+    #[clap(long, env, default_value = "0.25")]
+    pub reserved_memory: f64,
+
+    /// Block cache size in gigabytes
+    /// By default we use 0.125 gigabyte (128MB or 134_217_728 bytes)
+    /// One cache_block size is ≈ 96 bytes
+    /// In 128MB we can put 1_398_101 cache_blocks
+    #[clap(long, env, default_value = "0.125")]
+    pub block_cache_size: f64,
 }
 
 impl Opts {
@@ -102,11 +119,12 @@ pub struct ServerContext {
     pub near_rpc_client: near_jsonrpc_client::JsonRpcClient,
     pub s3_bucket_name: String,
     pub genesis_config: near_chain_configs::GenesisConfig,
-    pub blocks_cache: std::sync::Arc<std::sync::RwLock<lru::LruCache<u64, CacheBlock>>>,
+    pub blocks_cache:
+        std::sync::Arc<std::sync::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>>,
     pub final_block_height: std::sync::Arc<std::sync::atomic::AtomicU64>,
     pub compiled_contract_code_cache: std::sync::Arc<CompiledCodeCache>,
     pub contract_code_cache: std::sync::Arc<
-        std::sync::RwLock<lru::LruCache<near_primitives::hash::CryptoHash, Vec<u8>>>,
+        std::sync::RwLock<crate::cache::LruMemoryCache<near_primitives::hash::CryptoHash, Vec<u8>>>,
     >,
     pub max_gas_burnt: near_primitives_core::types::Gas,
 }
@@ -114,7 +132,7 @@ pub struct ServerContext {
 pub struct CompiledCodeCache {
     pub local_cache: std::sync::Arc<
         std::sync::RwLock<
-            lru::LruCache<
+            crate::cache::LruMemoryCache<
                 near_primitives::hash::CryptoHash,
                 near_primitives::types::CompiledContract,
             >,
@@ -140,6 +158,6 @@ impl near_primitives::types::CompiledContractCache for CompiledCodeCache {
     }
 
     fn has(&self, key: &near_primitives::hash::CryptoHash) -> std::io::Result<bool> {
-        Ok(self.local_cache.write().unwrap().get(key).is_some())
+        Ok(self.local_cache.write().unwrap().contains(key))
     }
 }

@@ -2,6 +2,7 @@ use crate::modules::blocks::CacheBlock;
 #[cfg(feature = "shadow_data_consistency")]
 use assert_json_diff::{assert_json_matches_no_panic, CompareMode, Config, NumericMode};
 use futures::StreamExt;
+use sysinfo::{System, SystemExt};
 
 #[cfg(feature = "shadow_data_consistency")]
 const DEFAULT_RETRY_COUNT: u8 = 3;
@@ -51,7 +52,7 @@ pub async fn get_final_cache_block(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
-    blocks_cache: std::sync::Arc<std::sync::RwLock<lru::LruCache<u64, CacheBlock>>>,
+    blocks_cache: std::sync::Arc<std::sync::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>>,
     final_block_height: std::sync::Arc<std::sync::atomic::AtomicU64>,
 ) -> anyhow::Result<()> {
     let block = CacheBlock {
@@ -70,7 +71,7 @@ async fn handle_streamer_message(
 
 pub async fn update_final_block_height_regularly(
     final_block_height: std::sync::Arc<std::sync::atomic::AtomicU64>,
-    blocks_cache: std::sync::Arc<std::sync::RwLock<lru::LruCache<u64, CacheBlock>>>,
+    blocks_cache: std::sync::Arc<std::sync::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>>,
     lake_config: near_lake_framework::LakeConfig,
 ) -> anyhow::Result<()> {
     tracing::info!("Task to get and store final block in the cache started");
@@ -98,6 +99,42 @@ pub async fn update_final_block_height_regularly(
         Ok(Err(e)) => Err(e),
         Err(e) => Err(anyhow::Error::from(e)), // JoinError
     }
+}
+
+/// Calculate the cache size based on the available memory.
+/// For caching we use the limit or if it is not set then all available memory.
+/// We divide the memory equally between the 3 caches: blocks, compiled_contracts, contract_code.
+/// If the installed limit exceeds the size of the available memory, we get a panic.
+pub(crate) async fn calculate_contract_code_cache_sizes(
+    reserved_memory: usize,
+    block_cache_size: usize,
+    limit_memory_cache: Option<usize>,
+) -> usize {
+    let sys = System::new_all();
+    let total_memory = sys.total_memory() as usize; // Total memory in bytes
+    let used_memory = sys.used_memory() as usize; // Used memory in bytes
+    let available_memory = total_memory - used_memory - reserved_memory; // Available memory in bytes
+
+    let mem_cache_size = if let Some(limit) = limit_memory_cache {
+        if limit >= available_memory {
+            panic!(
+                "Not enough memory to run the server. Available memory: {}, required memory: {}",
+                crate::modules::network::friendly_memory_size_format(available_memory),
+                crate::modules::network::friendly_memory_size_format(limit),
+            );
+        } else {
+            limit
+        }
+    } else {
+        available_memory
+    };
+
+    (mem_cache_size - block_cache_size) / 2 // divide on 2 because we have 2 caches: compiled_contracts and contract_code
+}
+
+/// Convert gigabytes to bytes
+pub(crate) async fn gigabytes_to_bytes(gigabytes: f64) -> usize {
+    (gigabytes * 1024.0 * 1024.0 * 1024.0) as usize
 }
 
 /// The `shadow_compare_results` is a function that compares
