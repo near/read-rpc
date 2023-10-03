@@ -117,7 +117,11 @@ pub(crate) async fn calculate_contract_code_cache_sizes(
 
     let mem_cache_size = if let Some(limit) = limit_memory_cache {
         if limit >= available_memory {
-            panic!("Not enough memory to run the server. Available memory: {} bytes, required memory: {} bytes", available_memory, limit);
+            panic!(
+                "Not enough memory to run the server. Available memory: {}, required memory: {}",
+                crate::modules::network::friendly_memory_size_format(available_memory),
+                crate::modules::network::friendly_memory_size_format(limit),
+            );
         } else {
             limit
         }
@@ -126,6 +130,11 @@ pub(crate) async fn calculate_contract_code_cache_sizes(
     };
 
     (mem_cache_size - block_cache_size) / 2 // divide on 2 because we have 2 caches: compiled_contracts and contract_code
+}
+
+/// Convert gigabytes to bytes
+pub(crate) async fn gigabytes_to_bytes(gigabytes: f64) -> usize {
+    (gigabytes * 1024.0 * 1024.0 * 1024.0) as usize
 }
 
 /// The `shadow_compare_results` is a function that compares

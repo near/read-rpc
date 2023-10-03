@@ -65,23 +65,22 @@ pub struct Opts {
     #[clap(long, env, default_value = "300000000000000")]
     pub max_gas_burnt: near_primitives_core::types::Gas,
 
-    /// Max available memory for `block_cache` and `contract_code_cache` in bytes
+    /// Max available memory for `block_cache` and `contract_code_cache` in gigabytes
     /// By default we use all available memory
-    /// Example: 1GB = 1073741824 bytes
     #[clap(long, env)]
-    pub limit_memory_cache: Option<usize>,
+    pub limit_memory_cache: Option<f64>,
 
-    /// Reserved memory for running the application in bytes
-    /// By default we use 256MB (268_435_456 bytes
-    #[clap(long, env, default_value = "268435456")]
-    pub reserved_memory: usize,
+    /// Reserved memory for running the application in gigabytes
+    /// By default we use 0.25 gigabyte (256MB or 268_435_456 bytes)
+    #[clap(long, env, default_value = "0.25")]
+    pub reserved_memory: f64,
 
-    /// Block cache size in bytes
-    /// By default we use 128MB (134_217_728 bytes)
+    /// Block cache size in gigabytes
+    /// By default we use 0.125 gigabyte (128MB or 134_217_728 bytes)
     /// One cache_block size is ≈ 96 bytes
     /// In 128MB we can put 1_398_101 cache_blocks
-    #[clap(long, env, default_value = "134217728")]
-    pub block_cache_size: usize,
+    #[clap(long, env, default_value = "0.125")]
+    pub block_cache_size: f64,
 }
 
 impl Opts {
