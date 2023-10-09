@@ -39,7 +39,6 @@ async fn main() -> anyhow::Result<()> {
     let config: near_lake_framework::LakeConfig = opts.to_lake_config(&scylla_session).await?;
 
     tracing::info!(target: INDEXER, "Creating hash storage...");
-    // let tx_collecting_storage = std::sync::Arc::new(storage::hash::HashStorage::new());
     let tx_collecting_storage = std::sync::Arc::new(
         storage::database::HashStorageWithDB::init_with_restore(scylla_db_client.clone()).await?,
     );

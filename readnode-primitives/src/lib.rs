@@ -1,5 +1,5 @@
 use borsh::{BorshDeserialize, BorshSerialize};
-use near_indexer_primitives::{views, IndexerTransactionWithOutcome, CryptoHash};
+use near_indexer_primitives::{views, CryptoHash, IndexerTransactionWithOutcome};
 use serde::{Deserialize, Serialize};
 
 #[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Debug, Clone)]
@@ -13,7 +13,11 @@ pub struct CollectingTransactionDetails {
 }
 
 impl CollectingTransactionDetails {
-    pub fn from_indexer_tx(transaction: IndexerTransactionWithOutcome, block_height: u64, block_hash: CryptoHash) -> Self {
+    pub fn from_indexer_tx(
+        transaction: IndexerTransactionWithOutcome,
+        block_height: u64,
+        block_hash: CryptoHash,
+    ) -> Self {
         Self {
             transaction: transaction.transaction.clone(),
             receipts: vec![],
