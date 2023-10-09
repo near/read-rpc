@@ -103,13 +103,11 @@ async fn new_transaction_details_to_collecting_pool(
         block_height,
         block_hash,
     );
+    let transaction_key = transaction_details.transaction_key();
     match tx_collecting_storage.set_tx(transaction_details).await {
         Ok(_) => {
             tx_collecting_storage
-                .push_receipt_to_watching_list(
-                    converted_into_receipt_id,
-                    transaction.transaction.hash.to_string(),
-                )
+                .push_receipt_to_watching_list(converted_into_receipt_id, transaction_key)
                 .await?
         }
         Err(e) => tracing::error!(
@@ -174,7 +172,7 @@ async fn process_receipt_execution_outcome(
     shard_id: u64,
     receipt_execution_outcome: &near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
 ) -> anyhow::Result<()> {
-    if let Ok(transaction_hash) = tx_collecting_storage
+    if let Ok(transaction_key) = tx_collecting_storage
         .get_transaction_hash_by_receipt_id(
             &receipt_execution_outcome.receipt.receipt_id.to_string(),
         )
@@ -183,7 +181,7 @@ async fn process_receipt_execution_outcome(
         save_receipt(
             scylla_db_client,
             &receipt_execution_outcome.receipt.receipt_id.to_string(),
-            &transaction_hash,
+            &transaction_key.transaction_hash,
             block_height,
             shard_id,
         )
@@ -201,7 +199,7 @@ async fn process_receipt_execution_outcome(
                 .map(|receipt_id| {
                     tx_collecting_storage.push_receipt_to_watching_list(
                         receipt_id.to_string(),
-                        transaction_hash.clone(),
+                        transaction_key.clone(),
                     )
                 }),
         );
@@ -216,7 +214,7 @@ async fn process_receipt_execution_outcome(
         }
 
         tx_collecting_storage
-            .push_outcome_and_receipt(&transaction_hash, receipt_execution_outcome.clone())
+            .push_outcome_and_receipt(&transaction_key, receipt_execution_outcome.clone())
             .await
             .map_err(|err| {
                 tracing::error!(

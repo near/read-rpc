@@ -2,6 +2,21 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use near_indexer_primitives::{views, CryptoHash, IndexerTransactionWithOutcome};
 use serde::{Deserialize, Serialize};
 
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
+pub struct TransactionKey {
+    pub transaction_hash: String,
+    pub block_height: u64,
+}
+
+impl TransactionKey {
+    pub fn new(transaction_hash: String, block_height: u64) -> Self {
+        Self {
+            transaction_hash,
+            block_height,
+        }
+    }
+}
+
 #[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Debug, Clone)]
 pub struct CollectingTransactionDetails {
     pub transaction: views::SignedTransactionView,
@@ -25,6 +40,12 @@ impl CollectingTransactionDetails {
             block_height,
             block_hash,
         }
+    }
+
+    /// Build unique transaction key based on transaction_hash and block_height
+    /// Help to handle transaction hash collisions
+    pub fn transaction_key(&self) -> TransactionKey {
+        TransactionKey::new(self.transaction.hash.clone().to_string(), self.block_height)
     }
 
     pub fn to_final_transaction_result(&self) -> anyhow::Result<TransactionDetails> {

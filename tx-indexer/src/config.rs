@@ -292,10 +292,11 @@ impl ScyllaStorageManager for ScyllaDBManager {
             .query(
                 "CREATE TABLE IF NOT EXISTS receipts_outcomes (
                 transaction_hash varchar,
+                block_height varint,
                 receipt_id varchar,
                 receipt BLOB,
                 outcome BLOB,
-                PRIMARY KEY (transaction_hash, receipt_id)
+                PRIMARY KEY (transaction_hash, block_height, receipt_id)
             )
             ",
                 &[],
@@ -359,13 +360,13 @@ impl ScyllaStorageManager for ScyllaDBManager {
             cache_add_receipt: Self::prepare_write_query(
                 &scylla_db_session,
                 "INSERT INTO tx_indexer_cache.receipts_outcomes
-                    (transaction_hash, receipt_id, receipt, outcome)
-                    VALUES(?, ?, ?, ?)",
+                    (transaction_hash, block_height, receipt_id, receipt, outcome)
+                    VALUES(?, ?, ?, ?, ?)",
             )
             .await?,
             cache_delete_receipts: Self::prepare_write_query(
                 &scylla_db_session,
-                "DELETE FROM tx_indexer_cache.receipts_outcomes WHERE transaction_hash = ?",
+                "DELETE FROM tx_indexer_cache.receipts_outcomes WHERE transaction_hash = ? AND block_height = ?",
             )
             .await?,
         }))
@@ -466,14 +467,15 @@ impl ScyllaDBManager {
     }
     pub(crate) async fn cache_add_receipt(
         &self,
-        transaction_hash: &str,
+        transaction_key: readnode_primitives::TransactionKey,
         indexer_execution_outcome_with_receipt: near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
     ) -> anyhow::Result<()> {
         Self::execute_prepared_query(
             &self.scylla_session,
             &self.cache_add_receipt,
             (
-                transaction_hash,
+                transaction_key.transaction_hash,
+                num_bigint::BigInt::from(transaction_key.block_height),
                 indexer_execution_outcome_with_receipt
                     .receipt
                     .receipt_id
@@ -493,39 +495,41 @@ impl ScyllaDBManager {
     pub(crate) async fn get_transactions_in_cache(
         &self,
     ) -> anyhow::Result<
-        std::collections::HashMap<String, readnode_primitives::CollectingTransactionDetails>,
+        std::collections::HashMap<
+            readnode_primitives::TransactionKey,
+            readnode_primitives::CollectingTransactionDetails,
+        >,
     > {
         let mut result = std::collections::HashMap::new();
         let mut rows_stream = self
             .scylla_session
             .query_iter(
-                "SELECT transaction_hash, transaction_details FROM tx_indexer_cache.transactions",
+                "SELECT transaction_details FROM tx_indexer_cache.transactions",
                 &[],
             )
             .await?
-            .into_typed::<(String, Vec<u8>)>();
+            .into_typed::<(Vec<u8>,)>();
         while let Some(next_row_res) = rows_stream.next().await {
-            let (transaction_hash, transaction_details) = next_row_res?;
-            result.insert(
-                transaction_hash.clone(),
+            let (transaction_details,) = next_row_res?;
+            let transaction_details =
                 readnode_primitives::CollectingTransactionDetails::try_from_slice(
                     &transaction_details,
-                )?,
-            );
+                )?;
+            result.insert(transaction_details.transaction_key(), transaction_details);
         }
         Ok(result)
     }
 
     pub(crate) async fn get_receipts_in_cache(
         &self,
-        transaction_hash: &str,
+        transaction_key: &readnode_primitives::TransactionKey,
     ) -> anyhow::Result<Vec<near_indexer_primitives::IndexerExecutionOutcomeWithReceipt>> {
         let mut result = vec![];
         let mut rows_stream = self
             .scylla_session
             .query_iter(
-                "SELECT receipt, outcome FROM tx_indexer_cache.receipts_outcomes WHERE transaction_hash = ?",
-                (transaction_hash,),
+                "SELECT receipt, outcome FROM tx_indexer_cache.receipts_outcomes WHERE transaction_hash = ? AND block_height = ?",
+                (transaction_key.transaction_hash.clone(), num_bigint::BigInt::from(transaction_key.block_height)),
             )
             .await?
             .into_typed::<(Vec<u8>, Vec<u8>)>();
@@ -557,7 +561,7 @@ impl ScyllaDBManager {
         let delete_receipts_feature = Self::execute_prepared_query(
             &self.scylla_session,
             &self.cache_delete_receipts,
-            (transaction_hash,),
+            (transaction_hash, num_bigint::BigInt::from(block_height)),
         );
         futures::try_join!(delete_transaction_feature, delete_receipts_feature)?;
         Ok(())
