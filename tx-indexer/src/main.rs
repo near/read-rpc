@@ -41,7 +41,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(target: INDEXER, "Creating hash storage...");
     // let tx_collecting_storage = std::sync::Arc::new(storage::hash::HashStorage::new());
     let tx_collecting_storage = std::sync::Arc::new(
-        storage::database::HashStorageWithDB::init_storage(scylla_db_client.clone()).await?,
+        storage::database::HashStorageWithDB::init_with_restore(scylla_db_client.clone()).await?,
     );
 
     tracing::info!(target: INDEXER, "Instantiating the stream...",);

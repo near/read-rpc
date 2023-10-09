@@ -24,12 +24,10 @@ pub(crate) async fn index_transactions(
 
     if !finished_transaction_details.is_empty() {
         let scylla_db_client = scylla_db_client.clone();
-        let block_height = streamer_message.block.header.height;
         tokio::spawn(async move {
-            let send_finished_transaction_details_futures =
-                finished_transaction_details.into_iter().map(|tx_details| {
-                    save_transaction_details(&scylla_db_client, tx_details, block_height)
-                });
+            let send_finished_transaction_details_futures = finished_transaction_details
+                .into_iter()
+                .map(|tx_details| save_transaction_details(&scylla_db_client, tx_details));
 
             join_all(send_finished_transaction_details_futures).await;
         });
@@ -47,6 +45,7 @@ async fn extract_transactions_to_collect(
     tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
 ) -> anyhow::Result<()> {
     let block_height = streamer_message.block.header.height;
+    let block_hash = streamer_message.block.header.hash;
 
     let futures = streamer_message
         .shards
@@ -58,6 +57,7 @@ async fn extract_transactions_to_collect(
                 new_transaction_details_to_collecting_pool(
                     tx,
                     block_height,
+                    block_hash,
                     shard_id,
                     scylla_db_client,
                     tx_collecting_storage,
@@ -74,6 +74,7 @@ async fn extract_transactions_to_collect(
 async fn new_transaction_details_to_collecting_pool(
     transaction: &IndexerTransactionWithOutcome,
     block_height: u64,
+    block_hash: near_indexer_primitives::CryptoHash,
     shard_id: u64,
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
     tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
@@ -97,8 +98,11 @@ async fn new_transaction_details_to_collecting_pool(
     )
     .await?;
 
-    let transaction_details =
-        readnode_primitives::CollectingTransactionDetails::from_indexer_tx(transaction.clone());
+    let transaction_details = readnode_primitives::CollectingTransactionDetails::from_indexer_tx(
+        transaction.clone(),
+        block_height,
+        block_hash,
+    );
     match tx_collecting_storage.set_tx(transaction_details).await {
         Ok(_) => {
             tx_collecting_storage
@@ -231,7 +235,6 @@ async fn process_receipt_execution_outcome(
 async fn save_transaction_details(
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
     tx_details: readnode_primitives::CollectingTransactionDetails,
-    block_height: u64,
 ) -> bool {
     let transaction_details = match tx_details.to_final_transaction_result() {
         Ok(details) => details,
@@ -247,12 +250,12 @@ async fn save_transaction_details(
     };
     let transaction_hash = transaction_details.transaction.hash.to_string();
     match scylla_db_client
-        .add_transaction(transaction_details, block_height)
+        .add_transaction(transaction_details, tx_details.block_height)
         .await
     {
         Ok(_) => {
             scylla_db_client
-                .delete_transaction_process(&transaction_hash)
+                .cache_delete_transaction(&transaction_hash, tx_details.block_height)
                 .await
                 .expect("Failed to delete transaction from memory storage");
             true

@@ -16,25 +16,35 @@ pub struct HashStorageWithDB {
 }
 
 impl HashStorageWithDB {
-    #[allow(unused)]
+    /// Init storage without restore transactions with receipts after interruption
     pub(crate) async fn init_storage(
         scylla_db_client: std::sync::Arc<crate::config::ScyllaDBManager>,
-    ) -> anyhow::Result<Self> {
-        let storage = Self {
-            scylla_db_manager: scylla_db_client.clone(),
+    ) -> Self {
+        Self {
+            scylla_db_manager: scylla_db_client,
             transactions: futures_locks::RwLock::new(std::collections::HashMap::new()),
             receipts_counters: futures_locks::RwLock::new(std::collections::HashMap::new()),
             receipts_watching_list: futures_locks::RwLock::new(std::collections::HashMap::new()),
             transactions_to_save: futures_locks::RwLock::new(std::collections::HashMap::new()),
-        };
-        storage.upload_transaction_with_receipt().await?;
+        }
+    }
+
+    /// Init storage with restore transactions with receipts after interruption
+    pub(crate) async fn init_with_restore(
+        scylla_db_client: std::sync::Arc<crate::config::ScyllaDBManager>,
+    ) -> anyhow::Result<Self> {
+        let storage = Self::init_storage(scylla_db_client).await;
+        storage
+            .restore_transactions_with_receipts_after_interruption()
+            .await?;
         Ok(storage)
     }
 
-    async fn upload_transaction_with_receipt(&self) -> anyhow::Result<()> {
+    /// Restore transactions with receipts after interruption
+    async fn restore_transactions_with_receipts_after_interruption(&self) -> anyhow::Result<()> {
         for (transaction_hash, transaction_details) in self
             .scylla_db_manager
-            .get_transactions_in_process()
+            .get_transactions_in_cache()
             .await?
             .iter()
         {
@@ -53,7 +63,7 @@ impl HashStorageWithDB {
 
             for indexer_execution_outcome_with_receipt in self
                 .scylla_db_manager
-                .get_receipts_in_process(transaction_hash)
+                .get_receipts_in_cache(transaction_hash)
                 .await?
                 .iter()
             {
@@ -104,7 +114,7 @@ impl HashStorageWithDB {
         let scylla_db_manager = self.scylla_db_manager.clone();
         tokio::spawn(async move {
             scylla_db_manager
-                .add_receipt_process(&transaction_hash, indexer_execution_outcome_with_receipt)
+                .cache_add_receipt(&transaction_hash, indexer_execution_outcome_with_receipt)
                 .await
         });
     }
@@ -218,7 +228,7 @@ impl TxCollectingStorage for HashStorageWithDB {
         let scylla_db_manager = self.scylla_db_manager.clone();
         tokio::spawn(async move {
             scylla_db_manager
-                .add_transaction_process(transaction_details_clone)
+                .cache_add_transaction(transaction_details_clone)
                 .await
         });
         let transaction_hash = transaction_details.transaction.hash.clone().to_string();

@@ -221,10 +221,10 @@ pub(crate) struct ScyllaDBManager {
     add_receipt: PreparedStatement,
     update_meta: PreparedStatement,
 
-    add_transaction_process: PreparedStatement,
-    delete_transaction_process: PreparedStatement,
-    add_receipt_process: PreparedStatement,
-    delete_receipts_process: PreparedStatement,
+    cache_add_transaction: PreparedStatement,
+    cache_delete_transaction: PreparedStatement,
+    cache_add_receipt: PreparedStatement,
+    cache_delete_receipts: PreparedStatement,
 }
 
 #[async_trait::async_trait]
@@ -272,15 +272,17 @@ impl ScyllaStorageManager for ScyllaDBManager {
             .await?;
 
         scylla_db_session
-            .use_keyspace("tx_indexer_process", false)
+            .use_keyspace("tx_indexer_cache", false)
             .await?;
         scylla_db_session
             .query(
                 "CREATE TABLE IF NOT EXISTS transactions (
                 transaction_hash varchar,
+                block_height varint,
+                block_hash varchar,
                 transaction_details BLOB,
-                PRIMARY KEY (transaction_hash)
-            )
+                PRIMARY KEY (transaction_hash, block_height)
+            ) WITH CLUSTERING ORDER BY (block_height DESC)
             ",
                 &[],
             )
@@ -309,7 +311,7 @@ impl ScyllaStorageManager for ScyllaDBManager {
             &[]
         ).await?;
         scylla_db_session.query(
-            "CREATE KEYSPACE IF NOT EXISTS tx_indexer_process WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 1}",
+            "CREATE KEYSPACE IF NOT EXISTS tx_indexer_cache WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 1}",
             &[]
         ).await?;
         Ok(())
@@ -342,28 +344,28 @@ impl ScyllaStorageManager for ScyllaDBManager {
             )
             .await?,
 
-            add_transaction_process: Self::prepare_write_query(
+            cache_add_transaction: Self::prepare_write_query(
                 &scylla_db_session,
-                "INSERT INTO tx_indexer_process.transactions
-                    (transaction_hash, transaction_details)
-                    VALUES(?, ?)",
+                "INSERT INTO tx_indexer_cache.transactions
+                    (transaction_hash, block_height, block_hash, transaction_details)
+                    VALUES(?, ?, ?, ?)",
             )
             .await?,
-            delete_transaction_process: Self::prepare_write_query(
+            cache_delete_transaction: Self::prepare_write_query(
                 &scylla_db_session,
-                "DELETE FROM tx_indexer_process.transactions WHERE transaction_hash = ?",
+                "DELETE FROM tx_indexer_cache.transactions WHERE transaction_hash = ? AND block_height = ?",
             )
             .await?,
-            add_receipt_process: Self::prepare_write_query(
+            cache_add_receipt: Self::prepare_write_query(
                 &scylla_db_session,
-                "INSERT INTO tx_indexer_process.receipts_outcomes
+                "INSERT INTO tx_indexer_cache.receipts_outcomes
                     (transaction_hash, receipt_id, receipt, outcome)
                     VALUES(?, ?, ?, ?)",
             )
             .await?,
-            delete_receipts_process: Self::prepare_write_query(
+            cache_delete_receipts: Self::prepare_write_query(
                 &scylla_db_session,
-                "DELETE FROM tx_indexer_process.receipts_outcomes WHERE transaction_hash = ?",
+                "DELETE FROM tx_indexer_cache.receipts_outcomes WHERE transaction_hash = ?",
             )
             .await?,
         }))
@@ -435,28 +437,41 @@ impl ScyllaDBManager {
         Ok(())
     }
 
-    pub(crate) async fn add_transaction_process(
+    pub(crate) async fn cache_add_transaction(
         &self,
         transaction_details: readnode_primitives::CollectingTransactionDetails,
     ) -> anyhow::Result<()> {
         let transaction_hash = transaction_details.transaction.hash.clone().to_string();
-        let transaction_details = transaction_details.try_to_vec()?;
+        let block_height = transaction_details.block_height;
+        let block_hash = transaction_details.block_hash;
+        let transaction_details = transaction_details.try_to_vec().map_err(|err| {
+            tracing::error!(target: "tx_indexer", "Failed to serialize transaction details: {:?}", err);
+            err})?;
         Self::execute_prepared_query(
             &self.scylla_session,
-            &self.add_transaction_process,
-            (transaction_hash, transaction_details),
+            &self.cache_add_transaction,
+            (
+                transaction_hash,
+                num_bigint::BigInt::from(block_height),
+                block_hash.to_string(),
+                transaction_details,
+            ),
         )
-        .await?;
+        .await
+        .map_err(|err| {
+            tracing::error!(target: "tx_indexer", "Failed to cache_add_transaction: {:?}", err);
+            err
+        })?;
         Ok(())
     }
-    pub(crate) async fn add_receipt_process(
+    pub(crate) async fn cache_add_receipt(
         &self,
         transaction_hash: &str,
         indexer_execution_outcome_with_receipt: near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
     ) -> anyhow::Result<()> {
         Self::execute_prepared_query(
             &self.scylla_session,
-            &self.add_receipt_process,
+            &self.cache_add_receipt,
             (
                 transaction_hash,
                 indexer_execution_outcome_with_receipt
@@ -475,7 +490,7 @@ impl ScyllaDBManager {
         Ok(())
     }
 
-    pub(crate) async fn get_transactions_in_process(
+    pub(crate) async fn get_transactions_in_cache(
         &self,
     ) -> anyhow::Result<
         std::collections::HashMap<String, readnode_primitives::CollectingTransactionDetails>,
@@ -484,7 +499,7 @@ impl ScyllaDBManager {
         let mut rows_stream = self
             .scylla_session
             .query_iter(
-                "SELECT transaction_hash, transaction_details FROM tx_indexer_process.transactions",
+                "SELECT transaction_hash, transaction_details FROM tx_indexer_cache.transactions",
                 &[],
             )
             .await?
@@ -501,7 +516,7 @@ impl ScyllaDBManager {
         Ok(result)
     }
 
-    pub(crate) async fn get_receipts_in_process(
+    pub(crate) async fn get_receipts_in_cache(
         &self,
         transaction_hash: &str,
     ) -> anyhow::Result<Vec<near_indexer_primitives::IndexerExecutionOutcomeWithReceipt>> {
@@ -509,7 +524,7 @@ impl ScyllaDBManager {
         let mut rows_stream = self
             .scylla_session
             .query_iter(
-                "SELECT receipt, outcome FROM tx_indexer_process.receipts_outcomes WHERE transaction_hash = ?",
+                "SELECT receipt, outcome FROM tx_indexer_cache.receipts_outcomes WHERE transaction_hash = ?",
                 (transaction_hash,),
             )
             .await?
@@ -529,18 +544,19 @@ impl ScyllaDBManager {
         Ok(result)
     }
 
-    pub(crate) async fn delete_transaction_process(
+    pub(crate) async fn cache_delete_transaction(
         &self,
         transaction_hash: &str,
+        block_height: u64,
     ) -> anyhow::Result<()> {
         let delete_transaction_feature = Self::execute_prepared_query(
             &self.scylla_session,
-            &self.delete_transaction_process,
-            (transaction_hash,),
+            &self.cache_delete_transaction,
+            (transaction_hash, num_bigint::BigInt::from(block_height)),
         );
         let delete_receipts_feature = Self::execute_prepared_query(
             &self.scylla_session,
-            &self.delete_receipts_process,
+            &self.cache_delete_receipts,
             (transaction_hash,),
         );
         futures::try_join!(delete_transaction_feature, delete_receipts_feature)?;

@@ -1,5 +1,5 @@
 use borsh::{BorshDeserialize, BorshSerialize};
-use near_indexer_primitives::{views, IndexerTransactionWithOutcome};
+use near_indexer_primitives::{views, IndexerTransactionWithOutcome, CryptoHash};
 use serde::{Deserialize, Serialize};
 
 #[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Debug, Clone)]
@@ -7,14 +7,19 @@ pub struct CollectingTransactionDetails {
     pub transaction: views::SignedTransactionView,
     pub receipts: Vec<views::ReceiptView>,
     pub execution_outcomes: Vec<views::ExecutionOutcomeWithIdView>,
+    // Next two fields using to handle transaction hash collisions
+    pub block_height: u64,
+    pub block_hash: CryptoHash,
 }
 
 impl CollectingTransactionDetails {
-    pub fn from_indexer_tx(transaction: IndexerTransactionWithOutcome) -> Self {
+    pub fn from_indexer_tx(transaction: IndexerTransactionWithOutcome, block_height: u64, block_hash: CryptoHash) -> Self {
         Self {
             transaction: transaction.transaction.clone(),
             receipts: vec![],
             execution_outcomes: vec![transaction.outcome.execution_outcome],
+            block_height,
+            block_hash,
         }
     }
 
