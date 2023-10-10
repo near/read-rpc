@@ -7,8 +7,6 @@ use near_indexer_primitives::IndexerTransactionWithOutcome;
 use crate::config;
 use crate::storage::base::TxCollectingStorage;
 
-// TODO: Handle known TX hash collision case for mainnet
-// ref: https://github.com/near/near-indexer-for-explorer/issues/84
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 pub(crate) async fn index_transactions(
     streamer_message: &near_indexer_primitives::StreamerMessage,
