@@ -19,8 +19,6 @@ async fn main() -> anyhow::Result<()> {
     init_tracing()?;
 
     let opts: Opts = Opts::parse();
-    tracing::info!(target: INDEXER, "Creating hash storage...");
-    let hash_storage = std::sync::Arc::new(futures_locks::RwLock::new(storage::HashStorage::new()));
 
     tracing::info!(target: INDEXER, "Connecting to scylla db...");
     let scylla_db_client: std::sync::Arc<config::ScyllaDBManager> = std::sync::Arc::new(
@@ -35,10 +33,15 @@ async fn main() -> anyhow::Result<()> {
         )
         .await?,
     );
+    let scylla_session = scylla_db_client.scylla_session().await;
 
     tracing::info!(target: INDEXER, "Generating LakeConfig...");
-    let scylla_session = scylla_db_client.scylla_session().await;
     let config: near_lake_framework::LakeConfig = opts.to_lake_config(&scylla_session).await?;
+
+    tracing::info!(target: INDEXER, "Creating hash storage...");
+    let tx_collecting_storage = std::sync::Arc::new(
+        storage::database::HashStorageWithDB::init_with_restore(scylla_db_client.clone()).await?,
+    );
 
     tracing::info!(target: INDEXER, "Instantiating the stream...",);
     let (sender, stream) = near_lake_framework::streamer(config);
@@ -58,7 +61,7 @@ async fn main() -> anyhow::Result<()> {
             handle_streamer_message(
                 streamer_message,
                 &scylla_db_client,
-                &hash_storage,
+                &tx_collecting_storage,
                 &opts.indexer_id,
                 std::sync::Arc::clone(&stats),
             )
@@ -84,7 +87,7 @@ async fn main() -> anyhow::Result<()> {
 async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
-    hash_storage: &std::sync::Arc<futures_locks::RwLock<storage::HashStorage>>,
+    tx_collecting_storage: &std::sync::Arc<impl storage::base::TxCollectingStorage>,
     indexer_id: &str,
     stats: std::sync::Arc<tokio::sync::RwLock<metrics::Stats>>,
 ) -> anyhow::Result<u64> {
@@ -98,7 +101,7 @@ async fn handle_streamer_message(
         .insert(block_height);
 
     let tx_future =
-        collector::index_transactions(&streamer_message, scylla_db_client, hash_storage);
+        collector::index_transactions(&streamer_message, scylla_db_client, tx_collecting_storage);
 
     let update_meta_future =
         scylla_db_client.update_meta(indexer_id, streamer_message.block.header.height);

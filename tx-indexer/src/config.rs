@@ -1,6 +1,8 @@
-use borsh::BorshSerialize;
+use borsh::{BorshDeserialize, BorshSerialize};
 pub use clap::{Parser, Subcommand};
 use database::ScyllaStorageManager;
+use futures::StreamExt;
+use near_indexer_primitives::near_primitives;
 use near_indexer_primitives::types::{BlockReference, Finality};
 use near_jsonrpc_client::{methods, JsonRpcClient};
 use num_traits::ToPrimitive;
@@ -218,6 +220,11 @@ pub(crate) struct ScyllaDBManager {
     add_transaction: PreparedStatement,
     add_receipt: PreparedStatement,
     update_meta: PreparedStatement,
+
+    cache_add_transaction: PreparedStatement,
+    cache_delete_transaction: PreparedStatement,
+    cache_add_receipt: PreparedStatement,
+    cache_delete_receipts: PreparedStatement,
 }
 
 #[async_trait::async_trait]
@@ -264,12 +271,48 @@ impl ScyllaStorageManager for ScyllaDBManager {
             )
             .await?;
 
+        scylla_db_session
+            .use_keyspace("tx_indexer_cache", false)
+            .await?;
+        scylla_db_session
+            .query(
+                "CREATE TABLE IF NOT EXISTS transactions (
+                transaction_hash varchar,
+                block_height varint,
+                block_hash varchar,
+                transaction_details BLOB,
+                PRIMARY KEY (transaction_hash, block_height)
+            ) WITH CLUSTERING ORDER BY (block_height DESC)
+            ",
+                &[],
+            )
+            .await?;
+
+        scylla_db_session
+            .query(
+                "CREATE TABLE IF NOT EXISTS receipts_outcomes (
+                transaction_hash varchar,
+                block_height varint,
+                receipt_id varchar,
+                receipt BLOB,
+                outcome BLOB,
+                PRIMARY KEY (transaction_hash, block_height, receipt_id)
+            )
+            ",
+                &[],
+            )
+            .await?;
+
         Ok(())
     }
 
     async fn create_keyspace(scylla_db_session: &scylla::Session) -> anyhow::Result<()> {
         scylla_db_session.query(
             "CREATE KEYSPACE IF NOT EXISTS tx_indexer WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 1}",
+            &[]
+        ).await?;
+        scylla_db_session.query(
+            "CREATE KEYSPACE IF NOT EXISTS tx_indexer_cache WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 1}",
             &[]
         ).await?;
         Ok(())
@@ -299,6 +342,31 @@ impl ScyllaStorageManager for ScyllaDBManager {
                 "INSERT INTO tx_indexer.meta
                     (indexer_id, last_processed_block_height)
                     VALUES (?, ?)",
+            )
+            .await?,
+
+            cache_add_transaction: Self::prepare_write_query(
+                &scylla_db_session,
+                "INSERT INTO tx_indexer_cache.transactions
+                    (transaction_hash, block_height, block_hash, transaction_details)
+                    VALUES(?, ?, ?, ?)",
+            )
+            .await?,
+            cache_delete_transaction: Self::prepare_write_query(
+                &scylla_db_session,
+                "DELETE FROM tx_indexer_cache.transactions WHERE transaction_hash = ? AND block_height = ?",
+            )
+            .await?,
+            cache_add_receipt: Self::prepare_write_query(
+                &scylla_db_session,
+                "INSERT INTO tx_indexer_cache.receipts_outcomes
+                    (transaction_hash, block_height, receipt_id, receipt, outcome)
+                    VALUES(?, ?, ?, ?, ?)",
+            )
+            .await?,
+            cache_delete_receipts: Self::prepare_write_query(
+                &scylla_db_session,
+                "DELETE FROM tx_indexer_cache.receipts_outcomes WHERE transaction_hash = ? AND block_height = ?",
             )
             .await?,
         }))
@@ -367,6 +435,135 @@ impl ScyllaDBManager {
             (indexer_id, num_bigint::BigInt::from(block_height)),
         )
         .await?;
+        Ok(())
+    }
+
+    pub(crate) async fn cache_add_transaction(
+        &self,
+        transaction_details: readnode_primitives::CollectingTransactionDetails,
+    ) -> anyhow::Result<()> {
+        let transaction_hash = transaction_details.transaction.hash.clone().to_string();
+        let block_height = transaction_details.block_height;
+        let block_hash = transaction_details.block_hash;
+        let transaction_details = transaction_details.try_to_vec().map_err(|err| {
+            tracing::error!(target: "tx_indexer", "Failed to serialize transaction details: {:?}", err);
+            err})?;
+        Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.cache_add_transaction,
+            (
+                transaction_hash,
+                num_bigint::BigInt::from(block_height),
+                block_hash.to_string(),
+                transaction_details,
+            ),
+        )
+        .await
+        .map_err(|err| {
+            tracing::error!(target: "tx_indexer", "Failed to cache_add_transaction: {:?}", err);
+            err
+        })?;
+        Ok(())
+    }
+    pub(crate) async fn cache_add_receipt(
+        &self,
+        transaction_key: readnode_primitives::TransactionKey,
+        indexer_execution_outcome_with_receipt: near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
+    ) -> anyhow::Result<()> {
+        Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.cache_add_receipt,
+            (
+                transaction_key.transaction_hash,
+                num_bigint::BigInt::from(transaction_key.block_height),
+                indexer_execution_outcome_with_receipt
+                    .receipt
+                    .receipt_id
+                    .to_string(),
+                indexer_execution_outcome_with_receipt
+                    .receipt
+                    .try_to_vec()?,
+                indexer_execution_outcome_with_receipt
+                    .execution_outcome
+                    .try_to_vec()?,
+            ),
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub(crate) async fn get_transactions_in_cache(
+        &self,
+    ) -> anyhow::Result<
+        std::collections::HashMap<
+            readnode_primitives::TransactionKey,
+            readnode_primitives::CollectingTransactionDetails,
+        >,
+    > {
+        let mut result = std::collections::HashMap::new();
+        let mut rows_stream = self
+            .scylla_session
+            .query_iter(
+                "SELECT transaction_details FROM tx_indexer_cache.transactions",
+                &[],
+            )
+            .await?
+            .into_typed::<(Vec<u8>,)>();
+        while let Some(next_row_res) = rows_stream.next().await {
+            let (transaction_details,) = next_row_res?;
+            let transaction_details =
+                readnode_primitives::CollectingTransactionDetails::try_from_slice(
+                    &transaction_details,
+                )?;
+            result.insert(transaction_details.transaction_key(), transaction_details);
+        }
+        Ok(result)
+    }
+
+    pub(crate) async fn get_receipts_in_cache(
+        &self,
+        transaction_key: &readnode_primitives::TransactionKey,
+    ) -> anyhow::Result<Vec<near_indexer_primitives::IndexerExecutionOutcomeWithReceipt>> {
+        let mut result = vec![];
+        let mut rows_stream = self
+            .scylla_session
+            .query_iter(
+                "SELECT receipt, outcome FROM tx_indexer_cache.receipts_outcomes WHERE transaction_hash = ? AND block_height = ?",
+                (transaction_key.transaction_hash.clone(), num_bigint::BigInt::from(transaction_key.block_height)),
+            )
+            .await?
+            .into_typed::<(Vec<u8>, Vec<u8>)>();
+        while let Some(next_row_res) = rows_stream.next().await {
+            let (receipt, outcome) = next_row_res?;
+            let receipt = near_primitives::views::ReceiptView::try_from_slice(&receipt)?;
+            let execution_outcome =
+                near_primitives::views::ExecutionOutcomeWithIdView::try_from_slice(&outcome)?;
+            result.push(
+                near_indexer_primitives::IndexerExecutionOutcomeWithReceipt {
+                    receipt,
+                    execution_outcome,
+                },
+            );
+        }
+        Ok(result)
+    }
+
+    pub(crate) async fn cache_delete_transaction(
+        &self,
+        transaction_hash: &str,
+        block_height: u64,
+    ) -> anyhow::Result<()> {
+        let delete_transaction_feature = Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.cache_delete_transaction,
+            (transaction_hash, num_bigint::BigInt::from(block_height)),
+        );
+        let delete_receipts_feature = Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.cache_delete_receipts,
+            (transaction_hash, num_bigint::BigInt::from(block_height)),
+        );
+        futures::try_join!(delete_transaction_feature, delete_receipts_feature)?;
         Ok(())
     }
 }
