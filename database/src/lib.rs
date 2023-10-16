@@ -320,10 +320,10 @@ pub trait ScyllaStorageManager {
     ) -> anyhow::Result<PreparedStatement> {
         let mut query = scylla::statement::query::Query::new(query_text);
 
-        // If `consistency` is not set use `LocalQuorum`
         if let Some(consistency) = consistency {
             query.set_consistency(consistency);
         } else {
+            // set `Consistency::LocalQuorum` as a default consistency
             query.set_consistency(scylla::frame::types::Consistency::LocalQuorum);
         }
 
@@ -342,7 +342,7 @@ pub trait ScyllaStorageManager {
     }
 
     /// Wrapper to prepare read queries
-    /// Just a simpler way to prepare a query with `Consistency::LocalQuorum`
+    /// Just a simpler way to prepare a query with `Consistency::LocalOne`
     /// we use it as a default consistency for read queries
     async fn prepare_read_query(
         scylla_db_session: &std::sync::Arc<scylla::Session>,
@@ -351,13 +351,13 @@ pub trait ScyllaStorageManager {
         Self::prepare_query(
             scylla_db_session,
             query_text,
-            Some(scylla::frame::types::Consistency::LocalQuorum),
+            Some(scylla::frame::types::Consistency::LocalOne),
         )
         .await
     }
 
     /// Wrapper to prepare write queries
-    /// Just a simpler way to prepare a query with `Consistency::Any`
+    /// Just a simpler way to prepare a query with `Consistency::LocalQuorum`
     /// we use it as a default consistency for write queries
     async fn prepare_write_query(
         scylla_db_session: &std::sync::Arc<scylla::Session>,
@@ -366,7 +366,7 @@ pub trait ScyllaStorageManager {
         Self::prepare_query(
             scylla_db_session,
             query_text,
-            Some(scylla::frame::types::Consistency::Any),
+            Some(scylla::frame::types::Consistency::LocalQuorum),
         )
         .await
     }
