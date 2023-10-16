@@ -221,6 +221,8 @@ pub(crate) struct ScyllaDBManager {
     add_receipt: PreparedStatement,
     update_meta: PreparedStatement,
 
+    cache_get_transactions: PreparedStatement,
+    cache_get_receipts: PreparedStatement,
     cache_add_transaction: PreparedStatement,
     cache_delete_transaction: PreparedStatement,
     cache_add_receipt: PreparedStatement,
@@ -344,6 +346,16 @@ impl ScyllaStorageManager for ScyllaDBManager {
                     VALUES (?, ?)",
             )
             .await?,
+
+            cache_get_transactions: Self::prepare_read_query(
+                &scylla_db_session,
+                "SELECT transaction_details FROM tx_indexer_cache.transactions",
+            ).await?,
+
+            cache_get_receipts: Self::prepare_read_query(
+                &scylla_db_session,
+                "SELECT receipt, outcome FROM tx_indexer_cache.receipts_outcomes WHERE transaction_hash = ? AND block_height = ?",
+            ).await?,
 
             cache_add_transaction: Self::prepare_write_query(
                 &scylla_db_session,
@@ -503,10 +515,7 @@ impl ScyllaDBManager {
         let mut result = std::collections::HashMap::new();
         let mut rows_stream = self
             .scylla_session
-            .query_iter(
-                "SELECT transaction_details FROM tx_indexer_cache.transactions",
-                &[],
-            )
+            .execute_iter(self.cache_get_transactions.clone(), &[])
             .await?
             .into_typed::<(Vec<u8>,)>();
         while let Some(next_row_res) = rows_stream.next().await {
@@ -527,9 +536,12 @@ impl ScyllaDBManager {
         let mut result = vec![];
         let mut rows_stream = self
             .scylla_session
-            .query_iter(
-                "SELECT receipt, outcome FROM tx_indexer_cache.receipts_outcomes WHERE transaction_hash = ? AND block_height = ?",
-                (transaction_key.transaction_hash.clone(), num_bigint::BigInt::from(transaction_key.block_height)),
+            .execute_iter(
+                self.cache_get_receipts.clone(),
+                (
+                    transaction_key.transaction_hash.clone(),
+                    num_bigint::BigInt::from(transaction_key.block_height),
+                ),
             )
             .await?
             .into_typed::<(Vec<u8>, Vec<u8>)>();
