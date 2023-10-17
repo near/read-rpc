@@ -349,7 +349,7 @@ impl ScyllaStorageManager for ScyllaDBManager {
 
             cache_get_transactions: Self::prepare_read_query(
                 &scylla_db_session,
-                "SELECT transaction_details FROM tx_indexer_cache.transactions WHERE block_height <= ?",
+                "SELECT transaction_details FROM tx_indexer_cache.transactions WHERE block_height <= ? ALLOW FILTERING",
             ).await?,
 
             cache_get_receipts: Self::prepare_read_query(
@@ -514,10 +514,12 @@ impl ScyllaDBManager {
         >,
     > {
         let mut result = std::collections::HashMap::new();
+        let mut prepared_query = self.cache_get_transactions.clone();
+        prepared_query.set_page_size(10);
         let mut rows_stream = self
             .scylla_session
             .execute_iter(
-                self.cache_get_transactions.clone(),
+                prepared_query,
                 (num_bigint::BigInt::from(start_block_height),),
             )
             .await?
