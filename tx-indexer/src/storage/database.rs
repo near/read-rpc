@@ -39,19 +39,23 @@ impl HashStorageWithDB {
     /// Init storage with restore transactions with receipts after interruption
     pub(crate) async fn init_with_restore(
         scylla_db_client: std::sync::Arc<crate::config::ScyllaDBManager>,
+        start_block_height: u64,
     ) -> anyhow::Result<Self> {
         let storage = Self::init_storage(scylla_db_client).await;
         storage
-            .restore_transactions_with_receipts_after_interruption()
+            .restore_transactions_with_receipts_after_interruption(start_block_height)
             .await?;
         Ok(storage)
     }
 
     /// Restore transactions with receipts after interruption
-    async fn restore_transactions_with_receipts_after_interruption(&self) -> anyhow::Result<()> {
+    async fn restore_transactions_with_receipts_after_interruption(
+        &self,
+        start_block_height: u64,
+    ) -> anyhow::Result<()> {
         for (transaction_key, transaction_details) in self
             .scylla_db_manager
-            .get_transactions_in_cache()
+            .get_transactions_in_cache(start_block_height)
             .await?
             .iter()
         {

@@ -98,24 +98,24 @@ impl Opts {
 impl Opts {
     pub async fn to_lake_config(
         &self,
-        scylladb_session: &std::sync::Arc<scylla::Session>,
+        start_block_height: u64,
     ) -> anyhow::Result<near_lake_framework::LakeConfig> {
         let config_builder = near_lake_framework::LakeConfigBuilder::default();
 
         Ok(match &self.chain_id {
             ChainId::Mainnet(_) => config_builder
                 .mainnet()
-                .start_block_height(get_start_block_height(self, scylladb_session).await?),
+                .start_block_height(start_block_height),
             ChainId::Testnet(_) => config_builder
                 .testnet()
-                .start_block_height(get_start_block_height(self, scylladb_session).await?),
+                .start_block_height(start_block_height),
         }
         .build()
         .expect("Failed to build LakeConfig"))
     }
 }
 
-async fn get_start_block_height(
+pub(crate) async fn get_start_block_height(
     opts: &Opts,
     scylladb_session: &std::sync::Arc<scylla::Session>,
 ) -> anyhow::Result<u64> {
@@ -349,7 +349,7 @@ impl ScyllaStorageManager for ScyllaDBManager {
 
             cache_get_transactions: Self::prepare_read_query(
                 &scylla_db_session,
-                "SELECT transaction_details FROM tx_indexer_cache.transactions",
+                "SELECT transaction_details FROM tx_indexer_cache.transactions WHERE block_height <= ? ALLOW FILTERING",
             ).await?,
 
             cache_get_receipts: Self::prepare_read_query(
@@ -506,6 +506,7 @@ impl ScyllaDBManager {
 
     pub(crate) async fn get_transactions_in_cache(
         &self,
+        start_block_height: u64,
     ) -> anyhow::Result<
         std::collections::HashMap<
             readnode_primitives::TransactionKey,
@@ -513,9 +514,14 @@ impl ScyllaDBManager {
         >,
     > {
         let mut result = std::collections::HashMap::new();
+        let mut prepared_query = self.cache_get_transactions.clone();
+        prepared_query.set_page_size(10);
         let mut rows_stream = self
             .scylla_session
-            .execute_iter(self.cache_get_transactions.clone(), &[])
+            .execute_iter(
+                prepared_query,
+                (num_bigint::BigInt::from(start_block_height),),
+            )
             .await?
             .into_typed::<(Vec<u8>,)>();
         while let Some(next_row_res) = rows_stream.next().await {
