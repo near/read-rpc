@@ -1,31 +1,10 @@
 use std::convert::TryFrom;
-use std::str::FromStr;
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use num_traits::ToPrimitive;
 use scylla::{prepared_statement::PreparedStatement, IntoTypedRows};
 
 use database::ScyllaStorageManager;
-
-pub type StateKey = Vec<u8>;
-pub type StateValue = Vec<u8>;
-pub struct BlockHeightShardId(pub u64, pub u64);
-pub struct QueryData<T: BorshDeserialize> {
-    pub data: T,
-    pub block_height: near_primitives_core::types::BlockHeight,
-    pub block_hash: near_indexer_primitives::CryptoHash,
-}
-pub struct ReceiptRecord {
-    pub receipt_id: near_primitives::hash::CryptoHash,
-    pub parent_transaction_hash: near_primitives::hash::CryptoHash,
-    pub block_height: near_primitives::types::BlockHeight,
-    pub shard_id: near_primitives::types::ShardId,
-}
-
-pub struct BlockRecord {
-    pub height: u64,
-    pub hash: near_primitives::hash::CryptoHash,
-}
 
 pub struct ScyllaDBManager {
     scylla_session: std::sync::Arc<scylla::Session>,
@@ -37,7 +16,7 @@ pub struct ScyllaDBManager {
     get_account: PreparedStatement,
     get_contract_code: PreparedStatement,
     get_access_key: PreparedStatement,
-    #[cfg(feature = "account_access_keys")]
+    // #[cfg(feature = "account_access_keys")]
     get_account_access_keys: PreparedStatement,
     get_receipt: PreparedStatement,
     get_transaction_by_hash: PreparedStatement,
@@ -91,7 +70,7 @@ impl ScyllaStorageManager for ScyllaDBManager {
                 &scylla_db_session,
                 "SELECT block_height, block_hash, data_value FROM state_indexer.state_changes_access_key WHERE account_id = ? AND block_height <= ? AND data_key = ? LIMIT 1",
             ).await?,
-            #[cfg(feature = "account_access_keys")]
+            // #[cfg(feature = "account_access_keys")]
             get_account_access_keys: Self::prepare_read_query(
                 &scylla_db_session,
                 "SELECT active_access_keys FROM state_indexer.account_access_keys WHERE account_id = ? AND block_height <= ? LIMIT 1",
@@ -117,9 +96,10 @@ impl ScyllaStorageManager for ScyllaDBManager {
     }
 }
 
-impl ScyllaDBManager {
+#[async_trait::async_trait]
+impl database::BaseDbManager for ScyllaDBManager {
     /// Searches the block height by the given block hash
-    pub async fn get_block_by_hash(
+    async fn get_block_by_hash(
         &self,
         block_hash: near_primitives::hash::CryptoHash,
     ) -> anyhow::Result<u64> {
@@ -138,10 +118,10 @@ impl ScyllaDBManager {
     }
 
     /// Searches the block height and shard id by the given chunk hash
-    pub async fn get_block_by_chunk_hash(
+    async fn get_block_by_chunk_hash(
         &self,
         chunk_hash: near_primitives::hash::CryptoHash,
-    ) -> anyhow::Result<BlockHeightShardId> {
+    ) -> anyhow::Result<readnode_primitives::BlockHeightShardId> {
         let block_height_shard_id = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_block_by_chunk_id,
@@ -152,7 +132,7 @@ impl ScyllaDBManager {
         .into_typed::<(num_bigint::BigInt, num_bigint::BigInt)>();
 
         block_height_shard_id
-            .map(BlockHeightShardId::try_from)
+            .map(readnode_primitives::BlockHeightShardId::try_from)
             .unwrap_or_else(|err| {
                 Err(anyhow::anyhow!(
                     "Block height and shard id not found for chunk hash {}\n{:?}",
@@ -163,10 +143,10 @@ impl ScyllaDBManager {
     }
 
     /// Returns all state keys for the given account id
-    pub async fn get_all_state_keys(
+    async fn get_all_state_keys(
         &self,
         account_id: &near_primitives::types::AccountId,
-    ) -> anyhow::Result<Vec<StateKey>> {
+    ) -> anyhow::Result<Vec<readnode_primitives::StateKey>> {
         let result = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_all_state_keys,
@@ -180,11 +160,11 @@ impl ScyllaDBManager {
     }
 
     /// Returns state keys for the given account id filtered by the given prefix
-    pub async fn get_state_keys_by_prefix(
+    async fn get_state_keys_by_prefix(
         &self,
         account_id: &near_primitives::types::AccountId,
         prefix: &[u8],
-    ) -> anyhow::Result<Vec<StateKey>> {
+    ) -> anyhow::Result<Vec<readnode_primitives::StateKey>> {
         let hex_str_prefix = hex::encode(prefix);
         let result = Self::execute_prepared_query(
             &self.scylla_session,
@@ -202,12 +182,12 @@ impl ScyllaDBManager {
     }
 
     /// Returns the state value for the given key of the given account at the given block height
-    pub async fn get_state_key_value(
+    async fn get_state_key_value(
         &self,
         account_id: &near_primitives::types::AccountId,
         block_height: near_primitives::types::BlockHeight,
-        key_data: StateKey,
-    ) -> anyhow::Result<StateValue> {
+        key_data: readnode_primitives::StateKey,
+    ) -> anyhow::Result<readnode_primitives::StateValue> {
         let result = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_state_key_value,
@@ -218,17 +198,17 @@ impl ScyllaDBManager {
             ),
         )
         .await?
-        .single_row_typed::<(StateValue,)>()?;
+        .single_row_typed::<(readnode_primitives::StateValue,)>()?;
 
         Ok(result.0)
     }
 
     /// Returns the near_primitives::account::Account at the given block height
-    pub async fn get_account(
+    async fn get_account(
         &self,
         account_id: &near_primitives::types::AccountId,
         request_block_height: near_primitives::types::BlockHeight,
-    ) -> anyhow::Result<QueryData<near_primitives::account::Account>> {
+    ) -> anyhow::Result<readnode_primitives::QueryData<near_primitives::account::Account>> {
         let (block_height, block_hash, data_blob) = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_account,
@@ -241,9 +221,9 @@ impl ScyllaDBManager {
         .single_row()?
         .into_typed::<(num_bigint::BigInt, String, Vec<u8>)>()?;
 
-        let block = BlockRecord::try_from((block_hash, block_height))?;
+        let block = readnode_primitives::BlockRecord::try_from((block_hash, block_height))?;
 
-        QueryData::<near_primitives::account::Account>::try_from((
+        readnode_primitives::QueryData::<near_primitives::account::Account>::try_from((
             data_blob,
             block.height,
             block.hash,
@@ -251,11 +231,11 @@ impl ScyllaDBManager {
     }
 
     /// Returns the contract code at the given block height
-    pub async fn get_contract_code(
+    async fn get_contract_code(
         &self,
         account_id: &near_primitives::types::AccountId,
         request_block_height: near_primitives::types::BlockHeight,
-    ) -> anyhow::Result<QueryData<Vec<u8>>> {
+    ) -> anyhow::Result<readnode_primitives::QueryData<Vec<u8>>> {
         let (block_height, block_hash, contract_code) = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_contract_code,
@@ -268,9 +248,9 @@ impl ScyllaDBManager {
         .single_row()?
         .into_typed::<(num_bigint::BigInt, String, Vec<u8>)>()?;
 
-        let block = BlockRecord::try_from((block_hash, block_height))?;
+        let block = readnode_primitives::BlockRecord::try_from((block_hash, block_height))?;
 
-        Ok(QueryData {
+        Ok(readnode_primitives::QueryData {
             data: contract_code,
             block_height: block.height,
             block_hash: block.hash,
@@ -278,12 +258,12 @@ impl ScyllaDBManager {
     }
 
     /// Returns the near_primitives::account::AccessKey at the given block height
-    pub async fn get_access_key(
+    async fn get_access_key(
         &self,
         account_id: &near_primitives::types::AccountId,
         request_block_height: near_primitives::types::BlockHeight,
         public_key: near_crypto::PublicKey,
-    ) -> anyhow::Result<QueryData<near_primitives::account::AccessKey>> {
+    ) -> anyhow::Result<readnode_primitives::QueryData<near_primitives::account::AccessKey>> {
         let key_data = public_key.try_to_vec()?;
         let (block_height, block_hash, data_blob) = Self::execute_prepared_query(
             &self.scylla_session,
@@ -298,17 +278,17 @@ impl ScyllaDBManager {
         .single_row()?
         .into_typed::<(num_bigint::BigInt, String, Vec<u8>)>()?;
 
-        let block = BlockRecord::try_from((block_hash, block_height))?;
+        let block = readnode_primitives::BlockRecord::try_from((block_hash, block_height))?;
 
-        QueryData::<near_primitives::account::AccessKey>::try_from((
+        readnode_primitives::QueryData::<near_primitives::account::AccessKey>::try_from((
             data_blob,
             block.height,
             block.hash,
         ))
     }
 
-    #[cfg(feature = "account_access_keys")]
-    pub async fn get_account_access_keys(
+    // #[cfg(feature = "account_access_keys")]
+    async fn get_account_access_keys(
         &self,
         account_id: &near_primitives::types::AccountId,
         block_height: near_primitives::types::BlockHeight,
@@ -327,10 +307,10 @@ impl ScyllaDBManager {
     }
 
     /// Returns the near_primitives::views::ReceiptView at the given receipt_id
-    pub async fn get_receipt_by_id(
+    async fn get_receipt_by_id(
         &self,
         receipt_id: near_primitives::hash::CryptoHash,
-    ) -> anyhow::Result<ReceiptRecord> {
+    ) -> anyhow::Result<readnode_primitives::ReceiptRecord> {
         let row = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_receipt,
@@ -340,11 +320,11 @@ impl ScyllaDBManager {
         .single_row()?
         .into_typed::<(String, String, num_bigint::BigInt, num_bigint::BigInt)>()?;
 
-        ReceiptRecord::try_from(row)
+        readnode_primitives::ReceiptRecord::try_from(row)
     }
 
     /// Returns the readnode_primitives::TransactionDetails at the given transaction hash
-    pub async fn get_transaction_by_hash(
+    async fn get_transaction_by_hash(
         &self,
         transaction_hash: &str,
     ) -> anyhow::Result<readnode_primitives::TransactionDetails> {
@@ -363,11 +343,11 @@ impl ScyllaDBManager {
     }
 
     /// Returns the block height and shard id by the given block height
-    pub async fn get_block_by_height_and_shard_id(
+    async fn get_block_by_height_and_shard_id(
         &self,
         block_height: near_primitives::types::BlockHeight,
         shard_id: near_primitives::types::ShardId,
-    ) -> anyhow::Result<BlockHeightShardId> {
+    ) -> anyhow::Result<readnode_primitives::BlockHeightShardId> {
         let rows = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_stored_at_block_height_and_shard_id_by_block_height,
@@ -382,7 +362,7 @@ impl ScyllaDBManager {
             .find(|(_, shard)| shard == &num_bigint::BigInt::from(shard_id));
 
         block_height_and_shard_id
-            .map(BlockHeightShardId::try_from)
+            .map(readnode_primitives::BlockHeightShardId::try_from)
             .unwrap_or_else(|| {
                 Err(anyhow::anyhow!(
                     "Block height {} and shard id {} not found",
@@ -390,104 +370,5 @@ impl ScyllaDBManager {
                     shard_id
                 ))
             })
-    }
-}
-
-// TryFrom impls for defined types
-
-impl TryFrom<(num_bigint::BigInt, num_bigint::BigInt)> for BlockHeightShardId {
-    type Error = anyhow::Error;
-
-    fn try_from(value: (num_bigint::BigInt, num_bigint::BigInt)) -> Result<Self, Self::Error> {
-        let stored_at_block_height = value
-            .0
-            .to_u64()
-            .ok_or_else(|| anyhow::anyhow!("Failed to parse `stored_at_block_height` to u64"))?;
-
-        let parsed_shard_id = value
-            .1
-            .to_u64()
-            .ok_or_else(|| anyhow::anyhow!("Failed to parse `shard_id` to u64"))?;
-
-        Ok(BlockHeightShardId(stored_at_block_height, parsed_shard_id))
-    }
-}
-
-impl<T>
-    TryFrom<(
-        Vec<u8>,
-        near_primitives_core::types::BlockHeight,
-        near_indexer_primitives::CryptoHash,
-    )> for QueryData<T>
-where
-    T: BorshDeserialize,
-{
-    type Error = anyhow::Error;
-
-    fn try_from(
-        value: (
-            Vec<u8>,
-            near_primitives_core::types::BlockHeight,
-            near_indexer_primitives::CryptoHash,
-        ),
-    ) -> Result<Self, Self::Error> {
-        let data = T::try_from_slice(&value.0)?;
-
-        Ok(Self {
-            data,
-            block_height: value.1,
-            block_hash: value.2,
-        })
-    }
-}
-
-impl TryFrom<(String, String, num_bigint::BigInt, num_bigint::BigInt)> for ReceiptRecord {
-    type Error = anyhow::Error;
-
-    fn try_from(
-        value: (String, String, num_bigint::BigInt, num_bigint::BigInt),
-    ) -> Result<Self, Self::Error> {
-        let receipt_id =
-            near_primitives::hash::CryptoHash::try_from(value.0.as_bytes()).map_err(|err| {
-                anyhow::anyhow!("Failed to parse `receipt_id` to CryptoHash: {}", err)
-            })?;
-        let parent_transaction_hash = near_primitives::hash::CryptoHash::from_str(&value.1)
-            .map_err(|err| {
-                anyhow::anyhow!(
-                    "Failed to parse `parent_transaction_hash` to CryptoHash: {}",
-                    err
-                )
-            })?;
-        let block_height = value
-            .2
-            .to_u64()
-            .ok_or_else(|| anyhow::anyhow!("Failed to parse `block_height` to u64"))?;
-        let shard_id = value
-            .3
-            .to_u64()
-            .ok_or_else(|| anyhow::anyhow!("Failed to parse `shard_id` to u64"))?;
-
-        Ok(ReceiptRecord {
-            receipt_id,
-            parent_transaction_hash,
-            block_height,
-            shard_id,
-        })
-    }
-}
-
-impl TryFrom<(String, num_bigint::BigInt)> for BlockRecord {
-    type Error = anyhow::Error;
-
-    fn try_from(value: (String, num_bigint::BigInt)) -> Result<Self, Self::Error> {
-        let height = value
-            .1
-            .to_u64()
-            .ok_or_else(|| anyhow::anyhow!("Failed to parse `block_height` to u64"))?;
-        let hash = near_primitives::hash::CryptoHash::from_str(&value.0).map_err(|err| {
-            anyhow::anyhow!("Failed to parse `block_hash` to CryptoHash: {}", err)
-        })?;
-
-        Ok(BlockRecord { height, hash })
     }
 }

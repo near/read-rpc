@@ -115,7 +115,7 @@ impl Opts {
 
 pub struct ServerContext {
     pub s3_client: near_lake_framework::s3_fetchers::LakeS3Client,
-    pub scylla_db_manager: std::sync::Arc<crate::storage::ScyllaDBManager>,
+    pub scylla_db_manager: std::sync::Arc<Box<dyn database::BaseDbManager + Sync + Send + 'static>>,
     pub near_rpc_client: near_jsonrpc_client::JsonRpcClient,
     pub s3_bucket_name: String,
     pub genesis_config: near_chain_configs::GenesisConfig,
@@ -129,6 +129,36 @@ pub struct ServerContext {
     pub max_gas_burnt: near_primitives_core::types::Gas,
 }
 
+impl ServerContext {
+    pub fn new(
+        s3_client: near_lake_framework::s3_fetchers::LakeS3Client,
+        db_manager: impl database::BaseDbManager + Sync + Send + 'static,
+        near_rpc_client: near_jsonrpc_client::JsonRpcClient,
+        s3_bucket_name: String,
+        genesis_config: near_chain_configs::GenesisConfig,
+        blocks_cache: std::sync::Arc<std::sync::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>>,
+        final_block_height: std::sync::Arc<std::sync::atomic::AtomicU64>,
+        compiled_contract_code_cache: std::sync::Arc<CompiledCodeCache>,
+        contract_code_cache: std::sync::Arc<
+            std::sync::RwLock<crate::cache::LruMemoryCache<near_primitives::hash::CryptoHash, Vec<u8>>>,
+        >,
+        max_gas_burnt: near_primitives_core::types::Gas,
+    ) -> Self {
+        Self {
+            s3_client,
+            scylla_db_manager: std::sync::Arc::new(Box::new(db_manager)),
+            near_rpc_client,
+            s3_bucket_name,
+            genesis_config,
+            blocks_cache,
+            final_block_height,
+            compiled_contract_code_cache,
+            contract_code_cache,
+            max_gas_burnt,
+        }
+    }
+
+}
 pub struct CompiledCodeCache {
     pub local_cache: std::sync::Arc<
         std::sync::RwLock<

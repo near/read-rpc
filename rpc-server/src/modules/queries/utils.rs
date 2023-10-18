@@ -11,7 +11,7 @@ use tokio::task;
 use crate::config::CompiledCodeCache;
 use crate::errors::FunctionCallError;
 use crate::modules::queries::{CodeStorage, MAX_LIMIT};
-use crate::storage::ScyllaDBManager;
+// use crate::storage::ScyllaDBManager;
 
 pub struct RunContractResponse {
     pub result: Vec<u8>,
@@ -25,7 +25,7 @@ pub struct RunContractResponse {
     tracing::instrument(skip(scylla_db_manager))
 )]
 pub async fn get_state_keys_from_scylla(
-    scylla_db_manager: &std::sync::Arc<ScyllaDBManager>,
+    scylla_db_manager: &std::sync::Arc<Box<dyn database::BaseDbManager + Sync + Send + 'static>>,
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
     prefix: &[u8],
@@ -36,7 +36,7 @@ pub async fn get_state_keys_from_scylla(
         block_height,
         prefix,
     );
-    let mut data: HashMap<crate::storage::StateKey, crate::storage::StateValue> = HashMap::new();
+    let mut data: HashMap<readnode_primitives::StateKey, readnode_primitives::StateValue> = HashMap::new();
     let result = {
         if !prefix.is_empty() {
             scylla_db_manager
@@ -74,7 +74,7 @@ pub async fn get_state_keys_from_scylla(
     tracing::instrument(skip(scylla_db_manager))
 )]
 pub async fn fetch_list_access_keys_from_scylla_db(
-    scylla_db_manager: &std::sync::Arc<ScyllaDBManager>,
+    scylla_db_manager: &std::sync::Arc<Box<dyn database::BaseDbManager + Sync + Send + 'static>>,
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
 ) -> anyhow::Result<Vec<near_primitives::views::AccessKeyInfoView>> {
@@ -110,7 +110,7 @@ pub async fn fetch_list_access_keys_from_scylla_db(
     tracing::instrument(skip(scylla_db_manager))
 )]
 pub async fn fetch_state_from_scylla_db(
-    scylla_db_manager: &std::sync::Arc<ScyllaDBManager>,
+    scylla_db_manager: &std::sync::Arc<Box<dyn database::BaseDbManager + Sync + Send + 'static>>,
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
     prefix: &[u8],
@@ -157,7 +157,7 @@ async fn run_code_in_vm_runner(
     context: near_vm_logic::VMContext,
     account_id: near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
-    scylla_db_manager: std::sync::Arc<ScyllaDBManager>,
+    scylla_db_manager: std::sync::Arc<Box<dyn database::BaseDbManager + Sync + Send + 'static>>,
     latest_protocol_version: near_primitives::types::ProtocolVersion,
     compiled_contract_code_cache: &std::sync::Arc<CompiledCodeCache>,
 ) -> Result<near_vm_logic::VMOutcome, near_primitives::errors::RuntimeError> {
@@ -235,7 +235,7 @@ pub async fn run_contract(
     account_id: near_primitives::types::AccountId,
     method_name: &str,
     args: near_primitives::types::FunctionArgs,
-    scylla_db_manager: std::sync::Arc<ScyllaDBManager>,
+    scylla_db_manager: std::sync::Arc<Box<dyn database::BaseDbManager + Sync + Send + 'static>>,
     compiled_contract_code_cache: &std::sync::Arc<CompiledCodeCache>,
     contract_code_cache: &std::sync::Arc<
         std::sync::RwLock<crate::cache::LruMemoryCache<near_primitives::hash::CryptoHash, Vec<u8>>>,

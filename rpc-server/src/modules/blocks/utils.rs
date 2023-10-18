@@ -1,7 +1,6 @@
 use crate::config::ServerContext;
 use crate::modules::blocks::methods::fetch_block;
 use crate::modules::blocks::CacheBlock;
-use crate::storage::ScyllaDBManager;
 use near_primitives::views::{StateChangeValueView, StateChangesRequestView};
 
 #[cfg_attr(
@@ -76,82 +75,6 @@ pub async fn fetch_chunk_from_s3(
     }
 }
 
-#[cfg_attr(
-    feature = "tracing-instrumentation",
-    tracing::instrument(skip(scylla_db_manager))
-)]
-pub async fn scylla_db_convert_block_hash_to_block_height(
-    scylla_db_manager: &std::sync::Arc<ScyllaDBManager>,
-    block_hash: near_primitives::hash::CryptoHash,
-) -> Result<u64, near_jsonrpc_primitives::types::blocks::RpcBlockError> {
-    tracing::debug!("`scylla_db_convert_block_hash_to_block_height` call");
-    match scylla_db_manager.get_block_by_hash(block_hash).await {
-        Ok(block_height) => Ok(block_height),
-        Err(err) => Err(
-            near_jsonrpc_primitives::types::blocks::RpcBlockError::UnknownBlock {
-                error_message: err.to_string(),
-            },
-        ),
-    }
-}
-
-#[cfg_attr(
-    feature = "tracing-instrumentation",
-    tracing::instrument(skip(scylla_db_manager))
-)]
-pub async fn scylla_db_convert_chunk_hash_to_block_height_and_shard_id(
-    scylla_db_manager: &std::sync::Arc<ScyllaDBManager>,
-    chunk_hash: near_primitives::hash::CryptoHash,
-) -> Result<
-    (
-        near_primitives::types::BlockHeight,
-        near_primitives::types::ShardId,
-    ),
-    near_jsonrpc_primitives::types::chunks::RpcChunkError,
-> {
-    tracing::debug!("`scylla_db_convert_chunk_hash_to_block_height_and_shard_id` call");
-    match scylla_db_manager.get_block_by_chunk_hash(chunk_hash).await {
-        Ok(block_id_shard_id) => Ok((block_id_shard_id.0, block_id_shard_id.1)),
-        Err(_err) => Err(
-            near_jsonrpc_primitives::types::chunks::RpcChunkError::InternalError {
-                error_message: format!("Unknown chunk hash: {chunk_hash}"),
-            },
-        ),
-    }
-}
-
-#[cfg_attr(
-    feature = "tracing-instrumentation",
-    tracing::instrument(skip(scylla_db_manager))
-)]
-pub async fn scylla_db_convert_block_height_and_shard_id_to_height_included_and_shard_id(
-    scylla_db_manager: &std::sync::Arc<ScyllaDBManager>,
-    block_height: near_primitives::types::BlockHeight,
-    shard_id: near_primitives::types::ShardId,
-) -> Result<
-    (
-        near_primitives::types::BlockHeight,
-        near_primitives::types::ShardId,
-    ),
-    near_jsonrpc_primitives::types::chunks::RpcChunkError,
-> {
-    tracing::debug!(
-        "`scylla_db_convert_block_height_and_shard_id_to_height_included_and_shard_id` call"
-    );
-    Ok(scylla_db_manager
-        .get_block_by_height_and_shard_id(block_height, shard_id)
-        .await
-        .map_err(
-            |_err| near_jsonrpc_primitives::types::chunks::RpcChunkError::InternalError {
-                error_message: format!(
-                    "Unknown block height: {} and shard_id: {}",
-                    block_height, shard_id
-                ),
-            },
-        )
-        .map(|block_height_shard_id| (block_height_shard_id.0, block_height_shard_id.1)))?
-}
-
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn fetch_block_from_cache_or_get(
     data: &jsonrpc_v2::Data<ServerContext>,
@@ -161,7 +84,14 @@ pub async fn fetch_block_from_cache_or_get(
         near_primitives::types::BlockReference::BlockId(block_id) => match block_id {
             near_primitives::types::BlockId::Height(block_height) => Ok(block_height),
             near_primitives::types::BlockId::Hash(hash) => {
-                scylla_db_convert_block_hash_to_block_height(&data.scylla_db_manager, hash).await
+                match data.scylla_db_manager.get_block_by_hash(hash).await {
+                    Ok(block_height) => Ok(block_height),
+                    Err(err) => Err(
+                        near_jsonrpc_primitives::types::blocks::RpcBlockError::UnknownBlock {
+                            error_message: err.to_string(),
+                        },
+                    ),
+                }
             }
         },
         near_primitives::types::BlockReference::Finality(_) => {

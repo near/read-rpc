@@ -466,3 +466,21 @@ macro_rules! capture_shadow_consistency_error {
 }
 #[cfg(feature = "shadow_data_consistency")]
 pub(crate) use capture_shadow_consistency_error;
+use database::ScyllaStorageManager;
+use crate::storage;
+
+
+pub async fn get_db_manager(opts: &crate::config::Opts) -> anyhow::Result<impl database::BaseDbManager> {
+    let db_manager =
+        *storage::ScyllaDBManager::new(
+            &opts.scylla_url,
+            opts.scylla_user.as_deref(),
+            opts.scylla_password.as_deref(),
+            opts.scylla_preferred_dc.as_deref(),
+            Some(opts.scylla_keepalive_interval),
+            opts.max_retry,
+            opts.strict_mode,
+        ).await?;
+    Ok(db_manager)
+}
+
