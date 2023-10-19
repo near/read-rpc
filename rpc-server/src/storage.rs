@@ -16,7 +16,7 @@ pub struct ScyllaDBManager {
     get_account: PreparedStatement,
     get_contract_code: PreparedStatement,
     get_access_key: PreparedStatement,
-    // #[cfg(feature = "account_access_keys")]
+    #[cfg(feature = "account_access_keys")]
     get_account_access_keys: PreparedStatement,
     get_receipt: PreparedStatement,
     get_transaction_by_hash: PreparedStatement,
@@ -70,7 +70,7 @@ impl ScyllaStorageManager for ScyllaDBManager {
                 &scylla_db_session,
                 "SELECT block_height, block_hash, data_value FROM state_indexer.state_changes_access_key WHERE account_id = ? AND block_height <= ? AND data_key = ? LIMIT 1",
             ).await?,
-            // #[cfg(feature = "account_access_keys")]
+            #[cfg(feature = "account_access_keys")]
             get_account_access_keys: Self::prepare_read_query(
                 &scylla_db_session,
                 "SELECT active_access_keys FROM state_indexer.account_access_keys WHERE account_id = ? AND block_height <= ? LIMIT 1",
@@ -97,7 +97,7 @@ impl ScyllaStorageManager for ScyllaDBManager {
 }
 
 #[async_trait::async_trait]
-impl database::BaseDbManager for ScyllaDBManager {
+impl database::RpcDbManager for ScyllaDBManager {
     /// Searches the block height by the given block hash
     async fn get_block_by_hash(
         &self,
@@ -287,7 +287,7 @@ impl database::BaseDbManager for ScyllaDBManager {
         ))
     }
 
-    // #[cfg(feature = "account_access_keys")]
+    #[cfg(feature = "account_access_keys")]
     async fn get_account_access_keys(
         &self,
         account_id: &near_primitives::types::AccountId,

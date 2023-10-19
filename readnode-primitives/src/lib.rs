@@ -1,9 +1,9 @@
+use borsh::{BorshDeserialize, BorshSerialize};
+use near_indexer_primitives::{views, CryptoHash, IndexerTransactionWithOutcome};
+use num_traits::ToPrimitive;
+use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::str::FromStr;
-use num_traits::ToPrimitive;
-use borsh::{BorshDeserialize, BorshSerialize};
-use near_indexer_primitives::{views, IndexerTransactionWithOutcome};
-use serde::{Deserialize, Serialize};
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 pub struct TransactionKey {
@@ -180,13 +180,13 @@ impl TryFrom<(num_bigint::BigInt, num_bigint::BigInt)> for BlockHeightShardId {
 }
 
 impl<T>
-TryFrom<(
-    Vec<u8>,
-    near_primitives_core::types::BlockHeight,
-    near_indexer_primitives::CryptoHash,
-)> for QueryData<T>
-    where
-        T: BorshDeserialize,
+    TryFrom<(
+        Vec<u8>,
+        near_primitives_core::types::BlockHeight,
+        near_indexer_primitives::CryptoHash,
+    )> for QueryData<T>
+where
+    T: BorshDeserialize,
 {
     type Error = anyhow::Error;
 
@@ -217,13 +217,12 @@ impl TryFrom<(String, String, num_bigint::BigInt, num_bigint::BigInt)> for Recei
             near_primitives::hash::CryptoHash::try_from(value.0.as_bytes()).map_err(|err| {
                 anyhow::anyhow!("Failed to parse `receipt_id` to CryptoHash: {}", err)
             })?;
-        let parent_transaction_hash = CryptoHash::from_str(&value.1)
-            .map_err(|err| {
-                anyhow::anyhow!(
-                    "Failed to parse `parent_transaction_hash` to CryptoHash: {}",
-                    err
-                )
-            })?;
+        let parent_transaction_hash = CryptoHash::from_str(&value.1).map_err(|err| {
+            anyhow::anyhow!(
+                "Failed to parse `parent_transaction_hash` to CryptoHash: {}",
+                err
+            )
+        })?;
         let block_height = value
             .2
             .to_u64()

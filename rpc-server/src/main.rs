@@ -118,31 +118,19 @@ async fn main() -> anyhow::Result<()> {
         cache::LruMemoryCache::new(contract_code_cache_size),
     ));
 
-    // let db_manager = std::sync::Arc::new(
-    //     *storage::ScyllaDBManager::new(
-    //         &opts.scylla_url,
-    //         opts.scylla_user.as_deref(),
-    //         opts.scylla_password.as_deref(),
-    //         opts.scylla_preferred_dc.as_deref(),
-    //         Some(opts.scylla_keepalive_interval),
-    //         opts.max_retry,
-    //         opts.strict_mode,
-    //     )
-    //     .await?,
-    // );
-
     tracing::info!("Get genesis config...");
     let genesis_config = near_rpc_client
         .call(near_jsonrpc_client::methods::EXPERIMENTAL_genesis_config::RpcGenesisConfigRequest)
         .await?;
     let lake_config = opts.to_lake_config(final_block.block_height).await?;
     let s3_config = opts.to_s3_config().await;
+    let db_manager = opts.prepare_db_manager().await?;
 
     let state = ServerContext::new(
-        near_lake_framework::s3_fetchers::LakeS3Client::new(
-            aws_sdk_s3::Client::from_conf(s3_config),
-        ),
-        utils::get_db_manager(&opts).await?,
+        near_lake_framework::s3_fetchers::LakeS3Client::new(aws_sdk_s3::Client::from_conf(
+            s3_config,
+        )),
+        db_manager,
         near_rpc_client.clone(),
         opts.s3_bucket_name.clone(),
         genesis_config,
@@ -150,7 +138,7 @@ async fn main() -> anyhow::Result<()> {
         std::sync::Arc::clone(&final_block_height),
         compiled_contract_code_cache,
         contract_code_cache,
-        opts.max_gas_burnt.clone(),
+        opts.max_gas_burnt,
     );
 
     tokio::spawn(async move {

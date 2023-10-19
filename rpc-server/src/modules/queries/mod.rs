@@ -1,6 +1,6 @@
+use database::RpcDbManager;
 use futures::executor::block_on;
 use std::collections::HashMap;
-use database::BaseDbManager;
 
 pub mod methods;
 pub mod utils;
@@ -10,7 +10,7 @@ const MAX_LIMIT: u8 = 100;
 pub type Result<T> = ::std::result::Result<T, near_vm_logic::VMLogicError>;
 
 pub struct CodeStorage {
-    scylla_db_manager: std::sync::Arc<Box<dyn BaseDbManager + Sync + Send + 'static>>,
+    db_manager: std::sync::Arc<Box<dyn RpcDbManager + Sync + Send + 'static>>,
     account_id: near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
     validators: HashMap<near_primitives::types::AccountId, near_primitives::types::Balance>,
@@ -33,12 +33,12 @@ impl near_vm_logic::ValuePtr for StorageValuePtr {
 
 impl CodeStorage {
     pub fn init(
-        scylla_db_manager: std::sync::Arc<Box<dyn BaseDbManager + Sync + Send + 'static>>,
+        db_manager: std::sync::Arc<Box<dyn RpcDbManager + Sync + Send + 'static>>,
         account_id: near_primitives::types::AccountId,
         block_height: near_primitives::types::BlockHeight,
     ) -> Self {
         Self {
-            scylla_db_manager,
+            db_manager,
             account_id,
             block_height,
             validators: Default::default(), // TODO: Should be store list of validators in the current epoch.
@@ -66,11 +66,9 @@ impl near_vm_logic::External for CodeStorage {
         key: &[u8],
         _mode: near_vm_logic::StorageGetMode,
     ) -> Result<Option<Box<dyn near_vm_logic::ValuePtr>>> {
-        let get_db_data = self.scylla_db_manager.get_state_key_value(
-            &self.account_id,
-            self.block_height,
-            key.to_vec(),
-        );
+        let get_db_data =
+            self.db_manager
+                .get_state_key_value(&self.account_id, self.block_height, key.to_vec());
         match block_on(get_db_data) {
             Ok(data) => Ok(if !data.is_empty() {
                 Some(Box::new(StorageValuePtr { value: data }) as Box<_>)
@@ -108,11 +106,9 @@ impl near_vm_logic::External for CodeStorage {
         key: &[u8],
         _mode: near_vm_logic::StorageGetMode,
     ) -> Result<bool> {
-        let get_db_state_keys = self.scylla_db_manager.get_state_key_value(
-            &self.account_id,
-            self.block_height,
-            key.to_vec(),
-        );
+        let get_db_state_keys =
+            self.db_manager
+                .get_state_key_value(&self.account_id, self.block_height, key.to_vec());
         match block_on(get_db_state_keys) {
             Ok(data) => Ok(!data.is_empty()),
             Err(_) => Ok(false),

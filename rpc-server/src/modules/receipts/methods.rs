@@ -57,7 +57,7 @@ async fn fetch_receipt(
     let receipt_id = request.receipt_reference.receipt_id;
 
     let receipt_record = data
-        .scylla_db_manager
+        .db_manager
         .get_receipt_by_id(receipt_id)
         .await
         .map_err(|err| {
@@ -67,7 +67,7 @@ async fn fetch_receipt(
 
     // Getting the raw Vec<u8> of the TransactionDetails from ScyllaDB
     let transaction_details = data
-        .scylla_db_manager
+        .db_manager
         .get_transaction_by_hash(&receipt_record.parent_transaction_hash.to_string())
         .await
         .map_err(|err| {

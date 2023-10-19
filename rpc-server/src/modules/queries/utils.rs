@@ -11,7 +11,6 @@ use tokio::task;
 use crate::config::CompiledCodeCache;
 use crate::errors::FunctionCallError;
 use crate::modules::queries::{CodeStorage, MAX_LIMIT};
-// use crate::storage::ScyllaDBManager;
 
 pub struct RunContractResponse {
     pub result: Vec<u8>,
@@ -22,34 +21,35 @@ pub struct RunContractResponse {
 
 #[cfg_attr(
     feature = "tracing-instrumentation",
-    tracing::instrument(skip(scylla_db_manager))
+    tracing::instrument(skip(db_manager))
 )]
-pub async fn get_state_keys_from_scylla(
-    scylla_db_manager: &std::sync::Arc<Box<dyn database::BaseDbManager + Sync + Send + 'static>>,
+pub async fn get_state_keys_from_db(
+    db_manager: &std::sync::Arc<Box<dyn database::RpcDbManager + Sync + Send + 'static>>,
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
     prefix: &[u8],
 ) -> HashMap<Vec<u8>, Vec<u8>> {
     tracing::debug!(
-        "`get_state_keys_from_scylla` call. AccountId {}, block {}, prefix {:?}",
+        "`get_state_keys_from_db` call. AccountId {}, block {}, prefix {:?}",
         account_id,
         block_height,
         prefix,
     );
-    let mut data: HashMap<readnode_primitives::StateKey, readnode_primitives::StateValue> = HashMap::new();
+    let mut data: HashMap<readnode_primitives::StateKey, readnode_primitives::StateValue> =
+        HashMap::new();
     let result = {
         if !prefix.is_empty() {
-            scylla_db_manager
+            db_manager
                 .get_state_keys_by_prefix(account_id, prefix)
                 .await
         } else {
-            scylla_db_manager.get_all_state_keys(account_id).await
+            db_manager.get_all_state_keys(account_id).await
         }
     };
     match result {
         Ok(state_keys) => {
             for state_key in state_keys {
-                let state_value_result = scylla_db_manager
+                let state_value_result = db_manager
                     .get_state_key_value(account_id, block_height, state_key.clone())
                     .await;
                 if let Ok(state_value) = state_value_result {
@@ -71,19 +71,19 @@ pub async fn get_state_keys_from_scylla(
 #[cfg(feature = "account_access_keys")]
 #[cfg_attr(
     feature = "tracing-instrumentation",
-    tracing::instrument(skip(scylla_db_manager))
+    tracing::instrument(skip(db_manager))
 )]
-pub async fn fetch_list_access_keys_from_scylla_db(
-    scylla_db_manager: &std::sync::Arc<Box<dyn database::BaseDbManager + Sync + Send + 'static>>,
+pub async fn fetch_list_access_keys_from_db(
+    db_manager: &std::sync::Arc<Box<dyn database::RpcDbManager + Sync + Send + 'static>>,
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
 ) -> anyhow::Result<Vec<near_primitives::views::AccessKeyInfoView>> {
     tracing::debug!(
-        "`fetch_list_access_keys_from_scylla_db` call. AccountID {}, block {}",
+        "`fetch_list_access_keys_from_db` call. AccountID {}, block {}",
         account_id,
         block_height,
     );
-    let row = scylla_db_manager
+    let row = db_manager
         .get_account_access_keys(account_id, block_height)
         .await?;
     let (account_keys,): (HashMap<String, Vec<u8>>,) =
@@ -107,22 +107,21 @@ pub async fn fetch_list_access_keys_from_scylla_db(
 
 #[cfg_attr(
     feature = "tracing-instrumentation",
-    tracing::instrument(skip(scylla_db_manager))
+    tracing::instrument(skip(db_manager))
 )]
-pub async fn fetch_state_from_scylla_db(
-    scylla_db_manager: &std::sync::Arc<Box<dyn database::BaseDbManager + Sync + Send + 'static>>,
+pub async fn fetch_state_from_db(
+    db_manager: &std::sync::Arc<Box<dyn database::RpcDbManager + Sync + Send + 'static>>,
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
     prefix: &[u8],
 ) -> anyhow::Result<near_primitives::views::ViewStateResult> {
     tracing::debug!(
-        "`fetch_state_from_scylla_db` call. AccountID {}, block {}, prefix {:?}",
+        "`fetch_state_from_db` call. AccountID {}, block {}, prefix {:?}",
         account_id,
         block_height,
         prefix,
     );
-    let state_from_db =
-        get_state_keys_from_scylla(scylla_db_manager, account_id, block_height, prefix).await;
+    let state_from_db = get_state_keys_from_db(db_manager, account_id, block_height, prefix).await;
     if state_from_db.is_empty() {
         anyhow::bail!("Data not found in db")
     } else {
@@ -144,12 +143,7 @@ pub async fn fetch_state_from_scylla_db(
 #[allow(clippy::too_many_arguments)]
 #[cfg_attr(
     feature = "tracing-instrumentation",
-    tracing::instrument(skip(
-        scylla_db_manager,
-        context,
-        contract_code,
-        compiled_contract_code_cache
-    ))
+    tracing::instrument(skip(db_manager, context, contract_code, compiled_contract_code_cache))
 )]
 async fn run_code_in_vm_runner(
     contract_code: near_primitives::contract::ContractCode,
@@ -157,12 +151,12 @@ async fn run_code_in_vm_runner(
     context: near_vm_logic::VMContext,
     account_id: near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
-    scylla_db_manager: std::sync::Arc<Box<dyn database::BaseDbManager + Sync + Send + 'static>>,
+    db_manager: std::sync::Arc<Box<dyn database::RpcDbManager + Sync + Send + 'static>>,
     latest_protocol_version: near_primitives::types::ProtocolVersion,
     compiled_contract_code_cache: &std::sync::Arc<CompiledCodeCache>,
 ) -> Result<near_vm_logic::VMOutcome, near_primitives::errors::RuntimeError> {
     let contract_method_name = String::from(method_name);
-    let mut external = CodeStorage::init(scylla_db_manager.clone(), account_id, block_height);
+    let mut external = CodeStorage::init(db_manager.clone(), account_id, block_height);
     let code_cache = std::sync::Arc::clone(compiled_contract_code_cache);
 
     let results = task::spawn_blocking(move || {
@@ -225,17 +219,13 @@ async fn run_code_in_vm_runner(
 #[allow(clippy::too_many_arguments)]
 #[cfg_attr(
     feature = "tracing-instrumentation",
-    tracing::instrument(skip(
-        scylla_db_manager,
-        compiled_contract_code_cache,
-        contract_code_cache
-    ))
+    tracing::instrument(skip(db_manager, compiled_contract_code_cache, contract_code_cache))
 )]
 pub async fn run_contract(
     account_id: near_primitives::types::AccountId,
     method_name: &str,
     args: near_primitives::types::FunctionArgs,
-    scylla_db_manager: std::sync::Arc<Box<dyn database::BaseDbManager + Sync + Send + 'static>>,
+    db_manager: std::sync::Arc<Box<dyn database::RpcDbManager + Sync + Send + 'static>>,
     compiled_contract_code_cache: &std::sync::Arc<CompiledCodeCache>,
     contract_code_cache: &std::sync::Arc<
         std::sync::RwLock<crate::cache::LruMemoryCache<near_primitives::hash::CryptoHash, Vec<u8>>>,
@@ -243,7 +233,7 @@ pub async fn run_contract(
     block: crate::modules::blocks::CacheBlock,
     max_gas_burnt: near_primitives_core::types::Gas,
 ) -> Result<RunContractResponse, FunctionCallError> {
-    let contract = scylla_db_manager
+    let contract = db_manager
         .get_account(&account_id, block.block_height)
         .await
         .map_err(|_| FunctionCallError::AccountDoesNotExist {
@@ -261,7 +251,7 @@ pub async fn run_contract(
             near_primitives::contract::ContractCode::new(code, Some(contract.data.code_hash()))
         }
         None => {
-            let code = scylla_db_manager
+            let code = db_manager
                 .get_contract_code(&account_id, block.block_height)
                 .await
                 .map_err(|_| FunctionCallError::InvalidAccountId {
@@ -305,7 +295,7 @@ pub async fn run_contract(
         context,
         account_id,
         block.block_height,
-        scylla_db_manager.clone(),
+        db_manager.clone(),
         block.latest_protocol_version,
         compiled_contract_code_cache,
     )

@@ -84,7 +84,7 @@ pub async fn fetch_block_from_cache_or_get(
         near_primitives::types::BlockReference::BlockId(block_id) => match block_id {
             near_primitives::types::BlockId::Height(block_height) => Ok(block_height),
             near_primitives::types::BlockId::Hash(hash) => {
-                match data.scylla_db_manager.get_block_by_hash(hash).await {
+                match data.db_manager.get_block_by_hash(hash).await {
                     Ok(block_height) => Ok(block_height),
                     Err(err) => Err(
                         near_jsonrpc_primitives::types::blocks::RpcBlockError::UnknownBlock {
