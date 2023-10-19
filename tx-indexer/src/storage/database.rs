@@ -37,6 +37,7 @@ impl HashStorageWithDB {
     }
 
     /// Init storage with restore transactions with receipts after interruption
+    #[allow(unused)]
     pub(crate) async fn init_with_restore(
         scylla_db_client: std::sync::Arc<crate::config::ScyllaDBManager>,
         start_block_height: u64,
