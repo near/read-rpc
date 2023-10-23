@@ -40,14 +40,13 @@ async fn main() -> anyhow::Result<()> {
     let config: near_lake_framework::LakeConfig = opts.to_lake_config(start_block_height).await?;
 
     tracing::info!(target: INDEXER, "Creating hash storage...");
-    // let tx_collecting_storage = std::sync::Arc::new(
-    //     storage::database::HashStorageWithDB::init_with_restore(
-    //         scylla_db_client.clone(),
-    //         start_block_height,
-    //     )
-    //     .await?,
-    // );
-    let tx_collecting_storage = std::sync::Arc::new(storage::memory::HashStorage::new());
+    let tx_collecting_storage = std::sync::Arc::new(
+        storage::database::HashStorageWithDB::init_with_restore(
+            scylla_db_client.clone(),
+            start_block_height,
+        )
+        .await?,
+    );
 
     tracing::info!(target: INDEXER, "Instantiating the stream...",);
     let (sender, stream) = near_lake_framework::streamer(config);

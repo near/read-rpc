@@ -347,14 +347,20 @@ impl ScyllaStorageManager for ScyllaDBManager {
             )
             .await?,
 
-            cache_get_transactions: Self::prepare_read_query(
+            cache_get_transactions: Self::prepare_query(
                 &scylla_db_session,
-                "SELECT transaction_details FROM tx_indexer_cache.transactions WHERE block_height <= ? ALLOW FILTERING",
+                scylla::statement::query::Query::new(
+                    "SELECT transaction_details FROM tx_indexer_cache.transactions WHERE block_height <= ? ALLOW FILTERING"
+                ).with_page_size(10),
+                Some(scylla::frame::types::Consistency::LocalOne)
             ).await?,
 
-            cache_get_receipts: Self::prepare_read_query(
+            cache_get_receipts: Self::prepare_query(
                 &scylla_db_session,
-                "SELECT receipt, outcome FROM tx_indexer_cache.receipts_outcomes WHERE transaction_hash = ? AND block_height = ?",
+                scylla::statement::query::Query::new(
+                    "SELECT receipt, outcome FROM tx_indexer_cache.receipts_outcomes WHERE transaction_hash = ? AND block_height = ?"
+                ).with_page_size(10),
+                Some(scylla::frame::types::Consistency::LocalOne)
             ).await?,
 
             cache_add_transaction: Self::prepare_write_query(
@@ -514,12 +520,10 @@ impl ScyllaDBManager {
         >,
     > {
         let mut result = std::collections::HashMap::new();
-        let mut prepared_query = self.cache_get_transactions.clone();
-        prepared_query.set_page_size(10);
         let mut rows_stream = self
             .scylla_session
             .execute_iter(
-                prepared_query,
+                self.cache_get_transactions.clone(),
                 (num_bigint::BigInt::from(start_block_height),),
             )
             .await?
