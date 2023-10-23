@@ -351,7 +351,7 @@ impl ScyllaStorageManager for ScyllaDBManager {
                 &scylla_db_session,
                 scylla::statement::query::Query::new(
                     "SELECT transaction_details FROM tx_indexer_cache.transactions WHERE block_height <= ? ALLOW FILTERING"
-                ).with_page_size(10),
+                ).with_page_size(1),
                 Some(scylla::frame::types::Consistency::LocalOne)
             ).await?,
 
@@ -359,7 +359,7 @@ impl ScyllaStorageManager for ScyllaDBManager {
                 &scylla_db_session,
                 scylla::statement::query::Query::new(
                     "SELECT receipt, outcome FROM tx_indexer_cache.receipts_outcomes WHERE transaction_hash = ? AND block_height = ?"
-                ).with_page_size(10),
+                ).with_page_size(1),
                 Some(scylla::frame::types::Consistency::LocalOne)
             ).await?,
 
@@ -534,7 +534,14 @@ impl ScyllaDBManager {
                 readnode_primitives::CollectingTransactionDetails::try_from_slice(
                     &transaction_details,
                 )?;
-            result.insert(transaction_details.transaction_key(), transaction_details);
+            let transaction_key = transaction_details.transaction_key();
+            result.insert(transaction_key.clone(), transaction_details);
+            tracing::info!(
+                target: crate::storage::STORAGE,
+                "Transaction uploaded from db {} - {}",
+                transaction_key.transaction_hash,
+                transaction_key.block_height
+            );
         }
         Ok(result)
     }

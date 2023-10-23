@@ -2,7 +2,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use near_indexer_primitives::{views, CryptoHash, IndexerTransactionWithOutcome};
 use serde::{Deserialize, Serialize};
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 pub struct TransactionKey {
     pub transaction_hash: String,
     pub block_height: u64,

@@ -318,9 +318,6 @@ pub trait ScyllaStorageManager {
         mut query: scylla::statement::query::Query,
         consistency: Option<scylla::frame::types::Consistency>,
     ) -> anyhow::Result<PreparedStatement> {
-
-        // let mut query = scylla::statement::query::Query::new(query_text);
-
         if let Some(consistency) = consistency {
             query.set_consistency(consistency);
         } else {

@@ -111,7 +111,7 @@ impl HashStorageWithDB {
             }
             tracing::info!(
                 target: crate::storage::STORAGE,
-                "Transaction uploaded from storage {}",
+                "Transaction collected from db {}",
                 transaction_key.transaction_hash,
             );
         }
