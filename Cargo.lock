@@ -202,7 +202,7 @@ dependencies = [
  "serde_urlencoded",
  "smallvec",
  "socket2 0.4.9",
- "time 0.3.21",
+ "time",
  "url",
 ]
 
@@ -502,7 +502,7 @@ dependencies = [
  "http",
  "hyper",
  "ring",
- "time 0.3.21",
+ "time",
  "tokio",
  "tower",
  "tracing",
@@ -674,7 +674,7 @@ dependencies = [
  "percent-encoding",
  "regex",
  "sha2 0.10.6",
- "time 0.3.21",
+ "time",
  "tracing",
 ]
 
@@ -813,7 +813,7 @@ dependencies = [
  "itoa",
  "num-integer",
  "ryu",
- "time 0.3.21",
+ "time",
 ]
 
 [[package]]
@@ -1183,18 +1183,17 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "chrono"
-version = "0.4.26"
+version = "0.4.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec837a71355b28f6556dbd569b37b3f363091c0bd4b2e735674521b4c5fd9bc5"
+checksum = "7f2c685bad3eb3d45a01354cedb7d5faa66194d1d58ba6e267a8de788f79db38"
 dependencies = [
  "android-tzdata",
  "iana-time-zone",
  "js-sys",
  "num-traits",
  "serde",
- "time 0.1.45",
  "wasm-bindgen",
- "winapi",
+ "windows-targets 0.48.0",
 ]
 
 [[package]]
@@ -1329,7 +1328,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e859cd57d0710d9e06c381b550c06e76992472a8c6d527aecd2fc673dcc231fb"
 dependencies = [
  "percent-encoding",
- "time 0.3.21",
+ "time",
  "version_check",
 ]
 
@@ -1720,8 +1719,14 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "borsh 0.10.3",
+ "futures",
+ "hex",
  "near-crypto",
+ "near-indexer-primitives",
  "near-primitives",
+ "num-bigint",
+ "num-traits",
  "prettytable-rs",
  "readnode-primitives",
  "scylla",
@@ -3240,7 +3245,7 @@ dependencies = [
  "smart-default",
  "strum 0.24.1",
  "thiserror",
- "time 0.3.21",
+ "time",
  "tracing",
 ]
 
@@ -4392,14 +4397,11 @@ dependencies = [
  "near-vm-errors",
  "near-vm-logic",
  "near-vm-runner",
- "num-bigint",
- "num-traits",
  "opentelemetry 0.17.0",
  "opentelemetry-jaeger 0.16.0",
  "paste",
  "prometheus",
  "readnode-primitives",
- "scylla",
  "serde",
  "serde_json",
  "sysinfo",
@@ -4811,13 +4813,13 @@ dependencies = [
 
 [[package]]
 name = "scylla-macros"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32d777dadbf7163d1524ea4f5a095146298d263a686febb96d022cf46d06df32"
+checksum = "5757ded3dfb10967ca7d1ff1084d072d565b5e10b2b21c286d5335c245425a7e"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.18",
 ]
 
 [[package]]
@@ -4975,7 +4977,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with_macros",
- "time 0.3.21",
+ "time",
 ]
 
 [[package]]
@@ -5188,16 +5190,13 @@ dependencies = [
  "itertools 0.10.5",
  "lazy_static",
  "near-indexer-primitives",
- "near-jsonrpc-client 0.0.0",
+ "near-jsonrpc-client 0.6.0",
  "near-lake-framework",
  "near-primitives-core",
- "num-bigint",
- "num-traits",
  "openssl-probe",
  "opentelemetry 0.19.0",
  "opentelemetry-jaeger 0.18.0",
  "prometheus",
- "scylla",
  "serde",
  "serde_json",
  "tokio",
@@ -5424,17 +5423,6 @@ dependencies = [
  "log",
  "ordered-float 2.10.0",
  "threadpool",
-]
-
-[[package]]
-name = "time"
-version = "0.1.45"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b797afad3f312d1c66a56d11d0316f916356d11bd158fbc6ca6389ff6bf805a"
-dependencies = [
- "libc",
- "wasi 0.10.0+wasi-snapshot-preview1",
- "winapi",
 ]
 
 [[package]]
@@ -5713,7 +5701,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09d48f71a791638519505cefafe162606f706c25592e4bde4d97600c0195312e"
 dependencies = [
  "crossbeam-channel",
- "time 0.3.21",
+ "time",
  "tracing-subscriber",
 ]
 
@@ -5807,7 +5795,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
- "time 0.3.21",
+ "time",
  "tracing-core",
  "tracing-subscriber",
 ]
@@ -6027,12 +6015,6 @@ name = "wasi"
 version = "0.9.0+wasi-snapshot-preview1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cccddf32554fecc6acb585f82a32a72e28b48f8c4c1883ddfeeeaa96f7d8e519"
-
-[[package]]
-name = "wasi"
-version = "0.10.0+wasi-snapshot-preview1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a143597ca7c7793eff794def352d41792a93c481eb1042423ff7ff72ba2c31f"
 
 [[package]]
 name = "wasi"

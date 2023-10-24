@@ -1,6 +1,5 @@
 use borsh::BorshSerialize;
 use clap::Parser;
-use database::ScyllaStorageManager;
 use futures::StreamExt;
 
 use crate::configs::Opts;
@@ -19,11 +18,11 @@ pub(crate) const INDEXER: &str = "state_indexer";
 
 #[cfg_attr(
     feature = "tracing-instrumentation",
-    tracing::instrument(skip(streamer_message, scylla_storage, indexer_id))
+    tracing::instrument(skip(streamer_message, db_manager, indexer_id))
 )]
 async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
-    scylla_storage: &configs::ScyllaDBManager,
+    db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
     indexer_id: &str,
     stats: std::sync::Arc<tokio::sync::RwLock<metrics::Stats>>,
 ) -> anyhow::Result<()> {
@@ -42,11 +41,11 @@ async fn handle_streamer_message(
             .iter()
             .map(|chunk| (chunk.chunk_hash.to_string(), chunk.shard_id, chunk.height_included))
             .collect(),
-        scylla_storage,
+        db_manager,
     );
-    let handle_state_change_future = handle_state_changes(streamer_message, scylla_storage, block_height, block_hash);
+    let handle_state_change_future = handle_state_changes(streamer_message, db_manager, block_height, block_hash);
 
-    let update_meta_future = scylla_storage.update_meta(indexer_id, num_bigint::BigInt::from(block_height));
+    let update_meta_future = db_manager.update_meta(indexer_id, block_height);
 
     futures::try_join!(handle_block_future, handle_state_change_future, update_meta_future)?;
 
@@ -62,15 +61,15 @@ async fn handle_streamer_message(
     Ok(())
 }
 
-#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(scylla_storage)))]
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(db_manager)))]
 async fn handle_block(
     block_height: u64,
     block_hash: CryptoHash,
-    chunks: Vec<(configs::ChunkHash, configs::ShardId, configs::HeightIncluded)>,
-    scylla_storage: &configs::ScyllaDBManager,
+    chunks: Vec<(database::primitives::ChunkHash, database::primitives::ShardId, database::primitives::HeightIncluded)>,
+    db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
 ) -> anyhow::Result<()> {
-    let add_block_future = scylla_storage.add_block(num_bigint::BigInt::from(block_height), block_hash);
-    let add_chunks_future = scylla_storage.add_chunks(num_bigint::BigInt::from(block_height), chunks);
+    let add_block_future = db_manager.add_block(block_height, block_hash);
+    let add_chunks_future = db_manager.add_chunks(block_height, chunks);
 
     futures::try_join!(add_block_future, add_chunks_future)?;
     Ok(())
@@ -85,11 +84,11 @@ async fn handle_block(
 /// in any order) so it's easier for us to skip all the changes except the latest one.
 #[cfg_attr(
     feature = "tracing-instrumentation",
-    tracing::instrument(skip(streamer_message, scylla_storage))
+    tracing::instrument(skip(streamer_message, db_manager))
 )]
 async fn handle_state_changes(
     streamer_message: near_indexer_primitives::StreamerMessage,
-    scylla_storage: &configs::ScyllaDBManager,
+    db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
     block_height: u64,
     block_hash: CryptoHash,
 ) -> anyhow::Result<Vec<()>> {
@@ -135,7 +134,7 @@ async fn handle_state_changes(
 
     // Asynchronous storing of StateChangeWithCauseView into the storage.
     let futures = state_changes_to_store.into_values().map(|state_change_with_cause| {
-        store_state_change(state_change_with_cause, scylla_storage, block_height, block_hash)
+        store_state_change(state_change_with_cause, db_manager, block_height, block_hash)
     });
 
     futures::future::try_join_all(futures).await
@@ -143,23 +142,22 @@ async fn handle_state_changes(
 
 #[cfg_attr(
     feature = "tracing-instrumentation",
-    tracing::instrument(skip(state_change, scylla_storage))
+    tracing::instrument(skip(state_change, db_manager))
 )]
 async fn store_state_change(
     state_change: near_indexer_primitives::views::StateChangeWithCauseView,
-    scylla_storage: &configs::ScyllaDBManager,
+    db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
     block_height: u64,
     block_hash: CryptoHash,
 ) -> anyhow::Result<()> {
-    let block_height = num_bigint::BigInt::from(block_height);
     match state_change.value {
         StateChangeValueView::DataUpdate { account_id, key, value } => {
-            scylla_storage
+            db_manager
                 .add_state_changes(account_id, block_height, block_hash, key.as_ref(), value.as_ref())
                 .await?
         }
         StateChangeValueView::DataDeletion { account_id, key } => {
-            scylla_storage
+            db_manager
                 .delete_state_changes(account_id, block_height, block_hash, key.as_ref())
                 .await?
         }
@@ -174,18 +172,13 @@ async fn store_state_change(
             let data_value = access_key
                 .try_to_vec()
                 .expect("Failed to borsh-serialize the AccessKey");
-            let add_access_key_future = scylla_storage.add_access_key(
-                account_id.clone(),
-                block_height.clone(),
-                block_hash,
-                &data_key,
-                &data_value,
-            );
+            let add_access_key_future =
+                db_manager.add_access_key(account_id.clone(), block_height, block_hash, &data_key, &data_value);
 
             #[cfg(feature = "account_access_keys")]
             {
                 let add_account_access_keys_future =
-                    scylla_storage.add_account_access_keys(account_id, block_height, &data_key, Some(&data_value));
+                    db_manager.add_account_access_keys(account_id, block_height, &data_key, Some(&data_value));
                 futures::try_join!(add_access_key_future, add_account_access_keys_future)?;
             }
             #[cfg(not(feature = "account_access_keys"))]
@@ -196,24 +189,24 @@ async fn store_state_change(
                 .try_to_vec()
                 .expect("Failed to borsh-serialize the PublicKey");
             let delete_access_key_future =
-                scylla_storage.delete_access_key(account_id.clone(), block_height.clone(), block_hash, &data_key);
+                db_manager.delete_access_key(account_id.clone(), block_height, block_hash, &data_key);
 
             #[cfg(feature = "account_access_keys")]
             {
                 let delete_account_access_keys_future =
-                    scylla_storage.add_account_access_keys(account_id, block_height, &data_key, None);
+                    db_manager.add_account_access_keys(account_id, block_height, &data_key, None);
                 futures::try_join!(delete_access_key_future, delete_account_access_keys_future)?;
             }
             #[cfg(not(feature = "account_access_keys"))]
             delete_access_key_future.await?;
         }
         StateChangeValueView::ContractCodeUpdate { account_id, code } => {
-            scylla_storage
+            db_manager
                 .add_contract_code(account_id, block_height, block_hash, code.as_ref())
                 .await?
         }
         StateChangeValueView::ContractCodeDeletion { account_id } => {
-            scylla_storage
+            db_manager
                 .delete_contract_code(account_id, block_height, block_hash)
                 .await?
         }
@@ -221,14 +214,12 @@ async fn store_state_change(
             let value = Account::from(account)
                 .try_to_vec()
                 .expect("Failed to borsh-serialize the Account");
-            scylla_storage
+            db_manager
                 .add_account(account_id, block_height, block_hash, value)
                 .await?
         }
         StateChangeValueView::AccountDeletion { account_id } => {
-            scylla_storage
-                .delete_account(account_id, block_height, block_hash)
-                .await?
+            db_manager.delete_account(account_id, block_height, block_hash).await?
         }
     }
     Ok(())
@@ -246,18 +237,15 @@ async fn main() -> anyhow::Result<()> {
 
     let opts: Opts = Opts::parse();
 
-    let scylla_storage = configs::ScyllaDBManager::new(
-        &opts.scylla_url,
-        opts.scylla_user.as_deref(),
-        opts.scylla_password.as_deref(),
-        opts.scylla_preferred_dc.as_deref(),
-        None,
-        opts.max_retry,
-        opts.strict_mode,
+    let db_manager = database::state_indexer::prepare_db_manager(
+        &opts.database_url,
+        opts.database_user.as_deref(),
+        opts.database_password.as_deref(),
     )
     .await?;
-    let scylla_session = scylla_storage.scylla_session().await;
-    let config: near_lake_framework::LakeConfig = opts.to_lake_config(&scylla_session).await?;
+
+    // let scylla_session = scylla_storage.scylla_session().await;
+    let config: near_lake_framework::LakeConfig = opts.to_lake_config(&db_manager).await?;
     let (sender, stream) = near_lake_framework::streamer(config);
 
     // Initiate metrics http server
@@ -268,7 +256,7 @@ async fn main() -> anyhow::Result<()> {
 
     let mut handlers = tokio_stream::wrappers::ReceiverStream::new(stream)
         .map(|streamer_message| {
-            handle_streamer_message(streamer_message, &scylla_storage, &opts.indexer_id, std::sync::Arc::clone(&stats))
+            handle_streamer_message(streamer_message, &db_manager, &opts.indexer_id, std::sync::Arc::clone(&stats))
         })
         .buffer_unordered(opts.concurrency);
 

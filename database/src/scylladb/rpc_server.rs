@@ -4,7 +4,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use num_traits::ToPrimitive;
 use scylla::{prepared_statement::PreparedStatement, IntoTypedRows};
 
-use database::ScyllaStorageManager;
+use crate::ScyllaStorageManager;
 
 pub struct ScyllaDBManager {
     scylla_session: std::sync::Arc<scylla::Session>,
@@ -97,7 +97,7 @@ impl ScyllaStorageManager for ScyllaDBManager {
 }
 
 #[async_trait::async_trait]
-impl database::RpcDbManager for ScyllaDBManager {
+impl crate::RpcDbManager for ScyllaDBManager {
     /// Searches the block height by the given block hash
     async fn get_block_by_hash(
         &self,

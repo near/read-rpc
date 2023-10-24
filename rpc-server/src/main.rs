@@ -16,7 +16,6 @@ mod config;
 mod errors;
 mod metrics;
 mod modules;
-mod storage;
 mod utils;
 
 fn init_logging(use_tracer: bool) -> anyhow::Result<()> {
@@ -124,7 +123,12 @@ async fn main() -> anyhow::Result<()> {
         .await?;
     let lake_config = opts.to_lake_config(final_block.block_height).await?;
     let s3_config = opts.to_s3_config().await;
-    let db_manager = opts.prepare_db_manager().await?;
+    let db_manager = database::rpc_server::prepare_db_manager(
+        opts.database_url.as_str(),
+        opts.database_user.as_deref(),
+        opts.database_password.as_deref(),
+    )
+    .await?;
 
     let state = ServerContext::new(
         near_lake_framework::s3_fetchers::LakeS3Client::new(aws_sdk_s3::Client::from_conf(
