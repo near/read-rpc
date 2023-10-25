@@ -56,6 +56,12 @@ pub(crate) struct Opts {
     /// before skipping giving up and moving to the next piece of data
     #[clap(long, default_value = "true", env)]
     pub strict_mode: bool,
+    /// To restore cache from scylla db we use smart range blocks
+    /// Regular transaction takes some blocks to be finalized
+    /// We don't need to restore too old transactions for the indexer because we will probably never be able to reassemble them.
+    /// We use a range of 1000 blocks for our peace of mind. We also leave the option to increase or decrease this range
+    #[clap(long, default_value = "1000", env)]
+    pub cache_restore_blocks_range: u64,
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -350,7 +356,7 @@ impl ScyllaStorageManager for ScyllaDBManager {
             cache_get_transactions: Self::prepare_query(
                 &scylla_db_session,
                 scylla::statement::query::Query::new(
-                    "SELECT transaction_details FROM tx_indexer_cache.transactions WHERE block_height <= ? ALLOW FILTERING"
+                    "SELECT transaction_details FROM tx_indexer_cache.transactions WHERE block_height >= ? AND block_height <= ? ALLOW FILTERING"
                 ).with_page_size(1),
                 Some(scylla::frame::types::Consistency::LocalOne)
             ).await?,
@@ -513,6 +519,7 @@ impl ScyllaDBManager {
     pub(crate) async fn get_transactions_in_cache(
         &self,
         start_block_height: u64,
+        cache_restore_blocks_range: u64,
     ) -> anyhow::Result<
         std::collections::HashMap<
             readnode_primitives::TransactionKey,
@@ -520,11 +527,15 @@ impl ScyllaDBManager {
         >,
     > {
         let mut result = std::collections::HashMap::new();
+        let start_restore_block_height = start_block_height - cache_restore_blocks_range;
         let mut rows_stream = self
             .scylla_session
             .execute_iter(
                 self.cache_get_transactions.clone(),
-                (num_bigint::BigInt::from(start_block_height),),
+                (
+                    num_bigint::BigInt::from(start_restore_block_height),
+                    num_bigint::BigInt::from(start_block_height),
+                ),
             )
             .await?
             .into_typed::<(Vec<u8>,)>();

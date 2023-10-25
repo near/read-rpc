@@ -44,6 +44,7 @@ async fn main() -> anyhow::Result<()> {
         storage::database::HashStorageWithDB::init_with_restore(
             scylla_db_client.clone(),
             start_block_height,
+            opts.cache_restore_blocks_range,
         )
         .await?,
     );
