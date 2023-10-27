@@ -285,12 +285,11 @@ impl ScyllaStorageManager for ScyllaDBManager {
         scylla_db_session
             .query(
                 "CREATE TABLE IF NOT EXISTS transactions (
-                transaction_hash varchar,
                 block_height varint,
-                block_hash varchar,
+                transaction_hash varchar,
                 transaction_details BLOB,
-                PRIMARY KEY (transaction_hash, block_height)
-            ) WITH CLUSTERING ORDER BY (block_height DESC)
+                PRIMARY KEY (block_height, transaction_hash)
+            )
             ",
                 &[],
             )
@@ -299,12 +298,12 @@ impl ScyllaStorageManager for ScyllaDBManager {
         scylla_db_session
             .query(
                 "CREATE TABLE IF NOT EXISTS receipts_outcomes (
-                transaction_hash varchar,
                 block_height varint,
+                transaction_hash varchar,
                 receipt_id varchar,
                 receipt BLOB,
                 outcome BLOB,
-                PRIMARY KEY (transaction_hash, block_height, receipt_id)
+                PRIMARY KEY (block_height, transaction_hash, receipt_id)
             )
             ",
                 &[],
@@ -364,7 +363,7 @@ impl ScyllaStorageManager for ScyllaDBManager {
             cache_get_receipts: Self::prepare_query(
                 &scylla_db_session,
                 scylla::statement::query::Query::new(
-                    "SELECT receipt, outcome FROM tx_indexer_cache.receipts_outcomes WHERE transaction_hash = ? AND block_height = ?"
+                    "SELECT receipt, outcome FROM tx_indexer_cache.receipts_outcomes WHERE block_height = ? AND transaction_hash = ?"
                 ).with_page_size(1),
                 Some(scylla::frame::types::Consistency::LocalOne)
             ).await?,
@@ -372,25 +371,25 @@ impl ScyllaStorageManager for ScyllaDBManager {
             cache_add_transaction: Self::prepare_write_query(
                 &scylla_db_session,
                 "INSERT INTO tx_indexer_cache.transactions
-                    (transaction_hash, block_height, block_hash, transaction_details)
-                    VALUES(?, ?, ?, ?)",
+                    (block_height, transaction_hash, transaction_details)
+                    VALUES(?, ?, ?)",
             )
             .await?,
             cache_delete_transaction: Self::prepare_write_query(
                 &scylla_db_session,
-                "DELETE FROM tx_indexer_cache.transactions WHERE transaction_hash = ? AND block_height = ?",
+                "DELETE FROM tx_indexer_cache.transactions WHERE block_height = ? AND transaction_hash = ?",
             )
             .await?,
             cache_add_receipt: Self::prepare_write_query(
                 &scylla_db_session,
                 "INSERT INTO tx_indexer_cache.receipts_outcomes
-                    (transaction_hash, block_height, receipt_id, receipt, outcome)
+                    (block_height, transaction_hash, receipt_id, receipt, outcome)
                     VALUES(?, ?, ?, ?, ?)",
             )
             .await?,
             cache_delete_receipts: Self::prepare_write_query(
                 &scylla_db_session,
-                "DELETE FROM tx_indexer_cache.receipts_outcomes WHERE transaction_hash = ? AND block_height = ?",
+                "DELETE FROM tx_indexer_cache.receipts_outcomes WHERE block_height = ? AND transaction_hash = ?",
             )
             .await?,
         }))
@@ -468,7 +467,6 @@ impl ScyllaDBManager {
     ) -> anyhow::Result<()> {
         let transaction_hash = transaction_details.transaction.hash.clone().to_string();
         let block_height = transaction_details.block_height;
-        let block_hash = transaction_details.block_hash;
         let transaction_details = transaction_details.try_to_vec().map_err(|err| {
             tracing::error!(target: "tx_indexer", "Failed to serialize transaction details: {:?}", err);
             err})?;
@@ -476,9 +474,8 @@ impl ScyllaDBManager {
             &self.scylla_session,
             &self.cache_add_transaction,
             (
-                transaction_hash,
                 num_bigint::BigInt::from(block_height),
-                block_hash.to_string(),
+                transaction_hash,
                 transaction_details,
             ),
         )
@@ -498,8 +495,8 @@ impl ScyllaDBManager {
             &self.scylla_session,
             &self.cache_add_receipt,
             (
-                transaction_key.transaction_hash,
                 num_bigint::BigInt::from(transaction_key.block_height),
+                transaction_key.transaction_hash,
                 indexer_execution_outcome_with_receipt
                     .receipt
                     .receipt_id
@@ -567,8 +564,8 @@ impl ScyllaDBManager {
             .execute_iter(
                 self.cache_get_receipts.clone(),
                 (
-                    transaction_key.transaction_hash.clone(),
                     num_bigint::BigInt::from(transaction_key.block_height),
+                    transaction_key.transaction_hash.clone(),
                 ),
             )
             .await?
@@ -596,12 +593,12 @@ impl ScyllaDBManager {
         let delete_transaction_feature = Self::execute_prepared_query(
             &self.scylla_session,
             &self.cache_delete_transaction,
-            (transaction_hash, num_bigint::BigInt::from(block_height)),
+            (num_bigint::BigInt::from(block_height), transaction_hash),
         );
         let delete_receipts_feature = Self::execute_prepared_query(
             &self.scylla_session,
             &self.cache_delete_receipts,
-            (transaction_hash, num_bigint::BigInt::from(block_height)),
+            (num_bigint::BigInt::from(block_height), transaction_hash),
         );
         futures::try_join!(delete_transaction_feature, delete_receipts_feature)?;
         Ok(())

@@ -43,7 +43,6 @@ async fn extract_transactions_to_collect(
     tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
 ) -> anyhow::Result<()> {
     let block_height = streamer_message.block.header.height;
-    let block_hash = streamer_message.block.header.hash;
 
     let futures = streamer_message
         .shards
@@ -55,7 +54,6 @@ async fn extract_transactions_to_collect(
                 new_transaction_details_to_collecting_pool(
                     tx,
                     block_height,
-                    block_hash,
                     shard_id,
                     scylla_db_client,
                     tx_collecting_storage,
@@ -72,7 +70,6 @@ async fn extract_transactions_to_collect(
 async fn new_transaction_details_to_collecting_pool(
     transaction: &IndexerTransactionWithOutcome,
     block_height: u64,
-    block_hash: near_indexer_primitives::CryptoHash,
     shard_id: u64,
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
     tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
@@ -99,7 +96,6 @@ async fn new_transaction_details_to_collecting_pool(
     let transaction_details = readnode_primitives::CollectingTransactionDetails::from_indexer_tx(
         transaction.clone(),
         block_height,
-        block_hash,
     );
     let transaction_key = transaction_details.transaction_key();
     match tx_collecting_storage.set_tx(transaction_details).await {
