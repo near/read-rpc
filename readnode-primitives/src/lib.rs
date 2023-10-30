@@ -27,10 +27,7 @@ pub struct CollectingTransactionDetails {
 }
 
 impl CollectingTransactionDetails {
-    pub fn from_indexer_tx(
-        transaction: IndexerTransactionWithOutcome,
-        block_height: u64,
-    ) -> Self {
+    pub fn from_indexer_tx(transaction: IndexerTransactionWithOutcome, block_height: u64) -> Self {
         Self {
             transaction: transaction.transaction.clone(),
             receipts: vec![],

@@ -227,7 +227,9 @@ pub(crate) struct ScyllaDBManager {
     add_receipt: PreparedStatement,
     update_meta: PreparedStatement,
 
-    cache_get_transactions: PreparedStatement,
+    cache_get_all_transactions: PreparedStatement,
+    cache_get_transaction: PreparedStatement,
+    cache_get_transaction_by_receipt_id: PreparedStatement,
     cache_get_receipts: PreparedStatement,
     cache_add_transaction: PreparedStatement,
     cache_delete_transaction: PreparedStatement,
@@ -309,6 +311,14 @@ impl ScyllaStorageManager for ScyllaDBManager {
                 &[],
             )
             .await?;
+        scylla_db_session
+            .query(
+                "
+                CREATE INDEX IF NOT EXISTS transaction_key_receipt_id ON receipts_outcomes (receipt_id);
+            ",
+                &[],
+            )
+            .await?;
 
         Ok(())
     }
@@ -352,11 +362,20 @@ impl ScyllaStorageManager for ScyllaDBManager {
             )
             .await?,
 
-            cache_get_transactions: Self::prepare_read_query(
+            cache_get_all_transactions: Self::prepare_read_query(
                 &scylla_db_session,
                 "SELECT transaction_details FROM tx_indexer_cache.transactions WHERE token(block_height) >= ? AND token(block_height) <= ?"
             ).await?,
 
+            cache_get_transaction: Self::prepare_read_query(
+                &scylla_db_session,
+                "SELECT transaction_details FROM tx_indexer_cache.transactions WHERE block_height = ? AND transaction_hash = ?"
+            ).await?,
+
+            cache_get_transaction_by_receipt_id: Self::prepare_read_query(
+                &scylla_db_session,
+                "SELECT block_height, transaction_hash FROM tx_indexer_cache.receipts_outcomes WHERE receipt_id = ? LIMIT 1"
+            ).await?,
             cache_get_receipts: Self::prepare_read_query(
                 &scylla_db_session,
                 "SELECT receipt, outcome FROM tx_indexer_cache.receipts_outcomes WHERE block_height = ? AND transaction_hash = ?"
@@ -507,7 +526,7 @@ impl ScyllaDBManager {
         Ok(())
     }
 
-    async fn task_get_transactions_by_token_rage(
+    async fn task_get_transactions_by_token_range(
         session: std::sync::Arc<scylla::Session>,
         prepared: PreparedStatement,
         token_val_range_start: i64,
@@ -515,13 +534,7 @@ impl ScyllaDBManager {
     ) -> anyhow::Result<Vec<readnode_primitives::CollectingTransactionDetails>> {
         let mut result = vec![];
         let mut rows_stream = session
-            .execute_iter(
-                prepared,
-                (
-                    num_bigint::BigInt::from(token_val_range_start),
-                    num_bigint::BigInt::from(token_val_range_end),
-                ),
-            )
+            .execute_iter(prepared, (token_val_range_start, token_val_range_end))
             .await?
             .into_typed::<(Vec<u8>,)>();
         while let Some(next_row_res) = rows_stream.next().await {
@@ -561,14 +574,14 @@ impl ScyllaDBManager {
         let mut handlers = vec![];
         for token_val_range_start in (i64::MIN..=i64::MAX).step_by(step as usize) {
             let session = self.scylla_session.clone();
-            let prepared = self.cache_get_transactions.clone();
+            let prepared = self.cache_get_all_transactions.clone();
             let permit = sem.clone().acquire_owned().await;
             tracing::debug!(
                 target: crate::storage::STORAGE,
                 "Creating Task to get transactions..."
             );
             handlers.push(tokio::task::spawn(async move {
-                let result = Self::task_get_transactions_by_token_rage(
+                let result = Self::task_get_transactions_by_token_range(
                     session,
                     prepared,
                     token_val_range_start,
@@ -608,6 +621,34 @@ impl ScyllaDBManager {
             }
         }
         Ok(results)
+    }
+    pub async fn get_transaction_by_receipt_id(
+        &self,
+        receipt_id: &str,
+    ) -> anyhow::Result<readnode_primitives::CollectingTransactionDetails> {
+        let (transaction_hash, block_height) = Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.cache_get_transaction_by_receipt_id,
+            (receipt_id,),
+        )
+        .await?
+        .single_row()?
+        .into_typed::<(String, num_bigint::BigInt)>()?;
+
+        let (transaction_details,) = Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.cache_get_transaction,
+            (block_height, transaction_hash),
+        )
+        .await?
+        .single_row()?
+        .into_typed::<(Vec<u8>,)>()?;
+
+        Ok(
+            readnode_primitives::CollectingTransactionDetails::try_from_slice(
+                &transaction_details,
+            )?,
+        )
     }
 
     pub(crate) async fn get_receipts_in_cache(

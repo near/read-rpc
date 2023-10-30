@@ -53,6 +53,63 @@ impl HashStorageWithDB {
         Ok(storage)
     }
 
+    async fn restore_transaction_with_receipts(
+        &self,
+        transaction_key: &readnode_primitives::TransactionKey,
+        transaction_details: &readnode_primitives::CollectingTransactionDetails,
+    ) -> anyhow::Result<()> {
+        self.update_tx(transaction_details.clone()).await?;
+        let receipt_id = transaction_details
+            .execution_outcomes
+            .first()
+            .expect("No execution outcomes")
+            .outcome
+            .receipt_ids
+            .first()
+            .expect("`receipt_ids` must contain one Receipt ID")
+            .to_string();
+        self.push_receipt_to_watching_list(receipt_id.clone(), transaction_key.clone())
+            .await?;
+
+        for indexer_execution_outcome_with_receipt in self
+            .scylla_db_manager
+            .get_receipts_in_cache(transaction_key)
+            .await?
+            .iter()
+        {
+            let mut tasks = futures::stream::FuturesUnordered::new();
+            tasks.extend(
+                indexer_execution_outcome_with_receipt
+                    .execution_outcome
+                    .outcome
+                    .receipt_ids
+                    .iter()
+                    .map(|receipt_id| {
+                        self.push_receipt_to_watching_list(
+                            receipt_id.to_string(),
+                            transaction_key.clone(),
+                        )
+                    }),
+            );
+            while let Some(result) = tasks.next().await {
+                let _ = result.map_err(|e| {
+                    tracing::debug!(
+                        target: crate::INDEXER,
+                        "Task encountered an error: {:#?}",
+                        e
+                    )
+                });
+            }
+
+            self.push_outcome_and_receipt_to_hash(
+                transaction_key,
+                indexer_execution_outcome_with_receipt.clone(),
+            )
+            .await?;
+        }
+        Ok(())
+    }
+
     /// Restore transactions with receipts after interruption
     async fn restore_transactions_with_receipts_after_interruption(
         &self,
@@ -65,55 +122,8 @@ impl HashStorageWithDB {
             .await?
             .iter()
         {
-            self.update_tx(transaction_details.clone()).await?;
-            let receipt_id = transaction_details
-                .execution_outcomes
-                .first()
-                .expect("No execution outcomes")
-                .outcome
-                .receipt_ids
-                .first()
-                .expect("`receipt_ids` must contain one Receipt ID")
-                .to_string();
-            self.push_receipt_to_watching_list(receipt_id.clone(), transaction_key.clone())
+            self.restore_transaction_with_receipts(transaction_key, transaction_details)
                 .await?;
-
-            for indexer_execution_outcome_with_receipt in self
-                .scylla_db_manager
-                .get_receipts_in_cache(transaction_key)
-                .await?
-                .iter()
-            {
-                let mut tasks = futures::stream::FuturesUnordered::new();
-                tasks.extend(
-                    indexer_execution_outcome_with_receipt
-                        .execution_outcome
-                        .outcome
-                        .receipt_ids
-                        .iter()
-                        .map(|receipt_id| {
-                            self.push_receipt_to_watching_list(
-                                receipt_id.to_string(),
-                                transaction_key.clone(),
-                            )
-                        }),
-                );
-                while let Some(result) = tasks.next().await {
-                    let _ = result.map_err(|e| {
-                        tracing::debug!(
-                            target: crate::INDEXER,
-                            "Task encountered an error: {:#?}",
-                            e
-                        )
-                    });
-                }
-
-                self.push_outcome_and_receipt_to_hash(
-                    transaction_key,
-                    indexer_execution_outcome_with_receipt.clone(),
-                )
-                .await?;
-            }
             tracing::info!(
                 target: crate::storage::STORAGE,
                 "Transaction collected from db {}",
@@ -170,6 +180,19 @@ impl HashStorageWithDB {
 
 #[async_trait::async_trait]
 impl TxCollectingStorage for HashStorageWithDB {
+    async fn restore_transaction_by_receipt_id(&self, receipt_id: &str) -> anyhow::Result<()> {
+        let transaction_details = self
+            .scylla_db_manager
+            .get_transaction_by_receipt_id(receipt_id)
+            .await?;
+        self.restore_transaction_with_receipts(
+            &transaction_details.transaction_key(),
+            &transaction_details,
+        )
+        .await?;
+        Ok(())
+    }
+
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
     async fn push_receipt_to_watching_list(
         &self,

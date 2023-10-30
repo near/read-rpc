@@ -65,6 +65,7 @@ async fn main() -> anyhow::Result<()> {
     let mut handlers = tokio_stream::wrappers::ReceiverStream::new(stream)
         .map(|streamer_message| {
             handle_streamer_message(
+                opts.chain_id.clone(),
                 streamer_message,
                 &scylla_db_client,
                 &tx_collecting_storage,
@@ -91,6 +92,7 @@ async fn main() -> anyhow::Result<()> {
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn handle_streamer_message(
+    chain_id: config::ChainId,
     streamer_message: near_indexer_primitives::StreamerMessage,
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
     tx_collecting_storage: &std::sync::Arc<impl storage::base::TxCollectingStorage>,
@@ -106,8 +108,12 @@ async fn handle_streamer_message(
         .block_heights_processing
         .insert(block_height);
 
-    let tx_future =
-        collector::index_transactions(&streamer_message, scylla_db_client, tx_collecting_storage);
+    let tx_future = collector::index_transactions(
+        chain_id,
+        &streamer_message,
+        scylla_db_client,
+        tx_collecting_storage,
+    );
 
     let update_meta_future =
         scylla_db_client.update_meta(indexer_id, streamer_message.block.header.height);

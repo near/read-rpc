@@ -34,6 +34,10 @@ impl HashStorage {
 
 #[async_trait::async_trait]
 impl TxCollectingStorage for HashStorage {
+    async fn restore_transaction_by_receipt_id(&self, _receipt_id: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
+
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
     async fn push_receipt_to_watching_list(
         &self,

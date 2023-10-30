@@ -7,16 +7,34 @@ use near_indexer_primitives::IndexerTransactionWithOutcome;
 use crate::config;
 use crate::storage::base::TxCollectingStorage;
 
+/// Blocks #47317863 and #47317864 with restored receipts.
+const PROBLEMATIC_BLOCKS: [near_indexer_primitives::CryptoHash; 2] = [
+    near_indexer_primitives::CryptoHash(
+        *b"\xcd\xde\x9a\x3f\x5d\xdf\xb4\x2c\xb9\x9b\xf4\x8c\x04\x95\x6f\x5b\
+           \xa0\xb7\x29\xe2\xa5\x04\xf8\xbd\x9c\x86\x92\xd6\x16\x8c\xcf\x14",
+    ),
+    near_indexer_primitives::CryptoHash(
+        *b"\x12\xa9\x5a\x1a\x3d\x14\xa7\x36\xb3\xce\xe6\xea\x07\x20\x8e\x75\
+           \x4e\xb5\xc2\xd7\xf9\x11\xca\x29\x09\xe0\xb8\x85\xb5\x2b\x95\x6a",
+    ),
+];
+
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 pub(crate) async fn index_transactions(
+    chain_id: config::ChainId,
     streamer_message: &near_indexer_primitives::StreamerMessage,
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
     tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
 ) -> anyhow::Result<()> {
     extract_transactions_to_collect(streamer_message, scylla_db_client, tx_collecting_storage)
         .await?;
-    collect_receipts_and_outcomes(streamer_message, scylla_db_client, tx_collecting_storage)
-        .await?;
+    collect_receipts_and_outcomes(
+        chain_id,
+        streamer_message,
+        scylla_db_client,
+        tx_collecting_storage,
+    )
+    .await?;
 
     let finished_transaction_details = tx_collecting_storage.transactions_to_save().await?;
 
@@ -116,16 +134,24 @@ async fn new_transaction_details_to_collecting_pool(
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn collect_receipts_and_outcomes(
+    chain_id: config::ChainId,
     streamer_message: &near_indexer_primitives::StreamerMessage,
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
     tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
 ) -> anyhow::Result<()> {
     let block_height = streamer_message.block.header.height;
+    let block_hash = streamer_message.block.header.hash;
 
-    let shard_futures = streamer_message
-        .shards
-        .iter()
-        .map(|shard| process_shard(scylla_db_client, tx_collecting_storage, block_height, shard));
+    let shard_futures = streamer_message.shards.iter().map(|shard| {
+        process_shard(
+            chain_id.clone(),
+            scylla_db_client,
+            tx_collecting_storage,
+            block_height,
+            block_hash,
+            shard,
+        )
+    });
 
     futures::future::try_join_all(shard_futures).await?;
 
@@ -134,9 +160,11 @@ async fn collect_receipts_and_outcomes(
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn process_shard(
+    chain_id: config::ChainId,
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
     tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
     block_height: u64,
+    block_hash: near_indexer_primitives::CryptoHash,
     shard: &near_indexer_primitives::IndexerShard,
 ) -> anyhow::Result<()> {
     let process_receipt_execution_outcome_futures =
@@ -145,9 +173,11 @@ async fn process_shard(
             .iter()
             .map(|receipt_execution_outcome| {
                 process_receipt_execution_outcome(
+                    chain_id.clone(),
                     scylla_db_client,
                     tx_collecting_storage,
                     block_height,
+                    block_hash,
                     shard.shard_id,
                     receipt_execution_outcome,
                 )
@@ -160,12 +190,24 @@ async fn process_shard(
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn process_receipt_execution_outcome(
+    chain_id: config::ChainId,
     scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
     tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
     block_height: u64,
+    block_hash: near_indexer_primitives::CryptoHash,
     shard_id: u64,
     receipt_execution_outcome: &near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
 ) -> anyhow::Result<()> {
+    if PROBLEMATIC_BLOCKS.contains(&block_hash) {
+        if let config::ChainId::Mainnet(_) = chain_id {
+            tx_collecting_storage
+                .restore_transaction_by_receipt_id(
+                    &receipt_execution_outcome.receipt.receipt_id.to_string(),
+                )
+                .await?;
+        }
+    }
+
     if let Ok(transaction_key) = tx_collecting_storage
         .get_transaction_hash_by_receipt_id(
             &receipt_execution_outcome.receipt.receipt_id.to_string(),
