@@ -45,6 +45,7 @@ async fn main() -> anyhow::Result<()> {
             scylla_db_client.clone(),
             start_block_height,
             opts.cache_restore_blocks_range,
+            opts.scylla_parallel_queries,
         )
         .await?,
     );

@@ -62,6 +62,12 @@ pub(crate) struct Opts {
     /// We use a range of 1000 blocks for our peace of mind. We also leave the option to increase or decrease this range
     #[clap(long, default_value = "1000", env)]
     pub cache_restore_blocks_range: u64,
+
+    /// Parallel queries = (nodes in cluster) ✕ (cores in node) ✕ 3
+    /// Current we have 6 - nodes with 8 - cpus
+    /// 6 ✕ 8 ✕ 3 = 144
+    #[clap(long, env, default_value = "144")]
+    pub scylla_parallel_queries: i64,
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -552,6 +558,7 @@ impl ScyllaDBManager {
         &self,
         start_block_height: u64,
         cache_restore_blocks_range: u64,
+        scylla_parallel_queries: i64,
     ) -> anyhow::Result<
         std::collections::HashMap<
             readnode_primitives::TransactionKey,
@@ -566,11 +573,12 @@ impl ScyllaDBManager {
         // the rest will wait. As a sub-range query completes,
         // we will pick a new sub-range and start processing it,
         // until we have completed all M.
-        let n = 6 * 8 * 3; // TODO:  Move to configuration
-        let m = n * 100;
-        let step = i64::MAX / (m / 2);
+        let sub_ranges = scylla_parallel_queries * 100;
+        let step = i64::MAX / (sub_ranges / 2);
 
-        let sem = std::sync::Arc::new(tokio::sync::Semaphore::new(n as usize));
+        let sem = std::sync::Arc::new(tokio::sync::Semaphore::new(
+            scylla_parallel_queries as usize,
+        ));
         let mut handlers = vec![];
         for token_val_range_start in (i64::MIN..=i64::MAX).step_by(step as usize) {
             let session = self.scylla_session.clone();
