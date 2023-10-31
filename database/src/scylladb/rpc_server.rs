@@ -292,8 +292,8 @@ impl crate::RpcDbManager for ScyllaDBManager {
         &self,
         account_id: &near_primitives::types::AccountId,
         block_height: near_primitives::types::BlockHeight,
-    ) -> anyhow::Result<scylla::frame::response::result::Row> {
-        let result = Self::execute_prepared_query(
+    ) -> anyhow::Result<std::collections::HashMap<String, Vec<u8>>> {
+        let (account_keys,) = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_account_access_keys,
             (
@@ -302,8 +302,9 @@ impl crate::RpcDbManager for ScyllaDBManager {
             ),
         )
         .await?
-        .single_row()?;
-        Ok(result)
+        .single_row()?
+        .into_typed::<(std::collections::HashMap<String, Vec<u8>>,)>()?;
+        Ok(account_keys)
     }
 
     /// Returns the near_primitives::views::ReceiptView at the given receipt_id

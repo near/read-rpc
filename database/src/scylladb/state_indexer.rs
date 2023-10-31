@@ -420,8 +420,8 @@ impl crate::StateIndexerDbManager for ScyllaDBManager {
         &self,
         account_id: near_indexer_primitives::types::AccountId,
         block_height: u64,
-    ) -> anyhow::Result<scylla::frame::response::result::Row> {
-        let result = Self::execute_prepared_query(
+    ) -> anyhow::Result<std::collections::HashMap<String, Vec<u8>>> {
+        let (result,) = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_account_access_keys,
             (
@@ -430,7 +430,8 @@ impl crate::StateIndexerDbManager for ScyllaDBManager {
             ),
         )
         .await?
-        .single_row()?;
+        .single_row()?
+        .into_typed::<(std::collections::HashMap<String, Vec<u8>>,)>()?;
         Ok(result)
     }
 
@@ -445,10 +446,7 @@ impl crate::StateIndexerDbManager for ScyllaDBManager {
         let public_key_hex = hex::encode(public_key).to_string();
 
         let mut account_keys = match self.get_access_keys(account_id.clone(), block_height).await {
-            Ok(row) => match row.into_typed::<(std::collections::HashMap<String, Vec<u8>>,)>() {
-                Ok((account_keys,)) => account_keys,
-                Err(_) => std::collections::HashMap::new(),
-            },
+            Ok(account_keys) => account_keys,
             Err(_) => std::collections::HashMap::new(),
         };
 

@@ -23,15 +23,14 @@ const PROBLEMATIC_BLOCKS: [near_indexer_primitives::CryptoHash; 2] = [
 pub(crate) async fn index_transactions(
     chain_id: config::ChainId,
     streamer_message: &near_indexer_primitives::StreamerMessage,
-    scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
+    db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
 ) -> anyhow::Result<()> {
-    extract_transactions_to_collect(streamer_message, scylla_db_client, tx_collecting_storage)
-        .await?;
+    extract_transactions_to_collect(streamer_message, db_manager, tx_collecting_storage).await?;
     collect_receipts_and_outcomes(
         chain_id,
         streamer_message,
-        scylla_db_client,
+        db_manager,
         tx_collecting_storage,
     )
     .await?;
@@ -39,11 +38,11 @@ pub(crate) async fn index_transactions(
     let finished_transaction_details = tx_collecting_storage.transactions_to_save().await?;
 
     if !finished_transaction_details.is_empty() {
-        let scylla_db_client = scylla_db_client.clone();
+        let db_manager = db_manager.clone();
         tokio::spawn(async move {
             let send_finished_transaction_details_futures = finished_transaction_details
                 .into_iter()
-                .map(|tx_details| save_transaction_details(&scylla_db_client, tx_details));
+                .map(|tx_details| save_transaction_details(&db_manager, tx_details));
 
             join_all(send_finished_transaction_details_futures).await;
         });
@@ -57,7 +56,7 @@ pub(crate) async fn index_transactions(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn extract_transactions_to_collect(
     streamer_message: &near_indexer_primitives::StreamerMessage,
-    scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
+    db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
 ) -> anyhow::Result<()> {
     let block_height = streamer_message.block.header.height;
@@ -73,7 +72,7 @@ async fn extract_transactions_to_collect(
                     tx,
                     block_height,
                     shard_id,
-                    scylla_db_client,
+                    db_manager,
                     tx_collecting_storage,
                 )
             })
@@ -89,7 +88,7 @@ async fn new_transaction_details_to_collecting_pool(
     transaction: &IndexerTransactionWithOutcome,
     block_height: u64,
     shard_id: u64,
-    scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
+    db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
 ) -> anyhow::Result<()> {
     let converted_into_receipt_id = transaction
@@ -101,9 +100,9 @@ async fn new_transaction_details_to_collecting_pool(
         .expect("`receipt_ids` must contain one Receipt ID")
         .to_string();
 
-    // Save the Receipt produced by the Transaction to the ScyllaDB Map
+    // Save the Receipt produced by the Transaction to the DB Map
     save_receipt(
-        scylla_db_client,
+        db_manager,
         &converted_into_receipt_id,
         &transaction.transaction.hash.to_string(),
         block_height,
@@ -136,7 +135,7 @@ async fn new_transaction_details_to_collecting_pool(
 async fn collect_receipts_and_outcomes(
     chain_id: config::ChainId,
     streamer_message: &near_indexer_primitives::StreamerMessage,
-    scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
+    db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
 ) -> anyhow::Result<()> {
     let block_height = streamer_message.block.header.height;
@@ -145,7 +144,7 @@ async fn collect_receipts_and_outcomes(
     let shard_futures = streamer_message.shards.iter().map(|shard| {
         process_shard(
             chain_id.clone(),
-            scylla_db_client,
+            db_manager,
             tx_collecting_storage,
             block_height,
             block_hash,
@@ -161,7 +160,7 @@ async fn collect_receipts_and_outcomes(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn process_shard(
     chain_id: config::ChainId,
-    scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
+    db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
     block_height: u64,
     block_hash: near_indexer_primitives::CryptoHash,
@@ -174,7 +173,7 @@ async fn process_shard(
             .map(|receipt_execution_outcome| {
                 process_receipt_execution_outcome(
                     chain_id.clone(),
-                    scylla_db_client,
+                    db_manager,
                     tx_collecting_storage,
                     block_height,
                     block_hash,
@@ -191,7 +190,7 @@ async fn process_shard(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn process_receipt_execution_outcome(
     chain_id: config::ChainId,
-    scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
+    db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
     block_height: u64,
     block_hash: near_indexer_primitives::CryptoHash,
@@ -215,7 +214,7 @@ async fn process_receipt_execution_outcome(
         .await
     {
         save_receipt(
-            scylla_db_client,
+            db_manager,
             &receipt_execution_outcome.receipt.receipt_id.to_string(),
             &transaction_key.transaction_hash,
             block_height,
@@ -264,10 +263,10 @@ async fn process_receipt_execution_outcome(
     Ok(())
 }
 
-// Save transaction detail into the scylla db
+// Save transaction detail into the db
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn save_transaction_details(
-    scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
+    db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_details: readnode_primitives::CollectingTransactionDetails,
 ) -> bool {
     let transaction_details = match tx_details.to_final_transaction_result() {
@@ -283,12 +282,12 @@ async fn save_transaction_details(
         }
     };
     let transaction_hash = transaction_details.transaction.hash.to_string();
-    match scylla_db_client
+    match db_manager
         .add_transaction(transaction_details, tx_details.block_height)
         .await
     {
         Ok(_) => {
-            scylla_db_client
+            db_manager
                 .cache_delete_transaction(&transaction_hash, tx_details.block_height)
                 .await
                 .expect("Failed to delete transaction from memory storage");
@@ -306,10 +305,10 @@ async fn save_transaction_details(
     }
 }
 
-// Save receipt_id, parent_transaction_hash, block_height and shard_id to the ScyllaDb
+// Save receipt_id, parent_transaction_hash, block_height and shard_id to the Db
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn save_receipt(
-    scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
+    db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     receipt_id: &str,
     parent_tx_hash: &str,
     block_height: u64,
@@ -317,10 +316,10 @@ async fn save_receipt(
 ) -> anyhow::Result<()> {
     tracing::debug!(
         target: crate::INDEXER,
-        "Saving receipt_id: {} to `receipts_map` in ScyllaDB",
+        "Saving receipt_id: {} to `receipts_map` in DB",
         receipt_id,
     );
-    scylla_db_client
+    db_manager
         .add_receipt(receipt_id, parent_tx_hash, block_height, shard_id)
         .await
         .map_err(|err| {

@@ -83,11 +83,9 @@ pub async fn fetch_list_access_keys_from_db(
         account_id,
         block_height,
     );
-    let row = db_manager
+    let account_keys = db_manager
         .get_account_access_keys(account_id, block_height)
         .await?;
-    let (account_keys,): (HashMap<String, Vec<u8>>,) =
-        row.into_typed::<(HashMap<String, Vec<u8>>,)>()?;
     let account_keys_view = account_keys
         .into_iter()
         .map(

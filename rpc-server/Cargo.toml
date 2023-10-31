@@ -4,11 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-actix-rt = "2.7.0"
 actix-web = "4.2.1"
 anyhow = "1.0.70"
 assert-json-diff = { version = "2.0.2", optional = true }
-async-trait = "0.1.66"
 aws-credential-types = "0.53.0"
 aws-sdk-s3 = "0.23.0"
 aws-types = "0.53.0"
@@ -65,7 +63,7 @@ near-vm-errors = "0.17.0"
 default = ["submit_tx_methods", "scylla_db"]
 submit_tx_methods = []
 tracing-instrumentation = []
-scylla_db_tracing = ["database/scylla_db_tracing", "database/scylla_db"]
 scylla_db = ["database/scylla_db"]
+scylla_db_tracing = ["database/scylla_db_tracing", "scylla_db"]
 shadow_data_consistency = ["dep:assert-json-diff"]
 account_access_keys = ["database/account_access_keys"]
