@@ -1,5 +1,15 @@
 #[async_trait::async_trait]
 pub trait TxCollectingStorage {
+    // In 2021 on the nearcore side an unfortunate situation/bug occurred.
+    // For some transactions Receipts haven't been created and were considered as _missing_.
+    // It was fixed with the patch and the protocol upgrade.
+    // The protocol team decided to include those Receipts in the first block of the "next" epoch.
+    // However, the number of missing receipts was 383 and they didn't fit into a single block,
+    // so they were included in the two sequential blocks: 47317863 and 47317864
+    // See the [PR#4248](https://github.com/near/nearcore/pull/4248)
+    // This method helps to collect the transactions we miss.
+    async fn restore_transaction_by_receipt_id(&self, receipt_id: &str) -> anyhow::Result<()>;
+
     async fn push_receipt_to_watching_list(
         &self,
         receipt_id: String,

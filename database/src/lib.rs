@@ -315,11 +315,9 @@ pub trait ScyllaStorageManager {
 
     async fn prepare_query(
         scylla_db_session: &std::sync::Arc<scylla::Session>,
-        query_text: &str,
+        mut query: scylla::statement::query::Query,
         consistency: Option<scylla::frame::types::Consistency>,
     ) -> anyhow::Result<PreparedStatement> {
-        let mut query = scylla::statement::query::Query::new(query_text);
-
         if let Some(consistency) = consistency {
             query.set_consistency(consistency);
         } else {
@@ -348,9 +346,10 @@ pub trait ScyllaStorageManager {
         scylla_db_session: &std::sync::Arc<scylla::Session>,
         query_text: &str,
     ) -> anyhow::Result<PreparedStatement> {
+        let query = scylla::statement::query::Query::new(query_text);
         Self::prepare_query(
             scylla_db_session,
-            query_text,
+            query,
             Some(scylla::frame::types::Consistency::LocalQuorum),
         )
         .await
@@ -363,9 +362,10 @@ pub trait ScyllaStorageManager {
         scylla_db_session: &std::sync::Arc<scylla::Session>,
         query_text: &str,
     ) -> anyhow::Result<PreparedStatement> {
+        let query = scylla::statement::query::Query::new(query_text);
         Self::prepare_query(
             scylla_db_session,
-            query_text,
+            query,
             Some(scylla::frame::types::Consistency::LocalQuorum),
         )
         .await
