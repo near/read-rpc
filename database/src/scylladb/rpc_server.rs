@@ -97,7 +97,7 @@ impl ScyllaStorageManager for ScyllaDBManager {
 }
 
 #[async_trait::async_trait]
-impl crate::RpcDbManager for ScyllaDBManager {
+impl crate::ReaderDbManager for ScyllaDBManager {
     /// Searches the block height by the given block hash
     async fn get_block_by_hash(
         &self,
@@ -143,7 +143,7 @@ impl crate::RpcDbManager for ScyllaDBManager {
     }
 
     /// Returns all state keys for the given account id
-    async fn get_all_state_keys(
+    async fn get_state_keys_all(
         &self,
         account_id: &near_primitives::types::AccountId,
     ) -> anyhow::Result<Vec<readnode_primitives::StateKey>> {

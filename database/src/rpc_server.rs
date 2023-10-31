@@ -30,7 +30,7 @@ async fn prepare_scylla_db_manager(
     scylla_keepalive_interval: Option<u64>,
     max_retry: u8,
     strict_mode: bool,
-) -> anyhow::Result<impl crate::RpcDbManager> {
+) -> anyhow::Result<impl crate::ReaderDbManager> {
     Ok(*crate::scylladb::rpc_server::ScyllaDBManager::new(
         scylla_url,
         scylla_user,
@@ -47,7 +47,7 @@ pub async fn prepare_db_manager(
     database_url: &str,
     database_user: Option<&str>,
     database_password: Option<&str>,
-) -> anyhow::Result<impl crate::RpcDbManager> {
+) -> anyhow::Result<impl crate::ReaderDbManager> {
     #[cfg(feature = "scylla_db")]
     prepare_scylla_db_manager(
         database_url,

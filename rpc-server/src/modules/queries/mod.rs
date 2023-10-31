@@ -1,4 +1,4 @@
-use database::RpcDbManager;
+use database::ReaderDbManager;
 use futures::executor::block_on;
 use std::collections::HashMap;
 
@@ -10,7 +10,7 @@ const MAX_LIMIT: u8 = 100;
 pub type Result<T> = ::std::result::Result<T, near_vm_logic::VMLogicError>;
 
 pub struct CodeStorage {
-    db_manager: std::sync::Arc<Box<dyn RpcDbManager + Sync + Send + 'static>>,
+    db_manager: std::sync::Arc<Box<dyn ReaderDbManager + Sync + Send + 'static>>,
     account_id: near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
     validators: HashMap<near_primitives::types::AccountId, near_primitives::types::Balance>,
@@ -33,7 +33,7 @@ impl near_vm_logic::ValuePtr for StorageValuePtr {
 
 impl CodeStorage {
     pub fn init(
-        db_manager: std::sync::Arc<Box<dyn RpcDbManager + Sync + Send + 'static>>,
+        db_manager: std::sync::Arc<Box<dyn ReaderDbManager + Sync + Send + 'static>>,
         account_id: near_primitives::types::AccountId,
         block_height: near_primitives::types::BlockHeight,
     ) -> Self {

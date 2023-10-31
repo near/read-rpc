@@ -1,5 +1,5 @@
 #[async_trait::async_trait]
-pub trait RpcDbManager {
+pub trait ReaderDbManager {
     /// Searches the block height by the given block hash
     async fn get_block_by_hash(
         &self,
@@ -13,7 +13,7 @@ pub trait RpcDbManager {
     ) -> anyhow::Result<readnode_primitives::BlockHeightShardId>;
 
     /// Returns all state keys for the given account id
-    async fn get_all_state_keys(
+    async fn get_state_keys_all(
         &self,
         account_id: &near_primitives::types::AccountId,
     ) -> anyhow::Result<Vec<readnode_primitives::StateKey>>;

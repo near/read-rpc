@@ -95,7 +95,7 @@ impl Opts {
 
 pub struct ServerContext {
     pub s3_client: near_lake_framework::s3_fetchers::LakeS3Client,
-    pub db_manager: std::sync::Arc<Box<dyn database::RpcDbManager + Sync + Send + 'static>>,
+    pub db_manager: std::sync::Arc<Box<dyn database::ReaderDbManager + Sync + Send + 'static>>,
     pub near_rpc_client: near_jsonrpc_client::JsonRpcClient,
     pub s3_bucket_name: String,
     pub genesis_config: near_chain_configs::GenesisConfig,
@@ -113,7 +113,7 @@ impl ServerContext {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         s3_client: near_lake_framework::s3_fetchers::LakeS3Client,
-        db_manager: impl database::RpcDbManager + Sync + Send + 'static,
+        db_manager: impl database::ReaderDbManager + Sync + Send + 'static,
         near_rpc_client: near_jsonrpc_client::JsonRpcClient,
         s3_bucket_name: String,
         genesis_config: near_chain_configs::GenesisConfig,

@@ -24,7 +24,7 @@ pub struct RunContractResponse {
     tracing::instrument(skip(db_manager))
 )]
 pub async fn get_state_keys_from_db(
-    db_manager: &std::sync::Arc<Box<dyn database::RpcDbManager + Sync + Send + 'static>>,
+    db_manager: &std::sync::Arc<Box<dyn database::ReaderDbManager + Sync + Send + 'static>>,
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
     prefix: &[u8],
@@ -43,7 +43,7 @@ pub async fn get_state_keys_from_db(
                 .get_state_keys_by_prefix(account_id, prefix)
                 .await
         } else {
-            db_manager.get_all_state_keys(account_id).await
+            db_manager.get_state_keys_all(account_id).await
         }
     };
     match result {
@@ -74,7 +74,7 @@ pub async fn get_state_keys_from_db(
     tracing::instrument(skip(db_manager))
 )]
 pub async fn fetch_list_access_keys_from_db(
-    db_manager: &std::sync::Arc<Box<dyn database::RpcDbManager + Sync + Send + 'static>>,
+    db_manager: &std::sync::Arc<Box<dyn database::ReaderDbManager + Sync + Send + 'static>>,
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
 ) -> anyhow::Result<Vec<near_primitives::views::AccessKeyInfoView>> {
@@ -108,7 +108,7 @@ pub async fn fetch_list_access_keys_from_db(
     tracing::instrument(skip(db_manager))
 )]
 pub async fn fetch_state_from_db(
-    db_manager: &std::sync::Arc<Box<dyn database::RpcDbManager + Sync + Send + 'static>>,
+    db_manager: &std::sync::Arc<Box<dyn database::ReaderDbManager + Sync + Send + 'static>>,
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
     prefix: &[u8],
@@ -149,7 +149,7 @@ async fn run_code_in_vm_runner(
     context: near_vm_logic::VMContext,
     account_id: near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
-    db_manager: std::sync::Arc<Box<dyn database::RpcDbManager + Sync + Send + 'static>>,
+    db_manager: std::sync::Arc<Box<dyn database::ReaderDbManager + Sync + Send + 'static>>,
     latest_protocol_version: near_primitives::types::ProtocolVersion,
     compiled_contract_code_cache: &std::sync::Arc<CompiledCodeCache>,
 ) -> Result<near_vm_logic::VMOutcome, near_primitives::errors::RuntimeError> {
@@ -223,7 +223,7 @@ pub async fn run_contract(
     account_id: near_primitives::types::AccountId,
     method_name: &str,
     args: near_primitives::types::FunctionArgs,
-    db_manager: std::sync::Arc<Box<dyn database::RpcDbManager + Sync + Send + 'static>>,
+    db_manager: std::sync::Arc<Box<dyn database::ReaderDbManager + Sync + Send + 'static>>,
     compiled_contract_code_cache: &std::sync::Arc<CompiledCodeCache>,
     contract_code_cache: &std::sync::Arc<
         std::sync::RwLock<crate::cache::LruMemoryCache<near_primitives::hash::CryptoHash, Vec<u8>>>,

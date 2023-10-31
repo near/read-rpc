@@ -1,5 +1,5 @@
 mod base;
-pub use crate::base::RpcDbManager;
+pub use crate::base::ReaderDbManager;
 pub use crate::base::StateIndexerDbManager;
 pub use crate::base::TxIndexerDbManager;
 mod scylladb;
