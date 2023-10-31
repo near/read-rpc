@@ -121,7 +121,7 @@ impl HashStorageWithDB {
     ) -> anyhow::Result<()> {
         for (transaction_key, transaction_details) in self
             .scylla_db_manager
-            .get_transactions_in_cache(
+            .get_transactions_to_cache(
                 start_block_height,
                 cache_restore_blocks_range,
                 scylla_parallel_queries,

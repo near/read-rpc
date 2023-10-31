@@ -554,7 +554,7 @@ impl ScyllaDBManager {
         Ok(result)
     }
 
-    pub(crate) async fn get_transactions_in_cache(
+    pub(crate) async fn get_transactions_to_cache(
         &self,
         start_block_height: u64,
         cache_restore_blocks_range: u64,
@@ -621,7 +621,7 @@ impl ScyllaDBManager {
                     results.insert(transaction_key.clone(), transaction);
                     tracing::info!(
                         target: crate::storage::STORAGE,
-                        "Transaction uploaded from db {} - {}",
+                        "Transaction downloaded from db {} - {}",
                         transaction_key.transaction_hash,
                         transaction_key.block_height
                     );
