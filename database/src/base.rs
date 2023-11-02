@@ -1,4 +1,14 @@
 #[async_trait::async_trait]
+pub trait BaseDbManager {
+    async fn new(
+        database_url: &str,
+        database_user: Option<&str>,
+        database_password: Option<&str>,
+        database_options: crate::AdditionalDatabaseOptions,
+    ) -> anyhow::Result<Box<Self>>;
+}
+
+#[async_trait::async_trait]
 pub trait ReaderDbManager {
     /// Searches the block height by the given block hash
     async fn get_block_by_hash(

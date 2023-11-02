@@ -61,9 +61,48 @@ pub struct Opts {
     /// In 128MB we can put 1_398_101 cache_blocks
     #[clap(long, env, default_value = "0.125")]
     pub block_cache_size: f64,
+
+    /// ScyllaDB preferred DataCenter
+    /// Accepts the DC name of the ScyllaDB to filter the connection to that DC only (preferrably).
+    /// If you connect to multi-DC cluter, you might experience big latencies while working with the DB. This is due to the fact that ScyllaDB driver tries to connect to any of the nodes in the cluster disregarding of the location of the DC. This option allows to filter the connection to the DC you need. Example: "DC1" where DC1 is located in the same region as the application.
+    #[cfg(feature = "scylla_db")]
+    #[clap(long, env)]
+    pub preferred_dc: Option<String>,
+
+    /// ScyllaDB keepalive interval
+    #[cfg(feature = "scylla_db")]
+    #[clap(long, env, default_value_t = 60)]
+    pub keepalive_interval: u64,
+
+    /// Max retry count for ScyllaDB if `strict_mode` is `false`
+    #[cfg(feature = "scylla_db")]
+    #[clap(long, env, default_value_t = 2)]
+    pub max_retry: u8,
+
+    /// Attempts to store data in the database should be infinite to ensure no data is missing.
+    /// Disable it to perform a limited write attempts (`max_retry`)
+    /// before skipping giving up and moving to the next piece of data
+    #[cfg(feature = "scylla_db")]
+    #[clap(long, env, default_value_t = false)]
+    pub strict_mode: bool,
 }
 
 impl Opts {
+    pub async fn to_additional_database_options(&self) -> database::AdditionalDatabaseOptions {
+        #[cfg(feature = "scylla_db")]
+        let database_options = database::AdditionalDatabaseOptions {
+            preferred_dc: self.preferred_dc.clone(),
+            keepalive_interval: Some(self.keepalive_interval),
+            max_retry: self.max_retry,
+            strict_mode: self.strict_mode,
+        };
+
+        #[cfg(not(feature = "scylla_db"))]
+        let database_options = database::AdditionalDatabaseOptions {};
+
+        database_options
+    }
+
     pub async fn to_s3_config(&self) -> aws_sdk_s3::Config {
         let credentials = aws_credential_types::Credentials::new(
             &self.access_key_id,

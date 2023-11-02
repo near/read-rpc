@@ -7,10 +7,9 @@ AWS_SECRET_ACCESS_KEY=SECRET_ACCESS_KEY
 AWS_DEFAULT_REGION=eu-central-1
 AWS_BUCKET_NAME=buket_name
 NEAR_RPC_URL=https://rpc.testnet.near.org
-SCYLLA_URL=127.0.0.1:9042
-SCYLLA_USER=username
-SCYLLA_PASSWORD=password
-SCYLLA_KEEPALIVE_INTERVAL=60
+DATABASE_URL=127.0.0.1:9042
+DATABASE_USER=username
+DATABASE_PASSWORD=password
 SERVER_PORT=8888
 RUST_LOG=info
 ```
@@ -65,6 +64,10 @@ Might be useful to disable if you want to run a totally read-only node that does
 ### `tracing-instrumentation` (default: `false`)
 
 This feature flag enables the tracing instrumentation for the RPC server. See the [Logging](#logging) section for more details.
+
+### `scylla_db` (default: `true`)
+
+See documentation [here](../database/README.md)
 
 ### `scylla_db_tracing` (default: `false`)
 

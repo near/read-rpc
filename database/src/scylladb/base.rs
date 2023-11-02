@@ -252,29 +252,29 @@ pub trait ScyllaStorageManager {
         Self::prepare(scylla_db_session).await
     }
 
-    async fn new(
-        scylla_url: &str,
-        scylla_user: Option<&str>,
-        scylla_password: Option<&str>,
-        scylla_preferred_dc: Option<&str>,
-        keepalive_interval: Option<u64>,
-        max_retry: u8,
-        strict_mode: bool,
-    ) -> anyhow::Result<Box<Self>> {
-        let scylla_db_session = std::sync::Arc::new(
-            Self::get_scylladb_session(
-                scylla_url,
-                scylla_user,
-                scylla_password,
-                scylla_preferred_dc,
-                keepalive_interval,
-                max_retry,
-                strict_mode,
-            )
-            .await?,
-        );
-        Self::new_from_session(scylla_db_session).await
-    }
+    // async fn new(
+    //     scylla_url: &str,
+    //     scylla_user: Option<&str>,
+    //     scylla_password: Option<&str>,
+    //     scylla_preferred_dc: Option<&str>,
+    //     keepalive_interval: Option<u64>,
+    //     max_retry: u8,
+    //     strict_mode: bool,
+    // ) -> anyhow::Result<Box<Self>> {
+    //     let scylla_db_session = std::sync::Arc::new(
+    //         Self::get_scylladb_session(
+    //             scylla_url,
+    //             scylla_user,
+    //             scylla_password,
+    //             scylla_preferred_dc,
+    //             keepalive_interval,
+    //             max_retry,
+    //             strict_mode,
+    //         )
+    //         .await?,
+    //     );
+    //     Self::new_from_session(scylla_db_session).await
+    // }
 
     async fn migrate(scylla_db_session: &scylla::Session) -> anyhow::Result<()> {
         Self::create_keyspace(scylla_db_session).await?;

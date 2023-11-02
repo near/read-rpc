@@ -22,10 +22,11 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(target: INDEXER, "Connecting to db...");
     let db_manager: std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>> =
         std::sync::Arc::new(Box::new(
-            database::tx_indexer::prepare_db_manager(
+            database::prepare_tx_indexer_db_manager(
                 &opts.database_url,
                 opts.database_user.as_deref(),
                 opts.database_password.as_deref(),
+                opts.to_additional_database_options().await,
             )
             .await?,
         ));

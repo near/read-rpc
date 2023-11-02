@@ -37,13 +37,24 @@ pub(crate) struct Opts {
     /// Chain ID: testnet or mainnet
     #[clap(subcommand)]
     pub chain_id: ChainId,
+
+    /// ScyllaDB preferred DataCenter
+    /// Accepts the DC name of the ScyllaDB to filter the connection to that DC only (preferrably).
+    /// If you connect to multi-DC cluter, you might experience big latencies while working with the DB. This is due to the fact that ScyllaDB driver tries to connect to any of the nodes in the cluster disregarding of the location of the DC. This option allows to filter the connection to the DC you need. Example: "DC1" where DC1 is located in the same region as the application.
+    #[cfg(feature = "scylla_db")]
+    #[clap(long, env)]
+    pub preferred_dc: Option<String>,
+
     /// Max retry count for ScyllaDB if `strict_mode` is `false`
-    #[clap(long, default_value = "5", env)]
+    #[cfg(feature = "scylla_db")]
+    #[clap(long, env, default_value_t = 5)]
     pub max_retry: u8,
+
     /// Attempts to store data in the database should be infinite to ensure no data is missing.
     /// Disable it to perform a limited write attempts (`max_retry`)
     /// before skipping giving up and moving to the next piece of data
-    #[clap(long, default_value = "true", env)]
+    #[cfg(feature = "scylla_db")]
+    #[clap(long, env, default_value_t = true)]
     pub strict_mode: bool,
 }
 
@@ -85,6 +96,21 @@ impl Opts {
 }
 
 impl Opts {
+    pub async fn to_additional_database_options(&self) -> database::AdditionalDatabaseOptions {
+        #[cfg(feature = "scylla_db")]
+        let database_options = database::AdditionalDatabaseOptions {
+            preferred_dc: self.preferred_dc.clone(),
+            keepalive_interval: None,
+            max_retry: self.max_retry,
+            strict_mode: self.strict_mode,
+        };
+
+        #[cfg(not(feature = "scylla_db"))]
+        let database_options = database::AdditionalDatabaseOptions {};
+
+        database_options
+    }
+
     pub async fn to_lake_config(
         &self,
         db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
