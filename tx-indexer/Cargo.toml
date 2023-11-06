@@ -10,20 +10,14 @@ async-trait = "0.1.66"
 aws-credential-types = "0.53.0"
 aws-sdk-s3 = "0.23.0"
 aws-types = "0.53.0"
-borsh = "0.10.2"
 clap = { version = "3.2.22", features = ["color", "derive", "env"] }
 dotenv = "0.15.0"
 futures = "0.3.5"
 futures-locks = "0.7.1"
 humantime = "2.1.0"
 lazy_static = "1.4.0"
-num-bigint = "0.3"
-num-traits = "0.2.15"
 prometheus = "0.13.1"
-scylla = "0.9.0"
-serde = { version = "1.0.145", features = ["derive"] }
-serde_json = "1.0.85"
-tokio = { version = "1.19.2", features = [
+tokio = { version = "1.28.2", features = [
     "sync",
     "time",
     "macros",
@@ -50,9 +44,11 @@ database = { path = "../database" }
 readnode-primitives = { path = "../readnode-primitives" }
 
 near-indexer-primitives = "0.17.0"
-near-jsonrpc-client = { git = "https://github.com/khorolets/near-jsonrpc-client-rs", rev = "0b6ad111307202a37028ef300a75a41f2a7947c3" }
+near-jsonrpc-client = "0.6.0"
 near-lake-framework = "0.7.2"
 
 [features]
+default = ["scylla_db"]
 tracing-instrumentation = []
-scylla_db_tracing = ["database/scylla_db_tracing"]
+scylla_db = ["database/scylla_db"]
+scylla_db_tracing = ["database/scylla_db_tracing", "scylla_db"]

@@ -1,6 +1,5 @@
 use crate::config::{init_tracing, Opts};
 use clap::Parser;
-use database::ScyllaStorageManager;
 use futures::StreamExt;
 mod collector;
 mod config;
@@ -20,32 +19,29 @@ async fn main() -> anyhow::Result<()> {
 
     let opts: Opts = Opts::parse();
 
-    tracing::info!(target: INDEXER, "Connecting to scylla db...");
-    let scylla_db_client: std::sync::Arc<config::ScyllaDBManager> = std::sync::Arc::new(
-        *config::ScyllaDBManager::new(
-            &opts.scylla_url,
-            opts.scylla_user.as_deref(),
-            opts.scylla_password.as_deref(),
-            opts.scylla_preferred_dc.as_deref(),
-            None,
-            opts.max_retry,
-            opts.strict_mode,
-        )
-        .await?,
-    );
-    let scylla_session = scylla_db_client.scylla_session().await;
+    tracing::info!(target: INDEXER, "Connecting to db...");
+    let db_manager: std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>> =
+        std::sync::Arc::new(Box::new(
+            database::prepare_tx_indexer_db_manager(
+                &opts.database_url,
+                opts.database_user.as_deref(),
+                opts.database_password.as_deref(),
+                opts.to_additional_database_options().await,
+            )
+            .await?,
+        ));
 
-    let start_block_height = config::get_start_block_height(&opts, &scylla_session).await?;
+    let start_block_height = config::get_start_block_height(&opts, &db_manager).await?;
     tracing::info!(target: INDEXER, "Generating LakeConfig...");
     let config: near_lake_framework::LakeConfig = opts.to_lake_config(start_block_height).await?;
 
     tracing::info!(target: INDEXER, "Creating hash storage...");
     let tx_collecting_storage = std::sync::Arc::new(
         storage::database::HashStorageWithDB::init_with_restore(
-            scylla_db_client.clone(),
+            db_manager.clone(),
             start_block_height,
             opts.cache_restore_blocks_range,
-            opts.scylla_parallel_queries,
+            opts.max_db_parallel_queries,
         )
         .await?,
     );
@@ -68,7 +64,7 @@ async fn main() -> anyhow::Result<()> {
             handle_streamer_message(
                 opts.chain_id.clone(),
                 streamer_message,
-                &scylla_db_client,
+                &db_manager,
                 &tx_collecting_storage,
                 &opts.indexer_id,
                 std::sync::Arc::clone(&stats),
@@ -95,7 +91,7 @@ async fn main() -> anyhow::Result<()> {
 async fn handle_streamer_message(
     chain_id: config::ChainId,
     streamer_message: near_indexer_primitives::StreamerMessage,
-    scylla_db_client: &std::sync::Arc<config::ScyllaDBManager>,
+    db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<impl storage::base::TxCollectingStorage>,
     indexer_id: &str,
     stats: std::sync::Arc<tokio::sync::RwLock<metrics::Stats>>,
@@ -112,12 +108,12 @@ async fn handle_streamer_message(
     let tx_future = collector::index_transactions(
         chain_id,
         &streamer_message,
-        scylla_db_client,
+        db_manager,
         tx_collecting_storage,
     );
 
     let update_meta_future =
-        scylla_db_client.update_meta(indexer_id, streamer_message.block.header.height);
+        db_manager.update_meta(indexer_id, streamer_message.block.header.height);
 
     match futures::try_join!(tx_future, update_meta_future) {
         Ok(_) => tracing::debug!(

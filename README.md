@@ -4,18 +4,19 @@ This workspace holds the collection of components for the Read RPC.
 
 ## Current content
 
-### `rpc-server`
+### [rpc-server](rpc_server/README.md)
+
 
 The JSON RPC server implementation that repeats all the APIs current real NEAR JSON RPC but using a different data sources:
 - The Read RPC Storage (ScyllaDB currently)
 - NEAR Lake Data buckets (AWS S3 currently)
 - real NEAR JSON RPC
 
-### `state-indexer`
+### [state-indexer](state-indexer/README.md)
 
 The indexer built on top of Lake Framework that watches the network and stores the `StateChanges` into the Storage (ScyllaDB) using the designed data schemas.
 
-### `tx-indexer`
+### [tx-indexer](tx-indexer/README.md)
 
 The indexer built on top of Lake Framework that watches the network and stores the `Transactions` along with all the related entities (`Receipts`, `ExecutionOutcomes`) into the Storage (ScyllaDB) using the specifically defined `TransactionDetails` structure in a dumped way (using the simplest key-value schema)
 

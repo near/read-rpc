@@ -3,8 +3,8 @@ use crate::errors::RPCError;
 use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
 use crate::modules::blocks::CacheBlock;
 #[cfg(feature = "account_access_keys")]
-use crate::modules::queries::utils::fetch_list_access_keys_from_scylla_db;
-use crate::modules::queries::utils::{fetch_state_from_scylla_db, run_contract};
+use crate::modules::queries::utils::fetch_list_access_keys_from_db;
+use crate::modules::queries::utils::{fetch_state_from_db, run_contract};
 use crate::utils::proxy_rpc_call;
 #[cfg(feature = "shadow_data_consistency")]
 use crate::utils::shadow_compare_results;
@@ -216,7 +216,7 @@ async fn view_account(
     );
 
     let account = data
-        .scylla_db_manager
+        .db_manager
         .get_account(account_id, block.block_height)
         .await
         .map_err(
@@ -251,7 +251,7 @@ async fn view_code(
         block.block_height
     );
     let contract = data
-        .scylla_db_manager
+        .db_manager
         .get_account(account_id, block.block_height)
         .await
         .map_err(
@@ -262,7 +262,7 @@ async fn view_code(
             },
         )?;
     let contract_code = data
-        .scylla_db_manager
+        .db_manager
         .get_contract_code(account_id, block.block_height)
         .await
         .map_err(
@@ -309,7 +309,7 @@ async fn function_call(
         account_id,
         method_name,
         args,
-        data.scylla_db_manager.clone(),
+        data.db_manager.clone(),
         &data.compiled_contract_code_cache,
         &data.contract_code_cache,
         block,
@@ -346,20 +346,16 @@ async fn view_state(
         prefix,
     );
 
-    let contract_state = fetch_state_from_scylla_db(
-        &data.scylla_db_manager,
-        account_id,
-        block.block_height,
-        prefix,
-    )
-    .await
-    .map_err(
-        |_err| near_jsonrpc_primitives::types::query::RpcQueryError::UnknownAccount {
-            requested_account_id: account_id.clone(),
-            block_height: block.block_height,
-            block_hash: block.block_hash,
-        },
-    )?;
+    let contract_state =
+        fetch_state_from_db(&data.db_manager, account_id, block.block_height, prefix)
+            .await
+            .map_err(|_err| {
+                near_jsonrpc_primitives::types::query::RpcQueryError::UnknownAccount {
+                    requested_account_id: account_id.clone(),
+                    block_height: block.block_height,
+                    block_hash: block.block_hash,
+                }
+            })?;
 
     Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc_primitives::types::query::QueryResponseKind::ViewState(contract_state),
@@ -389,7 +385,7 @@ async fn view_access_key(
     );
 
     let access_key = data
-        .scylla_db_manager
+        .db_manager
         .get_access_key(account_id, block.block_height, public_key.clone())
         .await
         .map_err(
@@ -425,19 +421,16 @@ async fn view_access_keys_list(
         block.block_height,
     );
 
-    let access_keys = fetch_list_access_keys_from_scylla_db(
-        &data.scylla_db_manager,
-        account_id,
-        block.block_height,
-    )
-    .await
-    // TODO: review this once we implement the `account_access_keys` after the redesign
-    // this error has to be the same the real NEAR JSON RPC returns in this case
-    .map_err(
-        |err| near_jsonrpc_primitives::types::query::RpcQueryError::InternalError {
-            error_message: format!("Failed to fetch access keys: {}", err),
-        },
-    )?;
+    let access_keys =
+        fetch_list_access_keys_from_db(&data.db_manager, account_id, block.block_height)
+            .await
+            // TODO: review this once we implement the `account_access_keys` after the redesign
+            // this error has to be the same the real NEAR JSON RPC returns in this case
+            .map_err(
+                |err| near_jsonrpc_primitives::types::query::RpcQueryError::InternalError {
+                    error_message: format!("Failed to fetch access keys: {}", err),
+                },
+            )?;
 
     Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc_primitives::types::query::QueryResponseKind::AccessKeyList(

@@ -12,27 +12,17 @@ pub struct Opts {
     #[clap(long, env = "AWS_BUCKET_NAME")]
     pub s3_bucket_name: String,
 
-    // Scylla db url
+    // DB url
     #[clap(long, env)]
-    pub scylla_url: String,
+    pub database_url: String,
 
-    /// ScyllaDB user(login)
+    /// DB user(login)
     #[clap(long, env)]
-    pub scylla_user: Option<String>,
+    pub database_user: Option<String>,
 
-    /// ScyllaDB password
+    ///DB password
     #[clap(long, env)]
-    pub scylla_password: Option<String>,
-
-    /// ScyllaDB preferred DataCenter
-    /// Accepts the DC name of the ScyllaDB to filter the connection to that DC only (preferrably).
-    /// If you connect to multi-DC cluter, you might experience big latencies while working with the DB. This is due to the fact that ScyllaDB driver tries to connect to any of the nodes in the cluster disregarding of the location of the DC. This option allows to filter the connection to the DC you need. Example: "DC1" where DC1 is located in the same region as the application.
-    #[clap(long, env)]
-    pub scylla_preferred_dc: Option<String>,
-
-    /// ScyllaDB keepalive interval
-    #[clap(long, env, default_value = "60")]
-    pub scylla_keepalive_interval: u64,
+    pub database_password: Option<String>,
 
     // AWS access key id
     #[clap(long, env = "AWS_ACCESS_KEY_ID")]
@@ -49,16 +39,6 @@ pub struct Opts {
     // AWS default region
     #[clap(long, env, default_value = "8000")]
     pub server_port: u16,
-
-    /// Max retry count for ScyllaDB if `strict_mode` is `false`
-    #[clap(long, default_value = "2", env)]
-    pub max_retry: u8,
-
-    /// Attempts to store data in the database should be infinite to ensure no data is missing.
-    /// Disable it to perform a limited write attempts (`max_retry`)
-    /// before skipping giving up and moving to the next piece of data
-    #[clap(long, default_value = "false", env)]
-    pub strict_mode: bool,
 
     /// Max gas burnt for contract function call
     /// Default value is 300_000_000_000_000
@@ -81,9 +61,48 @@ pub struct Opts {
     /// In 128MB we can put 1_398_101 cache_blocks
     #[clap(long, env, default_value = "0.125")]
     pub block_cache_size: f64,
+
+    /// ScyllaDB preferred DataCenter
+    /// Accepts the DC name of the ScyllaDB to filter the connection to that DC only (preferrably).
+    /// If you connect to multi-DC cluter, you might experience big latencies while working with the DB. This is due to the fact that ScyllaDB driver tries to connect to any of the nodes in the cluster disregarding of the location of the DC. This option allows to filter the connection to the DC you need. Example: "DC1" where DC1 is located in the same region as the application.
+    #[cfg(feature = "scylla_db")]
+    #[clap(long, env)]
+    pub preferred_dc: Option<String>,
+
+    /// ScyllaDB keepalive interval
+    #[cfg(feature = "scylla_db")]
+    #[clap(long, env, default_value_t = 60)]
+    pub keepalive_interval: u64,
+
+    /// Max retry count for ScyllaDB if `strict_mode` is `false`
+    #[cfg(feature = "scylla_db")]
+    #[clap(long, env, default_value_t = 2)]
+    pub max_retry: u8,
+
+    /// Attempts to store data in the database should be infinite to ensure no data is missing.
+    /// Disable it to perform a limited write attempts (`max_retry`)
+    /// before skipping giving up and moving to the next piece of data
+    #[cfg(feature = "scylla_db")]
+    #[clap(long, env, default_value_t = false)]
+    pub strict_mode: bool,
 }
 
 impl Opts {
+    pub async fn to_additional_database_options(&self) -> database::AdditionalDatabaseOptions {
+        #[cfg(feature = "scylla_db")]
+        let database_options = database::AdditionalDatabaseOptions {
+            preferred_dc: self.preferred_dc.clone(),
+            keepalive_interval: Some(self.keepalive_interval),
+            max_retry: self.max_retry,
+            strict_mode: self.strict_mode,
+        };
+
+        #[cfg(not(feature = "scylla_db"))]
+        let database_options = database::AdditionalDatabaseOptions {};
+
+        database_options
+    }
+
     pub async fn to_s3_config(&self) -> aws_sdk_s3::Config {
         let credentials = aws_credential_types::Credentials::new(
             &self.access_key_id,
@@ -115,7 +134,7 @@ impl Opts {
 
 pub struct ServerContext {
     pub s3_client: near_lake_framework::s3_fetchers::LakeS3Client,
-    pub scylla_db_manager: std::sync::Arc<crate::storage::ScyllaDBManager>,
+    pub db_manager: std::sync::Arc<Box<dyn database::ReaderDbManager + Sync + Send + 'static>>,
     pub near_rpc_client: near_jsonrpc_client::JsonRpcClient,
     pub s3_bucket_name: String,
     pub genesis_config: near_chain_configs::GenesisConfig,
@@ -129,6 +148,40 @@ pub struct ServerContext {
     pub max_gas_burnt: near_primitives_core::types::Gas,
 }
 
+impl ServerContext {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        s3_client: near_lake_framework::s3_fetchers::LakeS3Client,
+        db_manager: impl database::ReaderDbManager + Sync + Send + 'static,
+        near_rpc_client: near_jsonrpc_client::JsonRpcClient,
+        s3_bucket_name: String,
+        genesis_config: near_chain_configs::GenesisConfig,
+        blocks_cache: std::sync::Arc<
+            std::sync::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>,
+        >,
+        final_block_height: std::sync::Arc<std::sync::atomic::AtomicU64>,
+        compiled_contract_code_cache: std::sync::Arc<CompiledCodeCache>,
+        contract_code_cache: std::sync::Arc<
+            std::sync::RwLock<
+                crate::cache::LruMemoryCache<near_primitives::hash::CryptoHash, Vec<u8>>,
+            >,
+        >,
+        max_gas_burnt: near_primitives_core::types::Gas,
+    ) -> Self {
+        Self {
+            s3_client,
+            db_manager: std::sync::Arc::new(Box::new(db_manager)),
+            near_rpc_client,
+            s3_bucket_name,
+            genesis_config,
+            blocks_cache,
+            final_block_height,
+            compiled_contract_code_cache,
+            contract_code_cache,
+            max_gas_burnt,
+        }
+    }
+}
 pub struct CompiledCodeCache {
     pub local_cache: std::sync::Arc<
         std::sync::RwLock<

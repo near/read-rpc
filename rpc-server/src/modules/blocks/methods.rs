@@ -2,9 +2,6 @@ use crate::config::ServerContext;
 use crate::errors::RPCError;
 use crate::modules::blocks::utils::{
     fetch_block_from_cache_or_get, fetch_chunk_from_s3, is_matching_change,
-    scylla_db_convert_block_hash_to_block_height,
-    scylla_db_convert_block_height_and_shard_id_to_height_included_and_shard_id,
-    scylla_db_convert_chunk_hash_to_block_height_and_shard_id,
 };
 #[cfg(feature = "shadow_data_consistency")]
 use crate::utils::shadow_compare_results;
@@ -321,8 +318,14 @@ pub async fn fetch_block(
         near_primitives::types::BlockReference::BlockId(block_id) => match block_id {
             near_primitives::types::BlockId::Height(block_height) => Ok(block_height),
             near_primitives::types::BlockId::Hash(block_hash) => {
-                scylla_db_convert_block_hash_to_block_height(&data.scylla_db_manager, block_hash)
-                    .await
+                match data.db_manager.get_block_by_hash(block_hash).await {
+                    Ok(block_height) => Ok(block_height),
+                    Err(err) => Err(
+                        near_jsonrpc_primitives::types::blocks::RpcBlockError::UnknownBlock {
+                            error_message: err.to_string(),
+                        },
+                    ),
+                }
             }
         },
         near_primitives::types::BlockReference::Finality(finality) => match finality {
@@ -368,35 +371,39 @@ pub async fn fetch_chunk(
             block_id,
             shard_id,
         } => match block_id {
-            near_primitives::types::BlockId::Height(block_height) => {
-                scylla_db_convert_block_height_and_shard_id_to_height_included_and_shard_id(
-                    &data.scylla_db_manager,
-                    block_height,
-                    shard_id,
-                )
-                .await?
-            }
-            near_primitives::types::BlockId::Hash(block_hash) => {
-                let block_height = scylla_db_convert_block_hash_to_block_height(
-                    &data.scylla_db_manager,
-                    block_hash,
-                )
+            near_primitives::types::BlockId::Height(block_height) => data
+                .db_manager
+                .get_block_by_height_and_shard_id(block_height, shard_id)
                 .await
                 .map_err(|err| {
                     near_jsonrpc_primitives::types::chunks::RpcChunkError::InternalError {
                         error_message: err.to_string(),
                     }
-                })?;
+                })
+                .map(|block_height_shard_id| (block_height_shard_id.0, block_height_shard_id.1))?,
+            near_primitives::types::BlockId::Hash(block_hash) => {
+                let block_height = data
+                    .db_manager
+                    .get_block_by_hash(block_hash)
+                    .await
+                    .map_err(|err| {
+                        near_jsonrpc_primitives::types::chunks::RpcChunkError::InternalError {
+                            error_message: err.to_string(),
+                        }
+                    })?;
                 (block_height, shard_id)
             }
         },
-        near_jsonrpc_primitives::types::chunks::ChunkReference::ChunkHash { chunk_id } => {
-            scylla_db_convert_chunk_hash_to_block_height_and_shard_id(
-                &data.scylla_db_manager,
-                chunk_id,
+        near_jsonrpc_primitives::types::chunks::ChunkReference::ChunkHash { chunk_id } => data
+            .db_manager
+            .get_block_by_chunk_hash(chunk_id)
+            .await
+            .map_err(
+                |err| near_jsonrpc_primitives::types::chunks::RpcChunkError::InternalError {
+                    error_message: err.to_string(),
+                },
             )
-            .await?
-        }
+            .map(|block_height_shard_id| (block_height_shard_id.0, block_height_shard_id.1))?,
     };
     let chunk_view = fetch_chunk_from_s3(
         &data.s3_client,

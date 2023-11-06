@@ -193,7 +193,7 @@ async fn tx_status_common(
     };
 
     let transaction_details = data
-        .scylla_db_manager
+        .db_manager
         .get_transaction_by_hash(&tx_hash.to_string())
         .await
         .map_err(|_err| {

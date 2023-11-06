@@ -3,7 +3,6 @@ use crate::utils::{
 };
 use clap::Parser;
 use config::{Opts, ServerContext};
-use database::ScyllaStorageManager;
 use dotenv::dotenv;
 use jsonrpc_v2::{Data, Server};
 use tracing_subscriber::layer::SubscriberExt;
@@ -17,7 +16,6 @@ mod config;
 mod errors;
 mod metrics;
 mod modules;
-mod storage;
 mod utils;
 
 fn init_logging(use_tracer: bool) -> anyhow::Result<()> {
@@ -119,40 +117,34 @@ async fn main() -> anyhow::Result<()> {
         cache::LruMemoryCache::new(contract_code_cache_size),
     ));
 
-    let scylla_db_manager = std::sync::Arc::new(
-        *storage::ScyllaDBManager::new(
-            &opts.scylla_url,
-            opts.scylla_user.as_deref(),
-            opts.scylla_password.as_deref(),
-            opts.scylla_preferred_dc.as_deref(),
-            Some(opts.scylla_keepalive_interval),
-            opts.max_retry,
-            opts.strict_mode,
-        )
-        .await?,
-    );
-
     tracing::info!("Get genesis config...");
     let genesis_config = near_rpc_client
         .call(near_jsonrpc_client::methods::EXPERIMENTAL_genesis_config::RpcGenesisConfigRequest)
         .await?;
     let lake_config = opts.to_lake_config(final_block.block_height).await?;
     let s3_config = opts.to_s3_config().await;
+    let db_manager = database::prepare_read_rpc_db_manager(
+        opts.database_url.as_str(),
+        opts.database_user.as_deref(),
+        opts.database_password.as_deref(),
+        opts.to_additional_database_options().await,
+    )
+    .await?;
 
-    let state = ServerContext {
-        s3_client: near_lake_framework::s3_fetchers::LakeS3Client::new(
-            aws_sdk_s3::Client::from_conf(s3_config),
-        ),
-        scylla_db_manager,
-        near_rpc_client: near_rpc_client.clone(),
-        s3_bucket_name: opts.s3_bucket_name,
+    let state = ServerContext::new(
+        near_lake_framework::s3_fetchers::LakeS3Client::new(aws_sdk_s3::Client::from_conf(
+            s3_config,
+        )),
+        db_manager,
+        near_rpc_client.clone(),
+        opts.s3_bucket_name.clone(),
         genesis_config,
-        blocks_cache: std::sync::Arc::clone(&blocks_cache),
-        final_block_height: std::sync::Arc::clone(&final_block_height),
+        std::sync::Arc::clone(&blocks_cache),
+        std::sync::Arc::clone(&final_block_height),
         compiled_contract_code_cache,
         contract_code_cache,
-        max_gas_burnt: opts.max_gas_burnt,
-    };
+        opts.max_gas_burnt,
+    );
 
     tokio::spawn(async move {
         update_final_block_height_regularly(final_block_height.clone(), blocks_cache, lake_config)

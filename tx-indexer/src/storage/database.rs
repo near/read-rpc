@@ -2,7 +2,7 @@ use crate::storage::base::TxCollectingStorage;
 use futures::StreamExt;
 
 pub struct HashStorageWithDB {
-    scylla_db_manager: std::sync::Arc<crate::config::ScyllaDBManager>,
+    db_manager: std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     transactions: futures_locks::RwLock<
         std::collections::HashMap<
             readnode_primitives::TransactionKey,
@@ -25,10 +25,10 @@ pub struct HashStorageWithDB {
 impl HashStorageWithDB {
     /// Init storage without restore transactions with receipts after interruption
     pub(crate) async fn init_storage(
-        scylla_db_client: std::sync::Arc<crate::config::ScyllaDBManager>,
+        db_manager: std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     ) -> Self {
         Self {
-            scylla_db_manager: scylla_db_client,
+            db_manager,
             transactions: futures_locks::RwLock::new(std::collections::HashMap::new()),
             receipts_counters: futures_locks::RwLock::new(std::collections::HashMap::new()),
             receipts_watching_list: futures_locks::RwLock::new(std::collections::HashMap::new()),
@@ -39,17 +39,17 @@ impl HashStorageWithDB {
     /// Init storage with restore transactions with receipts after interruption
     #[allow(unused)]
     pub(crate) async fn init_with_restore(
-        scylla_db_client: std::sync::Arc<crate::config::ScyllaDBManager>,
+        db_manager: std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
         start_block_height: u64,
         cache_restore_blocks_range: u64,
-        scylla_parallel_queries: i64,
+        max_db_parallel_queries: i64,
     ) -> anyhow::Result<Self> {
-        let storage = Self::init_storage(scylla_db_client).await;
+        let storage = Self::init_storage(db_manager).await;
         storage
             .restore_transactions_with_receipts_after_interruption(
                 start_block_height,
                 cache_restore_blocks_range,
-                scylla_parallel_queries,
+                max_db_parallel_queries,
             )
             .await?;
         Ok(storage)
@@ -74,7 +74,7 @@ impl HashStorageWithDB {
             .await?;
 
         for indexer_execution_outcome_with_receipt in self
-            .scylla_db_manager
+            .db_manager
             .get_receipts_in_cache(transaction_key)
             .await?
             .iter()
@@ -117,14 +117,14 @@ impl HashStorageWithDB {
         &self,
         start_block_height: u64,
         cache_restore_blocks_range: u64,
-        scylla_parallel_queries: i64,
+        max_db_parallel_queries: i64,
     ) -> anyhow::Result<()> {
         for (transaction_key, transaction_details) in self
-            .scylla_db_manager
+            .db_manager
             .get_transactions_to_cache(
                 start_block_height,
                 cache_restore_blocks_range,
-                scylla_parallel_queries,
+                max_db_parallel_queries,
             )
             .await?
             .iter()
@@ -145,9 +145,9 @@ impl HashStorageWithDB {
         transaction_key: readnode_primitives::TransactionKey,
         indexer_execution_outcome_with_receipt: near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
     ) {
-        let scylla_db_manager = self.scylla_db_manager.clone();
+        let db_manager = self.db_manager.clone();
         tokio::spawn(async move {
-            scylla_db_manager
+            db_manager
                 .cache_add_receipt(transaction_key, indexer_execution_outcome_with_receipt)
                 .await
         });
@@ -189,7 +189,7 @@ impl HashStorageWithDB {
 impl TxCollectingStorage for HashStorageWithDB {
     async fn restore_transaction_by_receipt_id(&self, receipt_id: &str) -> anyhow::Result<()> {
         let transaction_details = self
-            .scylla_db_manager
+            .db_manager
             .get_transaction_by_receipt_id(receipt_id)
             .await?;
         self.restore_transaction_with_receipts(
@@ -279,9 +279,9 @@ impl TxCollectingStorage for HashStorageWithDB {
         transaction_details: readnode_primitives::CollectingTransactionDetails,
     ) -> anyhow::Result<()> {
         let transaction_details_clone = transaction_details.clone();
-        let scylla_db_manager = self.scylla_db_manager.clone();
+        let db_manager = self.db_manager.clone();
         tokio::spawn(async move {
-            scylla_db_manager
+            db_manager
                 .cache_add_transaction(transaction_details_clone)
                 .await
         });

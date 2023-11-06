@@ -4,11 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-actix-rt = "2.7.0"
 actix-web = "4.2.1"
 anyhow = "1.0.70"
 assert-json-diff = { version = "2.0.2", optional = true }
-async-trait = "0.1.66"
 aws-credential-types = "0.53.0"
 aws-sdk-s3 = "0.23.0"
 aws-types = "0.53.0"
@@ -22,11 +20,8 @@ http = "0.2.8"
 jsonrpc-v2 = { git = "https://github.com/kobayurii/jsonrpc-v2", rev = "95e7b1d2567ae841163af212a3f25abb6862becb" }
 lazy_static = "1.4.0"
 lru = "0.11.1"
-num-bigint = "0.3"
-num-traits = "0.2.15"
 paste = "1.0.14"
 prometheus = "0.13.1"
-scylla = "0.9.0"
 serde = { version = "1.0.145", features = ["derive"] }
 serde_json = "1.0.85"
 thiserror = "1.0.40"
@@ -65,9 +60,10 @@ near-vm-errors = "0.17.0"
 
 
 [features]
-default = ["submit_tx_methods"]
+default = ["submit_tx_methods", "scylla_db"]
 submit_tx_methods = []
 tracing-instrumentation = []
-scylla_db_tracing = ["database/scylla_db_tracing"]
+scylla_db = ["database/scylla_db"]
+scylla_db_tracing = ["database/scylla_db_tracing", "scylla_db"]
 shadow_data_consistency = ["dep:assert-json-diff"]
-account_access_keys = []
+account_access_keys = ["database/account_access_keys"]

@@ -1,6 +1,9 @@
 use borsh::{BorshDeserialize, BorshSerialize};
-use near_indexer_primitives::{views, IndexerTransactionWithOutcome};
+use near_indexer_primitives::{views, CryptoHash, IndexerTransactionWithOutcome};
+use num_traits::ToPrimitive;
 use serde::{Deserialize, Serialize};
+use std::convert::TryFrom;
+use std::str::FromStr;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 pub struct TransactionKey {
@@ -133,5 +136,123 @@ impl TransactionDetails {
                 .cloned()
                 .collect(),
         }
+    }
+}
+
+pub type StateKey = Vec<u8>;
+pub type StateValue = Vec<u8>;
+pub struct BlockHeightShardId(pub u64, pub u64);
+pub struct QueryData<T: BorshDeserialize> {
+    pub data: T,
+    pub block_height: near_primitives_core::types::BlockHeight,
+    pub block_hash: CryptoHash,
+}
+pub struct ReceiptRecord {
+    pub receipt_id: CryptoHash,
+    pub parent_transaction_hash: CryptoHash,
+    pub block_height: near_primitives::types::BlockHeight,
+    pub shard_id: near_primitives::types::ShardId,
+}
+
+pub struct BlockRecord {
+    pub height: u64,
+    pub hash: CryptoHash,
+}
+
+// TryFrom impls for defined types
+
+impl TryFrom<(num_bigint::BigInt, num_bigint::BigInt)> for BlockHeightShardId {
+    type Error = anyhow::Error;
+
+    fn try_from(value: (num_bigint::BigInt, num_bigint::BigInt)) -> Result<Self, Self::Error> {
+        let stored_at_block_height = value
+            .0
+            .to_u64()
+            .ok_or_else(|| anyhow::anyhow!("Failed to parse `stored_at_block_height` to u64"))?;
+
+        let parsed_shard_id = value
+            .1
+            .to_u64()
+            .ok_or_else(|| anyhow::anyhow!("Failed to parse `shard_id` to u64"))?;
+
+        Ok(BlockHeightShardId(stored_at_block_height, parsed_shard_id))
+    }
+}
+
+impl<T>
+    TryFrom<(
+        Vec<u8>,
+        near_primitives_core::types::BlockHeight,
+        near_indexer_primitives::CryptoHash,
+    )> for QueryData<T>
+where
+    T: BorshDeserialize,
+{
+    type Error = anyhow::Error;
+
+    fn try_from(
+        value: (
+            Vec<u8>,
+            near_primitives_core::types::BlockHeight,
+            near_indexer_primitives::CryptoHash,
+        ),
+    ) -> Result<Self, Self::Error> {
+        let data = T::try_from_slice(&value.0)?;
+
+        Ok(Self {
+            data,
+            block_height: value.1,
+            block_hash: value.2,
+        })
+    }
+}
+
+impl TryFrom<(String, String, num_bigint::BigInt, num_bigint::BigInt)> for ReceiptRecord {
+    type Error = anyhow::Error;
+
+    fn try_from(
+        value: (String, String, num_bigint::BigInt, num_bigint::BigInt),
+    ) -> Result<Self, Self::Error> {
+        let receipt_id =
+            near_primitives::hash::CryptoHash::try_from(value.0.as_bytes()).map_err(|err| {
+                anyhow::anyhow!("Failed to parse `receipt_id` to CryptoHash: {}", err)
+            })?;
+        let parent_transaction_hash = CryptoHash::from_str(&value.1).map_err(|err| {
+            anyhow::anyhow!(
+                "Failed to parse `parent_transaction_hash` to CryptoHash: {}",
+                err
+            )
+        })?;
+        let block_height = value
+            .2
+            .to_u64()
+            .ok_or_else(|| anyhow::anyhow!("Failed to parse `block_height` to u64"))?;
+        let shard_id = value
+            .3
+            .to_u64()
+            .ok_or_else(|| anyhow::anyhow!("Failed to parse `shard_id` to u64"))?;
+
+        Ok(ReceiptRecord {
+            receipt_id,
+            parent_transaction_hash,
+            block_height,
+            shard_id,
+        })
+    }
+}
+
+impl TryFrom<(String, num_bigint::BigInt)> for BlockRecord {
+    type Error = anyhow::Error;
+
+    fn try_from(value: (String, num_bigint::BigInt)) -> Result<Self, Self::Error> {
+        let height = value
+            .1
+            .to_u64()
+            .ok_or_else(|| anyhow::anyhow!("Failed to parse `block_height` to u64"))?;
+        let hash = CryptoHash::from_str(&value.0).map_err(|err| {
+            anyhow::anyhow!("Failed to parse `block_hash` to CryptoHash: {}", err)
+        })?;
+
+        Ok(BlockRecord { height, hash })
     }
 }
