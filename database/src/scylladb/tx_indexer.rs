@@ -1,4 +1,4 @@
-use crate::ScyllaStorageManager;
+use crate::scylladb::ScyllaStorageManager;
 use borsh::{BorshDeserialize, BorshSerialize};
 use futures::StreamExt;
 use num_traits::ToPrimitive;

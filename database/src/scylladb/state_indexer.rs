@@ -1,4 +1,4 @@
-use crate::ScyllaStorageManager;
+use crate::scylladb::ScyllaStorageManager;
 use num_traits::ToPrimitive;
 use scylla::prepared_statement::PreparedStatement;
 

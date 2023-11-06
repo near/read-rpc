@@ -237,7 +237,7 @@ async fn main() -> anyhow::Result<()> {
 
     let opts: Opts = Opts::parse();
 
-    let db_manager = database::prepare_stata_indexer_db_manager(
+    let db_manager = database::prepare_state_indexer_db_manager(
         &opts.database_url,
         opts.database_user.as_deref(),
         opts.database_password.as_deref(),

@@ -1,10 +1,8 @@
-use std::convert::TryFrom;
-
+use crate::scylladb::ScyllaStorageManager;
 use borsh::{BorshDeserialize, BorshSerialize};
 use num_traits::ToPrimitive;
 use scylla::{prepared_statement::PreparedStatement, IntoTypedRows};
-
-use crate::ScyllaStorageManager;
+use std::convert::TryFrom;
 
 pub struct ScyllaDBManager {
     scylla_session: std::sync::Arc<scylla::Session>,
