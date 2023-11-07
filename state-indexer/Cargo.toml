@@ -43,6 +43,7 @@ tracing-stackdriver = "0.7.2" # GCP logs
 
 database = { path = "../database" }
 epoch-indexer = { path = "../epoch-indexer" }
+configuration = { path = "../configuration" }
 
 near-primitives = "1.36.0"
 near-indexer-primitives = "1.36.0"

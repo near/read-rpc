@@ -1,0 +1,199 @@
+# General configuration for NEAR readnode
+[general]
+
+# Chain ID: testnet or mainnet
+chain_id = "mainnet" # mainnet or testnet
+
+# near network rpc url
+near_rpc_url = "https://beta.rpc.mainnet.near.org"
+
+# near network archival rpc url
+near_archival_rpc_url = "https://beta.rpc.mainnet.near.org" # Optional
+
+# Rpc server general configuration
+[general.rpc-server]
+
+# Referer header value
+# We want to set a custom referer to let NEAR JSON RPC nodes know that we are a read-rpc instance
+referer_header_value = "read-rpc"
+
+# Port for RPC server
+port = 8000
+
+# Max gas burnt for contract function call
+# Default value is 300_000_000_000_000
+max_gas_burnt = 300_000_000_000_000
+
+# Max available memory for `block_cache` and `contract_code_cache` in gigabytes
+# By default we use all available memory
+limit_memory_cache = 0
+
+# Reserved memory for running the application in gigabytes
+# By default we use 0.25 gigabyte (256MB or 268_435_456 bytes)
+reserved_memory = 0.25
+
+# Block cache size in gigabytes
+# By default we use 0.125 gigabyte (128MB or 134_217_728 bytes)
+# One cache_block size is ≈ 96 bytes
+# In 128MB we can put 1_398_101 cache_blocks
+block_cache_size = 0.125
+
+# Tx indexer general configuration
+[general.tx-indexer]
+
+# Indexer ID to handle meta data about the instance
+indexer_id = "tx-indexer" # Unique indexer ID
+
+# Port for metrics server
+port = 8080
+
+# To restore cache from db we use smart range blocks
+# Regular transaction takes some blocks to be finalized
+# We don't need to restore too old transactions for the indexer because we will probably never be able to reassemble them.
+# We use a range of 1000 blocks for our peace of mind. We also leave the option to increase or decrease this range
+cache_restore_blocks_range = 1000
+
+# State indexer general configuration
+[general.state-indexer]
+
+# Indexer ID to handle meta data about the instance
+indexer_id = "state-indexer" # Unique indexer ID
+
+# Port for metrics server
+port = 8081
+
+# Concurrency for state indexer
+concurrency = 1
+
+# Epoch indexer general configuration
+[general.epoch-indexer]
+
+# Indexer ID to handle meta data about the instance
+indexer_id = "epoch-indexer" # Unique indexer ID
+
+# Tracking acconunts configuration
+[accounts]
+# Accounts to track. By default we track all accounts.
+# You can specify a list of accounts to track.
+tracked_accounts = ["test.near"]
+
+# Tracking state changes configuration
+[state_changes]
+# State changes to track. By default we track all state changes.
+# You can specify a list of state changes to track.
+# Possible values: "state", "access_key", "contract_code"
+# "accounts" are tracked from the [accounts] section
+tracked_changes = ["state", "access_key", "contract_code"]
+
+# Lake framework configuration
+[lake_config]
+
+# Lake framework AWS access key id
+aws_access_key_id = "${AWS_ACCESS_KEY_ID}"
+
+# Lake framework AWS secret access key
+aws_secret_access_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+
+# Lake framework AWS default region
+aws_default_region = "eu-central-1"
+
+# Lake framework bucket name
+aws_bucket_name = "near-lake-data-mainnet"
+
+# Database configuration
+[database]
+
+# Database connection string
+database_url = "postgresql://postgres:password@localhost:5432/near-indexer" # Postgres database URL
+
+# Database user(login)
+database_user = "postgres" # Optional database user
+
+# Database password
+database_password = "password" # Optional database password
+
+# Postgres database name
+database_name = "near-indexer" # Optional database name
+
+# Database configuration for rpc server
+[database.rpc-server]
+
+# ScyllaDB preferred DataCenter
+# Accepts the DC name of the ScyllaDB to filter the connection to that DC only (preferrably).
+# If you connect to multi-DC cluter, you might experience big latencies while working with the DB.
+# This is due to the fact that ScyllaDB driver tries to connect to any of the nodes in the cluster disregarding of the location of the DC.
+# This option allows to filter the connection to the DC you need.
+# Example: "DC1" where DC1 is located in the same region as the application.
+preferred_dc = "" # Optional
+
+# Max retry count for ScyllaDB if `strict_mode` is `false`
+max_retry = 2
+
+# Attempts to store data in the database should be infinite to ensure no data is missing.
+# Disable it to perform a limited write attempts (`max_retry`)
+# before giving up, and moving to the next piece of data
+strict_mode = false
+
+# ScyllaDB keepalive interval
+keepalive_interval = 60
+
+# Database configuration for tx indexer
+[database.tx-indexer]
+
+# ScyllaDB preferred DataCenter
+# Accepts the DC name of the ScyllaDB to filter the connection to that DC only (preferrably).
+# If you connect to multi-DC cluter, you might experience big latencies while working with the DB.
+# This is due to the fact that ScyllaDB driver tries to connect to any of the nodes in the cluster disregarding of the location of the DC.
+# This option allows to filter the connection to the DC you need.
+# Example: "DC1" where DC1 is located in the same region as the application.
+preferred_dc = "DC1" # Optional
+
+# Max retry count for ScyllaDB if `strict_mode` is `false`
+max_retry = 5
+
+# Attempts to store data in the database should be infinite to ensure no data is missing.
+# Disable it to perform a limited write attempts (`max_retry`)
+# before giving up, and moving to the next piece of data
+strict_mode = true
+
+# Parallel queries = (nodes in cluster) ✕ (cores in node) ✕ 3
+# Current we have 6 - nodes with 8 - cpus
+# 6 ✕ 8 ✕ 3 = 144
+max_db_parallel_queries = 144
+
+# Database configuration for state indexer
+[database.state-indexer]
+
+# ScyllaDB preferred DataCenter
+# Accepts the DC name of the ScyllaDB to filter the connection to that DC only (preferrably).
+# If you connect to multi-DC cluter, you might experience big latencies while working with the DB.
+# This is due to the fact that ScyllaDB driver tries to connect to any of the nodes in the cluster disregarding of the location of the DC.
+# This option allows to filter the connection to the DC you need.
+# Example: "DC1" where DC1 is located in the same region as the application.
+preferred_dc = "DC1" # Optional
+
+# Max retry count for ScyllaDB if `strict_mode` is `false`
+max_retry = 5
+
+# Attempts to store data in the database should be infinite to ensure no data is missing.
+# Disable it to perform a limited write attempts (`max_retry`)
+# before giving up, and moving to the next piece of data
+strict_mode = true
+
+# Database configuration for epoch indexer
+[database.epoch-indexer]
+# ScyllaDB preferred DataCenter
+# Accepts the DC name of the ScyllaDB to filter the connection to that DC only (preferrably).
+# If you connect to multi-DC cluter, you might experience big latencies while working with the DB.
+# This is due to the fact that ScyllaDB driver tries to connect to any of the nodes in the cluster disregarding of the location of the DC.
+# This option allows to filter the connection to the DC you need.
+# Example: "DC1" where DC1 is located in the same region as the application.
+preferred_dc = "DC1" # Optional
+
+# Max retry count for ScyllaDB if `strict_mode` is `false`
+max_retry = 5
+
+# Attempts to store data in the database should be infinite to ensure no data is missing.
+# Disable it to perform a limited write attempts (`max_retry`)
+# before giving up, and moving to the next piece of data
+strict_mode = true
