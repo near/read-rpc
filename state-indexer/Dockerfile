@@ -3,9 +3,10 @@ ARG features=""
 WORKDIR /tmp/
 
 COPY Cargo.lock ./
-RUN echo '[workspace]\nmembers = ["state-indexer", "database"]' > Cargo.toml
+RUN echo '[workspace]\nmembers = ["state-indexer", "database", "readnode-primitives"]' > Cargo.toml
 COPY state-indexer/Cargo.toml state-indexer/Cargo.toml
 COPY database database
+COPY readnode-primitives readnode-primitives
 RUN mkdir state-indexer/src && echo 'fn main() {}' > state-indexer/src/main.rs cargo build --release && rm -r state-indexer/src
 
 # copy your source tree
