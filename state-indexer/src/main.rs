@@ -25,6 +25,7 @@ async fn handle_streamer_message(
     db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
     rpc_client: &near_jsonrpc_client::JsonRpcClient,
     indexer_id: &str,
+    indexer_config: configuration::StateIndexerConfig,
     stats: std::sync::Arc<tokio::sync::RwLock<metrics::Stats>>,
 ) -> anyhow::Result<()> {
     let block_height = streamer_message.block.header.height;
@@ -65,7 +66,8 @@ async fn handle_streamer_message(
             .collect(),
         db_manager,
     );
-    let handle_state_change_future = handle_state_changes(streamer_message, db_manager, block_height, block_hash);
+    let handle_state_change_future =
+        handle_state_changes(streamer_message, db_manager, block_height, block_hash, indexer_config);
 
     let update_meta_future = db_manager.update_meta(indexer_id, block_height);
 
@@ -153,6 +155,7 @@ async fn handle_state_changes(
     db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
     block_height: u64,
     block_hash: CryptoHash,
+    indexer_config: configuration::StateIndexerConfig,
 ) -> anyhow::Result<Vec<()>> {
     let mut state_changes_to_store =
         std::collections::HashMap::<String, near_indexer_primitives::views::StateChangeWithCauseView>::new();
@@ -165,6 +168,9 @@ async fn handle_state_changes(
     // Collecting a unique list of StateChangeWithCauseView for account_id + change kind + suffix
     // by overwriting the records in the HashMap
     for state_change in initial_state_changes {
+        if !indexer_config.should_be_indexed(&state_change.value) {
+            continue;
+        };
         let key = match &state_change.value {
             StateChangeValueView::DataUpdate { account_id, key, .. }
             | StateChangeValueView::DataDeletion { account_id, key } => {
@@ -326,6 +332,7 @@ async fn main() -> anyhow::Result<()> {
 
     let stats = std::sync::Arc::new(tokio::sync::RwLock::new(metrics::Stats::new()));
     tokio::spawn(metrics::state_logger(std::sync::Arc::clone(&stats), opts.rpc_url().to_string()));
+    let indexer_config = configuration::read_configuration().await?.state_indexer;
 
     let mut handlers = tokio_stream::wrappers::ReceiverStream::new(stream)
         .map(|streamer_message| {
@@ -334,6 +341,7 @@ async fn main() -> anyhow::Result<()> {
                 &db_manager,
                 &rpc_client,
                 &opts.indexer_id,
+                indexer_config.clone(),
                 std::sync::Arc::clone(&stats),
             )
         })

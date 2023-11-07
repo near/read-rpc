@@ -1,0 +1,9 @@
+[state_indexer]
+accounts = ["test.near"] # Empty list means all accounts
+changes = ["state"]  # ["state", "access_key", "contract_code", "account"] Empty list means all changes
+
+[tx_indexer]
+# Not yet implemented
+
+[rpc_server]
+# Not yet implemented
