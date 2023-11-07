@@ -1,0 +1,10 @@
+[package]
+name = "configuration"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.70"
+toml = "0.8.4"
+serde = "1.0.145"
+serde_derive = "1.0.145"
