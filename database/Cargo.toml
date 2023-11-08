@@ -7,6 +7,7 @@ edition = "2021"
 anyhow = "1.0.70"
 async-trait = "0.1.66"
 borsh = "0.10.2"
+diesel = { version = "2.1.3", features = ["postgres"], optional = true }
 futures = "0.3.5"
 hex = "0.4.3"
 prettytable-rs = { version = "0.10", optional = true }
@@ -29,6 +30,7 @@ near-crypto = "0.17.0"
 near-indexer-primitives = "0.17.0"
 
 [features]
+postgres_db = ["dep:diesel"]
 scylla_db = ["dep:scylla", "dep:num-bigint", "dep:num-traits"]
 scylla_db_tracing = ["dep:prettytable-rs", "dep:uuid", "scylla_db"]
 account_access_keys = []

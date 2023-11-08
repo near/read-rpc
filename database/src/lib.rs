@@ -1,3 +1,6 @@
+#[cfg(all(feature = "scylla_db", feature = "postgres_db"))]
+compile_error!("feature \"scylla_db\" and feature \"postgres_db\" cannot be enabled at the same time");
+
 mod base;
 
 use crate::base::BaseDbManager;
@@ -10,8 +13,10 @@ mod scylladb;
 #[cfg(feature = "scylla_db")]
 pub use crate::scylladb::AdditionalDatabaseOptions;
 
-#[cfg(not(feature = "scylla_db"))]
-pub use crate::base::AdditionalDatabaseOptions;
+#[cfg(feature = "postgres_db")]
+mod postgres;
+#[cfg(feature = "postgres_db")]
+pub use crate::postgres::AdditionalDatabaseOptions;
 
 pub mod primitives;
 
@@ -40,13 +45,24 @@ pub async fn prepare_read_rpc_db_manager(
     database_options: AdditionalDatabaseOptions,
 ) -> anyhow::Result<impl ReaderDbManager + Send + Sync + 'static> {
     #[cfg(feature = "scylla_db")]
-    prepare_db_manager::<scylladb::rpc_server::ScyllaDBManager>(
+    let db_manager = prepare_db_manager::<scylladb::rpc_server::ScyllaDBManager>(
         database_url,
         database_user,
         database_password,
         database_options,
     )
-    .await
+    .await?;
+
+    #[cfg(feature = "postgres_db")]
+    let db_manager = prepare_db_manager::<postgres::rpc_server::PostgresDBManager>(
+        database_url,
+        database_user,
+        database_password,
+        database_options,
+    )
+        .await?;
+
+    Ok(db_manager)
 }
 
 pub async fn prepare_state_indexer_db_manager(
@@ -56,13 +72,24 @@ pub async fn prepare_state_indexer_db_manager(
     database_options: AdditionalDatabaseOptions,
 ) -> anyhow::Result<impl StateIndexerDbManager + Send + Sync + 'static> {
     #[cfg(feature = "scylla_db")]
-    prepare_db_manager::<scylladb::state_indexer::ScyllaDBManager>(
+    let db_manager = prepare_db_manager::<scylladb::state_indexer::ScyllaDBManager>(
         database_url,
         database_user,
         database_password,
         database_options,
     )
-    .await
+    .await?;
+
+    #[cfg(feature = "postgres_db")]
+    let db_manager = prepare_db_manager::<postgres::state_indexer::PostgresDBManager>(
+        database_url,
+        database_user,
+        database_password,
+        database_options,
+    )
+        .await?;
+
+    Ok(db_manager)
 }
 
 pub async fn prepare_tx_indexer_db_manager(
@@ -72,11 +99,22 @@ pub async fn prepare_tx_indexer_db_manager(
     database_options: AdditionalDatabaseOptions,
 ) -> anyhow::Result<impl TxIndexerDbManager + Send + Sync + 'static> {
     #[cfg(feature = "scylla_db")]
-    prepare_db_manager::<scylladb::tx_indexer::ScyllaDBManager>(
+    let db_manager = prepare_db_manager::<scylladb::tx_indexer::ScyllaDBManager>(
         database_url,
         database_user,
         database_password,
         database_options,
     )
-    .await
+    .await?;
+
+    #[cfg(feature = "postgres_db")]
+    let db_manager = prepare_db_manager::<postgres::tx_indexer::PostgresDBManager>(
+        database_url,
+        database_user,
+        database_password,
+        database_options,
+    )
+        .await?;
+
+    Ok(db_manager)
 }

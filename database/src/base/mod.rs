@@ -14,6 +14,3 @@ pub trait BaseDbManager {
         database_options: crate::AdditionalDatabaseOptions,
     ) -> anyhow::Result<Box<Self>>;
 }
-
-#[cfg(not(feature = "scylla_db"))]
-pub struct AdditionalDatabaseOptions {}

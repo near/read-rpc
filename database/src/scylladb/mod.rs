@@ -26,7 +26,6 @@ use scylla::transport::errors::QueryError;
 /// Attempts to store data in the database should be infinite to ensure no data is missing.
 /// Disable it to perform a limited write attempts (`max_retry`)
 /// before skipping giving up and moving to the next piece of data
-#[cfg(feature = "scylla_db")]
 pub struct AdditionalDatabaseOptions {
     pub preferred_dc: Option<String>,
     pub keepalive_interval: Option<u64>,

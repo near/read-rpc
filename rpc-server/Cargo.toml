@@ -63,6 +63,7 @@ near-vm-errors = "0.17.0"
 default = ["submit_tx_methods", "scylla_db"]
 submit_tx_methods = []
 tracing-instrumentation = []
+postgres_db = ["database/postgres_db"]
 scylla_db = ["database/scylla_db"]
 scylla_db_tracing = ["database/scylla_db_tracing", "scylla_db"]
 shadow_data_consistency = ["dep:assert-json-diff"]
