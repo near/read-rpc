@@ -21,7 +21,6 @@ struct StateChangesAccessKey {
 
 #[derive(Insertable, Queryable, Selectable)]
 struct StateChangesAccessKeys {
-    id: i32,
     account_id: String,
     block_height: u64,
     block_hash: String,
