@@ -1,8 +1,7 @@
-use std::collections::HashMap;
+use crate::primitives::{ChunkHash, HeightIncluded, ShardId};
+use crate::AdditionalDatabaseOptions;
 use near_indexer_primitives::CryptoHash;
 use near_primitives::types::AccountId;
-use crate::AdditionalDatabaseOptions;
-use crate::primitives::{ChunkHash, HeightIncluded, ShardId};
 
 pub(crate) struct PostgresDBManager {
     // scylla_session: std::sync::Arc<scylla::Session>,
@@ -33,54 +32,125 @@ pub(crate) struct PostgresDBManager {
 
 #[async_trait::async_trait]
 impl crate::BaseDbManager for PostgresDBManager {
-    async fn new(database_url: &str, database_user: Option<&str>, database_password: Option<&str>, database_options: AdditionalDatabaseOptions) -> anyhow::Result<Box<Self>> {
+    async fn new(
+        database_url: &str,
+        database_user: Option<&str>,
+        database_password: Option<&str>,
+        database_options: AdditionalDatabaseOptions,
+    ) -> anyhow::Result<Box<Self>> {
         todo!()
     }
 }
 
 #[async_trait::async_trait]
 impl crate::StateIndexerDbManager for PostgresDBManager {
-    async fn add_state_changes(&self, account_id: AccountId, block_height: u64, block_hash: CryptoHash, key: &[u8], value: &[u8]) -> anyhow::Result<()> {
+    async fn add_state_changes(
+        &self,
+        account_id: AccountId,
+        block_height: u64,
+        block_hash: CryptoHash,
+        key: &[u8],
+        value: &[u8],
+    ) -> anyhow::Result<()> {
         todo!()
     }
 
-    async fn delete_state_changes(&self, account_id: AccountId, block_height: u64, block_hash: CryptoHash, key: &[u8]) -> anyhow::Result<()> {
+    async fn delete_state_changes(
+        &self,
+        account_id: AccountId,
+        block_height: u64,
+        block_hash: CryptoHash,
+        key: &[u8],
+    ) -> anyhow::Result<()> {
         todo!()
     }
 
-    async fn add_access_key(&self, account_id: AccountId, block_height: u64, block_hash: CryptoHash, public_key: &[u8], access_key: &[u8]) -> anyhow::Result<()> {
+    async fn add_access_key(
+        &self,
+        account_id: AccountId,
+        block_height: u64,
+        block_hash: CryptoHash,
+        public_key: &[u8],
+        access_key: &[u8],
+    ) -> anyhow::Result<()> {
         todo!()
     }
 
-    async fn delete_access_key(&self, account_id: AccountId, block_height: u64, block_hash: CryptoHash, public_key: &[u8]) -> anyhow::Result<()> {
+    async fn delete_access_key(
+        &self,
+        account_id: AccountId,
+        block_height: u64,
+        block_hash: CryptoHash,
+        public_key: &[u8],
+    ) -> anyhow::Result<()> {
         todo!()
     }
 
-    async fn get_access_keys(&self, account_id: AccountId, block_height: u64) -> anyhow::Result<HashMap<String, Vec<u8>>> {
+    #[cfg(feature = "account_access_keys")]
+    async fn get_access_keys(
+        &self,
+        account_id: AccountId,
+        block_height: u64,
+    ) -> anyhow::Result<std::collections::HashMap<String, Vec<u8>>> {
         todo!()
     }
 
-    async fn add_account_access_keys(&self, account_id: AccountId, block_height: u64, public_key: &[u8], access_key: Option<&[u8]>) -> anyhow::Result<()> {
+    #[cfg(feature = "account_access_keys")]
+    async fn add_account_access_keys(
+        &self,
+        account_id: AccountId,
+        block_height: u64,
+        public_key: &[u8],
+        access_key: Option<&[u8]>,
+    ) -> anyhow::Result<()> {
         todo!()
     }
 
-    async fn update_account_access_keys(&self, account_id: String, block_height: u64, account_keys: HashMap<String, Vec<u8>>) -> anyhow::Result<()> {
+    #[cfg(feature = "account_access_keys")]
+    async fn update_account_access_keys(
+        &self,
+        account_id: String,
+        block_height: u64,
+        account_keys: std::collections::HashMap<String, Vec<u8>>,
+    ) -> anyhow::Result<()> {
         todo!()
     }
 
-    async fn add_contract_code(&self, account_id: AccountId, block_height: u64, block_hash: CryptoHash, code: &[u8]) -> anyhow::Result<()> {
+    async fn add_contract_code(
+        &self,
+        account_id: AccountId,
+        block_height: u64,
+        block_hash: CryptoHash,
+        code: &[u8],
+    ) -> anyhow::Result<()> {
         todo!()
     }
 
-    async fn delete_contract_code(&self, account_id: AccountId, block_height: u64, block_hash: CryptoHash) -> anyhow::Result<()> {
+    async fn delete_contract_code(
+        &self,
+        account_id: AccountId,
+        block_height: u64,
+        block_hash: CryptoHash,
+    ) -> anyhow::Result<()> {
         todo!()
     }
 
-    async fn add_account(&self, account_id: AccountId, block_height: u64, block_hash: CryptoHash, account: Vec<u8>) -> anyhow::Result<()> {
+    async fn add_account(
+        &self,
+        account_id: AccountId,
+        block_height: u64,
+        block_hash: CryptoHash,
+        account: Vec<u8>,
+    ) -> anyhow::Result<()> {
         todo!()
     }
 
-    async fn delete_account(&self, account_id: AccountId, block_height: u64, block_hash: CryptoHash) -> anyhow::Result<()> {
+    async fn delete_account(
+        &self,
+        account_id: AccountId,
+        block_height: u64,
+        block_hash: CryptoHash,
+    ) -> anyhow::Result<()> {
         todo!()
     }
 
@@ -88,7 +158,11 @@ impl crate::StateIndexerDbManager for PostgresDBManager {
         todo!()
     }
 
-    async fn add_chunks(&self, block_height: u64, chunks: Vec<(ChunkHash, ShardId, HeightIncluded)>) -> anyhow::Result<()> {
+    async fn add_chunks(
+        &self,
+        block_height: u64,
+        chunks: Vec<(ChunkHash, ShardId, HeightIncluded)>,
+    ) -> anyhow::Result<()> {
         todo!()
     }
 

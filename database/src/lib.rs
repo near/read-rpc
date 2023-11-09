@@ -1,5 +1,7 @@
 #[cfg(all(feature = "scylla_db", feature = "postgres_db"))]
-compile_error!("feature \"scylla_db\" and feature \"postgres_db\" cannot be enabled at the same time");
+compile_error!(
+    "feature \"scylla_db\" and feature \"postgres_db\" cannot be enabled at the same time"
+);
 
 mod base;
 
@@ -60,7 +62,7 @@ pub async fn prepare_read_rpc_db_manager(
         database_password,
         database_options,
     )
-        .await?;
+    .await?;
 
     Ok(db_manager)
 }
@@ -87,7 +89,7 @@ pub async fn prepare_state_indexer_db_manager(
         database_password,
         database_options,
     )
-        .await?;
+    .await?;
 
     Ok(db_manager)
 }
@@ -114,7 +116,7 @@ pub async fn prepare_tx_indexer_db_manager(
         database_password,
         database_options,
     )
-        .await?;
+    .await?;
 
     Ok(db_manager)
 }
