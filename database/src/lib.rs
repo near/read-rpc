@@ -16,9 +16,13 @@ mod scylladb;
 pub use crate::scylladb::AdditionalDatabaseOptions;
 
 #[cfg(feature = "postgres_db")]
-mod postgres;
+pub extern crate diesel;
+#[cfg(feature = "postgres_db")]
+pub mod postgres;
 #[cfg(feature = "postgres_db")]
 pub use crate::postgres::AdditionalDatabaseOptions;
+#[cfg(feature = "postgres_db")]
+pub use postgres::{models, schema};
 
 pub mod primitives;
 

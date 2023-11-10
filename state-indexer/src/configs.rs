@@ -56,6 +56,11 @@ pub(crate) struct Opts {
     #[cfg(feature = "scylla_db")]
     #[clap(long, env, default_value_t = true)]
     pub strict_mode: bool,
+
+    /// Postgres database name
+    #[cfg(feature = "postgres_db")]
+    #[clap(long, env)]
+    pub database_name: Option<String>,
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -105,8 +110,10 @@ impl Opts {
             strict_mode: self.strict_mode,
         };
 
-        #[cfg(not(feature = "scylla_db"))]
-        let database_options = database::AdditionalDatabaseOptions {};
+        #[cfg(feature = "postgres_db")]
+        let database_options = database::AdditionalDatabaseOptions {
+            database_name: self.database_name.clone(),
+        };
 
         database_options
     }

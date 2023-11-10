@@ -1,7 +1,8 @@
+pub mod models;
 pub mod rpc_server;
+pub mod schema;
 pub mod state_indexer;
 pub mod tx_indexer;
-mod models;
 
 pub struct AdditionalDatabaseOptions {
     pub database_name: Option<String>,
