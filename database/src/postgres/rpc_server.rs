@@ -1,28 +1,9 @@
 use crate::postgres::PostgresStorageManager;
 use crate::AdditionalDatabaseOptions;
-use near_crypto::PublicKey;
-use near_indexer_primitives::CryptoHash;
-use near_primitives::account::{AccessKey, Account};
-use near_primitives::types::{AccountId, BlockHeight, ShardId};
-use readnode_primitives::{
-    BlockHeightShardId, QueryData, ReceiptRecord, StateKey, StateValue, TransactionDetails,
-};
+use bigdecimal::ToPrimitive;
 
 pub(crate) struct PostgresDBManager {
-    pg_pool: diesel_async::pooled_connection::deadpool::Pool<diesel_async::AsyncPgConnection>,
-    // get_block_by_hash: PreparedStatement,
-    // get_block_by_chunk_id: PreparedStatement,
-    // get_all_state_keys: PreparedStatement,
-    // get_state_keys_by_prefix: PreparedStatement,
-    // get_state_key_value: PreparedStatement,
-    // get_account: PreparedStatement,
-    // get_contract_code: PreparedStatement,
-    // get_access_key: PreparedStatement,
-    // #[cfg(feature = "account_access_keys")]
-    // get_account_access_keys: PreparedStatement,
-    // get_receipt: PreparedStatement,
-    // get_transaction_by_hash: PreparedStatement,
-    // get_stored_at_block_height_and_shard_id_by_block_height: PreparedStatement,
+    pg_pool: crate::postgres::PgAsyncPool,
 }
 
 #[async_trait::async_trait]
@@ -49,88 +30,104 @@ impl PostgresStorageManager for PostgresDBManager {}
 
 #[async_trait::async_trait]
 impl crate::ReaderDbManager for PostgresDBManager {
-    async fn get_block_by_hash(&self, block_hash: CryptoHash) -> anyhow::Result<u64> {
-        todo!()
+    async fn get_block_by_hash(
+        &self,
+        block_hash: near_indexer_primitives::CryptoHash,
+    ) -> anyhow::Result<u64> {
+        let block_height = crate::models::Block::get_block_height_by_hash(
+            Self::get_connection(&self.pg_pool).await?,
+            block_hash,
+        )
+        .await?;
+        block_height
+            .to_u64()
+            .ok_or_else(|| anyhow::anyhow!("Failed to parse `block_height` to u64"))
     }
 
     async fn get_block_by_chunk_hash(
         &self,
-        chunk_hash: CryptoHash,
-    ) -> anyhow::Result<BlockHeightShardId> {
+        chunk_hash: near_indexer_primitives::CryptoHash,
+    ) -> anyhow::Result<readnode_primitives::BlockHeightShardId> {
         todo!()
     }
 
-    async fn get_state_keys_all(&self, account_id: &AccountId) -> anyhow::Result<Vec<StateKey>> {
+    async fn get_state_keys_all(
+        &self,
+        account_id: &near_primitives::types::AccountId,
+    ) -> anyhow::Result<Vec<readnode_primitives::StateKey>> {
         todo!()
     }
 
     async fn get_state_keys_by_prefix(
         &self,
-        account_id: &AccountId,
+        account_id: &near_primitives::types::AccountId,
         prefix: &[u8],
-    ) -> anyhow::Result<Vec<StateKey>> {
+    ) -> anyhow::Result<Vec<readnode_primitives::StateKey>> {
         todo!()
     }
 
     async fn get_state_key_value(
         &self,
-        account_id: &AccountId,
-        block_height: BlockHeight,
-        key_data: StateKey,
-    ) -> anyhow::Result<StateValue> {
+        account_id: &near_primitives::types::AccountId,
+        block_height: near_primitives::types::BlockHeight,
+        key_data: readnode_primitives::StateKey,
+    ) -> anyhow::Result<readnode_primitives::StateValue> {
         todo!()
     }
 
     async fn get_account(
         &self,
-        account_id: &AccountId,
-        request_block_height: BlockHeight,
-    ) -> anyhow::Result<QueryData<Account>> {
+        account_id: &near_primitives::types::AccountId,
+        request_block_height: near_primitives::types::BlockHeight,
+    ) -> anyhow::Result<readnode_primitives::QueryData<near_primitives::account::Account>> {
         todo!()
     }
 
     async fn get_contract_code(
         &self,
-        account_id: &AccountId,
-        request_block_height: BlockHeight,
-    ) -> anyhow::Result<QueryData<Vec<u8>>> {
+        account_id: &near_primitives::types::AccountId,
+        request_block_height: near_primitives::types::BlockHeight,
+    ) -> anyhow::Result<readnode_primitives::QueryData<Vec<u8>>> {
         todo!()
     }
 
     async fn get_access_key(
         &self,
-        account_id: &AccountId,
-        request_block_height: BlockHeight,
-        public_key: PublicKey,
-    ) -> anyhow::Result<QueryData<AccessKey>> {
+        account_id: &near_primitives::types::AccountId,
+        request_block_height: near_primitives::types::BlockHeight,
+        public_key: near_crypto::PublicKey,
+    ) -> anyhow::Result<readnode_primitives::QueryData<near_primitives::account::AccessKey>> {
         todo!()
     }
 
     #[cfg(feature = "account_access_keys")]
     async fn get_account_access_keys(
         &self,
-        account_id: &AccountId,
-        block_height: BlockHeight,
+        account_id: &near_primitives::types::AccountId,
+        block_height: near_primitives::types::BlockHeight,
     ) -> anyhow::Result<std::collections::HashMap<String, Vec<u8>>> {
         todo!()
     }
 
-    async fn get_receipt_by_id(&self, receipt_id: CryptoHash) -> anyhow::Result<ReceiptRecord> {
+    async fn get_receipt_by_id(
+        &self,
+        receipt_id: near_indexer_primitives::CryptoHash,
+    ) -> anyhow::Result<readnode_primitives::ReceiptRecord> {
         todo!()
     }
 
     async fn get_transaction_by_hash(
         &self,
         transaction_hash: &str,
-    ) -> anyhow::Result<TransactionDetails> {
+    ) -> anyhow::Result<readnode_primitives::TransactionDetails> {
         todo!()
     }
 
     async fn get_block_by_height_and_shard_id(
         &self,
-        block_height: BlockHeight,
-        shard_id: ShardId,
-    ) -> anyhow::Result<BlockHeightShardId> {
+        block_height: near_primitives::types::BlockHeight,
+        shard_id: near_primitives::types::ShardId,
+    ) -> anyhow::Result<readnode_primitives::BlockHeightShardId> {
         todo!()
     }
 }

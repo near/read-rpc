@@ -4,6 +4,11 @@ pub mod schema;
 pub mod state_indexer;
 pub mod tx_indexer;
 
+pub type PgAsyncPool =
+    diesel_async::pooled_connection::deadpool::Pool<diesel_async::AsyncPgConnection>;
+pub type PgAsyncConn =
+    diesel_async::pooled_connection::deadpool::Object<diesel_async::AsyncPgConnection>;
+
 pub struct AdditionalDatabaseOptions {
     pub database_name: Option<String>,
 }
@@ -15,9 +20,7 @@ pub trait PostgresStorageManager {
         database_user: Option<&str>,
         database_password: Option<&str>,
         database_options: AdditionalDatabaseOptions,
-    ) -> anyhow::Result<
-        diesel_async::pooled_connection::deadpool::Pool<diesel_async::AsyncPgConnection>,
-    > {
+    ) -> anyhow::Result<PgAsyncPool> {
         let connecting_url = if database_url.starts_with("postgres://") {
             database_url.to_string()
         } else {
@@ -36,11 +39,7 @@ pub trait PostgresStorageManager {
         Ok(pool)
     }
 
-    async fn get_connection(
-        pool: diesel_async::pooled_connection::deadpool::Pool<diesel_async::AsyncPgConnection>,
-    ) -> anyhow::Result<
-        diesel_async::pooled_connection::deadpool::Object<diesel_async::AsyncPgConnection>,
-    > {
+    async fn get_connection(pool: &PgAsyncPool) -> anyhow::Result<PgAsyncConn> {
         Ok(pool.get().await?)
     }
 }

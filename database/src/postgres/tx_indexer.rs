@@ -1,23 +1,9 @@
+use crate::postgres::PostgresStorageManager;
 use crate::AdditionalDatabaseOptions;
-use near_indexer_primitives::IndexerExecutionOutcomeWithReceipt;
-use readnode_primitives::{CollectingTransactionDetails, TransactionDetails, TransactionKey};
-use std::collections::HashMap;
+use bigdecimal::ToPrimitive;
 
 pub(crate) struct PostgresDBManager {
-    // scylla_session: std::sync::Arc<scylla::Session>,
-    // add_transaction: PreparedStatement,
-    // add_receipt: PreparedStatement,
-    // update_meta: PreparedStatement,
-    // last_processed_block_height: PreparedStatement,
-    //
-    // cache_get_all_transactions: PreparedStatement,
-    // cache_get_transaction: PreparedStatement,
-    // cache_get_transaction_by_receipt_id: PreparedStatement,
-    // cache_get_receipts: PreparedStatement,
-    // cache_add_transaction: PreparedStatement,
-    // cache_delete_transaction: PreparedStatement,
-    // cache_add_receipt: PreparedStatement,
-    // cache_delete_receipts: PreparedStatement,
+    pg_pool: crate::postgres::PgAsyncPool,
 }
 
 #[async_trait::async_trait]
@@ -28,15 +14,25 @@ impl crate::BaseDbManager for PostgresDBManager {
         database_password: Option<&str>,
         database_options: AdditionalDatabaseOptions,
     ) -> anyhow::Result<Box<Self>> {
-        todo!()
+        let pg_pool = Self::create_pool(
+            database_url,
+            database_user,
+            database_password,
+            database_options,
+        )
+        .await?;
+        Ok(Box::new(Self { pg_pool }))
     }
 }
+
+#[async_trait::async_trait]
+impl PostgresStorageManager for PostgresDBManager {}
 
 #[async_trait::async_trait]
 impl crate::TxIndexerDbManager for PostgresDBManager {
     async fn add_transaction(
         &self,
-        transaction: TransactionDetails,
+        transaction: readnode_primitives::TransactionDetails,
         block_height: u64,
     ) -> anyhow::Result<()> {
         todo!()
@@ -53,20 +49,25 @@ impl crate::TxIndexerDbManager for PostgresDBManager {
     }
 
     async fn update_meta(&self, indexer_id: &str, block_height: u64) -> anyhow::Result<()> {
-        todo!()
+        crate::models::Meta {
+            indexer_id: indexer_id.to_string(),
+            last_processed_block_height: bigdecimal::BigDecimal::from(block_height),
+        }
+        .save(Self::get_connection(&self.pg_pool).await?)
+        .await
     }
 
     async fn cache_add_transaction(
         &self,
-        transaction_details: CollectingTransactionDetails,
+        transaction_details: readnode_primitives::CollectingTransactionDetails,
     ) -> anyhow::Result<()> {
         todo!()
     }
 
     async fn cache_add_receipt(
         &self,
-        transaction_key: TransactionKey,
-        indexer_execution_outcome_with_receipt: IndexerExecutionOutcomeWithReceipt,
+        transaction_key: readnode_primitives::TransactionKey,
+        indexer_execution_outcome_with_receipt: near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
     ) -> anyhow::Result<()> {
         todo!()
     }
@@ -76,21 +77,26 @@ impl crate::TxIndexerDbManager for PostgresDBManager {
         start_block_height: u64,
         cache_restore_blocks_range: u64,
         max_db_parallel_queries: i64,
-    ) -> anyhow::Result<HashMap<TransactionKey, CollectingTransactionDetails>> {
+    ) -> anyhow::Result<
+        std::collections::HashMap<
+            readnode_primitives::TransactionKey,
+            readnode_primitives::CollectingTransactionDetails,
+        >,
+    > {
         todo!()
     }
 
     async fn get_transaction_by_receipt_id(
         &self,
         receipt_id: &str,
-    ) -> anyhow::Result<CollectingTransactionDetails> {
+    ) -> anyhow::Result<readnode_primitives::CollectingTransactionDetails> {
         todo!()
     }
 
     async fn get_receipts_in_cache(
         &self,
-        transaction_key: &TransactionKey,
-    ) -> anyhow::Result<Vec<IndexerExecutionOutcomeWithReceipt>> {
+        transaction_key: &readnode_primitives::TransactionKey,
+    ) -> anyhow::Result<Vec<near_indexer_primitives::IndexerExecutionOutcomeWithReceipt>> {
         todo!()
     }
 
@@ -103,6 +109,13 @@ impl crate::TxIndexerDbManager for PostgresDBManager {
     }
 
     async fn get_last_processed_block_height(&self, indexer_id: &str) -> anyhow::Result<u64> {
-        todo!()
+        let block_height = crate::models::Meta::get_last_processed_block_height(
+            Self::get_connection(&self.pg_pool).await?,
+            indexer_id,
+        )
+        .await?;
+        block_height
+            .to_u64()
+            .ok_or_else(|| anyhow::anyhow!("Failed to parse `block_height` to u64"))
     }
 }

@@ -1,14 +1,11 @@
-use crate::diesel::prelude::*;
-use crate::schema::{
-    account_state, block, chunk, meta, receipt_map, receipt_outcome, state_changes_access_key,
-    state_changes_access_keys, state_changes_account, state_changes_contract, state_changes_data,
-    transaction_cache, transaction_detail,
-};
+use crate::schema::*;
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 
 /// State-indexer tables
 #[derive(Insertable, Queryable, Selectable)]
 #[diesel(table_name = state_changes_data)]
-struct StateChangesData {
+pub struct StateChangesData {
     account_id: String,
     block_height: bigdecimal::BigDecimal,
     block_hash: String,
@@ -18,7 +15,7 @@ struct StateChangesData {
 
 #[derive(Insertable, Queryable, Selectable)]
 #[diesel(table_name = state_changes_access_key)]
-struct StateChangesAccessKey {
+pub struct StateChangesAccessKey {
     account_id: String,
     block_height: bigdecimal::BigDecimal,
     block_hash: String,
@@ -28,7 +25,7 @@ struct StateChangesAccessKey {
 
 #[derive(Insertable, Queryable, Selectable)]
 #[diesel(table_name = state_changes_access_keys)]
-struct StateChangesAccessKeys {
+pub struct StateChangesAccessKeys {
     account_id: String,
     block_height: bigdecimal::BigDecimal,
     block_hash: String,
@@ -37,7 +34,7 @@ struct StateChangesAccessKeys {
 
 #[derive(Insertable, Queryable, Selectable)]
 #[diesel(table_name = state_changes_contract)]
-struct StateChangesContract {
+pub struct StateChangesContract {
     account_id: String,
     block_height: bigdecimal::BigDecimal,
     block_hash: String,
@@ -46,7 +43,7 @@ struct StateChangesContract {
 
 #[derive(Insertable, Queryable, Selectable)]
 #[diesel(table_name = state_changes_account)]
-struct StateChangesAccount {
+pub struct StateChangesAccount {
     account_id: String,
     block_height: bigdecimal::BigDecimal,
     block_hash: String,
@@ -55,23 +52,46 @@ struct StateChangesAccount {
 
 #[derive(Insertable, Queryable, Selectable)]
 #[diesel(table_name = block)]
-struct Block {
-    block_height: bigdecimal::BigDecimal,
-    block_hash: String,
+pub struct Block {
+    pub block_height: bigdecimal::BigDecimal,
+    pub block_hash: String,
+}
+
+impl Block {
+    pub async fn save(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+        diesel::insert_into(block::table)
+            .values(self)
+            .on_conflict_do_nothing()
+            .execute(&mut conn)
+            .await?;
+        Ok(())
+    }
+    pub async fn get_block_height_by_hash(
+        mut conn: crate::postgres::PgAsyncConn,
+        block_hash: near_primitives::hash::CryptoHash,
+    ) -> anyhow::Result<bigdecimal::BigDecimal> {
+        let resp = block::table
+            .filter(block::block_hash.eq(block_hash.to_string()))
+            .select(Self::as_select())
+            .first(&mut conn)
+            .await?;
+
+        Ok(resp.block_height)
+    }
 }
 
 #[derive(Insertable, Queryable, Selectable)]
 #[diesel(table_name = chunk)]
-struct Chunk {
-    chunk_hash: String,
-    block_height: bigdecimal::BigDecimal,
-    shard_id: bigdecimal::BigDecimal,
-    stored_at_block_height: bigdecimal::BigDecimal,
+pub struct Chunk {
+    pub chunk_hash: String,
+    pub block_height: bigdecimal::BigDecimal,
+    pub shard_id: bigdecimal::BigDecimal,
+    pub stored_at_block_height: bigdecimal::BigDecimal,
 }
 
 #[derive(Insertable, Queryable, Selectable)]
 #[diesel(table_name = account_state)]
-struct AccountState {
+pub struct AccountState {
     account_id: String,
     data_key: String,
 }
@@ -80,7 +100,7 @@ struct AccountState {
 
 #[derive(Insertable, Queryable, Selectable)]
 #[diesel(table_name = transaction_detail)]
-struct TransactionDetail {
+pub struct TransactionDetail {
     transaction_hash: String,
     block_height: bigdecimal::BigDecimal,
     account_id: String,
@@ -89,7 +109,7 @@ struct TransactionDetail {
 
 #[derive(Insertable, Queryable, Selectable)]
 #[diesel(table_name = receipt_map)]
-struct ReceiptMap {
+pub struct ReceiptMap {
     receipt_id: String,
     block_height: bigdecimal::BigDecimal,
     parent_transaction_hash: String,
@@ -99,7 +119,7 @@ struct ReceiptMap {
 /// Tx-indexer cache tables
 #[derive(Insertable, Queryable, Selectable)]
 #[diesel(table_name = transaction_cache)]
-struct TransactionCache {
+pub struct TransactionCache {
     block_height: bigdecimal::BigDecimal,
     transaction_hash: String,
     transaction_details: Vec<u8>,
@@ -107,7 +127,7 @@ struct TransactionCache {
 
 #[derive(Insertable, Queryable, Selectable)]
 #[diesel(table_name = receipt_outcome)]
-struct ReceiptOutcome {
+pub struct ReceiptOutcome {
     block_height: bigdecimal::BigDecimal,
     transaction_hash: String,
     receipt_id: String,
@@ -118,7 +138,33 @@ struct ReceiptOutcome {
 /// Metadata table
 #[derive(Insertable, Queryable, Selectable)]
 #[diesel(table_name = meta)]
-struct Meta {
-    indexer_id: String,
-    last_processed_block_height: bigdecimal::BigDecimal,
+pub struct Meta {
+    pub indexer_id: String,
+    pub last_processed_block_height: bigdecimal::BigDecimal,
+}
+
+impl Meta {
+    pub async fn save(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+        diesel::insert_into(meta::table)
+            .values(self)
+            .on_conflict(meta::indexer_id)
+            .do_update()
+            .set(meta::last_processed_block_height.eq(self.last_processed_block_height.clone()))
+            .execute(&mut conn)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn get_last_processed_block_height(
+        mut conn: crate::postgres::PgAsyncConn,
+        indexer_id: &str,
+    ) -> anyhow::Result<bigdecimal::BigDecimal> {
+        let resp = meta::table
+            .filter(meta::indexer_id.eq(indexer_id))
+            .select(Self::as_select())
+            .first(&mut conn)
+            .await?;
+
+        Ok(resp.last_processed_block_height)
+    }
 }
