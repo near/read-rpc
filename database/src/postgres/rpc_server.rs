@@ -1,7 +1,7 @@
 use crate::postgres::PostgresStorageManager;
 use crate::AdditionalDatabaseOptions;
 use bigdecimal::ToPrimitive;
-use borsh::BorshSerialize;
+use borsh::{BorshDeserialize, BorshSerialize};
 
 pub(crate) struct PostgresDBManager {
     pg_pool: crate::postgres::PgAsyncPool,
@@ -236,14 +236,31 @@ impl crate::ReaderDbManager for PostgresDBManager {
         &self,
         receipt_id: near_indexer_primitives::CryptoHash,
     ) -> anyhow::Result<readnode_primitives::ReceiptRecord> {
-        todo!()
+        let receipt = crate::models::ReceiptMap::get_receipt_by_id(
+            Self::get_connection(&self.pg_pool).await?,
+            receipt_id,
+        )
+        .await?;
+        readnode_primitives::ReceiptRecord::try_from((
+            receipt.receipt_id,
+            receipt.parent_transaction_hash,
+            receipt.block_height,
+            receipt.shard_id,
+        ))
     }
 
     async fn get_transaction_by_hash(
         &self,
         transaction_hash: &str,
     ) -> anyhow::Result<readnode_primitives::TransactionDetails> {
-        todo!()
+        let transaction_data = crate::models::TransactionDetail::get_transaction_by_hash(
+            Self::get_connection(&self.pg_pool).await?,
+            transaction_hash,
+        )
+        .await?;
+        Ok(readnode_primitives::TransactionDetails::try_from_slice(
+            &transaction_data,
+        )?)
     }
 
     async fn get_block_by_height_and_shard_id(

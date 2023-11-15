@@ -349,6 +349,19 @@ impl TransactionDetail {
             .await?;
         Ok(())
     }
+
+    pub async fn get_transaction_by_hash(
+        mut conn: crate::postgres::PgAsyncConn,
+        transaction_hash: &str,
+    ) -> anyhow::Result<Vec<u8>> {
+        let resp = transaction_detail::table
+            .filter(transaction_detail::transaction_hash.eq(transaction_hash))
+            .select(Self::as_select())
+            .first(&mut conn)
+            .await?;
+
+        Ok(resp.transaction_details)
+    }
 }
 
 #[derive(Insertable, Queryable, Selectable)]
@@ -368,6 +381,19 @@ impl ReceiptMap {
             .execute(&mut conn)
             .await?;
         Ok(())
+    }
+
+    pub async fn get_receipt_by_id(
+        mut conn: crate::postgres::PgAsyncConn,
+        receipt_id: near_indexer_primitives::CryptoHash,
+    ) -> anyhow::Result<Self> {
+        let resp = receipt_map::table
+            .filter(receipt_map::receipt_id.eq(receipt_id.to_string()))
+            .select(Self::as_select())
+            .first(&mut conn)
+            .await?;
+
+        Ok(resp)
     }
 }
 
