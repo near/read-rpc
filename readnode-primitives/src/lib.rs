@@ -11,13 +11,9 @@ use std::str::FromStr;
 
 #[cfg(feature = "scylla_db")]
 use num_traits::ToPrimitive;
-#[cfg(feature = "scylla_db")]
-pub type BigInt = num_bigint::BigInt;
 
 #[cfg(feature = "postgres_db")]
 use bigdecimal::ToPrimitive;
-#[cfg(feature = "postgres_db")]
-pub type BigInt = bigdecimal::BigDecimal;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 pub struct TransactionKey {
@@ -175,10 +171,13 @@ pub struct BlockRecord {
 
 // TryFrom impls for defined types
 
-impl TryFrom<(BigInt, BigInt)> for BlockHeightShardId {
+impl<T> TryFrom<(T, T)> for BlockHeightShardId
+where
+    T: ToPrimitive,
+{
     type Error = anyhow::Error;
 
-    fn try_from(value: (BigInt, BigInt)) -> Result<Self, Self::Error> {
+    fn try_from(value: (T, T)) -> Result<Self, Self::Error> {
         let stored_at_block_height = value
             .0
             .to_u64()
@@ -221,10 +220,13 @@ where
     }
 }
 
-impl TryFrom<(String, String, BigInt, BigInt)> for ReceiptRecord {
+impl<T> TryFrom<(String, String, T, T)> for ReceiptRecord
+where
+    T: ToPrimitive,
+{
     type Error = anyhow::Error;
 
-    fn try_from(value: (String, String, BigInt, BigInt)) -> Result<Self, Self::Error> {
+    fn try_from(value: (String, String, T, T)) -> Result<Self, Self::Error> {
         let receipt_id =
             near_primitives::hash::CryptoHash::try_from(value.0.as_bytes()).map_err(|err| {
                 anyhow::anyhow!("Failed to parse `receipt_id` to CryptoHash: {}", err)
@@ -253,10 +255,13 @@ impl TryFrom<(String, String, BigInt, BigInt)> for ReceiptRecord {
     }
 }
 
-impl TryFrom<(String, BigInt)> for BlockRecord {
+impl<T> TryFrom<(String, T)> for BlockRecord
+where
+    T: ToPrimitive,
+{
     type Error = anyhow::Error;
 
-    fn try_from(value: (String, BigInt)) -> Result<Self, Self::Error> {
+    fn try_from(value: (String, T)) -> Result<Self, Self::Error> {
         let height = value
             .1
             .to_u64()

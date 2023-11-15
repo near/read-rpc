@@ -50,16 +50,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    state_chages_data (account_id, data_key, block_height) {
-        account_id -> Text,
-        block_height -> Numeric,
-        block_hash -> Text,
-        data_key -> Text,
-        data_value -> Nullable<Bytea>,
-    }
-}
-
-diesel::table! {
     state_changes_access_key (account_id, data_key, block_height) {
         account_id -> Text,
         block_height -> Numeric,
@@ -130,7 +120,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     meta,
     receipt_map,
     receipt_outcome,
-    state_chages_data,
     state_changes_access_key,
     state_changes_access_keys,
     state_changes_account,
