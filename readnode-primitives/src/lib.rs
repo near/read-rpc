@@ -1,9 +1,17 @@
+#[cfg(feature = "postgres_db")]
+use bigdecimal::ToPrimitive;
 use borsh::{BorshDeserialize, BorshSerialize};
 use near_indexer_primitives::{views, CryptoHash, IndexerTransactionWithOutcome};
+#[cfg(feature = "scylla_db")]
 use num_traits::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::str::FromStr;
+
+#[cfg(feature = "scylla_db")]
+pub type BigInt = num_bigint::BigInt;
+#[cfg(feature = "postgres_db")]
+pub type BigInt = bigdecimal::BigDecimal;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 pub struct TransactionKey {
@@ -161,10 +169,10 @@ pub struct BlockRecord {
 
 // TryFrom impls for defined types
 
-impl TryFrom<(num_bigint::BigInt, num_bigint::BigInt)> for BlockHeightShardId {
+impl TryFrom<(BigInt, BigInt)> for BlockHeightShardId {
     type Error = anyhow::Error;
 
-    fn try_from(value: (num_bigint::BigInt, num_bigint::BigInt)) -> Result<Self, Self::Error> {
+    fn try_from(value: (BigInt, BigInt)) -> Result<Self, Self::Error> {
         let stored_at_block_height = value
             .0
             .to_u64()
@@ -207,12 +215,10 @@ where
     }
 }
 
-impl TryFrom<(String, String, num_bigint::BigInt, num_bigint::BigInt)> for ReceiptRecord {
+impl TryFrom<(String, String, BigInt, BigInt)> for ReceiptRecord {
     type Error = anyhow::Error;
 
-    fn try_from(
-        value: (String, String, num_bigint::BigInt, num_bigint::BigInt),
-    ) -> Result<Self, Self::Error> {
+    fn try_from(value: (String, String, BigInt, BigInt)) -> Result<Self, Self::Error> {
         let receipt_id =
             near_primitives::hash::CryptoHash::try_from(value.0.as_bytes()).map_err(|err| {
                 anyhow::anyhow!("Failed to parse `receipt_id` to CryptoHash: {}", err)
@@ -241,10 +247,10 @@ impl TryFrom<(String, String, num_bigint::BigInt, num_bigint::BigInt)> for Recei
     }
 }
 
-impl TryFrom<(String, num_bigint::BigInt)> for BlockRecord {
+impl TryFrom<(String, BigInt)> for BlockRecord {
     type Error = anyhow::Error;
 
-    fn try_from(value: (String, num_bigint::BigInt)) -> Result<Self, Self::Error> {
+    fn try_from(value: (String, BigInt)) -> Result<Self, Self::Error> {
         let height = value
             .1
             .to_u64()

@@ -38,7 +38,21 @@ impl crate::StateIndexerDbManager for PostgresDBManager {
         key: &[u8],
         value: &[u8],
     ) -> anyhow::Result<()> {
-        todo!()
+        crate::models::StateChangesData {
+            account_id: account_id.to_string(),
+            block_height: bigdecimal::BigDecimal::from(block_height),
+            block_hash: block_hash.to_string(),
+            data_key: hex::encode(key).to_string(),
+            data_value: Some(value.to_vec()),
+        }
+        .save(Self::get_connection(&self.pg_pool).await?)
+        .await?;
+        crate::models::AccountState {
+            account_id: account_id.to_string(),
+            data_key: hex::encode(key).to_string(),
+        }
+        .save(Self::get_connection(&self.pg_pool).await?)
+        .await
     }
 
     async fn delete_state_changes(
@@ -48,7 +62,15 @@ impl crate::StateIndexerDbManager for PostgresDBManager {
         block_hash: near_indexer_primitives::CryptoHash,
         key: &[u8],
     ) -> anyhow::Result<()> {
-        todo!()
+        crate::models::StateChangesData {
+            account_id: account_id.to_string(),
+            block_height: bigdecimal::BigDecimal::from(block_height),
+            block_hash: block_hash.to_string(),
+            data_key: hex::encode(key).to_string(),
+            data_value: None,
+        }
+        .save(Self::get_connection(&self.pg_pool).await?)
+        .await
     }
 
     async fn add_access_key(
@@ -59,7 +81,15 @@ impl crate::StateIndexerDbManager for PostgresDBManager {
         public_key: &[u8],
         access_key: &[u8],
     ) -> anyhow::Result<()> {
-        todo!()
+        crate::models::StateChangesAccessKey {
+            account_id: account_id.to_string(),
+            block_height: bigdecimal::BigDecimal::from(block_height),
+            block_hash: block_hash.to_string(),
+            data_key: hex::encode(public_key).to_string(),
+            data_value: Some(access_key.to_vec()),
+        }
+        .save(Self::get_connection(&self.pg_pool).await?)
+        .await
     }
 
     async fn delete_access_key(
@@ -69,7 +99,15 @@ impl crate::StateIndexerDbManager for PostgresDBManager {
         block_hash: near_indexer_primitives::CryptoHash,
         public_key: &[u8],
     ) -> anyhow::Result<()> {
-        todo!()
+        crate::models::StateChangesAccessKey {
+            account_id: account_id.to_string(),
+            block_height: bigdecimal::BigDecimal::from(block_height),
+            block_hash: block_hash.to_string(),
+            data_key: hex::encode(public_key).to_string(),
+            data_value: None,
+        }
+        .save(Self::get_connection(&self.pg_pool).await?)
+        .await
     }
 
     #[cfg(feature = "account_access_keys")]
@@ -78,7 +116,20 @@ impl crate::StateIndexerDbManager for PostgresDBManager {
         account_id: near_primitives::types::AccountId,
         block_height: u64,
     ) -> anyhow::Result<std::collections::HashMap<String, Vec<u8>>> {
-        todo!()
+        let active_access_keys = crate::models::StateChangesAccessKeys::get_active_access_keys(
+            Self::get_connection(&self.pg_pool).await?,
+            &account_id,
+            block_height,
+        )
+        .await?;
+
+        if let Some(active_access_keys_value) = active_access_keys {
+            let active_access_keys: std::collections::HashMap<String, Vec<u8>> =
+                serde_json::from_value(active_access_keys_value)?;
+            Ok(active_access_keys)
+        } else {
+            Ok(std::collections::HashMap::new())
+        }
     }
 
     #[cfg(feature = "account_access_keys")]
@@ -89,7 +140,23 @@ impl crate::StateIndexerDbManager for PostgresDBManager {
         public_key: &[u8],
         access_key: Option<&[u8]>,
     ) -> anyhow::Result<()> {
-        todo!()
+        let public_key_hex = hex::encode(public_key).to_string();
+
+        let mut account_keys = match self.get_access_keys(account_id.clone(), block_height).await {
+            Ok(account_keys) => account_keys,
+            Err(_) => std::collections::HashMap::new(),
+        };
+        match access_key {
+            Some(access_key) => {
+                account_keys.insert(public_key_hex, access_key.to_vec());
+            }
+            None => {
+                account_keys.remove(&public_key_hex);
+            }
+        }
+        self.update_account_access_keys(account_id.to_string(), block_height, account_keys)
+            .await?;
+        Ok(())
     }
 
     #[cfg(feature = "account_access_keys")]
@@ -99,7 +166,14 @@ impl crate::StateIndexerDbManager for PostgresDBManager {
         block_height: u64,
         account_keys: std::collections::HashMap<String, Vec<u8>>,
     ) -> anyhow::Result<()> {
-        todo!()
+        crate::models::StateChangesAccessKeys {
+            account_id: account_id.to_string(),
+            block_height: bigdecimal::BigDecimal::from(block_height),
+            block_hash: "".to_string(),
+            active_access_keys: Some(serde_json::to_value(account_keys)?),
+        }
+        .save(Self::get_connection(&self.pg_pool).await?)
+        .await
     }
 
     async fn add_contract_code(
@@ -109,7 +183,14 @@ impl crate::StateIndexerDbManager for PostgresDBManager {
         block_hash: near_indexer_primitives::CryptoHash,
         code: &[u8],
     ) -> anyhow::Result<()> {
-        todo!()
+        crate::models::StateChangesContract {
+            account_id: account_id.to_string(),
+            block_height: bigdecimal::BigDecimal::from(block_height),
+            block_hash: block_hash.to_string(),
+            data_value: Some(code.to_vec()),
+        }
+        .save(Self::get_connection(&self.pg_pool).await?)
+        .await
     }
 
     async fn delete_contract_code(
@@ -118,7 +199,14 @@ impl crate::StateIndexerDbManager for PostgresDBManager {
         block_height: u64,
         block_hash: near_indexer_primitives::CryptoHash,
     ) -> anyhow::Result<()> {
-        todo!()
+        crate::models::StateChangesContract {
+            account_id: account_id.to_string(),
+            block_height: bigdecimal::BigDecimal::from(block_height),
+            block_hash: block_hash.to_string(),
+            data_value: None,
+        }
+        .save(Self::get_connection(&self.pg_pool).await?)
+        .await
     }
 
     async fn add_account(
@@ -128,7 +216,14 @@ impl crate::StateIndexerDbManager for PostgresDBManager {
         block_hash: near_indexer_primitives::CryptoHash,
         account: Vec<u8>,
     ) -> anyhow::Result<()> {
-        todo!()
+        crate::models::StateChangesAccount {
+            account_id: account_id.to_string(),
+            block_height: bigdecimal::BigDecimal::from(block_height),
+            block_hash: block_hash.to_string(),
+            data_value: Some(account),
+        }
+        .save(Self::get_connection(&self.pg_pool).await?)
+        .await
     }
 
     async fn delete_account(
@@ -137,7 +232,14 @@ impl crate::StateIndexerDbManager for PostgresDBManager {
         block_height: u64,
         block_hash: near_indexer_primitives::CryptoHash,
     ) -> anyhow::Result<()> {
-        todo!()
+        crate::models::StateChangesAccount {
+            account_id: account_id.to_string(),
+            block_height: bigdecimal::BigDecimal::from(block_height),
+            block_hash: block_hash.to_string(),
+            data_value: None,
+        }
+        .save(Self::get_connection(&self.pg_pool).await?)
+        .await
     }
 
     async fn add_block(
@@ -148,7 +250,9 @@ impl crate::StateIndexerDbManager for PostgresDBManager {
         crate::models::Block {
             block_height: bigdecimal::BigDecimal::from(block_height),
             block_hash: block_hash.to_string(),
-        }.save(Self::get_connection(&self.pg_pool).await?).await
+        }
+        .save(Self::get_connection(&self.pg_pool).await?)
+        .await
     }
 
     async fn add_chunks(
@@ -160,7 +264,19 @@ impl crate::StateIndexerDbManager for PostgresDBManager {
             crate::primitives::HeightIncluded,
         )>,
     ) -> anyhow::Result<()> {
-        todo!()
+        let new_chunks = chunks
+            .iter()
+            .map(
+                |(chunk_hash, shard_id, height_included)| crate::models::Chunk {
+                    chunk_hash: chunk_hash.to_string(),
+                    block_height: bigdecimal::BigDecimal::from(block_height),
+                    shard_id: bigdecimal::BigDecimal::from(*shard_id),
+                    stored_at_block_height: bigdecimal::BigDecimal::from(*height_included),
+                },
+            )
+            .collect();
+        crate::models::Chunk::bulk_insert(new_chunks, Self::get_connection(&self.pg_pool).await?)
+            .await
     }
 
     async fn update_meta(&self, indexer_id: &str, block_height: u64) -> anyhow::Result<()> {

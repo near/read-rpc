@@ -4576,6 +4576,7 @@ name = "readnode-primitives"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bigdecimal 0.4.2",
  "borsh 0.10.3",
  "near-indexer-primitives",
  "near-primitives",

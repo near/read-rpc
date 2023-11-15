@@ -6,11 +6,16 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.70"
 borsh = "0.10.2"
-num-bigint = "0.3"
-num-traits = "0.2.15"
+bigdecimal = { version = "0.4.2", optional = true }
+num-bigint = { version = "0.3", optional = true }
+num-traits = { version = "0.2.15", optional = true }
 serde = { version = "1.0.145", features = ["derive"] }
 serde_json = "1.0.85"
 
 near-indexer-primitives = "0.17.0"
 near-primitives = "0.17.0"
 near-primitives-core = "0.17.0"
+
+[features]
+postgres_db = ["dep:bigdecimal"]
+scylla_db = ["dep:num-bigint", "dep:num-traits"]

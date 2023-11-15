@@ -6,48 +6,121 @@ use diesel_async::RunQueryDsl;
 #[derive(Insertable, Queryable, Selectable)]
 #[diesel(table_name = state_changes_data)]
 pub struct StateChangesData {
-    account_id: String,
-    block_height: bigdecimal::BigDecimal,
-    block_hash: String,
-    data_key: String,
-    data_value: Option<Vec<u8>>,
+    pub account_id: String,
+    pub block_height: bigdecimal::BigDecimal,
+    pub block_hash: String,
+    pub data_key: String,
+    pub data_value: Option<Vec<u8>>,
+}
+
+impl StateChangesData {
+    pub async fn save(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+        diesel::insert_into(state_changes_data::table)
+            .values(self)
+            .on_conflict_do_nothing()
+            .execute(&mut conn)
+            .await?;
+        Ok(())
+    }
 }
 
 #[derive(Insertable, Queryable, Selectable)]
 #[diesel(table_name = state_changes_access_key)]
 pub struct StateChangesAccessKey {
-    account_id: String,
-    block_height: bigdecimal::BigDecimal,
-    block_hash: String,
-    data_key: String,
-    data_value: Option<Vec<u8>>,
+    pub account_id: String,
+    pub block_height: bigdecimal::BigDecimal,
+    pub block_hash: String,
+    pub data_key: String,
+    pub data_value: Option<Vec<u8>>,
+}
+
+impl StateChangesAccessKey {
+    pub async fn save(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+        diesel::insert_into(state_changes_access_key::table)
+            .values(self)
+            .on_conflict_do_nothing()
+            .execute(&mut conn)
+            .await?;
+        Ok(())
+    }
 }
 
 #[derive(Insertable, Queryable, Selectable)]
 #[diesel(table_name = state_changes_access_keys)]
 pub struct StateChangesAccessKeys {
-    account_id: String,
-    block_height: bigdecimal::BigDecimal,
-    block_hash: String,
-    active_access_keys: Option<serde_json::Value>,
+    pub account_id: String,
+    pub block_height: bigdecimal::BigDecimal,
+    pub block_hash: String,
+    pub active_access_keys: Option<serde_json::Value>,
+}
+
+impl StateChangesAccessKeys {
+    pub async fn save(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+        diesel::insert_into(state_changes_access_keys::table)
+            .values(self)
+            .on_conflict_do_nothing()
+            .execute(&mut conn)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn get_active_access_keys(
+        mut conn: crate::postgres::PgAsyncConn,
+        account_id: &str,
+        block_height: u64,
+    ) -> anyhow::Result<Option<serde_json::Value>> {
+        let resp = state_changes_access_keys::table
+            .filter(state_changes_access_keys::account_id.eq(account_id))
+            .filter(
+                state_changes_access_keys::block_height
+                    .le(bigdecimal::BigDecimal::from(block_height)),
+            )
+            .select(Self::as_select())
+            .first(&mut conn)
+            .await?;
+
+        Ok(resp.active_access_keys)
+    }
 }
 
 #[derive(Insertable, Queryable, Selectable)]
 #[diesel(table_name = state_changes_contract)]
 pub struct StateChangesContract {
-    account_id: String,
-    block_height: bigdecimal::BigDecimal,
-    block_hash: String,
-    data_value: Option<Vec<u8>>,
+    pub account_id: String,
+    pub block_height: bigdecimal::BigDecimal,
+    pub block_hash: String,
+    pub data_value: Option<Vec<u8>>,
+}
+
+impl StateChangesContract {
+    pub async fn save(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+        diesel::insert_into(state_changes_contract::table)
+            .values(self)
+            .on_conflict_do_nothing()
+            .execute(&mut conn)
+            .await?;
+        Ok(())
+    }
 }
 
 #[derive(Insertable, Queryable, Selectable)]
 #[diesel(table_name = state_changes_account)]
 pub struct StateChangesAccount {
-    account_id: String,
-    block_height: bigdecimal::BigDecimal,
-    block_hash: String,
-    data_value: Option<Vec<u8>>,
+    pub account_id: String,
+    pub block_height: bigdecimal::BigDecimal,
+    pub block_hash: String,
+    pub data_value: Option<Vec<u8>>,
+}
+
+impl StateChangesAccount {
+    pub async fn save(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+        diesel::insert_into(state_changes_account::table)
+            .values(self)
+            .on_conflict_do_nothing()
+            .execute(&mut conn)
+            .await?;
+        Ok(())
+    }
 }
 
 #[derive(Insertable, Queryable, Selectable)]
@@ -80,7 +153,7 @@ impl Block {
     }
 }
 
-#[derive(Insertable, Queryable, Selectable)]
+#[derive(Insertable, Queryable, Selectable, Clone)]
 #[diesel(table_name = chunk)]
 pub struct Chunk {
     pub chunk_hash: String,
@@ -89,13 +162,50 @@ pub struct Chunk {
     pub stored_at_block_height: bigdecimal::BigDecimal,
 }
 
+impl Chunk {
+    pub async fn bulk_insert(
+        chunks: Vec<Self>,
+        mut conn: crate::postgres::PgAsyncConn,
+    ) -> anyhow::Result<()> {
+        diesel::insert_into(chunk::table)
+            .values(&chunks)
+            .on_conflict_do_nothing()
+            .execute(&mut conn)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn get_block_height_by_chunk_hash(
+        mut conn: crate::postgres::PgAsyncConn,
+        chunk_hash: near_primitives::hash::CryptoHash,
+    ) -> anyhow::Result<(bigdecimal::BigDecimal, bigdecimal::BigDecimal)> {
+        let resp = chunk::table
+            .filter(chunk::chunk_hash.eq(chunk_hash.to_string()))
+            .select(Self::as_select())
+            .first(&mut conn)
+            .await?;
+
+        Ok((resp.stored_at_block_height, resp.shard_id))
+    }
+}
+
 #[derive(Insertable, Queryable, Selectable)]
 #[diesel(table_name = account_state)]
 pub struct AccountState {
-    account_id: String,
-    data_key: String,
+    pub account_id: String,
+    pub data_key: String,
 }
 
+impl AccountState {
+    pub async fn save(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+        diesel::insert_into(account_state::table)
+            .values(self)
+            .on_conflict_do_nothing()
+            .execute(&mut conn)
+            .await?;
+        Ok(())
+    }
+}
 /// Tx-indexer tables
 
 #[derive(Insertable, Queryable, Selectable)]

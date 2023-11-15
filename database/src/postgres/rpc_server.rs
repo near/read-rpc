@@ -48,7 +48,20 @@ impl crate::ReaderDbManager for PostgresDBManager {
         &self,
         chunk_hash: near_indexer_primitives::CryptoHash,
     ) -> anyhow::Result<readnode_primitives::BlockHeightShardId> {
-        todo!()
+        let block_height_shard_id = crate::models::Chunk::get_block_height_by_chunk_hash(
+            Self::get_connection(&self.pg_pool).await?,
+            chunk_hash,
+        )
+        .await;
+        block_height_shard_id
+            .map(readnode_primitives::BlockHeightShardId::try_from)
+            .unwrap_or_else(|err| {
+                Err(anyhow::anyhow!(
+                    "Block height and shard id not found for chunk hash {}\n{:?}",
+                    chunk_hash,
+                    err,
+                ))
+            })
     }
 
     async fn get_state_keys_all(
