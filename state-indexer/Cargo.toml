@@ -49,8 +49,7 @@ near-jsonrpc-client = "0.6.0"
 near-lake-framework = "0.7.2"
 
 [features]
-#default = ["scylla_db"]
-default = ["postgres_db"]
+default = ["scylla_db"]
 tracing-instrumentation = []
 postgres_db = ["database/postgres_db"]
 scylla_db = ["database/scylla_db"]

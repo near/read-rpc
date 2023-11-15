@@ -401,19 +401,137 @@ impl ReceiptMap {
 #[derive(Insertable, Queryable, Selectable)]
 #[diesel(table_name = transaction_cache)]
 pub struct TransactionCache {
-    block_height: bigdecimal::BigDecimal,
-    transaction_hash: String,
-    transaction_details: Vec<u8>,
+    pub block_height: bigdecimal::BigDecimal,
+    pub transaction_hash: String,
+    pub transaction_details: Vec<u8>,
+}
+
+impl TransactionCache {
+    pub async fn save(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+        diesel::insert_into(transaction_cache::table)
+            .values(self)
+            .on_conflict_do_nothing()
+            .execute(&mut conn)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn get_transaction(
+        mut conn: crate::postgres::PgAsyncConn,
+        block_height: bigdecimal::BigDecimal,
+        transaction_hash: &str,
+    ) -> anyhow::Result<Vec<u8>> {
+        let resp = transaction_cache::table
+            .filter(transaction_cache::block_height.eq(block_height))
+            .filter(transaction_cache::transaction_hash.eq(transaction_hash))
+            .select(Self::as_select())
+            .first(&mut conn)
+            .await?;
+
+        Ok(resp.transaction_details)
+    }
+    pub async fn get_transactions(
+        mut conn: crate::postgres::PgAsyncConn,
+        start_block_height: u64,
+        cache_restore_blocks_range: u64,
+    ) -> anyhow::Result<Vec<Self>> {
+        let resp = transaction_cache::table
+            .filter(
+                transaction_cache::block_height
+                    .le(bigdecimal::BigDecimal::from(start_block_height)),
+            )
+            .filter(
+                transaction_cache::block_height.ge(bigdecimal::BigDecimal::from(
+                    start_block_height - cache_restore_blocks_range,
+                )),
+            )
+            .select(Self::as_select())
+            .load(&mut conn)
+            .await?;
+
+        Ok(resp)
+    }
+
+    pub async fn delete_transaction(
+        mut conn: crate::postgres::PgAsyncConn,
+        block_height: u64,
+        transaction_hash: &str,
+    ) -> anyhow::Result<()> {
+        diesel::delete(
+            transaction_cache::table
+                .filter(
+                    transaction_cache::block_height.eq(bigdecimal::BigDecimal::from(block_height)),
+                )
+                .filter(transaction_cache::transaction_hash.eq(transaction_hash)),
+        )
+        .execute(&mut conn)
+        .await?;
+        Ok(())
+    }
 }
 
 #[derive(Insertable, Queryable, Selectable)]
 #[diesel(table_name = receipt_outcome)]
 pub struct ReceiptOutcome {
-    block_height: bigdecimal::BigDecimal,
-    transaction_hash: String,
-    receipt_id: String,
-    receipt: Vec<u8>,
-    outcome: Vec<u8>,
+    pub block_height: bigdecimal::BigDecimal,
+    pub transaction_hash: String,
+    pub receipt_id: String,
+    pub receipt: Vec<u8>,
+    pub outcome: Vec<u8>,
+}
+
+impl ReceiptOutcome {
+    pub async fn save(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+        diesel::insert_into(receipt_outcome::table)
+            .values(self)
+            .on_conflict_do_nothing()
+            .execute(&mut conn)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn get_transaction_key(
+        mut conn: crate::postgres::PgAsyncConn,
+        receipt_id: &str,
+    ) -> anyhow::Result<(bigdecimal::BigDecimal, String)> {
+        let resp = receipt_outcome::table
+            .filter(receipt_outcome::receipt_id.eq(receipt_id.to_string()))
+            .select(Self::as_select())
+            .first(&mut conn)
+            .await?;
+        Ok((resp.block_height, resp.transaction_hash))
+    }
+
+    pub async fn get_receipt_outcome(
+        mut conn: crate::postgres::PgAsyncConn,
+        block_height: u64,
+        transaction_hash: &str,
+    ) -> anyhow::Result<Vec<Self>> {
+        let resp = receipt_outcome::table
+            .filter(receipt_outcome::block_height.eq(bigdecimal::BigDecimal::from(block_height)))
+            .filter(receipt_outcome::transaction_hash.eq(transaction_hash))
+            .select(Self::as_select())
+            .load(&mut conn)
+            .await?;
+        Ok(resp)
+    }
+
+    pub async fn delete_receipt_outcome(
+        mut conn: crate::postgres::PgAsyncConn,
+        block_height: u64,
+        transaction_hash: &str,
+    ) -> anyhow::Result<()> {
+        diesel::delete(
+            receipt_outcome::table
+                .filter(
+                    receipt_outcome::block_height.eq(bigdecimal::BigDecimal::from(block_height)),
+                )
+                .filter(receipt_outcome::transaction_hash.eq(transaction_hash)),
+        )
+        .execute(&mut conn)
+        .await?;
+        Ok(())
+    }
 }
 
 /// Metadata table

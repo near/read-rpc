@@ -1,15 +1,21 @@
-#[cfg(feature = "postgres_db")]
-use bigdecimal::ToPrimitive;
+#[cfg(all(feature = "scylla_db", feature = "postgres_db"))]
+compile_error!(
+    "feature \"scylla_db\" and feature \"postgres_db\" cannot be enabled at the same time"
+);
+
 use borsh::{BorshDeserialize, BorshSerialize};
 use near_indexer_primitives::{views, CryptoHash, IndexerTransactionWithOutcome};
-#[cfg(feature = "scylla_db")]
-use num_traits::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::str::FromStr;
 
 #[cfg(feature = "scylla_db")]
+use num_traits::ToPrimitive;
+#[cfg(feature = "scylla_db")]
 pub type BigInt = num_bigint::BigInt;
+
+#[cfg(feature = "postgres_db")]
+use bigdecimal::ToPrimitive;
 #[cfg(feature = "postgres_db")]
 pub type BigInt = bigdecimal::BigDecimal;
 

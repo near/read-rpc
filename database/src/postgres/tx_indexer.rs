@@ -1,7 +1,7 @@
 use crate::postgres::PostgresStorageManager;
 use crate::AdditionalDatabaseOptions;
 use bigdecimal::ToPrimitive;
-use borsh::BorshSerialize;
+use borsh::{BorshDeserialize, BorshSerialize};
 
 pub(crate) struct PostgresDBManager {
     pg_pool: crate::postgres::PgAsyncPool,
@@ -79,7 +79,19 @@ impl crate::TxIndexerDbManager for PostgresDBManager {
         &self,
         transaction_details: readnode_primitives::CollectingTransactionDetails,
     ) -> anyhow::Result<()> {
-        todo!()
+        let transaction_hash = transaction_details.transaction.hash.clone().to_string();
+        let block_height = transaction_details.block_height;
+        let transaction_details = transaction_details.try_to_vec().map_err(|err| {
+            tracing::error!(target: "tx_indexer", "Failed to serialize transaction details: {:?}", err);
+            err})?;
+        crate::models::TransactionCache {
+            block_height: bigdecimal::BigDecimal::from(block_height),
+            transaction_hash,
+            transaction_details,
+        }
+        .save(Self::get_connection(&self.pg_pool).await?)
+        .await?;
+        Ok(())
     }
 
     async fn cache_add_receipt(
@@ -87,35 +99,103 @@ impl crate::TxIndexerDbManager for PostgresDBManager {
         transaction_key: readnode_primitives::TransactionKey,
         indexer_execution_outcome_with_receipt: near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
     ) -> anyhow::Result<()> {
-        todo!()
+        crate::models::ReceiptOutcome {
+            block_height: bigdecimal::BigDecimal::from(transaction_key.block_height),
+            transaction_hash: transaction_key.transaction_hash,
+            receipt_id: indexer_execution_outcome_with_receipt
+                .receipt
+                .receipt_id
+                .to_string(),
+            receipt: indexer_execution_outcome_with_receipt
+                .receipt
+                .try_to_vec()?,
+            outcome: indexer_execution_outcome_with_receipt
+                .execution_outcome
+                .try_to_vec()?,
+        }
+        .save(Self::get_connection(&self.pg_pool).await?)
+        .await
     }
 
     async fn get_transactions_to_cache(
         &self,
         start_block_height: u64,
         cache_restore_blocks_range: u64,
-        max_db_parallel_queries: i64,
+        _max_db_parallel_queries: i64,
     ) -> anyhow::Result<
         std::collections::HashMap<
             readnode_primitives::TransactionKey,
             readnode_primitives::CollectingTransactionDetails,
         >,
     > {
-        todo!()
+        let transactions = crate::models::TransactionCache::get_transactions(
+            Self::get_connection(&self.pg_pool).await?,
+            start_block_height,
+            cache_restore_blocks_range,
+        )
+        .await?;
+        Ok(transactions
+            .into_iter()
+            .map(|tx| {
+                let transaction_details =
+                    readnode_primitives::CollectingTransactionDetails::try_from_slice(
+                        &tx.transaction_details,
+                    )
+                    .expect("Failed to deserialize transaction details");
+                (transaction_details.transaction_key(), transaction_details)
+            })
+            .collect())
     }
 
     async fn get_transaction_by_receipt_id(
         &self,
         receipt_id: &str,
     ) -> anyhow::Result<readnode_primitives::CollectingTransactionDetails> {
-        todo!()
+        let (block_height, transaction_hash) = crate::models::ReceiptOutcome::get_transaction_key(
+            Self::get_connection(&self.pg_pool).await?,
+            receipt_id,
+        )
+        .await?;
+        let transaction_details = crate::models::TransactionCache::get_transaction(
+            Self::get_connection(&self.pg_pool).await?,
+            block_height,
+            &transaction_hash,
+        )
+        .await?;
+        Ok(
+            readnode_primitives::CollectingTransactionDetails::try_from_slice(
+                &transaction_details,
+            )?,
+        )
     }
 
     async fn get_receipts_in_cache(
         &self,
         transaction_key: &readnode_primitives::TransactionKey,
     ) -> anyhow::Result<Vec<near_indexer_primitives::IndexerExecutionOutcomeWithReceipt>> {
-        todo!()
+        let result = crate::models::ReceiptOutcome::get_receipt_outcome(
+            Self::get_connection(&self.pg_pool).await?,
+            transaction_key.block_height,
+            &transaction_key.transaction_hash,
+        )
+        .await?;
+        Ok(result
+            .into_iter()
+            .map(|receipt_outcome| {
+                let receipt =
+                    near_primitives::views::ReceiptView::try_from_slice(&receipt_outcome.receipt)
+                        .expect("Failed to deserialize receipt");
+                let execution_outcome =
+                    near_primitives::views::ExecutionOutcomeWithIdView::try_from_slice(
+                        &receipt_outcome.outcome,
+                    )
+                    .expect("Failed to deserialize execution outcome");
+                near_indexer_primitives::IndexerExecutionOutcomeWithReceipt {
+                    receipt,
+                    execution_outcome,
+                }
+            })
+            .collect())
     }
 
     async fn cache_delete_transaction(
@@ -123,7 +203,19 @@ impl crate::TxIndexerDbManager for PostgresDBManager {
         transaction_hash: &str,
         block_height: u64,
     ) -> anyhow::Result<()> {
-        todo!()
+        crate::models::TransactionCache::delete_transaction(
+            Self::get_connection(&self.pg_pool).await?,
+            block_height,
+            transaction_hash,
+        )
+        .await?;
+        crate::models::ReceiptOutcome::delete_receipt_outcome(
+            Self::get_connection(&self.pg_pool).await?,
+            block_height,
+            transaction_hash,
+        )
+        .await?;
+        Ok(())
     }
 
     async fn get_last_processed_block_height(&self, indexer_id: &str) -> anyhow::Result<u64> {
