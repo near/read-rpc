@@ -1,6 +1,7 @@
 use crate::postgres::PostgresStorageManager;
 use crate::AdditionalDatabaseOptions;
 use bigdecimal::ToPrimitive;
+use borsh::BorshSerialize;
 
 pub(crate) struct PostgresDBManager {
     pg_pool: crate::postgres::PgAsyncPool,
@@ -68,7 +69,14 @@ impl crate::ReaderDbManager for PostgresDBManager {
         &self,
         account_id: &near_primitives::types::AccountId,
     ) -> anyhow::Result<Vec<readnode_primitives::StateKey>> {
-        todo!()
+        let result = crate::models::AccountState::get_state_keys_all(
+            Self::get_connection(&self.pg_pool).await?,
+            account_id,
+        )
+        .await?
+        .into_iter()
+        .filter_map(|key| hex::decode(key).ok());
+        Ok(result.collect())
     }
 
     async fn get_state_keys_by_prefix(
@@ -76,7 +84,16 @@ impl crate::ReaderDbManager for PostgresDBManager {
         account_id: &near_primitives::types::AccountId,
         prefix: &[u8],
     ) -> anyhow::Result<Vec<readnode_primitives::StateKey>> {
-        todo!()
+        let hex_str_prefix = hex::encode(prefix);
+        let result = crate::models::AccountState::get_state_keys_by_prefix(
+            Self::get_connection(&self.pg_pool).await?,
+            account_id,
+            hex_str_prefix,
+        )
+        .await?
+        .into_iter()
+        .filter_map(|key| hex::decode(key).ok());
+        Ok(result.collect())
     }
 
     async fn get_state_key_value(
@@ -85,7 +102,18 @@ impl crate::ReaderDbManager for PostgresDBManager {
         block_height: near_primitives::types::BlockHeight,
         key_data: readnode_primitives::StateKey,
     ) -> anyhow::Result<readnode_primitives::StateValue> {
-        todo!()
+        let result = crate::models::StateChangesData::get_state_key_value(
+            Self::get_connection(&self.pg_pool).await?,
+            account_id,
+            block_height,
+            hex::encode(key_data),
+        )
+        .await?;
+        if let Some(value) = result {
+            Ok(value)
+        } else {
+            anyhow::bail!("State value not found")
+        }
     }
 
     async fn get_account(
@@ -93,7 +121,29 @@ impl crate::ReaderDbManager for PostgresDBManager {
         account_id: &near_primitives::types::AccountId,
         request_block_height: near_primitives::types::BlockHeight,
     ) -> anyhow::Result<readnode_primitives::QueryData<near_primitives::account::Account>> {
-        todo!()
+        let account_data = crate::models::StateChangesAccount::get_account(
+            Self::get_connection(&self.pg_pool).await?,
+            account_id,
+            request_block_height,
+        )
+        .await?;
+        if let Some(data_value) = account_data.data_value {
+            let block = readnode_primitives::BlockRecord::try_from((
+                account_data.block_hash,
+                account_data.block_height,
+            ))?;
+            readnode_primitives::QueryData::<near_primitives::account::Account>::try_from((
+                data_value,
+                block.height,
+                block.hash,
+            ))
+        } else {
+            anyhow::bail!(
+                "Account `{}`not found! Block {}",
+                account_id,
+                request_block_height
+            )
+        }
     }
 
     async fn get_contract_code(
@@ -101,7 +151,29 @@ impl crate::ReaderDbManager for PostgresDBManager {
         account_id: &near_primitives::types::AccountId,
         request_block_height: near_primitives::types::BlockHeight,
     ) -> anyhow::Result<readnode_primitives::QueryData<Vec<u8>>> {
-        todo!()
+        let contract_data = crate::models::StateChangesContract::get_contract(
+            Self::get_connection(&self.pg_pool).await?,
+            account_id,
+            request_block_height,
+        )
+        .await?;
+        if let Some(data_value) = contract_data.data_value {
+            let block = readnode_primitives::BlockRecord::try_from((
+                contract_data.block_hash,
+                contract_data.block_height,
+            ))?;
+            Ok(readnode_primitives::QueryData {
+                data: data_value,
+                block_height: block.height,
+                block_hash: block.hash,
+            })
+        } else {
+            anyhow::bail!(
+                "Contract code `{}`not found! Block {}",
+                account_id,
+                request_block_height
+            )
+        }
     }
 
     async fn get_access_key(
@@ -110,7 +182,32 @@ impl crate::ReaderDbManager for PostgresDBManager {
         request_block_height: near_primitives::types::BlockHeight,
         public_key: near_crypto::PublicKey,
     ) -> anyhow::Result<readnode_primitives::QueryData<near_primitives::account::AccessKey>> {
-        todo!()
+        let key_data = public_key.try_to_vec()?;
+        let access_key_data = crate::models::StateChangesAccessKey::get_access_key(
+            Self::get_connection(&self.pg_pool).await?,
+            account_id,
+            request_block_height,
+            hex::encode(key_data),
+        )
+        .await?;
+
+        if let Some(data_value) = access_key_data.data_value {
+            let block = readnode_primitives::BlockRecord::try_from((
+                access_key_data.block_hash,
+                access_key_data.block_height,
+            ))?;
+            readnode_primitives::QueryData::<near_primitives::account::AccessKey>::try_from((
+                data_value,
+                block.height,
+                block.hash,
+            ))
+        } else {
+            anyhow::bail!(
+                "Access key `{}`not found! Block {}",
+                account_id,
+                request_block_height
+            )
+        }
     }
 
     #[cfg(feature = "account_access_keys")]
@@ -119,7 +216,20 @@ impl crate::ReaderDbManager for PostgresDBManager {
         account_id: &near_primitives::types::AccountId,
         block_height: near_primitives::types::BlockHeight,
     ) -> anyhow::Result<std::collections::HashMap<String, Vec<u8>>> {
-        todo!()
+        let active_access_keys = crate::models::StateChangesAccessKeys::get_active_access_keys(
+            Self::get_connection(&self.pg_pool).await?,
+            &account_id,
+            block_height,
+        )
+        .await?;
+
+        if let Some(active_access_keys_value) = active_access_keys {
+            let active_access_keys: std::collections::HashMap<String, Vec<u8>> =
+                serde_json::from_value(active_access_keys_value)?;
+            Ok(active_access_keys)
+        } else {
+            Ok(std::collections::HashMap::new())
+        }
     }
 
     async fn get_receipt_by_id(
@@ -141,6 +251,21 @@ impl crate::ReaderDbManager for PostgresDBManager {
         block_height: near_primitives::types::BlockHeight,
         shard_id: near_primitives::types::ShardId,
     ) -> anyhow::Result<readnode_primitives::BlockHeightShardId> {
-        todo!()
+        let block_height_shard_id = crate::models::Chunk::get_stored_block_height(
+            Self::get_connection(&self.pg_pool).await?,
+            block_height,
+            shard_id,
+        )
+        .await;
+        block_height_shard_id
+            .map(readnode_primitives::BlockHeightShardId::try_from)
+            .unwrap_or_else(|err| {
+                Err(anyhow::anyhow!(
+                    "Block height and shard id not found for block height {} and shard id {}\n{:?}",
+                    block_height,
+                    shard_id,
+                    err,
+                ))
+            })
     }
 }

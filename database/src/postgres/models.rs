@@ -22,6 +22,24 @@ impl StateChangesData {
             .await?;
         Ok(())
     }
+
+    pub async fn get_state_key_value(
+        mut conn: crate::postgres::PgAsyncConn,
+        account_id: &str,
+        block_height: u64,
+        data_key: String,
+    ) -> anyhow::Result<Option<Vec<u8>>> {
+        let resp = state_changes_data::table
+            .filter(state_changes_data::account_id.eq(account_id))
+            .filter(state_changes_data::block_height.le(bigdecimal::BigDecimal::from(block_height)))
+            .filter(state_changes_data::data_key.eq(data_key))
+            .order(state_changes_data::block_height.desc())
+            .select(Self::as_select())
+            .first(&mut conn)
+            .await?;
+
+        Ok(resp.data_value)
+    }
 }
 
 #[derive(Insertable, Queryable, Selectable)]
@@ -42,6 +60,27 @@ impl StateChangesAccessKey {
             .execute(&mut conn)
             .await?;
         Ok(())
+    }
+
+    pub async fn get_access_key(
+        mut conn: crate::postgres::PgAsyncConn,
+        account_id: &str,
+        block_height: u64,
+        data_key: String,
+    ) -> anyhow::Result<Self> {
+        let resp = state_changes_access_key::table
+            .filter(state_changes_access_key::account_id.eq(account_id))
+            .filter(
+                state_changes_access_key::block_height
+                    .le(bigdecimal::BigDecimal::from(block_height)),
+            )
+            .filter(state_changes_access_key::data_key.eq(data_key))
+            .order(state_changes_access_key::block_height.desc())
+            .select(Self::as_select())
+            .first(&mut conn)
+            .await?;
+
+        Ok(resp)
     }
 }
 
@@ -101,6 +140,24 @@ impl StateChangesContract {
             .await?;
         Ok(())
     }
+
+    pub async fn get_contract(
+        mut conn: crate::postgres::PgAsyncConn,
+        account_id: &str,
+        block_height: u64,
+    ) -> anyhow::Result<Self> {
+        let resp = state_changes_contract::table
+            .filter(state_changes_contract::account_id.eq(account_id))
+            .filter(
+                state_changes_contract::block_height.le(bigdecimal::BigDecimal::from(block_height)),
+            )
+            .order(state_changes_contract::block_height.desc())
+            .select(Self::as_select())
+            .first(&mut conn)
+            .await?;
+
+        Ok(resp)
+    }
 }
 
 #[derive(Insertable, Queryable, Selectable)]
@@ -120,6 +177,24 @@ impl StateChangesAccount {
             .execute(&mut conn)
             .await?;
         Ok(())
+    }
+
+    pub async fn get_account(
+        mut conn: crate::postgres::PgAsyncConn,
+        account_id: &str,
+        block_height: u64,
+    ) -> anyhow::Result<Self> {
+        let resp = state_changes_account::table
+            .filter(state_changes_account::account_id.eq(account_id))
+            .filter(
+                state_changes_account::block_height.le(bigdecimal::BigDecimal::from(block_height)),
+            )
+            .order(state_changes_account::block_height.desc())
+            .select(Self::as_select())
+            .first(&mut conn)
+            .await?;
+
+        Ok(resp)
     }
 }
 
@@ -187,6 +262,20 @@ impl Chunk {
 
         Ok((resp.stored_at_block_height, resp.shard_id))
     }
+
+    pub async fn get_stored_block_height(
+        mut conn: crate::postgres::PgAsyncConn,
+        block_height: u64,
+        shard_id: u64,
+    ) -> anyhow::Result<(bigdecimal::BigDecimal, bigdecimal::BigDecimal)> {
+        let resp = chunk::table
+            .filter(chunk::block_height.eq(bigdecimal::BigDecimal::from(block_height)))
+            .filter(chunk::shard_id.eq(bigdecimal::BigDecimal::from(shard_id)))
+            .select(Self::as_select())
+            .first(&mut conn)
+            .await?;
+        Ok((resp.stored_at_block_height, resp.shard_id))
+    }
 }
 
 #[derive(Insertable, Queryable, Selectable)]
@@ -204,6 +293,40 @@ impl AccountState {
             .execute(&mut conn)
             .await?;
         Ok(())
+    }
+
+    pub async fn get_state_keys_all(
+        mut conn: crate::postgres::PgAsyncConn,
+        account_id: &str,
+    ) -> anyhow::Result<Vec<String>> {
+        let resp = account_state::table
+            .filter(account_state::account_id.eq(account_id))
+            .select(Self::as_select())
+            .load(&mut conn)
+            .await?;
+
+        Ok(resp
+            .into_iter()
+            .map(|account_state_key| account_state_key.data_key)
+            .collect())
+    }
+
+    pub async fn get_state_keys_by_prefix(
+        mut conn: crate::postgres::PgAsyncConn,
+        account_id: &str,
+        prefix: String,
+    ) -> anyhow::Result<Vec<String>> {
+        let resp = account_state::table
+            .filter(account_state::account_id.eq(account_id))
+            .filter(account_state::data_key.like(format!("{}%", prefix)))
+            .select(Self::as_select())
+            .load(&mut conn)
+            .await?;
+
+        Ok(resp
+            .into_iter()
+            .map(|account_state_key| account_state_key.data_key)
+            .collect())
     }
 }
 /// Tx-indexer tables
