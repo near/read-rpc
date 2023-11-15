@@ -334,19 +334,41 @@ impl AccountState {
 #[derive(Insertable, Queryable, Selectable)]
 #[diesel(table_name = transaction_detail)]
 pub struct TransactionDetail {
-    transaction_hash: String,
-    block_height: bigdecimal::BigDecimal,
-    account_id: String,
-    transaction_details: Vec<u8>,
+    pub transaction_hash: String,
+    pub block_height: bigdecimal::BigDecimal,
+    pub account_id: String,
+    pub transaction_details: Vec<u8>,
+}
+
+impl TransactionDetail {
+    pub async fn save(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+        diesel::insert_into(transaction_detail::table)
+            .values(self)
+            .on_conflict_do_nothing()
+            .execute(&mut conn)
+            .await?;
+        Ok(())
+    }
 }
 
 #[derive(Insertable, Queryable, Selectable)]
 #[diesel(table_name = receipt_map)]
 pub struct ReceiptMap {
-    receipt_id: String,
-    block_height: bigdecimal::BigDecimal,
-    parent_transaction_hash: String,
-    shard_id: bigdecimal::BigDecimal,
+    pub receipt_id: String,
+    pub block_height: bigdecimal::BigDecimal,
+    pub parent_transaction_hash: String,
+    pub shard_id: bigdecimal::BigDecimal,
+}
+
+impl ReceiptMap {
+    pub async fn save(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+        diesel::insert_into(receipt_map::table)
+            .values(self)
+            .on_conflict_do_nothing()
+            .execute(&mut conn)
+            .await?;
+        Ok(())
+    }
 }
 
 /// Tx-indexer cache tables

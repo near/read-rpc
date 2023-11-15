@@ -1,6 +1,7 @@
 use crate::postgres::PostgresStorageManager;
 use crate::AdditionalDatabaseOptions;
 use bigdecimal::ToPrimitive;
+use borsh::BorshSerialize;
 
 pub(crate) struct PostgresDBManager {
     pg_pool: crate::postgres::PgAsyncPool,
@@ -35,7 +36,17 @@ impl crate::TxIndexerDbManager for PostgresDBManager {
         transaction: readnode_primitives::TransactionDetails,
         block_height: u64,
     ) -> anyhow::Result<()> {
-        todo!()
+        let transaction_details = transaction
+            .try_to_vec()
+            .expect("Failed to borsh-serialize the Transaction");
+        crate::models::TransactionDetail {
+            transaction_hash: transaction.transaction.hash.to_string(),
+            block_height: bigdecimal::BigDecimal::from(block_height),
+            account_id: transaction.transaction.signer_id.to_string(),
+            transaction_details,
+        }
+        .save(Self::get_connection(&self.pg_pool).await?)
+        .await
     }
 
     async fn add_receipt(
@@ -45,7 +56,14 @@ impl crate::TxIndexerDbManager for PostgresDBManager {
         block_height: u64,
         shard_id: u64,
     ) -> anyhow::Result<()> {
-        todo!()
+        crate::models::ReceiptMap {
+            receipt_id: receipt_id.to_string(),
+            parent_transaction_hash: parent_tx_hash.to_string(),
+            block_height: bigdecimal::BigDecimal::from(block_height),
+            shard_id: bigdecimal::BigDecimal::from(shard_id),
+        }
+        .save(Self::get_connection(&self.pg_pool).await?)
+        .await
     }
 
     async fn update_meta(&self, indexer_id: &str, block_height: u64) -> anyhow::Result<()> {
