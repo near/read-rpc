@@ -45,13 +45,13 @@ impl crate::StateIndexerDbManager for PostgresDBManager {
             data_key: hex::encode(key).to_string(),
             data_value: Some(value.to_vec()),
         }
-        .save(Self::get_connection(&self.pg_pool).await?)
+        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
         .await?;
         crate::models::AccountState {
             account_id: account_id.to_string(),
             data_key: hex::encode(key).to_string(),
         }
-        .save(Self::get_connection(&self.pg_pool).await?)
+        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
         .await
     }
 
@@ -69,7 +69,7 @@ impl crate::StateIndexerDbManager for PostgresDBManager {
             data_key: hex::encode(key).to_string(),
             data_value: None,
         }
-        .save(Self::get_connection(&self.pg_pool).await?)
+        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
         .await
     }
 
@@ -88,7 +88,7 @@ impl crate::StateIndexerDbManager for PostgresDBManager {
             data_key: hex::encode(public_key).to_string(),
             data_value: Some(access_key.to_vec()),
         }
-        .save(Self::get_connection(&self.pg_pool).await?)
+        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
         .await
     }
 
@@ -106,7 +106,7 @@ impl crate::StateIndexerDbManager for PostgresDBManager {
             data_key: hex::encode(public_key).to_string(),
             data_value: None,
         }
-        .save(Self::get_connection(&self.pg_pool).await?)
+        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
         .await
     }
 
@@ -172,7 +172,7 @@ impl crate::StateIndexerDbManager for PostgresDBManager {
             block_hash: "".to_string(),
             active_access_keys: Some(serde_json::to_value(account_keys)?),
         }
-        .save(Self::get_connection(&self.pg_pool).await?)
+        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
         .await
     }
 
@@ -189,7 +189,7 @@ impl crate::StateIndexerDbManager for PostgresDBManager {
             block_hash: block_hash.to_string(),
             data_value: Some(code.to_vec()),
         }
-        .save(Self::get_connection(&self.pg_pool).await?)
+        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
         .await
     }
 
@@ -205,7 +205,7 @@ impl crate::StateIndexerDbManager for PostgresDBManager {
             block_hash: block_hash.to_string(),
             data_value: None,
         }
-        .save(Self::get_connection(&self.pg_pool).await?)
+        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
         .await
     }
 
@@ -222,7 +222,7 @@ impl crate::StateIndexerDbManager for PostgresDBManager {
             block_hash: block_hash.to_string(),
             data_value: Some(account),
         }
-        .save(Self::get_connection(&self.pg_pool).await?)
+        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
         .await
     }
 
@@ -238,7 +238,7 @@ impl crate::StateIndexerDbManager for PostgresDBManager {
             block_hash: block_hash.to_string(),
             data_value: None,
         }
-        .save(Self::get_connection(&self.pg_pool).await?)
+        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
         .await
     }
 
@@ -251,7 +251,7 @@ impl crate::StateIndexerDbManager for PostgresDBManager {
             block_height: bigdecimal::BigDecimal::from(block_height),
             block_hash: block_hash.to_string(),
         }
-        .save(Self::get_connection(&self.pg_pool).await?)
+        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
         .await
     }
 
@@ -284,7 +284,7 @@ impl crate::StateIndexerDbManager for PostgresDBManager {
             indexer_id: indexer_id.to_string(),
             last_processed_block_height: bigdecimal::BigDecimal::from(block_height),
         }
-        .save(Self::get_connection(&self.pg_pool).await?)
+        .insert_or_update(Self::get_connection(&self.pg_pool).await?)
         .await
     }
 

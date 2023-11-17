@@ -20,16 +20,30 @@ async fn main() -> anyhow::Result<()> {
     let opts: Opts = Opts::parse();
 
     tracing::info!(target: INDEXER, "Connecting to db...");
-    let db_manager: std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>> =
-        std::sync::Arc::new(Box::new(
-            database::prepare_tx_indexer_db_manager(
-                &opts.database_url,
-                opts.database_user.as_deref(),
-                opts.database_password.as_deref(),
-                opts.to_additional_database_options().await,
-            )
-            .await?,
-        ));
+    #[cfg(feature = "scylla_db")]
+    let db_manager: std::sync::Arc<
+        Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>,
+    > = std::sync::Arc::new(Box::new(
+        database::prepare_tx_indexer_scylla_db_manager(
+            &opts.database_url,
+            opts.database_user.as_deref(),
+            opts.database_password.as_deref(),
+            opts.to_additional_database_options().await,
+        )
+        .await?,
+    ));
+    #[cfg(all(feature = "postgres_db", not(feature = "scylla_db")))]
+    let db_manager: std::sync::Arc<
+        Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>,
+    > = std::sync::Arc::new(Box::new(
+        database::prepare_tx_indexer_postgres_db_manager(
+            &opts.database_url,
+            opts.database_user.as_deref(),
+            opts.database_password.as_deref(),
+            opts.to_additional_database_options().await,
+        )
+        .await?,
+    ));
 
     let start_block_height = config::get_start_block_height(&opts, &db_manager).await?;
     tracing::info!(target: INDEXER, "Generating LakeConfig...");

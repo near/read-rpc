@@ -60,7 +60,7 @@ pub(crate) struct Opts {
 
     /// Attempts to store data in the database should be infinite to ensure no data is missing.
     /// Disable it to perform a limited write attempts (`max_retry`)
-    /// before skipping giving up and moving to the next piece of data
+    /// before giving up, and moving to the next piece of data
     #[cfg(feature = "scylla_db")]
     #[clap(long, env, default_value_t = true)]
     pub strict_mode: bool,
@@ -110,20 +110,18 @@ impl Opts {
 
 impl Opts {
     pub async fn to_additional_database_options(&self) -> database::AdditionalDatabaseOptions {
-        #[cfg(feature = "scylla_db")]
-        let database_options = database::AdditionalDatabaseOptions {
+        database::AdditionalDatabaseOptions {
+            #[cfg(feature = "scylla_db")]
             preferred_dc: self.preferred_dc.clone(),
+            #[cfg(feature = "scylla_db")]
             keepalive_interval: None,
+            #[cfg(feature = "scylla_db")]
             max_retry: self.max_retry,
+            #[cfg(feature = "scylla_db")]
             strict_mode: self.strict_mode,
-        };
-
-        #[cfg(feature = "postgres_db")]
-        let database_options = database::AdditionalDatabaseOptions {
+            #[cfg(feature = "postgres_db")]
             database_name: self.database_name.clone(),
-        };
-
-        database_options
+        }
     }
 
     pub async fn to_lake_config(

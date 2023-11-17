@@ -9,19 +9,15 @@ pub type PgAsyncPool =
 pub type PgAsyncConn =
     diesel_async::pooled_connection::deadpool::Object<diesel_async::AsyncPgConnection>;
 
-pub struct AdditionalDatabaseOptions {
-    pub database_name: Option<String>,
-}
-
 #[async_trait::async_trait]
 pub trait PostgresStorageManager {
     async fn create_pool(
         database_url: &str,
         database_user: Option<&str>,
         database_password: Option<&str>,
-        database_options: AdditionalDatabaseOptions,
+        database_options: crate::AdditionalDatabaseOptions,
     ) -> anyhow::Result<PgAsyncPool> {
-        let connecting_url = if database_url.starts_with("postgres://") {
+        let connection_string = if database_url.starts_with("postgres://") {
             database_url.to_string()
         } else {
             format!(
@@ -34,7 +30,7 @@ pub trait PostgresStorageManager {
         };
         let config = diesel_async::pooled_connection::AsyncDieselConnectionManager::<
             diesel_async::AsyncPgConnection,
-        >::new(connecting_url);
+        >::new(connection_string);
         let pool = diesel_async::pooled_connection::deadpool::Pool::builder(config).build()?;
         Ok(pool)
     }

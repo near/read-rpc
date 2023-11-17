@@ -14,7 +14,7 @@ pub struct StateChangesData {
 }
 
 impl StateChangesData {
-    pub async fn save(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+    pub async fn insert_or_ignore(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
         diesel::insert_into(state_changes_data::table)
             .values(self)
             .on_conflict_do_nothing()
@@ -29,7 +29,7 @@ impl StateChangesData {
         block_height: u64,
         data_key: String,
     ) -> anyhow::Result<Option<Vec<u8>>> {
-        let resp = state_changes_data::table
+        let response = state_changes_data::table
             .filter(state_changes_data::account_id.eq(account_id))
             .filter(state_changes_data::block_height.le(bigdecimal::BigDecimal::from(block_height)))
             .filter(state_changes_data::data_key.eq(data_key))
@@ -38,7 +38,7 @@ impl StateChangesData {
             .first(&mut conn)
             .await?;
 
-        Ok(resp.data_value)
+        Ok(response.data_value)
     }
 }
 
@@ -53,7 +53,7 @@ pub struct StateChangesAccessKey {
 }
 
 impl StateChangesAccessKey {
-    pub async fn save(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+    pub async fn insert_or_ignore(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
         diesel::insert_into(state_changes_access_key::table)
             .values(self)
             .on_conflict_do_nothing()
@@ -68,7 +68,7 @@ impl StateChangesAccessKey {
         block_height: u64,
         data_key: String,
     ) -> anyhow::Result<Self> {
-        let resp = state_changes_access_key::table
+        let response = state_changes_access_key::table
             .filter(state_changes_access_key::account_id.eq(account_id))
             .filter(
                 state_changes_access_key::block_height
@@ -80,7 +80,7 @@ impl StateChangesAccessKey {
             .first(&mut conn)
             .await?;
 
-        Ok(resp)
+        Ok(response)
     }
 }
 
@@ -94,7 +94,7 @@ pub struct StateChangesAccessKeys {
 }
 
 impl StateChangesAccessKeys {
-    pub async fn save(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+    pub async fn insert_or_ignore(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
         diesel::insert_into(state_changes_access_keys::table)
             .values(self)
             .on_conflict_do_nothing()
@@ -108,7 +108,7 @@ impl StateChangesAccessKeys {
         account_id: &str,
         block_height: u64,
     ) -> anyhow::Result<Option<serde_json::Value>> {
-        let resp = state_changes_access_keys::table
+        let response = state_changes_access_keys::table
             .filter(state_changes_access_keys::account_id.eq(account_id))
             .filter(
                 state_changes_access_keys::block_height
@@ -118,7 +118,7 @@ impl StateChangesAccessKeys {
             .first(&mut conn)
             .await?;
 
-        Ok(resp.active_access_keys)
+        Ok(response.active_access_keys)
     }
 }
 
@@ -132,7 +132,7 @@ pub struct StateChangesContract {
 }
 
 impl StateChangesContract {
-    pub async fn save(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+    pub async fn insert_or_ignore(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
         diesel::insert_into(state_changes_contract::table)
             .values(self)
             .on_conflict_do_nothing()
@@ -146,7 +146,7 @@ impl StateChangesContract {
         account_id: &str,
         block_height: u64,
     ) -> anyhow::Result<Self> {
-        let resp = state_changes_contract::table
+        let response = state_changes_contract::table
             .filter(state_changes_contract::account_id.eq(account_id))
             .filter(
                 state_changes_contract::block_height.le(bigdecimal::BigDecimal::from(block_height)),
@@ -156,7 +156,7 @@ impl StateChangesContract {
             .first(&mut conn)
             .await?;
 
-        Ok(resp)
+        Ok(response)
     }
 }
 
@@ -170,7 +170,7 @@ pub struct StateChangesAccount {
 }
 
 impl StateChangesAccount {
-    pub async fn save(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+    pub async fn insert_or_ignore(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
         diesel::insert_into(state_changes_account::table)
             .values(self)
             .on_conflict_do_nothing()
@@ -184,7 +184,7 @@ impl StateChangesAccount {
         account_id: &str,
         block_height: u64,
     ) -> anyhow::Result<Self> {
-        let resp = state_changes_account::table
+        let response = state_changes_account::table
             .filter(state_changes_account::account_id.eq(account_id))
             .filter(
                 state_changes_account::block_height.le(bigdecimal::BigDecimal::from(block_height)),
@@ -194,7 +194,7 @@ impl StateChangesAccount {
             .first(&mut conn)
             .await?;
 
-        Ok(resp)
+        Ok(response)
     }
 }
 
@@ -206,7 +206,7 @@ pub struct Block {
 }
 
 impl Block {
-    pub async fn save(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+    pub async fn insert_or_ignore(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
         diesel::insert_into(block::table)
             .values(self)
             .on_conflict_do_nothing()
@@ -218,13 +218,13 @@ impl Block {
         mut conn: crate::postgres::PgAsyncConn,
         block_hash: near_primitives::hash::CryptoHash,
     ) -> anyhow::Result<bigdecimal::BigDecimal> {
-        let resp = block::table
+        let response = block::table
             .filter(block::block_hash.eq(block_hash.to_string()))
             .select(Self::as_select())
             .first(&mut conn)
             .await?;
 
-        Ok(resp.block_height)
+        Ok(response.block_height)
     }
 }
 
@@ -254,13 +254,13 @@ impl Chunk {
         mut conn: crate::postgres::PgAsyncConn,
         chunk_hash: near_primitives::hash::CryptoHash,
     ) -> anyhow::Result<(bigdecimal::BigDecimal, bigdecimal::BigDecimal)> {
-        let resp = chunk::table
+        let response = chunk::table
             .filter(chunk::chunk_hash.eq(chunk_hash.to_string()))
             .select(Self::as_select())
             .first(&mut conn)
             .await?;
 
-        Ok((resp.stored_at_block_height, resp.shard_id))
+        Ok((response.stored_at_block_height, response.shard_id))
     }
 
     pub async fn get_stored_block_height(
@@ -268,13 +268,13 @@ impl Chunk {
         block_height: u64,
         shard_id: u64,
     ) -> anyhow::Result<(bigdecimal::BigDecimal, bigdecimal::BigDecimal)> {
-        let resp = chunk::table
+        let response = chunk::table
             .filter(chunk::block_height.eq(bigdecimal::BigDecimal::from(block_height)))
             .filter(chunk::shard_id.eq(bigdecimal::BigDecimal::from(shard_id)))
             .select(Self::as_select())
             .first(&mut conn)
             .await?;
-        Ok((resp.stored_at_block_height, resp.shard_id))
+        Ok((response.stored_at_block_height, response.shard_id))
     }
 }
 
@@ -286,7 +286,7 @@ pub struct AccountState {
 }
 
 impl AccountState {
-    pub async fn save(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+    pub async fn insert_or_ignore(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
         diesel::insert_into(account_state::table)
             .values(self)
             .on_conflict_do_nothing()
@@ -299,13 +299,13 @@ impl AccountState {
         mut conn: crate::postgres::PgAsyncConn,
         account_id: &str,
     ) -> anyhow::Result<Vec<String>> {
-        let resp = account_state::table
+        let response = account_state::table
             .filter(account_state::account_id.eq(account_id))
             .select(Self::as_select())
             .load(&mut conn)
             .await?;
 
-        Ok(resp
+        Ok(response
             .into_iter()
             .map(|account_state_key| account_state_key.data_key)
             .collect())
@@ -316,14 +316,14 @@ impl AccountState {
         account_id: &str,
         prefix: String,
     ) -> anyhow::Result<Vec<String>> {
-        let resp = account_state::table
+        let response = account_state::table
             .filter(account_state::account_id.eq(account_id))
             .filter(account_state::data_key.like(format!("{}%", prefix)))
             .select(Self::as_select())
             .load(&mut conn)
             .await?;
 
-        Ok(resp
+        Ok(response
             .into_iter()
             .map(|account_state_key| account_state_key.data_key)
             .collect())
@@ -341,7 +341,7 @@ pub struct TransactionDetail {
 }
 
 impl TransactionDetail {
-    pub async fn save(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+    pub async fn insert_or_ignore(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
         diesel::insert_into(transaction_detail::table)
             .values(self)
             .on_conflict_do_nothing()
@@ -354,13 +354,13 @@ impl TransactionDetail {
         mut conn: crate::postgres::PgAsyncConn,
         transaction_hash: &str,
     ) -> anyhow::Result<Vec<u8>> {
-        let resp = transaction_detail::table
+        let response = transaction_detail::table
             .filter(transaction_detail::transaction_hash.eq(transaction_hash))
             .select(Self::as_select())
             .first(&mut conn)
             .await?;
 
-        Ok(resp.transaction_details)
+        Ok(response.transaction_details)
     }
 }
 
@@ -374,7 +374,7 @@ pub struct ReceiptMap {
 }
 
 impl ReceiptMap {
-    pub async fn save(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+    pub async fn insert_or_ignore(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
         diesel::insert_into(receipt_map::table)
             .values(self)
             .on_conflict_do_nothing()
@@ -387,13 +387,13 @@ impl ReceiptMap {
         mut conn: crate::postgres::PgAsyncConn,
         receipt_id: near_indexer_primitives::CryptoHash,
     ) -> anyhow::Result<Self> {
-        let resp = receipt_map::table
+        let response = receipt_map::table
             .filter(receipt_map::receipt_id.eq(receipt_id.to_string()))
             .select(Self::as_select())
             .first(&mut conn)
             .await?;
 
-        Ok(resp)
+        Ok(response)
     }
 }
 
@@ -407,7 +407,7 @@ pub struct TransactionCache {
 }
 
 impl TransactionCache {
-    pub async fn save(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+    pub async fn insert_or_ignore(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
         diesel::insert_into(transaction_cache::table)
             .values(self)
             .on_conflict_do_nothing()
@@ -421,21 +421,21 @@ impl TransactionCache {
         block_height: bigdecimal::BigDecimal,
         transaction_hash: &str,
     ) -> anyhow::Result<Vec<u8>> {
-        let resp = transaction_cache::table
+        let response = transaction_cache::table
             .filter(transaction_cache::block_height.eq(block_height))
             .filter(transaction_cache::transaction_hash.eq(transaction_hash))
             .select(Self::as_select())
             .first(&mut conn)
             .await?;
 
-        Ok(resp.transaction_details)
+        Ok(response.transaction_details)
     }
     pub async fn get_transactions(
         mut conn: crate::postgres::PgAsyncConn,
         start_block_height: u64,
         cache_restore_blocks_range: u64,
     ) -> anyhow::Result<Vec<Self>> {
-        let resp = transaction_cache::table
+        let response = transaction_cache::table
             .filter(
                 transaction_cache::block_height
                     .le(bigdecimal::BigDecimal::from(start_block_height)),
@@ -449,7 +449,7 @@ impl TransactionCache {
             .load(&mut conn)
             .await?;
 
-        Ok(resp)
+        Ok(response)
     }
 
     pub async fn delete_transaction(
@@ -481,7 +481,7 @@ pub struct ReceiptOutcome {
 }
 
 impl ReceiptOutcome {
-    pub async fn save(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+    pub async fn insert_or_ignore(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
         diesel::insert_into(receipt_outcome::table)
             .values(self)
             .on_conflict_do_nothing()
@@ -494,12 +494,12 @@ impl ReceiptOutcome {
         mut conn: crate::postgres::PgAsyncConn,
         receipt_id: &str,
     ) -> anyhow::Result<(bigdecimal::BigDecimal, String)> {
-        let resp = receipt_outcome::table
+        let response = receipt_outcome::table
             .filter(receipt_outcome::receipt_id.eq(receipt_id.to_string()))
             .select(Self::as_select())
             .first(&mut conn)
             .await?;
-        Ok((resp.block_height, resp.transaction_hash))
+        Ok((response.block_height, response.transaction_hash))
     }
 
     pub async fn get_receipt_outcome(
@@ -507,13 +507,13 @@ impl ReceiptOutcome {
         block_height: u64,
         transaction_hash: &str,
     ) -> anyhow::Result<Vec<Self>> {
-        let resp = receipt_outcome::table
+        let response = receipt_outcome::table
             .filter(receipt_outcome::block_height.eq(bigdecimal::BigDecimal::from(block_height)))
             .filter(receipt_outcome::transaction_hash.eq(transaction_hash))
             .select(Self::as_select())
             .load(&mut conn)
             .await?;
-        Ok(resp)
+        Ok(response)
     }
 
     pub async fn delete_receipt_outcome(
@@ -543,7 +543,7 @@ pub struct Meta {
 }
 
 impl Meta {
-    pub async fn save(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+    pub async fn insert_or_update(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
         diesel::insert_into(meta::table)
             .values(self)
             .on_conflict(meta::indexer_id)
@@ -558,12 +558,12 @@ impl Meta {
         mut conn: crate::postgres::PgAsyncConn,
         indexer_id: &str,
     ) -> anyhow::Result<bigdecimal::BigDecimal> {
-        let resp = meta::table
+        let response = meta::table
             .filter(meta::indexer_id.eq(indexer_id))
             .select(Self::as_select())
             .first(&mut conn)
             .await?;
 
-        Ok(resp.last_processed_block_height)
+        Ok(response.last_processed_block_height)
     }
 }

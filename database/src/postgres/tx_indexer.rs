@@ -45,7 +45,7 @@ impl crate::TxIndexerDbManager for PostgresDBManager {
             account_id: transaction.transaction.signer_id.to_string(),
             transaction_details,
         }
-        .save(Self::get_connection(&self.pg_pool).await?)
+        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
         .await
     }
 
@@ -62,7 +62,7 @@ impl crate::TxIndexerDbManager for PostgresDBManager {
             block_height: bigdecimal::BigDecimal::from(block_height),
             shard_id: bigdecimal::BigDecimal::from(shard_id),
         }
-        .save(Self::get_connection(&self.pg_pool).await?)
+        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
         .await
     }
 
@@ -71,7 +71,7 @@ impl crate::TxIndexerDbManager for PostgresDBManager {
             indexer_id: indexer_id.to_string(),
             last_processed_block_height: bigdecimal::BigDecimal::from(block_height),
         }
-        .save(Self::get_connection(&self.pg_pool).await?)
+        .insert_or_update(Self::get_connection(&self.pg_pool).await?)
         .await
     }
 
@@ -89,7 +89,7 @@ impl crate::TxIndexerDbManager for PostgresDBManager {
             transaction_hash,
             transaction_details,
         }
-        .save(Self::get_connection(&self.pg_pool).await?)
+        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
         .await?;
         Ok(())
     }
@@ -113,7 +113,7 @@ impl crate::TxIndexerDbManager for PostgresDBManager {
                 .execution_outcome
                 .try_to_vec()?,
         }
-        .save(Self::get_connection(&self.pg_pool).await?)
+        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
         .await
     }
 

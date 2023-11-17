@@ -34,7 +34,8 @@ near-crypto = "0.17.0"
 near-indexer-primitives = "0.17.0"
 
 [features]
-postgres_db = ["dep:diesel", "dep:diesel-async", "dep:bigdecimal", "dep:serde", "dep:serde_json", "readnode-primitives/postgres_db"]
-scylla_db = ["dep:scylla", "dep:num-bigint", "dep:num-traits", "readnode-primitives/scylla_db"]
+default = ["scylla_db"]
+postgres_db = ["dep:diesel", "dep:diesel-async", "dep:bigdecimal", "dep:serde", "dep:serde_json"]
+scylla_db = ["dep:scylla", "dep:num-bigint", "dep:num-traits"]
 scylla_db_tracing = ["dep:prettytable-rs", "dep:uuid", "scylla_db"]
 account_access_keys = []
