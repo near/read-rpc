@@ -7,21 +7,75 @@ use sysinfo::{System, SystemExt};
 #[cfg(feature = "shadow_data_consistency")]
 const DEFAULT_RETRY_COUNT: u8 = 3;
 
-#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(params)))]
-pub async fn proxy_rpc_call<M>(
-    client: &near_jsonrpc_client::JsonRpcClient,
-    params: M,
-) -> near_jsonrpc_client::MethodCallResult<M::Response, M::Error>
-where
-    M: near_jsonrpc_client::methods::RpcMethod + std::fmt::Debug,
-{
-    tracing::debug!("PROXY call. {:?}", params);
-    client.call(params).await
+#[derive(Clone)]
+pub struct JsonRpcClient {
+    regular_client: near_jsonrpc_client::JsonRpcClient,
+    archive_client: near_jsonrpc_client::JsonRpcClient,
 }
 
-pub async fn get_final_cache_block(
-    near_rpc_client: &near_jsonrpc_client::JsonRpcClient,
-) -> Option<CacheBlock> {
+impl JsonRpcClient {
+    pub fn new(rpc_url: http::Uri, archive_rpc_url: Option<http::Uri>) -> Self {
+        let regular_client = near_jsonrpc_client::JsonRpcClient::connect(rpc_url.to_string());
+        let archive_client = match archive_rpc_url {
+            Some(archive_rpc_url) => {
+                near_jsonrpc_client::JsonRpcClient::connect(archive_rpc_url.to_string())
+            }
+            None => regular_client.clone(),
+        };
+        Self {
+            regular_client,
+            archive_client,
+        }
+    }
+
+    pub fn header(mut self, header_name: String, header_value: String) -> anyhow::Result<Self> {
+        let header_name: &'static str = Box::leak(header_name.into_boxed_str());
+        let header_value: &'static str = Box::leak(header_value.into_boxed_str());
+
+        self.regular_client = self.regular_client.header((header_name, header_value))?;
+        self.archive_client = self.archive_client.header((header_name, header_value))?;
+        Ok(self)
+    }
+
+    async fn rpc_call<M>(
+        &self,
+        params: M,
+        is_archive: bool,
+    ) -> near_jsonrpc_client::MethodCallResult<M::Response, M::Error>
+    where
+        M: near_jsonrpc_client::methods::RpcMethod + std::fmt::Debug,
+    {
+        if is_archive {
+            self.archive_client.call(params).await
+        } else {
+            self.regular_client.call(params).await
+        }
+    }
+
+    pub async fn call<M>(
+        &self,
+        params: M,
+    ) -> near_jsonrpc_client::MethodCallResult<M::Response, M::Error>
+    where
+        M: near_jsonrpc_client::methods::RpcMethod + std::fmt::Debug,
+    {
+        tracing::debug!("PROXY call. {:?}", params);
+        self.rpc_call(params, false).await
+    }
+
+    pub async fn archive_call<M>(
+        &self,
+        params: M,
+    ) -> near_jsonrpc_client::MethodCallResult<M::Response, M::Error>
+    where
+        M: near_jsonrpc_client::methods::RpcMethod + std::fmt::Debug,
+    {
+        tracing::debug!("ARCHIVAL PROXY call. {:?}", params);
+        self.rpc_call(params, true).await
+    }
+}
+
+pub async fn get_final_cache_block(near_rpc_client: &JsonRpcClient) -> Option<CacheBlock> {
     let block_request_method = near_jsonrpc_client::methods::block::RpcBlockRequest {
         block_reference: near_primitives::types::BlockReference::Finality(
             near_primitives::types::Finality::Final,
@@ -146,7 +200,7 @@ pub(crate) async fn gigabytes_to_bytes(gigabytes: f64) -> usize {
 /// The function takes three arguments:
 ///
 /// `readrpc_response`: a `Result<serde_json::Value, serde_json::Error>` object representing the results from Read RPC.
-/// `client`: `near_jsonrpc_client::JsonRpcClient`.
+/// `client`: `JsonRpcClient`.
 /// `params`: `near_jsonrpc_client::methods::RpcMethod` trait.
 ///
 /// In case of a successful comparison, the function returns `Ok(())`.
@@ -154,7 +208,7 @@ pub(crate) async fn gigabytes_to_bytes(gigabytes: f64) -> usize {
 #[cfg(feature = "shadow_data_consistency")]
 pub async fn shadow_compare_results<M>(
     read_rpc_response: Result<serde_json::Value, serde_json::Error>,
-    client: near_jsonrpc_client::JsonRpcClient,
+    client: JsonRpcClient,
     params: M,
     read_rpc_response_is_ok: bool,
 ) -> Result<(), ShadowDataConsistencyError>
@@ -171,7 +225,7 @@ where
         }
     };
 
-    let mut near_rpc_response = client.call(&params).await;
+    let mut near_rpc_response = client.archive_call(&params).await;
 
     for _ in 0..DEFAULT_RETRY_COUNT {
         if let Err(json_rpc_err) = &near_rpc_response {
@@ -188,7 +242,7 @@ where
                 }
             };
             if retry {
-                near_rpc_response = client.call(&params).await;
+                near_rpc_response = client.archive_call(&params).await;
             } else {
                 break;
             }

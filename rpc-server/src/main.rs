@@ -74,9 +74,11 @@ async fn main() -> anyhow::Result<()> {
     #[cfg(not(feature = "tracing-instrumentation"))]
     init_logging(false)?;
 
-    let near_rpc_client = near_jsonrpc_client::JsonRpcClient::connect(opts.rpc_url.to_string());
+    let near_rpc_client =
+        utils::JsonRpcClient::new(opts.rpc_url.clone(), opts.archive_rpc_url.clone());
     // We want to set a custom referer to let NEAR JSON RPC nodes know that we are a read-rpc instance
-    let near_rpc_client = near_rpc_client.header(("Referer", "read-rpc"))?; // TODO: make it configurable
+    let near_rpc_client =
+        near_rpc_client.header("Referer".to_string(), opts.referer_header_value.clone())?;
 
     let final_block = get_final_cache_block(&near_rpc_client)
         .await
@@ -149,7 +151,7 @@ async fn main() -> anyhow::Result<()> {
             s3_config,
         )),
         db_manager,
-        near_rpc_client.clone(),
+        near_rpc_client,
         opts.s3_bucket_name.clone(),
         genesis_config,
         std::sync::Arc::clone(&blocks_cache),

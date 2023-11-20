@@ -1,6 +1,5 @@
 use crate::config::ServerContext;
 use crate::errors::RPCError;
-use crate::utils::proxy_rpc_call;
 use jsonrpc_v2::{Data, Params};
 
 pub async fn light_client_proof(
@@ -12,7 +11,7 @@ pub async fn light_client_proof(
     near_jsonrpc_primitives::types::light_client::RpcLightClientExecutionProofResponse,
     RPCError,
 > {
-    Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
+    Ok(data.near_rpc_client.call(params).await?)
 }
 
 pub async fn next_light_client_block(
@@ -22,7 +21,7 @@ pub async fn next_light_client_block(
     >,
 ) -> Result<near_jsonrpc_primitives::types::light_client::RpcLightClientNextBlockResponse, RPCError>
 {
-    match proxy_rpc_call(&data.near_rpc_client, params).await? {
+    match data.near_rpc_client.call(params).await? {
         Some(light_client_block) => Ok(
             near_jsonrpc_primitives::types::light_client::RpcLightClientNextBlockResponse {
                 light_client_block: Some(std::sync::Arc::new(light_client_block)),
