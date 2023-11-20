@@ -50,5 +50,6 @@ near-lake-framework = "0.7.2"
 [features]
 default = ["scylla_db"]
 tracing-instrumentation = []
+postgres_db = ["database/postgres_db"]
 scylla_db = ["database/scylla_db"]
 scylla_db_tracing = ["database/scylla_db_tracing", "scylla_db"]

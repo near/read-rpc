@@ -237,7 +237,17 @@ async fn main() -> anyhow::Result<()> {
 
     let opts: Opts = Opts::parse();
 
-    let db_manager = database::prepare_state_indexer_db_manager(
+    #[cfg(feature = "scylla_db")]
+    let db_manager = database::prepare_db_manager::<database::scylladb::state_indexer::ScyllaDBManager>(
+        &opts.database_url,
+        opts.database_user.as_deref(),
+        opts.database_password.as_deref(),
+        opts.to_additional_database_options().await,
+    )
+    .await?;
+
+    #[cfg(all(feature = "postgres_db", not(feature = "scylla_db")))]
+    let db_manager = database::prepare_db_manager::<database::postgres::state_indexer::PostgresDBManager>(
         &opts.database_url,
         opts.database_user.as_deref(),
         opts.database_password.as_deref(),

@@ -161,10 +161,13 @@ pub struct BlockRecord {
 
 // TryFrom impls for defined types
 
-impl TryFrom<(num_bigint::BigInt, num_bigint::BigInt)> for BlockHeightShardId {
+impl<T> TryFrom<(T, T)> for BlockHeightShardId
+where
+    T: ToPrimitive,
+{
     type Error = anyhow::Error;
 
-    fn try_from(value: (num_bigint::BigInt, num_bigint::BigInt)) -> Result<Self, Self::Error> {
+    fn try_from(value: (T, T)) -> Result<Self, Self::Error> {
         let stored_at_block_height = value
             .0
             .to_u64()
@@ -207,12 +210,13 @@ where
     }
 }
 
-impl TryFrom<(String, String, num_bigint::BigInt, num_bigint::BigInt)> for ReceiptRecord {
+impl<T> TryFrom<(String, String, T, T)> for ReceiptRecord
+where
+    T: ToPrimitive,
+{
     type Error = anyhow::Error;
 
-    fn try_from(
-        value: (String, String, num_bigint::BigInt, num_bigint::BigInt),
-    ) -> Result<Self, Self::Error> {
+    fn try_from(value: (String, String, T, T)) -> Result<Self, Self::Error> {
         let receipt_id =
             near_primitives::hash::CryptoHash::try_from(value.0.as_bytes()).map_err(|err| {
                 anyhow::anyhow!("Failed to parse `receipt_id` to CryptoHash: {}", err)
@@ -241,10 +245,13 @@ impl TryFrom<(String, String, num_bigint::BigInt, num_bigint::BigInt)> for Recei
     }
 }
 
-impl TryFrom<(String, num_bigint::BigInt)> for BlockRecord {
+impl<T> TryFrom<(String, T)> for BlockRecord
+where
+    T: ToPrimitive,
+{
     type Error = anyhow::Error;
 
-    fn try_from(value: (String, num_bigint::BigInt)) -> Result<Self, Self::Error> {
+    fn try_from(value: (String, T)) -> Result<Self, Self::Error> {
         let height = value
             .1
             .to_u64()

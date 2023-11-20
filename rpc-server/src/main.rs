@@ -123,13 +123,26 @@ async fn main() -> anyhow::Result<()> {
         .await?;
     let lake_config = opts.to_lake_config(final_block.block_height).await?;
     let s3_config = opts.to_s3_config().await;
-    let db_manager = database::prepare_read_rpc_db_manager(
-        opts.database_url.as_str(),
-        opts.database_user.as_deref(),
-        opts.database_password.as_deref(),
-        opts.to_additional_database_options().await,
-    )
-    .await?;
+
+    #[cfg(feature = "scylla_db")]
+    let db_manager =
+        database::prepare_db_manager::<database::scylladb::rpc_server::ScyllaDBManager>(
+            opts.database_url.as_str(),
+            opts.database_user.as_deref(),
+            opts.database_password.as_deref(),
+            opts.to_additional_database_options().await,
+        )
+        .await?;
+
+    #[cfg(all(feature = "postgres_db", not(feature = "scylla_db")))]
+    let db_manager =
+        database::prepare_db_manager::<database::postgres::rpc_server::PostgresDBManager>(
+            opts.database_url.as_str(),
+            opts.database_user.as_deref(),
+            opts.database_password.as_deref(),
+            opts.to_additional_database_options().await,
+        )
+        .await?;
 
     let state = ServerContext::new(
         near_lake_framework::s3_fetchers::LakeS3Client::new(aws_sdk_s3::Client::from_conf(
