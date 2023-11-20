@@ -14,7 +14,10 @@ pub struct StateChangesData {
 }
 
 impl StateChangesData {
-    pub async fn insert_or_ignore(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+    pub async fn insert_or_ignore(
+        &self,
+        mut conn: crate::postgres::PgAsyncConn,
+    ) -> anyhow::Result<()> {
         diesel::insert_into(state_changes_data::table)
             .values(self)
             .on_conflict_do_nothing()
@@ -53,7 +56,10 @@ pub struct StateChangesAccessKey {
 }
 
 impl StateChangesAccessKey {
-    pub async fn insert_or_ignore(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+    pub async fn insert_or_ignore(
+        &self,
+        mut conn: crate::postgres::PgAsyncConn,
+    ) -> anyhow::Result<()> {
         diesel::insert_into(state_changes_access_key::table)
             .values(self)
             .on_conflict_do_nothing()
@@ -94,7 +100,10 @@ pub struct StateChangesAccessKeys {
 }
 
 impl StateChangesAccessKeys {
-    pub async fn insert_or_ignore(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+    pub async fn insert_or_ignore(
+        &self,
+        mut conn: crate::postgres::PgAsyncConn,
+    ) -> anyhow::Result<()> {
         diesel::insert_into(state_changes_access_keys::table)
             .values(self)
             .on_conflict_do_nothing()
@@ -132,7 +141,10 @@ pub struct StateChangesContract {
 }
 
 impl StateChangesContract {
-    pub async fn insert_or_ignore(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+    pub async fn insert_or_ignore(
+        &self,
+        mut conn: crate::postgres::PgAsyncConn,
+    ) -> anyhow::Result<()> {
         diesel::insert_into(state_changes_contract::table)
             .values(self)
             .on_conflict_do_nothing()
@@ -170,7 +182,10 @@ pub struct StateChangesAccount {
 }
 
 impl StateChangesAccount {
-    pub async fn insert_or_ignore(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+    pub async fn insert_or_ignore(
+        &self,
+        mut conn: crate::postgres::PgAsyncConn,
+    ) -> anyhow::Result<()> {
         diesel::insert_into(state_changes_account::table)
             .values(self)
             .on_conflict_do_nothing()
@@ -206,7 +221,10 @@ pub struct Block {
 }
 
 impl Block {
-    pub async fn insert_or_ignore(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+    pub async fn insert_or_ignore(
+        &self,
+        mut conn: crate::postgres::PgAsyncConn,
+    ) -> anyhow::Result<()> {
         diesel::insert_into(block::table)
             .values(self)
             .on_conflict_do_nothing()
@@ -286,7 +304,10 @@ pub struct AccountState {
 }
 
 impl AccountState {
-    pub async fn insert_or_ignore(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+    pub async fn insert_or_ignore(
+        &self,
+        mut conn: crate::postgres::PgAsyncConn,
+    ) -> anyhow::Result<()> {
         diesel::insert_into(account_state::table)
             .values(self)
             .on_conflict_do_nothing()
@@ -341,7 +362,10 @@ pub struct TransactionDetail {
 }
 
 impl TransactionDetail {
-    pub async fn insert_or_ignore(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+    pub async fn insert_or_ignore(
+        &self,
+        mut conn: crate::postgres::PgAsyncConn,
+    ) -> anyhow::Result<()> {
         diesel::insert_into(transaction_detail::table)
             .values(self)
             .on_conflict_do_nothing()
@@ -374,7 +398,10 @@ pub struct ReceiptMap {
 }
 
 impl ReceiptMap {
-    pub async fn insert_or_ignore(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+    pub async fn insert_or_ignore(
+        &self,
+        mut conn: crate::postgres::PgAsyncConn,
+    ) -> anyhow::Result<()> {
         diesel::insert_into(receipt_map::table)
             .values(self)
             .on_conflict_do_nothing()
@@ -407,7 +434,10 @@ pub struct TransactionCache {
 }
 
 impl TransactionCache {
-    pub async fn insert_or_ignore(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+    pub async fn insert_or_ignore(
+        &self,
+        mut conn: crate::postgres::PgAsyncConn,
+    ) -> anyhow::Result<()> {
         diesel::insert_into(transaction_cache::table)
             .values(self)
             .on_conflict_do_nothing()
@@ -481,7 +511,10 @@ pub struct ReceiptOutcome {
 }
 
 impl ReceiptOutcome {
-    pub async fn insert_or_ignore(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+    pub async fn insert_or_ignore(
+        &self,
+        mut conn: crate::postgres::PgAsyncConn,
+    ) -> anyhow::Result<()> {
         diesel::insert_into(receipt_outcome::table)
             .values(self)
             .on_conflict_do_nothing()
@@ -543,7 +576,10 @@ pub struct Meta {
 }
 
 impl Meta {
-    pub async fn insert_or_update(&self, mut conn: crate::postgres::PgAsyncConn) -> anyhow::Result<()> {
+    pub async fn insert_or_update(
+        &self,
+        mut conn: crate::postgres::PgAsyncConn,
+    ) -> anyhow::Result<()> {
         diesel::insert_into(meta::table)
             .values(self)
             .on_conflict(meta::indexer_id)
