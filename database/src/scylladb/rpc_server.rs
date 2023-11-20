@@ -4,7 +4,7 @@ use num_traits::ToPrimitive;
 use scylla::{prepared_statement::PreparedStatement, IntoTypedRows};
 use std::convert::TryFrom;
 
-pub(crate) struct ScyllaDBManager {
+pub struct ScyllaDBManager {
     scylla_session: std::sync::Arc<scylla::Session>,
     get_block_by_hash: PreparedStatement,
     get_block_by_chunk_id: PreparedStatement,

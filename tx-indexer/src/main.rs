@@ -24,7 +24,7 @@ async fn main() -> anyhow::Result<()> {
     let db_manager: std::sync::Arc<
         Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>,
     > = std::sync::Arc::new(Box::new(
-        database::prepare_tx_indexer_scylla_db_manager(
+        database::prepare_db_manager::<database::scylladb::tx_indexer::ScyllaDBManager>(
             &opts.database_url,
             opts.database_user.as_deref(),
             opts.database_password.as_deref(),
@@ -36,7 +36,7 @@ async fn main() -> anyhow::Result<()> {
     let db_manager: std::sync::Arc<
         Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>,
     > = std::sync::Arc::new(Box::new(
-        database::prepare_tx_indexer_postgres_db_manager(
+        database::prepare_db_manager::<database::postgres::tx_indexer::PostgresDBManager>(
             &opts.database_url,
             opts.database_user.as_deref(),
             opts.database_password.as_deref(),

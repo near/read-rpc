@@ -3,7 +3,7 @@ use crate::AdditionalDatabaseOptions;
 use bigdecimal::ToPrimitive;
 use borsh::{BorshDeserialize, BorshSerialize};
 
-pub(crate) struct PostgresDBManager {
+pub struct PostgresDBManager {
     pg_pool: crate::postgres::PgAsyncPool,
 }
 

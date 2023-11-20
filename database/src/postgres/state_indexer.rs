@@ -2,7 +2,7 @@ use crate::postgres::PostgresStorageManager;
 use crate::AdditionalDatabaseOptions;
 use bigdecimal::ToPrimitive;
 
-pub(crate) struct PostgresDBManager {
+pub struct PostgresDBManager {
     pg_pool: crate::postgres::PgAsyncPool,
 }
 

@@ -2,7 +2,7 @@ use crate::scylladb::ScyllaStorageManager;
 use num_traits::ToPrimitive;
 use scylla::prepared_statement::PreparedStatement;
 
-pub(crate) struct ScyllaDBManager {
+pub struct ScyllaDBManager {
     scylla_session: std::sync::Arc<scylla::Session>,
 
     add_state_changes: PreparedStatement,
