@@ -5,7 +5,6 @@ use crate::modules::blocks::CacheBlock;
 #[cfg(feature = "account_access_keys")]
 use crate::modules::queries::utils::fetch_list_access_keys_from_db;
 use crate::modules::queries::utils::{fetch_state_from_db, run_contract};
-use crate::utils::proxy_rpc_call;
 #[cfg(feature = "shadow_data_consistency")]
 use crate::utils::shadow_compare_results;
 use jsonrpc_v2::{Data, Params};
@@ -26,7 +25,7 @@ pub async fn query(
             // genesis sync_checkpoint or earliest_available sync_checkpoint
             // and proxy to near-rpc
             crate::metrics::SYNC_CHECKPOINT_REQUESTS_TOTAL.inc();
-            Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
+            Ok(data.near_rpc_client.call(params).await?)
         }
         near_primitives::types::BlockReference::Finality(finality) => {
             if finality != &near_primitives::types::Finality::Final {
@@ -34,7 +33,7 @@ pub async fn query(
                 // optimistic finality or doom_slug finality
                 // and proxy to near-rpc
                 crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
-                Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
+                Ok(data.near_rpc_client.call(params).await?)
             } else {
                 query_call(data, Params(params)).await
             }
@@ -76,10 +75,18 @@ async fn query_call(
         near_primitives::views::QueryRequest::ViewState {
             account_id,
             prefix,
-            include_proof: _,
+            include_proof,
         } => {
             crate::metrics::QUERY_VIEW_STATE_REQUESTS_TOTAL.inc();
-            view_state(&data, block, &account_id, prefix.as_ref()).await
+            if include_proof {
+                // TODO: We can calculate the proof for state only on regular or archival nodes.
+                // After indexing the epochs and validators,
+                // we will be able to separate proxies queries to regular and archival nodes.
+                // For now we will proxy all requests with `include_proof` to archival nodes.
+                return Ok(data.near_rpc_client.archival_call(params).await?);
+            } else {
+                view_state(&data, block, &account_id, prefix.as_ref()).await
+            }
         }
         near_primitives::views::QueryRequest::CallFunction {
             account_id,
@@ -94,7 +101,7 @@ async fn query_call(
         near_primitives::views::QueryRequest::ViewAccessKeyList { account_id } => {
             crate::metrics::QUERY_VIEW_ACCESS_KEYS_LIST_REQUESTS_TOTAL.inc();
             #[cfg(not(feature = "account_access_keys"))]
-            return Ok(crate::utils::proxy_rpc_call(&data.near_rpc_client, params).await?);
+            return Ok(data.near_rpc_client.call(params).await?);
             #[cfg(feature = "account_access_keys")]
             {
                 view_access_keys_list(&data, block, &account_id).await

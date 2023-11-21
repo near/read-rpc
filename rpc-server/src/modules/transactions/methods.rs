@@ -3,7 +3,6 @@ use crate::errors::RPCError;
 use crate::modules::transactions::{
     parse_signed_transaction, parse_transaction_status_common_request,
 };
-use crate::utils::proxy_rpc_call;
 #[cfg(feature = "shadow_data_consistency")]
 use crate::utils::shadow_compare_results;
 use jsonrpc_v2::{Data, Params};
@@ -128,7 +127,7 @@ pub async fn send_tx_async(
             near_jsonrpc_client::methods::broadcast_tx_async::RpcBroadcastTxAsyncRequest {
                 signed_transaction,
             };
-        match proxy_rpc_call(&data.near_rpc_client, proxy_params).await {
+        match data.near_rpc_client.call(proxy_params).await {
             Ok(resp) => Ok(resp),
             Err(err) => Err(RPCError::internal_error(&err.to_string())),
         }
@@ -154,7 +153,7 @@ pub async fn send_tx_commit(
             near_jsonrpc_client::methods::broadcast_tx_commit::RpcBroadcastTxCommitRequest {
                 signed_transaction,
             };
-        match proxy_rpc_call(&data.near_rpc_client, proxy_params).await {
+        match data.near_rpc_client.call(proxy_params).await {
             Ok(resp) => Ok(
                 near_jsonrpc_primitives::types::transactions::RpcTransactionResponse {
                     final_execution_outcome: FinalExecutionOutcome(resp),

@@ -8,6 +8,15 @@ pub struct Opts {
     #[clap(long, env = "NEAR_RPC_URL")]
     pub rpc_url: http::Uri,
 
+    // near network archival rpc url
+    #[clap(long, env = "ARCHIVAL_NEAR_RPC_URL")]
+    pub archival_rpc_url: Option<http::Uri>,
+
+    // Referer header value
+    // We want to set a custom referer to let NEAR JSON RPC nodes know that we are a read-rpc instance
+    #[clap(long, env = "REFERER_HEADER_VALUE", default_value = "read-rpc")]
+    pub referer_header_value: String,
+
     // Indexer bucket name
     #[clap(long, env = "AWS_BUCKET_NAME")]
     pub s3_bucket_name: String,
@@ -37,12 +46,12 @@ pub struct Opts {
     pub region: String,
 
     // AWS default region
-    #[clap(long, env, default_value = "8000")]
+    #[clap(long, env, default_value_t = 8000)]
     pub server_port: u16,
 
     /// Max gas burnt for contract function call
     /// Default value is 300_000_000_000_000
-    #[clap(long, env, default_value = "300000000000000")]
+    #[clap(long, env, default_value_t = 300_000_000_000_000)]
     pub max_gas_burnt: near_primitives_core::types::Gas,
 
     /// Max available memory for `block_cache` and `contract_code_cache` in gigabytes
@@ -52,14 +61,14 @@ pub struct Opts {
 
     /// Reserved memory for running the application in gigabytes
     /// By default we use 0.25 gigabyte (256MB or 268_435_456 bytes)
-    #[clap(long, env, default_value = "0.25")]
+    #[clap(long, env, default_value_t = 0.25)]
     pub reserved_memory: f64,
 
     /// Block cache size in gigabytes
     /// By default we use 0.125 gigabyte (128MB or 134_217_728 bytes)
     /// One cache_block size is ≈ 96 bytes
     /// In 128MB we can put 1_398_101 cache_blocks
-    #[clap(long, env, default_value = "0.125")]
+    #[clap(long, env, default_value_t = 0.125)]
     pub block_cache_size: f64,
 
     /// ScyllaDB preferred DataCenter
@@ -140,7 +149,7 @@ impl Opts {
 pub struct ServerContext {
     pub s3_client: near_lake_framework::s3_fetchers::LakeS3Client,
     pub db_manager: std::sync::Arc<Box<dyn database::ReaderDbManager + Sync + Send + 'static>>,
-    pub near_rpc_client: near_jsonrpc_client::JsonRpcClient,
+    pub near_rpc_client: crate::utils::JsonRpcClient,
     pub s3_bucket_name: String,
     pub genesis_config: near_chain_configs::GenesisConfig,
     pub blocks_cache:
@@ -158,7 +167,7 @@ impl ServerContext {
     pub fn new(
         s3_client: near_lake_framework::s3_fetchers::LakeS3Client,
         db_manager: impl database::ReaderDbManager + Sync + Send + 'static,
-        near_rpc_client: near_jsonrpc_client::JsonRpcClient,
+        near_rpc_client: crate::utils::JsonRpcClient,
         s3_bucket_name: String,
         genesis_config: near_chain_configs::GenesisConfig,
         blocks_cache: std::sync::Arc<

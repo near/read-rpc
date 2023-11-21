@@ -7,21 +7,84 @@ use sysinfo::{System, SystemExt};
 #[cfg(feature = "shadow_data_consistency")]
 const DEFAULT_RETRY_COUNT: u8 = 3;
 
-#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(params)))]
-pub async fn proxy_rpc_call<M>(
-    client: &near_jsonrpc_client::JsonRpcClient,
-    params: M,
-) -> near_jsonrpc_client::MethodCallResult<M::Response, M::Error>
-where
-    M: near_jsonrpc_client::methods::RpcMethod + std::fmt::Debug,
-{
-    tracing::debug!("PROXY call. {:?}", params);
-    client.call(params).await
+/// JsonRpcClient represents a client capable of interacting with NEAR JSON-RPC endpoints,
+/// The client is capable of handling requests to both regular and archival nodes.
+#[derive(Clone)]
+pub struct JsonRpcClient {
+    regular_client: near_jsonrpc_client::JsonRpcClient,
+    archival_client: near_jsonrpc_client::JsonRpcClient,
 }
 
-pub async fn get_final_cache_block(
-    near_rpc_client: &near_jsonrpc_client::JsonRpcClient,
-) -> Option<CacheBlock> {
+impl JsonRpcClient {
+    /// Creates a new JsonRpcClient.
+    /// The client is capable of handling requests to both regular and archival nodes.
+    /// If the `archival_rpc_url` is not provided, the client will use the regular endpoint for both
+    pub fn new(rpc_url: http::Uri, archival_rpc_url: Option<http::Uri>) -> Self {
+        let regular_client = near_jsonrpc_client::JsonRpcClient::connect(rpc_url.to_string());
+        let archival_client = match archival_rpc_url {
+            Some(archival_rpc_url) => {
+                near_jsonrpc_client::JsonRpcClient::connect(archival_rpc_url.to_string())
+            }
+            None => regular_client.clone(),
+        };
+        Self {
+            regular_client,
+            archival_client,
+        }
+    }
+
+    /// Adds a custom header to the RPC request.
+    pub fn header(mut self, header_name: String, header_value: String) -> anyhow::Result<Self> {
+        let header_name: &'static str = Box::leak(header_name.into_boxed_str());
+        let header_value: &'static str = Box::leak(header_value.into_boxed_str());
+
+        self.regular_client = self.regular_client.header((header_name, header_value))?;
+        self.archival_client = self.archival_client.header((header_name, header_value))?;
+        Ok(self)
+    }
+
+    /// Performs an RPC call to either the regular or archival endpoint.
+    async fn rpc_call<M>(
+        &self,
+        params: M,
+        is_archival: bool,
+    ) -> near_jsonrpc_client::MethodCallResult<M::Response, M::Error>
+    where
+        M: near_jsonrpc_client::methods::RpcMethod + std::fmt::Debug,
+    {
+        if is_archival {
+            self.archival_client.call(params).await
+        } else {
+            self.regular_client.call(params).await
+        }
+    }
+
+    /// Performs an RPC call to the regular endpoint.
+    pub async fn call<M>(
+        &self,
+        params: M,
+    ) -> near_jsonrpc_client::MethodCallResult<M::Response, M::Error>
+    where
+        M: near_jsonrpc_client::methods::RpcMethod + std::fmt::Debug,
+    {
+        tracing::debug!("PROXY call. {:?}", params);
+        self.rpc_call(params, false).await
+    }
+
+    /// Performs an RPC call to the archival endpoint.
+    pub async fn archival_call<M>(
+        &self,
+        params: M,
+    ) -> near_jsonrpc_client::MethodCallResult<M::Response, M::Error>
+    where
+        M: near_jsonrpc_client::methods::RpcMethod + std::fmt::Debug,
+    {
+        tracing::debug!("ARCHIVAL PROXY call. {:?}", params);
+        self.rpc_call(params, true).await
+    }
+}
+
+pub async fn get_final_cache_block(near_rpc_client: &JsonRpcClient) -> Option<CacheBlock> {
     let block_request_method = near_jsonrpc_client::methods::block::RpcBlockRequest {
         block_reference: near_primitives::types::BlockReference::Finality(
             near_primitives::types::Finality::Final,
@@ -146,7 +209,7 @@ pub(crate) async fn gigabytes_to_bytes(gigabytes: f64) -> usize {
 /// The function takes three arguments:
 ///
 /// `readrpc_response`: a `Result<serde_json::Value, serde_json::Error>` object representing the results from Read RPC.
-/// `client`: `near_jsonrpc_client::JsonRpcClient`.
+/// `client`: `JsonRpcClient`.
 /// `params`: `near_jsonrpc_client::methods::RpcMethod` trait.
 ///
 /// In case of a successful comparison, the function returns `Ok(())`.
@@ -154,7 +217,7 @@ pub(crate) async fn gigabytes_to_bytes(gigabytes: f64) -> usize {
 #[cfg(feature = "shadow_data_consistency")]
 pub async fn shadow_compare_results<M>(
     read_rpc_response: Result<serde_json::Value, serde_json::Error>,
-    client: near_jsonrpc_client::JsonRpcClient,
+    client: JsonRpcClient,
     params: M,
     read_rpc_response_is_ok: bool,
 ) -> Result<(), ShadowDataConsistencyError>
@@ -171,7 +234,7 @@ where
         }
     };
 
-    let mut near_rpc_response = client.call(&params).await;
+    let mut near_rpc_response = client.archival_call(&params).await;
 
     for _ in 0..DEFAULT_RETRY_COUNT {
         if let Err(json_rpc_err) = &near_rpc_response {
@@ -188,7 +251,7 @@ where
                 }
             };
             if retry {
-                near_rpc_response = client.call(&params).await;
+                near_rpc_response = client.archival_call(&params).await;
             } else {
                 break;
             }

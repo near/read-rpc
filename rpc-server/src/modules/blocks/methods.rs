@@ -6,8 +6,6 @@ use crate::modules::blocks::utils::{
 #[cfg(feature = "shadow_data_consistency")]
 use crate::utils::shadow_compare_results;
 use jsonrpc_v2::{Data, Params};
-
-use crate::utils::proxy_rpc_call;
 use near_primitives::trie_key::TrieKey;
 use near_primitives::views::StateChangeValueView;
 
@@ -27,7 +25,7 @@ pub async fn block(
             // genesis sync_checkpoint or earliest_available sync_checkpoint
             // and proxy to near-rpc
             crate::metrics::SYNC_CHECKPOINT_REQUESTS_TOTAL.inc();
-            let block_view = proxy_rpc_call(&data.near_rpc_client, params).await?;
+            let block_view = data.near_rpc_client.call(params).await?;
             Ok(near_jsonrpc_primitives::types::blocks::RpcBlockResponse { block_view })
         }
         near_primitives::types::BlockReference::Finality(finality) => {
@@ -36,7 +34,7 @@ pub async fn block(
                 // genesis sync_checkpoint or earliest_available sync_checkpoint
                 // and proxy to near-rpc
                 crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
-                let block_view = proxy_rpc_call(&data.near_rpc_client, params).await?;
+                let block_view = data.near_rpc_client.call(params).await?;
                 Ok(near_jsonrpc_primitives::types::blocks::RpcBlockResponse { block_view })
             } else {
                 block_call(data, Params(params)).await
@@ -100,7 +98,7 @@ pub async fn changes_in_block_by_type(
             // genesis sync_checkpoint or earliest_available sync_checkpoint
             // and proxy to near-rpc
             crate::metrics::SYNC_CHECKPOINT_REQUESTS_TOTAL.inc();
-            Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
+            Ok(data.near_rpc_client.call(params).await?)
         }
         near_primitives::types::BlockReference::Finality(finality) => {
             if finality != &near_primitives::types::Finality::Final {
@@ -108,7 +106,7 @@ pub async fn changes_in_block_by_type(
                 // optimistic finality or doom_slug finality
                 // and proxy to near-rpc
                 crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
-                Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
+                Ok(data.near_rpc_client.call(params).await?)
             } else {
                 changes_in_block_by_type_call(data, Params(params)).await
             }
@@ -138,7 +136,7 @@ pub async fn changes_in_block(
             // genesis sync_checkpoint or earliest_available sync_checkpoint
             // and proxy to near-rpc
             crate::metrics::SYNC_CHECKPOINT_REQUESTS_TOTAL.inc();
-            Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
+            Ok(data.near_rpc_client.call(params).await?)
         }
         near_primitives::types::BlockReference::Finality(finality) => {
             if finality != &near_primitives::types::Finality::Final {
@@ -146,7 +144,7 @@ pub async fn changes_in_block(
                 // optimistic finality or doom_slug finality
                 // and proxy to near-rpc
                 crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
-                Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
+                Ok(data.near_rpc_client.call(params).await?)
             } else {
                 changes_in_block_call(data, Params(params)).await
             }

@@ -3,7 +3,6 @@ use crate::errors::RPCError;
 use crate::modules::network::{
     friendly_memory_size_format, parse_validator_request, StatusResponse,
 };
-use crate::utils::proxy_rpc_call;
 use jsonrpc_v2::{Data, Params};
 use serde_json::Value;
 use sysinfo::{System, SystemExt};
@@ -66,7 +65,7 @@ pub async fn validators(
 ) -> Result<near_jsonrpc_primitives::types::validator::RpcValidatorResponse, RPCError> {
     match parse_validator_request(params).await {
         Ok(request) => {
-            let validator_info = proxy_rpc_call(&data.near_rpc_client, request).await?;
+            let validator_info = data.near_rpc_client.call(request).await?;
             Ok(near_jsonrpc_primitives::types::validator::RpcValidatorResponse { validator_info })
         }
         Err(err) => Err(RPCError::parse_error(&err.to_string())),
@@ -77,7 +76,7 @@ pub async fn validators_ordered(
     data: Data<ServerContext>,
     Params(params): Params<near_jsonrpc_primitives::types::validator::RpcValidatorsOrderedRequest>,
 ) -> Result<near_jsonrpc_primitives::types::validator::RpcValidatorsOrderedResponse, RPCError> {
-    Ok(proxy_rpc_call(&data.near_rpc_client, params).await?)
+    Ok(data.near_rpc_client.call(params).await?)
 }
 
 pub async fn genesis_config(
@@ -91,6 +90,6 @@ pub async fn protocol_config(
     data: Data<ServerContext>,
     Params(params): Params<near_jsonrpc_primitives::types::config::RpcProtocolConfigRequest>,
 ) -> Result<near_jsonrpc_primitives::types::config::RpcProtocolConfigResponse, RPCError> {
-    let config_view = proxy_rpc_call(&data.near_rpc_client, params).await?;
+    let config_view = data.near_rpc_client.call(params).await?;
     Ok(near_jsonrpc_primitives::types::config::RpcProtocolConfigResponse { config_view })
 }
