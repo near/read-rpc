@@ -9,8 +9,8 @@ pub struct Opts {
     pub rpc_url: http::Uri,
 
     // near network archive rpc url
-    #[clap(long, env = "ARCHIVE_NEAR_RPC_URL")]
-    pub archive_rpc_url: Option<http::Uri>,
+    #[clap(long, env = "ARCHIVAL_NEAR_RPC_URL")]
+    pub archival_rpc_url: Option<http::Uri>,
 
     // Referer header value
     // We want to set a custom referer to let NEAR JSON RPC nodes know that we are a read-rpc instance

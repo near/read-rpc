@@ -75,7 +75,7 @@ async fn main() -> anyhow::Result<()> {
     init_logging(false)?;
 
     let near_rpc_client =
-        utils::JsonRpcClient::new(opts.rpc_url.clone(), opts.archive_rpc_url.clone());
+        utils::JsonRpcClient::new(opts.rpc_url.clone(), opts.archival_rpc_url.clone());
     // We want to set a custom referer to let NEAR JSON RPC nodes know that we are a read-rpc instance
     let near_rpc_client =
         near_rpc_client.header("Referer".to_string(), opts.referer_header_value.clone())?;

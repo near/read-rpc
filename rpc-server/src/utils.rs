@@ -7,16 +7,21 @@ use sysinfo::{System, SystemExt};
 #[cfg(feature = "shadow_data_consistency")]
 const DEFAULT_RETRY_COUNT: u8 = 3;
 
+/// JsonRpcClient represents a client capable of interacting with NEAR JSON-RPC endpoints,
+/// The client is capable of handling requests to both regular and archival nodes.
 #[derive(Clone)]
 pub struct JsonRpcClient {
     regular_client: near_jsonrpc_client::JsonRpcClient,
-    archive_client: near_jsonrpc_client::JsonRpcClient,
+    archival_client: near_jsonrpc_client::JsonRpcClient,
 }
 
 impl JsonRpcClient {
+    /// Creates a new JsonRpcClient.
+    /// The client is capable of handling requests to both regular and archival nodes.
+    /// If the `archive_rpc_url` is not provided, the client will use the regular endpoint for both
     pub fn new(rpc_url: http::Uri, archive_rpc_url: Option<http::Uri>) -> Self {
         let regular_client = near_jsonrpc_client::JsonRpcClient::connect(rpc_url.to_string());
-        let archive_client = match archive_rpc_url {
+        let archival_client = match archive_rpc_url {
             Some(archive_rpc_url) => {
                 near_jsonrpc_client::JsonRpcClient::connect(archive_rpc_url.to_string())
             }
@@ -24,19 +29,21 @@ impl JsonRpcClient {
         };
         Self {
             regular_client,
-            archive_client,
+            archival_client,
         }
     }
 
+    /// Adds a custom header to the RPC request.
     pub fn header(mut self, header_name: String, header_value: String) -> anyhow::Result<Self> {
         let header_name: &'static str = Box::leak(header_name.into_boxed_str());
         let header_value: &'static str = Box::leak(header_value.into_boxed_str());
 
         self.regular_client = self.regular_client.header((header_name, header_value))?;
-        self.archive_client = self.archive_client.header((header_name, header_value))?;
+        self.archival_client = self.archival_client.header((header_name, header_value))?;
         Ok(self)
     }
 
+    /// Performs an RPC call to either the regular or archival endpoint.
     async fn rpc_call<M>(
         &self,
         params: M,
@@ -46,12 +53,13 @@ impl JsonRpcClient {
         M: near_jsonrpc_client::methods::RpcMethod + std::fmt::Debug,
     {
         if is_archive {
-            self.archive_client.call(params).await
+            self.archival_client.call(params).await
         } else {
             self.regular_client.call(params).await
         }
     }
 
+    /// Performs an RPC call to the regular endpoint.
     pub async fn call<M>(
         &self,
         params: M,
@@ -63,7 +71,8 @@ impl JsonRpcClient {
         self.rpc_call(params, false).await
     }
 
-    pub async fn archive_call<M>(
+    /// Performs an RPC call to the archival endpoint.
+    pub async fn archival_call<M>(
         &self,
         params: M,
     ) -> near_jsonrpc_client::MethodCallResult<M::Response, M::Error>
@@ -225,7 +234,7 @@ where
         }
     };
 
-    let mut near_rpc_response = client.archive_call(&params).await;
+    let mut near_rpc_response = client.archival_call(&params).await;
 
     for _ in 0..DEFAULT_RETRY_COUNT {
         if let Err(json_rpc_err) = &near_rpc_response {
@@ -242,7 +251,7 @@ where
                 }
             };
             if retry {
-                near_rpc_response = client.archive_call(&params).await;
+                near_rpc_response = client.archival_call(&params).await;
             } else {
                 break;
             }

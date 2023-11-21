@@ -79,8 +79,11 @@ async fn query_call(
         } => {
             crate::metrics::QUERY_VIEW_STATE_REQUESTS_TOTAL.inc();
             if include_proof {
-                // We can calculate the proof for state only on archive nodes.
-                return Ok(data.near_rpc_client.archive_call(params).await?);
+                // TODO: We can calculate the proof for state only on regular or archival nodes.
+                // After indexing the epochs and validators,
+                // we will be able to separate proxies queries to regular and archival nodes.
+                // For now we will proxy all requests with `include_proof` to archival nodes.
+                return Ok(data.near_rpc_client.archival_call(params).await?);
             } else {
                 view_state(&data, block, &account_id, prefix.as_ref()).await
             }
