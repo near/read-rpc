@@ -18,12 +18,12 @@ pub struct JsonRpcClient {
 impl JsonRpcClient {
     /// Creates a new JsonRpcClient.
     /// The client is capable of handling requests to both regular and archival nodes.
-    /// If the `archive_rpc_url` is not provided, the client will use the regular endpoint for both
-    pub fn new(rpc_url: http::Uri, archive_rpc_url: Option<http::Uri>) -> Self {
+    /// If the `archival_rpc_url` is not provided, the client will use the regular endpoint for both
+    pub fn new(rpc_url: http::Uri, archival_rpc_url: Option<http::Uri>) -> Self {
         let regular_client = near_jsonrpc_client::JsonRpcClient::connect(rpc_url.to_string());
-        let archival_client = match archive_rpc_url {
-            Some(archive_rpc_url) => {
-                near_jsonrpc_client::JsonRpcClient::connect(archive_rpc_url.to_string())
+        let archival_client = match archival_rpc_url {
+            Some(archival_rpc_url) => {
+                near_jsonrpc_client::JsonRpcClient::connect(archival_rpc_url.to_string())
             }
             None => regular_client.clone(),
         };
@@ -47,12 +47,12 @@ impl JsonRpcClient {
     async fn rpc_call<M>(
         &self,
         params: M,
-        is_archive: bool,
+        is_archival: bool,
     ) -> near_jsonrpc_client::MethodCallResult<M::Response, M::Error>
     where
         M: near_jsonrpc_client::methods::RpcMethod + std::fmt::Debug,
     {
-        if is_archive {
+        if is_archival {
             self.archival_client.call(params).await
         } else {
             self.regular_client.call(params).await

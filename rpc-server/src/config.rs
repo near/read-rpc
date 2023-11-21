@@ -8,7 +8,7 @@ pub struct Opts {
     #[clap(long, env = "NEAR_RPC_URL")]
     pub rpc_url: http::Uri,
 
-    // near network archive rpc url
+    // near network archival rpc url
     #[clap(long, env = "ARCHIVAL_NEAR_RPC_URL")]
     pub archival_rpc_url: Option<http::Uri>,
 
