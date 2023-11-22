@@ -60,8 +60,8 @@ near-vm-errors = "0.17.0"
 
 
 [features]
-default = ["submit_tx_methods", "scylla_db"]
-submit_tx_methods = []
+default = ["send_tx_methods", "scylla_db"]
+send_tx_methods = []
 tracing-instrumentation = []
 postgres_db = ["database/postgres_db"]
 scylla_db = ["database/scylla_db"]

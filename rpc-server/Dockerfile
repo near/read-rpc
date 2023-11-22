@@ -1,5 +1,5 @@
 FROM rust:1.69 AS builder
-ARG features=""
+ARG features="default"
 WORKDIR /tmp/
 
 COPY Cargo.lock ./
