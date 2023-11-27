@@ -43,10 +43,10 @@ tracing-stackdriver = "0.7.2" # GCP logs
 
 database = { path = "../database" }
 
-near-primitives-core = "0.17.0"
-near-indexer-primitives = "0.17.0"
-near-jsonrpc-client = "0.6.0"
-near-lake-framework = "0.7.2"
+near-primitives = "1.36.0"
+near-indexer-primitives = "1.36.0"
+near-jsonrpc-client = "0.7.0"
+near-lake-framework = "0.7.4"
 
 [features]
 default = ["scylla_db"]

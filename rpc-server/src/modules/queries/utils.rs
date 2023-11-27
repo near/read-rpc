@@ -146,13 +146,13 @@ pub async fn fetch_state_from_db(
 async fn run_code_in_vm_runner(
     contract_code: near_primitives::contract::ContractCode,
     method_name: &str,
-    context: near_vm_logic::VMContext,
+    context: near_vm_runner::logic::VMContext,
     account_id: near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
     db_manager: std::sync::Arc<Box<dyn database::ReaderDbManager + Sync + Send + 'static>>,
     latest_protocol_version: near_primitives::types::ProtocolVersion,
     compiled_contract_code_cache: &std::sync::Arc<CompiledCodeCache>,
-) -> Result<near_vm_logic::VMOutcome, near_primitives::errors::RuntimeError> {
+) -> Result<near_vm_runner::logic::VMOutcome, near_primitives::errors::RuntimeError> {
     let contract_method_name = String::from(method_name);
     let mut external = CodeStorage::init(db_manager.clone(), account_id, block_height);
     let code_cache = std::sync::Arc::clone(compiled_contract_code_cache);
@@ -163,8 +163,8 @@ async fn run_code_in_vm_runner(
             &contract_method_name,
             &mut external,
             context,
-            &near_vm_logic::VMConfig::free(),
-            &near_primitives_core::runtime::fees::RuntimeFeesConfig::free(),
+            &near_vm_runner::logic::VMConfig::free(),
+            &near_primitives::runtime::fees::RuntimeFeesConfig::free(),
             &[],
             latest_protocol_version,
             Some(code_cache.deref()),
@@ -180,32 +180,34 @@ async fn run_code_in_vm_runner(
             // Note that this does not include errors caused by user code / input, those are
             // stored in outcome.aborted.
             result.map_err(|e| match e {
-                near_vm_errors::VMRunnerError::ExternalError(any_err) => {
+                near_vm_runner::logic::errors::VMRunnerError::ExternalError(any_err) => {
                     let err = any_err
                         .downcast()
                         .expect("Downcasting AnyError should not fail");
                     near_primitives::errors::RuntimeError::ValidatorError(err)
                 }
-                near_vm_errors::VMRunnerError::InconsistentStateError(
-                    err @ near_vm_errors::InconsistentStateError::IntegerOverflow,
+                near_vm_runner::logic::errors::VMRunnerError::InconsistentStateError(
+                    err @ near_vm_runner::logic::errors::InconsistentStateError::IntegerOverflow,
                 ) => {
                     near_primitives::errors::StorageError::StorageInconsistentState(err.to_string())
                         .into()
                 }
-                near_vm_errors::VMRunnerError::CacheError(err) => {
+                near_vm_runner::logic::errors::VMRunnerError::CacheError(err) => {
                     near_primitives::errors::StorageError::StorageInconsistentState(err.to_string())
                         .into()
                 }
-                near_vm_errors::VMRunnerError::LoadingError(msg) => {
+                near_vm_runner::logic::errors::VMRunnerError::LoadingError(msg) => {
                     panic!("Contract runtime failed to load a contract: {msg}")
                 }
-                near_vm_errors::VMRunnerError::Nondeterministic(msg) => {
+                near_vm_runner::logic::errors::VMRunnerError::Nondeterministic(msg) => {
                     panic!(
                         "Contract runner returned non-deterministic error '{}', aborting",
                         msg
                     )
                 }
-                near_vm_errors::VMRunnerError::WasmUnknownError { debug_message } => {
+                near_vm_runner::logic::errors::VMRunnerError::WasmUnknownError {
+                    debug_message,
+                } => {
                     panic!("Wasmer returned unknown message: {}", debug_message)
                 }
             })
@@ -229,7 +231,7 @@ pub async fn run_contract(
         std::sync::RwLock<crate::cache::LruMemoryCache<near_primitives::hash::CryptoHash, Vec<u8>>>,
     >,
     block: crate::modules::blocks::CacheBlock,
-    max_gas_burnt: near_primitives_core::types::Gas,
+    max_gas_burnt: near_primitives::types::Gas,
 ) -> Result<RunContractResponse, FunctionCallError> {
     let contract = db_manager
         .get_account(&account_id, block.block_height)
@@ -265,10 +267,10 @@ pub async fn run_contract(
     let public_key = PublicKey::empty(KeyType::ED25519);
     let random_seed = create_random_seed(
         block.latest_protocol_version,
-        near_primitives_core::hash::CryptoHash::default(),
+        near_primitives::hash::CryptoHash::default(),
         block.state_root,
     );
-    let context = near_vm_logic::VMContext {
+    let context = near_vm_runner::logic::VMContext {
         current_account_id: account_id.parse().unwrap(),
         signer_account_id: account_id.parse().unwrap(),
         signer_account_pk: public_key.try_to_vec().expect("Failed to serialize"),
@@ -283,7 +285,7 @@ pub async fn run_contract(
         attached_deposit: 0,
         prepaid_gas: max_gas_burnt,
         random_seed,
-        view_config: Some(near_primitives::config::ViewConfig { max_gas_burnt }),
+        view_config: Some(near_vm_runner::logic::ViewConfig { max_gas_burnt }),
         output_data_receivers: vec![],
     };
 
@@ -309,8 +311,9 @@ pub async fn run_contract(
     } else {
         let logs = result.logs;
         let result = match result.return_data {
-            near_vm_logic::ReturnData::Value(buf) => buf,
-            near_vm_logic::ReturnData::ReceiptIndex(_) | near_vm_logic::ReturnData::None => vec![],
+            near_vm_runner::logic::ReturnData::Value(buf) => buf,
+            near_vm_runner::logic::ReturnData::ReceiptIndex(_)
+            | near_vm_runner::logic::ReturnData::None => vec![],
         };
         Ok(RunContractResponse {
             result,

@@ -5,7 +5,7 @@ use futures::StreamExt;
 use crate::configs::Opts;
 use near_indexer_primitives::views::StateChangeValueView;
 use near_indexer_primitives::CryptoHash;
-use near_primitives_core::account::Account;
+use near_primitives::account::Account;
 
 mod configs;
 mod metrics;
