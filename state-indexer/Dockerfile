@@ -16,7 +16,7 @@ COPY state-indexer/src ./state-indexer/src
 # build for release
 RUN cargo build --release --features "$features"
 
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 RUN apt update && apt install -yy openssl ca-certificates
 COPY --from=builder /tmp/target/release/state-indexer .
 ENTRYPOINT ["./state-indexer"]
