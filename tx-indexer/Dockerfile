@@ -3,7 +3,8 @@ ARG features="default"
 WORKDIR /tmp/
 
 COPY Cargo.lock ./
-RUN echo '[workspace]\nmembers = ["tx-indexer", "database", "readnode-primitives"]' > Cargo.toml
+COPY Cargo.toml ./
+RUN sed '/perf-testing/d; /rpc-server/d; /state-indexer/d' Cargo.toml > Cargo.toml.new && mv Cargo.toml.new Cargo.toml
 COPY tx-indexer/Cargo.toml tx-indexer/Cargo.toml
 COPY database database
 COPY readnode-primitives readnode-primitives
