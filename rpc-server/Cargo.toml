@@ -46,18 +46,14 @@ tracing-stackdriver = "0.7.2" # GCP logs
 database = { path = "../database" }
 readnode-primitives = { path = "../readnode-primitives" }
 
-near-chain-configs = "0.17.0"
-near-crypto = "0.17.0"
-near-jsonrpc-client = "0.6.0"
-near-jsonrpc-primitives = "0.17.0"
-near-indexer-primitives = "0.17.0"
-near-lake-framework = "0.7.3"
-near-primitives = "0.17.0"
-near-primitives-core = "0.17.0"
-near-vm-runner = "0.17.0"
-near-vm-logic = "0.17.0"
-near-vm-errors = "0.17.0"
-
+near-chain-configs = "1.36.0"
+near-crypto = "1.36.0"
+near-jsonrpc-client = "0.7.0"
+near-jsonrpc-primitives = "1.36.0"
+near-indexer-primitives = "1.36.0"
+near-lake-framework = "0.7.4"
+near-primitives = "1.36.0"
+near-vm-runner = "1.36.0"
 
 [features]
 default = ["send_tx_methods", "scylla_db"]

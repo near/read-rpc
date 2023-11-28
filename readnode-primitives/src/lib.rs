@@ -144,14 +144,14 @@ pub type StateValue = Vec<u8>;
 pub struct BlockHeightShardId(pub u64, pub u64);
 pub struct QueryData<T: BorshDeserialize> {
     pub data: T,
-    pub block_height: near_primitives_core::types::BlockHeight,
+    pub block_height: near_indexer_primitives::types::BlockHeight,
     pub block_hash: CryptoHash,
 }
 pub struct ReceiptRecord {
     pub receipt_id: CryptoHash,
     pub parent_transaction_hash: CryptoHash,
-    pub block_height: near_primitives::types::BlockHeight,
-    pub shard_id: near_primitives::types::ShardId,
+    pub block_height: near_indexer_primitives::types::BlockHeight,
+    pub shard_id: near_indexer_primitives::types::ShardId,
 }
 
 pub struct BlockRecord {
@@ -185,8 +185,8 @@ where
 impl<T>
     TryFrom<(
         Vec<u8>,
-        near_primitives_core::types::BlockHeight,
-        near_indexer_primitives::CryptoHash,
+        near_indexer_primitives::types::BlockHeight,
+        CryptoHash,
     )> for QueryData<T>
 where
     T: BorshDeserialize,
@@ -196,8 +196,8 @@ where
     fn try_from(
         value: (
             Vec<u8>,
-            near_primitives_core::types::BlockHeight,
-            near_indexer_primitives::CryptoHash,
+            near_indexer_primitives::types::BlockHeight,
+            CryptoHash,
         ),
     ) -> Result<Self, Self::Error> {
         let data = T::try_from_slice(&value.0)?;
@@ -217,10 +217,9 @@ where
     type Error = anyhow::Error;
 
     fn try_from(value: (String, String, T, T)) -> Result<Self, Self::Error> {
-        let receipt_id =
-            near_primitives::hash::CryptoHash::try_from(value.0.as_bytes()).map_err(|err| {
-                anyhow::anyhow!("Failed to parse `receipt_id` to CryptoHash: {}", err)
-            })?;
+        let receipt_id = CryptoHash::try_from(value.0.as_bytes()).map_err(|err| {
+            anyhow::anyhow!("Failed to parse `receipt_id` to CryptoHash: {}", err)
+        })?;
         let parent_transaction_hash = CryptoHash::from_str(&value.1).map_err(|err| {
             anyhow::anyhow!(
                 "Failed to parse `parent_transaction_hash` to CryptoHash: {}",

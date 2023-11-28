@@ -52,7 +52,7 @@ pub struct Opts {
     /// Max gas burnt for contract function call
     /// Default value is 300_000_000_000_000
     #[clap(long, env, default_value_t = 300_000_000_000_000)]
-    pub max_gas_burnt: near_primitives_core::types::Gas,
+    pub max_gas_burnt: near_primitives::types::Gas,
 
     /// Max available memory for `block_cache` and `contract_code_cache` in gigabytes
     /// By default we use all available memory
@@ -133,7 +133,7 @@ impl Opts {
 
     pub async fn to_lake_config(
         &self,
-        start_block_height: near_primitives_core::types::BlockHeight,
+        start_block_height: near_primitives::types::BlockHeight,
     ) -> anyhow::Result<near_lake_framework::LakeConfig> {
         let config_builder = near_lake_framework::LakeConfigBuilder::default();
         Ok(config_builder
@@ -159,7 +159,7 @@ pub struct ServerContext {
     pub contract_code_cache: std::sync::Arc<
         std::sync::RwLock<crate::cache::LruMemoryCache<near_primitives::hash::CryptoHash, Vec<u8>>>,
     >,
-    pub max_gas_burnt: near_primitives_core::types::Gas,
+    pub max_gas_burnt: near_primitives::types::Gas,
 }
 
 impl ServerContext {
@@ -180,7 +180,7 @@ impl ServerContext {
                 crate::cache::LruMemoryCache<near_primitives::hash::CryptoHash, Vec<u8>>,
             >,
         >,
-        max_gas_burnt: near_primitives_core::types::Gas,
+        max_gas_burnt: near_primitives::types::Gas,
     ) -> Self {
         Self {
             s3_client,
@@ -201,17 +201,17 @@ pub struct CompiledCodeCache {
         std::sync::RwLock<
             crate::cache::LruMemoryCache<
                 near_primitives::hash::CryptoHash,
-                near_primitives::types::CompiledContract,
+                near_vm_runner::logic::CompiledContract,
             >,
         >,
     >,
 }
 
-impl near_primitives::types::CompiledContractCache for CompiledCodeCache {
+impl near_vm_runner::logic::CompiledContractCache for CompiledCodeCache {
     fn put(
         &self,
         key: &near_primitives::hash::CryptoHash,
-        value: near_primitives::types::CompiledContract,
+        value: near_vm_runner::logic::CompiledContract,
     ) -> std::io::Result<()> {
         self.local_cache.write().unwrap().put(*key, value);
         Ok(())
@@ -220,7 +220,7 @@ impl near_primitives::types::CompiledContractCache for CompiledCodeCache {
     fn get(
         &self,
         key: &near_primitives::hash::CryptoHash,
-    ) -> std::io::Result<Option<near_primitives::types::CompiledContract>> {
+    ) -> std::io::Result<Option<near_vm_runner::logic::CompiledContract>> {
         Ok(self.local_cache.write().unwrap().get(key).cloned())
     }
 

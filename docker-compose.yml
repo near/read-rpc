@@ -1,9 +1,9 @@
 version: '3.4'
 
 x-common-variables: &common-variables
-  SCYLLA_URL: scylla:9042
-  SCYLLA_USER: ${SCYLLA_USER}
-  SCYLLA_PASSWORD: ${SCYLLA_PASSWORD}
+  DATABASE_URL: scylla:9042
+  DATABASE_USER: ${SCYLLA_USER}
+  DATABASE_PASSWORD: ${SCYLLA_PASSWORD}
   AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
   AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
   AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
@@ -11,7 +11,8 @@ x-common-variables: &common-variables
   OTEL_EXPORTER_JAEGER_AGENT_PORT: 6831
   OTEL_EXPORTER_JAEGER_ENDPOINT: http://jaeger:14268/api/traces
 
-  NEAR_RPC_URL: https://archival-rpc.mainnet.near.org
+  NEAR_RPC_URL: https://rpc.mainnet.near.org
+  ARCHIVAL_NEAR_RPC_URL: https://archival-rpc.mainnet.near.org
   AWS_BUCKET_NAME: near-lake-data-mainnet
 
 services:

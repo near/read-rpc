@@ -7,7 +7,7 @@ pub mod utils;
 
 const MAX_LIMIT: u8 = 100;
 
-pub type Result<T> = ::std::result::Result<T, near_vm_logic::VMLogicError>;
+pub type Result<T> = ::std::result::Result<T, near_vm_runner::logic::VMLogicError>;
 
 pub struct CodeStorage {
     db_manager: std::sync::Arc<Box<dyn ReaderDbManager + Sync + Send + 'static>>,
@@ -21,7 +21,7 @@ pub struct StorageValuePtr {
     value: Vec<u8>,
 }
 
-impl near_vm_logic::ValuePtr for StorageValuePtr {
+impl near_vm_runner::logic::ValuePtr for StorageValuePtr {
     fn len(&self) -> u32 {
         self.value.len() as u32
     }
@@ -47,11 +47,11 @@ impl CodeStorage {
     }
 }
 
-impl near_vm_logic::External for CodeStorage {
+impl near_vm_runner::logic::External for CodeStorage {
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
     fn storage_set(&mut self, _key: &[u8], _value: &[u8]) -> Result<()> {
-        Err(near_vm_logic::VMLogicError::HostError(
-            near_vm_logic::HostError::ProhibitedInView {
+        Err(near_vm_runner::logic::VMLogicError::HostError(
+            near_vm_runner::logic::HostError::ProhibitedInView {
                 method_name: String::from("storage_set"),
             },
         ))
@@ -64,8 +64,8 @@ impl near_vm_logic::External for CodeStorage {
     fn storage_get(
         &self,
         key: &[u8],
-        _mode: near_vm_logic::StorageGetMode,
-    ) -> Result<Option<Box<dyn near_vm_logic::ValuePtr>>> {
+        _mode: near_vm_runner::logic::StorageGetMode,
+    ) -> Result<Option<Box<dyn near_vm_runner::logic::ValuePtr>>> {
         let get_db_data =
             self.db_manager
                 .get_state_key_value(&self.account_id, self.block_height, key.to_vec());
@@ -81,8 +81,8 @@ impl near_vm_logic::External for CodeStorage {
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
     fn storage_remove(&mut self, _key: &[u8]) -> Result<()> {
-        Err(near_vm_logic::VMLogicError::HostError(
-            near_vm_logic::HostError::ProhibitedInView {
+        Err(near_vm_runner::logic::VMLogicError::HostError(
+            near_vm_runner::logic::HostError::ProhibitedInView {
                 method_name: String::from("storage_remove"),
             },
         ))
@@ -90,8 +90,8 @@ impl near_vm_logic::External for CodeStorage {
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
     fn storage_remove_subtree(&mut self, _prefix: &[u8]) -> Result<()> {
-        Err(near_vm_logic::VMLogicError::HostError(
-            near_vm_logic::HostError::ProhibitedInView {
+        Err(near_vm_runner::logic::VMLogicError::HostError(
+            near_vm_runner::logic::HostError::ProhibitedInView {
                 method_name: String::from("storage_remove_subtree"),
             },
         ))
@@ -104,7 +104,7 @@ impl near_vm_logic::External for CodeStorage {
     fn storage_has_key(
         &mut self,
         key: &[u8],
-        _mode: near_vm_logic::StorageGetMode,
+        _mode: near_vm_runner::logic::StorageGetMode,
     ) -> Result<bool> {
         let get_db_state_keys =
             self.db_manager
@@ -145,8 +145,8 @@ impl near_vm_logic::External for CodeStorage {
     fn validator_total_stake(&self) -> Result<near_primitives::types::Balance> {
         // TODO: Should be works after implementing validators. See comment above.
         // Ok(self.validators.values().sum())
-        Err(near_vm_logic::VMLogicError::HostError(
-            near_vm_logic::HostError::ProhibitedInView {
+        Err(near_vm_runner::logic::VMLogicError::HostError(
+            near_vm_runner::logic::HostError::ProhibitedInView {
                 method_name: String::from("validator_total_stake"),
             },
         ))
