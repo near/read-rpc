@@ -159,6 +159,31 @@ pub struct BlockRecord {
     pub hash: CryptoHash,
 }
 
+#[derive(Debug)]
+pub struct EpochValidatorsInfo {
+    pub epoch_id: CryptoHash,
+    pub epoch_height: u64,
+    pub epoch_start_height: u64,
+    pub validators_info: views::EpochValidatorInfo,
+}
+
+#[derive(Debug)]
+pub struct ProtocolConfig {
+    pub epoch_id: CryptoHash,
+    pub epoch_height: u64,
+    pub epoch_start_height: u64,
+    pub protocol_config: near_chain_configs::ProtocolConfigView,
+}
+
+#[derive(Debug)]
+pub struct IndexedEpochInfo {
+    pub epoch_id: CryptoHash,
+    pub epoch_height: u64,
+    pub epoch_start_height: u64,
+    pub validators_info: views::EpochValidatorInfo,
+    pub protocol_config: near_chain_configs::ProtocolConfigView,
+}
+
 // TryFrom impls for defined types
 
 impl<T> TryFrom<(T, T)> for BlockHeightShardId

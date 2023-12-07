@@ -1,30 +1,22 @@
 [package]
-name = "state-indexer"
+name = "epoch-indexer"
 version = "0.1.0"
-authors = ["Near Inc <hello@nearprotocol.com>"]
 edition = "2021"
 
 [dependencies]
-actix-web = "4.2.1"
+aws-credential-types = "0.53.0"
 aws-sdk-s3 = "0.23.0"
 aws-types = "0.53.0"
 anyhow = "1.0.70"
-borsh = "0.10.2"
 clap = { version = "3.1.6", features = ["color", "derive", "env"] }
 dotenv = "0.15.0"
 futures = "0.3.5"
-hex = "0.4.3"
-humantime = "2.1.0"
-lazy_static = "1.4.0"
-openssl-probe = "0.1.5"
-prometheus = "0.13.1"
 tokio = { version = "1.28.2", features = [
     "sync",
     "time",
     "macros",
     "rt-multi-thread",
 ] }
-tokio-stream = { version = "0.1" }
 tracing = "0.1.34"
 tracing-subscriber = { version = "0.3.15", features = [
     "fmt",
@@ -33,26 +25,18 @@ tracing-subscriber = { version = "0.3.15", features = [
     "json",
 ] }
 opentelemetry = { version = "0.19", features = ["rt-tokio-current-thread"] }
-opentelemetry-jaeger = { version = "0.18", features = [
-    "rt-tokio-current-thread",
-    "collector_client",
-    "isahc_collector_client",
-] }
 tracing-opentelemetry = { version = "0.19" }
-tracing-stackdriver = "0.7.2" # GCP logs
 
 database = { path = "../database" }
-epoch-indexer = { path = "../epoch-indexer" }
+readnode-primitives = { path = "../readnode-primitives" }
 
-near-primitives = "1.36.0"
-near-indexer-primitives = "1.36.0"
 near-jsonrpc-client = "0.7.0"
+near-chain-configs = "1.36.0"
+near-indexer-primitives = "1.36.0"
 near-lake-framework = "0.7.4"
 
 [features]
 default = ["scylla_db"]
-tracing-instrumentation = []
 postgres_db = ["database/postgres_db"]
 scylla_db = ["database/scylla_db"]
 scylla_db_tracing = ["database/scylla_db_tracing", "scylla_db"]
-account_access_keys = ["database/account_access_keys"]

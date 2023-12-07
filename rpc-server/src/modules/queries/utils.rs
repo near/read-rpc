@@ -142,27 +142,24 @@ pub async fn fetch_state_from_db(
 #[allow(clippy::too_many_arguments)]
 #[cfg_attr(
     feature = "tracing-instrumentation",
-    tracing::instrument(skip(db_manager, context, contract_code, compiled_contract_code_cache))
+    tracing::instrument(skip(context, code_storage, contract_code, compiled_contract_code_cache))
 )]
 async fn run_code_in_vm_runner(
     contract_code: near_primitives::contract::ContractCode,
     method_name: &str,
     context: near_vm_runner::logic::VMContext,
-    account_id: near_primitives::types::AccountId,
-    block_height: near_primitives::types::BlockHeight,
-    db_manager: std::sync::Arc<Box<dyn database::ReaderDbManager + Sync + Send + 'static>>,
+    mut code_storage: CodeStorage,
     latest_protocol_version: near_primitives::types::ProtocolVersion,
     compiled_contract_code_cache: &std::sync::Arc<CompiledCodeCache>,
 ) -> Result<near_vm_runner::logic::VMOutcome, near_primitives::errors::RuntimeError> {
     let contract_method_name = String::from(method_name);
-    let mut external = CodeStorage::init(db_manager.clone(), account_id, block_height);
     let code_cache = std::sync::Arc::clone(compiled_contract_code_cache);
 
     let results = task::spawn_blocking(move || {
         near_vm_runner::run(
             &contract_code,
             &contract_method_name,
-            &mut external,
+            &mut code_storage,
             context,
             &near_vm_runner::logic::VMConfig::free(),
             &near_primitives::runtime::fees::RuntimeFeesConfig::free(),
@@ -265,6 +262,13 @@ pub async fn run_contract(
             near_primitives::contract::ContractCode::new(code.data, Some(contract.data.code_hash()))
         }
     };
+    let validators = db_manager
+        .get_validators_by_epoch_id(block.epoch_id)
+        .await
+        .map_err(|_| FunctionCallError::InternalError {
+            error_message: "Failed to get epoch info".to_string(),
+        })?;
+
     let public_key = PublicKey::empty(KeyType::ED25519);
     let random_seed = create_random_seed(
         block.latest_protocol_version,
@@ -279,7 +283,7 @@ pub async fn run_contract(
         input: args.into(),
         block_height: block.block_height,
         block_timestamp: block.block_timestamp,
-        epoch_height: 0, // TODO: implement indexing of epoch_height and pass it here
+        epoch_height: validators.epoch_height,
         account_balance: contract.data.amount(),
         account_locked_balance: contract.data.locked(),
         storage_usage: contract.data.storage_usage(),
@@ -290,13 +294,23 @@ pub async fn run_contract(
         output_data_receivers: vec![],
     };
 
+    let code_storage = CodeStorage::init(
+        db_manager.clone(),
+        account_id.clone(),
+        block.block_height,
+        validators
+            .validators_info
+            .current_validators
+            .iter()
+            .map(|validator| (validator.account_id.clone(), validator.stake))
+            .collect(),
+    );
+
     let result = run_code_in_vm_runner(
         contract_code,
         method_name,
         context,
-        account_id,
-        block.block_height,
-        db_manager.clone(),
+        code_storage,
         block.latest_protocol_version,
         compiled_contract_code_cache,
     )

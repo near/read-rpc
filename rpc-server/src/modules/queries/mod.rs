@@ -34,12 +34,13 @@ impl CodeStorage {
         db_manager: std::sync::Arc<Box<dyn ReaderDbManager + Sync + Send + 'static>>,
         account_id: near_primitives::types::AccountId,
         block_height: near_primitives::types::BlockHeight,
+        validators: HashMap<near_primitives::types::AccountId, near_primitives::types::Balance>,
     ) -> Self {
         Self {
             db_manager,
             account_id,
             block_height,
-            validators: Default::default(), // TODO: Should be store list of validators in the current epoch.
+            validators,
             data_count: Default::default(), // TODO: Using for generate_data_id
         }
     }
@@ -137,12 +138,6 @@ impl near_vm_runner::logic::External for CodeStorage {
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
     fn validator_total_stake(&self) -> Result<near_primitives::types::Balance> {
-        // TODO: Should be works after implementing validators. See comment above.
-        // Ok(self.validators.values().sum())
-        Err(near_vm_runner::logic::VMLogicError::HostError(
-            near_vm_runner::logic::HostError::ProhibitedInView {
-                method_name: String::from("validator_total_stake"),
-            },
-        ))
+        Ok(self.validators.values().sum())
     }
 }

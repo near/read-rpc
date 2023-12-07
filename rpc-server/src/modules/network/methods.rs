@@ -1,9 +1,9 @@
 use crate::config::ServerContext;
 use crate::errors::RPCError;
-use crate::modules::network::{
-    friendly_memory_size_format, parse_validator_request, StatusResponse,
-};
+use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
+use crate::modules::network::{friendly_memory_size_format, StatusResponse};
 use jsonrpc_v2::{Data, Params};
+use near_primitives::types::EpochReference;
 use serde_json::Value;
 use sysinfo::{System, SystemExt};
 
@@ -61,15 +61,12 @@ pub async fn network_info(
 
 pub async fn validators(
     data: Data<ServerContext>,
-    Params(params): Params<Value>,
+    Params(params): Params<near_jsonrpc_primitives::types::validator::RpcValidatorRequest>,
 ) -> Result<near_jsonrpc_primitives::types::validator::RpcValidatorResponse, RPCError> {
-    match parse_validator_request(params).await {
-        Ok(request) => {
-            let validator_info = data.near_rpc_client.call(request).await?;
-            Ok(near_jsonrpc_primitives::types::validator::RpcValidatorResponse { validator_info })
-        }
-        Err(err) => Err(RPCError::parse_error(&err.to_string())),
-    }
+    let validator_info = validators_call(data, params)
+        .await
+        .map_err(near_jsonrpc_primitives::errors::RpcError::from)?;
+    Ok(near_jsonrpc_primitives::types::validator::RpcValidatorResponse { validator_info })
 }
 
 pub async fn validators_ordered(
@@ -90,6 +87,74 @@ pub async fn protocol_config(
     data: Data<ServerContext>,
     Params(params): Params<near_jsonrpc_primitives::types::config::RpcProtocolConfigRequest>,
 ) -> Result<near_jsonrpc_primitives::types::config::RpcProtocolConfigResponse, RPCError> {
-    let config_view = data.near_rpc_client.call(params).await?;
+    let config_view = protocol_config_call(data, params.block_reference)
+        .await
+        .map_err(near_jsonrpc_primitives::errors::RpcError::from)?;
     Ok(near_jsonrpc_primitives::types::config::RpcProtocolConfigResponse { config_view })
+}
+
+async fn validators_call(
+    data: Data<ServerContext>,
+    validator_request: near_jsonrpc_primitives::types::validator::RpcValidatorRequest,
+) -> Result<
+    near_primitives::views::EpochValidatorInfo,
+    near_jsonrpc_primitives::types::validator::RpcValidatorError,
+> {
+    let epoch_id = match validator_request.epoch_reference {
+        EpochReference::EpochId(epoch_id) => epoch_id.0,
+        EpochReference::BlockId(block_id) => {
+            let block_reference = near_primitives::types::BlockReference::BlockId(block_id);
+            let block = fetch_block_from_cache_or_get(&data, block_reference)
+                .await
+                .map_err(|_err| {
+                    near_jsonrpc_primitives::types::validator::RpcValidatorError::UnknownEpoch
+                })?;
+            block.epoch_id
+        }
+        EpochReference::Latest => {
+            let block_reference = near_primitives::types::BlockReference::Finality(
+                near_primitives::types::Finality::Final,
+            );
+            let block = fetch_block_from_cache_or_get(&data, block_reference)
+                .await
+                .map_err(|_err| {
+                    near_jsonrpc_primitives::types::validator::RpcValidatorError::UnknownEpoch
+                })?;
+            block.epoch_id
+        }
+    };
+    let validators = data
+        .db_manager
+        .get_validators_by_epoch_id(epoch_id)
+        .await
+        .map_err(|_err| {
+            near_jsonrpc_primitives::types::validator::RpcValidatorError::ValidatorInfoUnavailable
+        })?;
+    Ok(validators.validators_info)
+}
+
+async fn protocol_config_call(
+    data: Data<ServerContext>,
+    block_reference: near_primitives::types::BlockReference,
+) -> Result<
+    near_chain_configs::ProtocolConfigView,
+    near_jsonrpc_primitives::types::config::RpcProtocolConfigError,
+> {
+    let block = fetch_block_from_cache_or_get(&data, block_reference)
+        .await
+        .map_err(|err| {
+            near_jsonrpc_primitives::types::config::RpcProtocolConfigError::UnknownBlock {
+                error_message: err.to_string(),
+            }
+        })?;
+    let protocol_config = data
+        .db_manager
+        .get_protocol_config_by_epoch_id(block.epoch_id)
+        .await
+        .map_err(|err| {
+            near_jsonrpc_primitives::types::config::RpcProtocolConfigError::InternalError {
+                error_message: err.to_string(),
+            }
+        })?;
+    Ok(protocol_config)
 }

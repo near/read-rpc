@@ -4,6 +4,7 @@ resolver = "2"
 
 members = [
     "database",
+    "epoch-indexer",
     "perf-testing",
     "readnode-primitives",
     "rpc-server",

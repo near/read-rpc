@@ -294,4 +294,47 @@ impl crate::ReaderDbManager for PostgresDBManager {
                 ))
             })
     }
+
+    async fn get_validators_by_epoch_id(
+        &self,
+        epoch_id: near_indexer_primitives::CryptoHash,
+    ) -> anyhow::Result<readnode_primitives::EpochValidatorsInfo> {
+        let epoch = crate::models::Validators::get_validators(
+            Self::get_connection(&self.pg_pool).await?,
+            epoch_id,
+        )
+        .await?;
+        let epoch_height = epoch
+            .epoch_height
+            .to_u64()
+            .ok_or_else(|| anyhow::anyhow!("Failed to parse `epoch_height` to u64"))?;
+        let epoch_start_height = epoch
+            .epoch_start_height
+            .to_u64()
+            .ok_or_else(|| anyhow::anyhow!("Failed to parse `epoch_start_height` to u64"))?;
+        let (validators_info,) = serde_json::from_value::<(
+            near_indexer_primitives::views::EpochValidatorInfo,
+        )>(epoch.validators_info)?;
+        Ok(readnode_primitives::EpochValidatorsInfo {
+            epoch_id,
+            epoch_height,
+            epoch_start_height,
+            validators_info,
+        })
+    }
+
+    async fn get_protocol_config_by_epoch_id(
+        &self,
+        epoch_id: near_indexer_primitives::CryptoHash,
+    ) -> anyhow::Result<near_chain_configs::ProtocolConfigView> {
+        let protocol_config = crate::models::ProtocolConfig::get_protocol_config(
+            Self::get_connection(&self.pg_pool).await?,
+            epoch_id,
+        )
+        .await?;
+        let (protocol_config,) = serde_json::from_value::<(near_chain_configs::ProtocolConfigView,)>(
+            protocol_config.protocol_config,
+        )?;
+        Ok(protocol_config)
+    }
 }

@@ -103,9 +103,11 @@ pub async fn get_final_cache_block(near_rpc_client: &JsonRpcClient) -> Option<Ca
                 block_hash: block_view.header.hash,
                 block_height: block_view.header.height,
                 block_timestamp: block_view.header.timestamp,
+                gas_price: block_view.header.gas_price,
                 latest_protocol_version: block_view.header.latest_protocol_version,
                 chunks_included: block_view.header.chunks_included,
                 state_root: block_view.header.prev_state_root,
+                epoch_id: block_view.header.epoch_id,
             })
         }
         Err(_) => None,
@@ -122,9 +124,11 @@ async fn handle_streamer_message(
         block_hash: streamer_message.block.header.hash,
         block_height: streamer_message.block.header.height,
         block_timestamp: streamer_message.block.header.timestamp,
+        gas_price: streamer_message.block.header.gas_price,
         latest_protocol_version: streamer_message.block.header.latest_protocol_version,
         chunks_included: streamer_message.block.header.chunks_included,
         state_root: streamer_message.block.header.prev_state_root,
+        epoch_id: streamer_message.block.header.epoch_id,
     };
     final_block_height.store(block.block_height, std::sync::atomic::Ordering::SeqCst);
     blocks_cache.write().unwrap().put(block.block_height, block);

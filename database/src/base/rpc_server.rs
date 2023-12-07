@@ -83,4 +83,13 @@ pub trait ReaderDbManager {
         block_height: near_primitives::types::BlockHeight,
         shard_id: near_primitives::types::ShardId,
     ) -> anyhow::Result<readnode_primitives::BlockHeightShardId>;
+    async fn get_validators_by_epoch_id(
+        &self,
+        epoch_id: near_primitives::hash::CryptoHash,
+    ) -> anyhow::Result<readnode_primitives::EpochValidatorsInfo>;
+
+    async fn get_protocol_config_by_epoch_id(
+        &self,
+        epoch_id: near_primitives::hash::CryptoHash,
+    ) -> anyhow::Result<near_chain_configs::ProtocolConfigView>;
 }

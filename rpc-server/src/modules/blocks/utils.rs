@@ -121,9 +121,11 @@ pub async fn fetch_block_from_cache_or_get(
                 block_hash: block_from_s3.block_view.header.hash,
                 block_height: block_from_s3.block_view.header.height,
                 block_timestamp: block_from_s3.block_view.header.timestamp,
+                gas_price: block_from_s3.block_view.header.gas_price,
                 latest_protocol_version: block_from_s3.block_view.header.latest_protocol_version,
                 chunks_included: block_from_s3.block_view.header.chunks_included,
                 state_root: block_from_s3.block_view.header.prev_state_root,
+                epoch_id: block_from_s3.block_view.header.epoch_id,
             };
 
             data.blocks_cache

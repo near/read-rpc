@@ -24,6 +24,8 @@ pub struct ScyllaDBManager {
 
     add_block: PreparedStatement,
     add_chunk: PreparedStatement,
+    add_validators: PreparedStatement,
+    add_protocol_config: PreparedStatement,
     add_account_state: PreparedStatement,
     update_meta: PreparedStatement,
     last_processed_block_height: PreparedStatement,
@@ -145,6 +147,36 @@ impl ScyllaStorageManager for ScyllaDBManager {
                     PRIMARY KEY (block_hash)
                 )
                 ",
+                &[],
+            )
+            .await?;
+
+        scylla_db_session
+            .query(
+                "
+                CREATE TABLE IF NOT EXISTS validators (
+                    epoch_id varchar,
+                    epoch_height varint,
+                    epoch_start_height varint,
+                    validators_info text,
+                    PRIMARY KEY (epoch_id, epoch_start_height)
+                )
+            ",
+                &[],
+            )
+            .await?;
+
+        scylla_db_session
+            .query(
+                "
+                CREATE TABLE IF NOT EXISTS protocol_configs (
+                    epoch_id varchar,
+                    epoch_height varint,
+                    epoch_start_height varint,
+                    protocol_config text,
+                    PRIMARY KEY (epoch_id, epoch_start_height)
+                )
+            ",
                 &[],
             )
             .await?;
@@ -316,6 +348,20 @@ impl ScyllaStorageManager for ScyllaDBManager {
                 &scylla_db_session,
                 "INSERT INTO state_indexer.chunks
                     (chunk_hash, block_height, shard_id, stored_at_block_height)
+                    VALUES (?, ?, ?, ?)",
+            )
+            .await?,
+            add_validators: Self::prepare_write_query(
+                &scylla_db_session,
+                "INSERT INTO state_indexer.validators
+                    (epoch_id, epoch_height, epoch_start_height, validators_info)
+                    VALUES (?, ?, ?, ?)",
+            )
+            .await?,
+            add_protocol_config: Self::prepare_write_query(
+                &scylla_db_session,
+                "INSERT INTO state_indexer.protocol_configs
+                    (epoch_id, epoch_height, epoch_start_height, protocol_config)
                     VALUES (?, ?, ?, ?)",
             )
             .await?,
@@ -652,5 +698,47 @@ impl crate::StateIndexerDbManager for ScyllaDBManager {
         block_height
             .to_u64()
             .ok_or_else(|| anyhow::anyhow!("Failed to parse `block_height` to u64"))
+    }
+
+    async fn add_validators(
+        &self,
+        epoch_id: near_indexer_primitives::CryptoHash,
+        epoch_height: u64,
+        epoch_start_height: u64,
+        validators_info: &near_primitives::views::EpochValidatorInfo,
+    ) -> anyhow::Result<()> {
+        Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.add_validators,
+            (
+                epoch_id.to_string(),
+                num_bigint::BigInt::from(epoch_height),
+                num_bigint::BigInt::from(epoch_start_height),
+                serde_json::to_string(validators_info)?,
+            ),
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn add_protocol_config(
+        &self,
+        epoch_id: near_indexer_primitives::CryptoHash,
+        epoch_height: u64,
+        epoch_start_height: u64,
+        protocol_config: &near_chain_configs::ProtocolConfigView,
+    ) -> anyhow::Result<()> {
+        Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.add_protocol_config,
+            (
+                epoch_id.to_string(),
+                num_bigint::BigInt::from(epoch_height),
+                num_bigint::BigInt::from(epoch_start_height),
+                serde_json::to_string(protocol_config)?,
+            ),
+        )
+        .await?;
+        Ok(())
     }
 }
