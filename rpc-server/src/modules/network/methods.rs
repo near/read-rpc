@@ -2,6 +2,8 @@ use crate::config::ServerContext;
 use crate::errors::RPCError;
 use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
 use crate::modules::network::{friendly_memory_size_format, StatusResponse};
+#[cfg(feature = "shadow_data_consistency")]
+use crate::utils::shadow_compare_results;
 use jsonrpc_v2::{Data, Params};
 use near_primitives::types::EpochReference;
 use serde_json::Value;
@@ -63,10 +65,41 @@ pub async fn validators(
     data: Data<ServerContext>,
     Params(params): Params<near_jsonrpc_primitives::types::validator::RpcValidatorRequest>,
 ) -> Result<near_jsonrpc_primitives::types::validator::RpcValidatorResponse, RPCError> {
-    let validator_info = validators_call(data, params)
-        .await
-        .map_err(near_jsonrpc_primitives::errors::RpcError::from)?;
-    Ok(near_jsonrpc_primitives::types::validator::RpcValidatorResponse { validator_info })
+    tracing::debug!("`gas_price` called with parameters: {:?}", params);
+    crate::metrics::VALIDATORS_REQUESTS_TOTAL.inc();
+    let validator_info = validators_call(&data, &params).await;
+
+    #[cfg(feature = "shadow_data_consistency")]
+    {
+        let near_rpc_client = &data.near_rpc_client.clone();
+        let meta_data = format!("{:?}", params);
+        let (read_rpc_response_json, is_response_ok) = match &validator_info {
+            Ok(validators) => (serde_json::to_value(&validators), true),
+            Err(err) => (serde_json::to_value(err), false),
+        };
+        let comparison_result = shadow_compare_results(
+            read_rpc_response_json,
+            near_rpc_client.clone(),
+            params,
+            is_response_ok,
+        )
+        .await;
+        match comparison_result {
+            Ok(_) => {
+                tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", meta_data);
+            }
+            Err(err) => {
+                crate::utils::capture_shadow_consistency_error!(err, meta_data, "VALIDATORS")
+            }
+        }
+    }
+
+    Ok(
+        near_jsonrpc_primitives::types::validator::RpcValidatorResponse {
+            validator_info: validator_info
+                .map_err(near_jsonrpc_primitives::errors::RpcError::from)?,
+        },
+    )
 }
 
 pub async fn validators_ordered(
@@ -94,17 +127,17 @@ pub async fn protocol_config(
 }
 
 async fn validators_call(
-    data: Data<ServerContext>,
-    validator_request: near_jsonrpc_primitives::types::validator::RpcValidatorRequest,
+    data: &Data<ServerContext>,
+    validator_request: &near_jsonrpc_primitives::types::validator::RpcValidatorRequest,
 ) -> Result<
     near_primitives::views::EpochValidatorInfo,
     near_jsonrpc_primitives::types::validator::RpcValidatorError,
 > {
-    let epoch_id = match validator_request.epoch_reference {
+    let epoch_id = match &validator_request.epoch_reference {
         EpochReference::EpochId(epoch_id) => epoch_id.0,
         EpochReference::BlockId(block_id) => {
-            let block_reference = near_primitives::types::BlockReference::BlockId(block_id);
-            let block = fetch_block_from_cache_or_get(&data, block_reference)
+            let block_reference = near_primitives::types::BlockReference::BlockId(block_id.clone());
+            let block = fetch_block_from_cache_or_get(data, block_reference)
                 .await
                 .map_err(|_err| {
                     near_jsonrpc_primitives::types::validator::RpcValidatorError::UnknownEpoch
@@ -112,10 +145,11 @@ async fn validators_call(
             block.epoch_id
         }
         EpochReference::Latest => {
+            crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
             let block_reference = near_primitives::types::BlockReference::Finality(
                 near_primitives::types::Finality::Final,
             );
-            let block = fetch_block_from_cache_or_get(&data, block_reference)
+            let block = fetch_block_from_cache_or_get(data, block_reference)
                 .await
                 .map_err(|_err| {
                     near_jsonrpc_primitives::types::validator::RpcValidatorError::UnknownEpoch

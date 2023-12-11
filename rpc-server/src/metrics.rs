@@ -80,6 +80,8 @@ lazy_static! {
         "chunk_requests_counter",
         "Total number requests to the chunk endpoint"
     ).unwrap();
+
+    // gas_price requests counters
     pub(crate) static ref GAS_PRICE_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
         "gas_price_requests_counter",
         "Total number requests to the gas_price endpoint"
@@ -97,6 +99,12 @@ lazy_static! {
     pub(crate) static ref RECEIPT_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
         "receipt_requests_counter",
         "Total number requests to the receipt endpoint"
+    ).unwrap();
+
+    // validators requests counters
+    pub(crate) static ref VALIDATORS_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+        "validators_requests_counter",
+        "Total number requests to the validators endpoint"
     ).unwrap();
 }
 
@@ -364,6 +372,35 @@ lazy_static! {
         "Gas_price error 4: Failed to compare. Network or parsing error"
     ).unwrap();
     // end GAS_PRICE
+}
+
+lazy_static! {
+    // VALIDATORS
+    pub(crate) static ref VALIDATORS_ERROR_0: IntCounter = try_create_int_counter(
+        "validators_error_0",
+        "validators error 0: ReadRPC success, NEAR RPC success"
+    ).unwrap();
+
+    pub(crate) static ref VALIDATORS_ERROR_1: IntCounter = try_create_int_counter(
+        "validators_error_1",
+        "Validators error 1: ReadRPC success, NEAR RPC error"
+    ).unwrap();
+
+    pub(crate) static ref VALIDATORS_ERROR_2: IntCounter = try_create_int_counter(
+        "validators_error_2",
+        "Validators error 2: ReadRPC error, NEAR RPC success"
+    ).unwrap();
+
+    pub(crate) static ref VALIDATORS_ERROR_3: IntCounter = try_create_int_counter(
+        "validators_error_3",
+        "Validators error 3: ReadRPC error, NEAR RPC error"
+    ).unwrap();
+
+    pub(crate) static ref VALIDATORS_ERROR_4: IntCounter = try_create_int_counter(
+        "validators_error_4",
+        "Validators error 4: Failed to compare. Network or parsing error"
+    ).unwrap();
+    // end VALIDATORS
 }
 
 lazy_static! {
