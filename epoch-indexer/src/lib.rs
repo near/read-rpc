@@ -91,7 +91,7 @@ pub async fn get_epoch_info_by_block_height(
         s3_bucket_name,
         block_height,
     )
-        .await?;
+    .await?;
     get_epoch_info_by_id(block.header.next_epoch_id, rpc_client).await
 }
 

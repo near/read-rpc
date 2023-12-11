@@ -80,6 +80,10 @@ lazy_static! {
         "chunk_requests_counter",
         "Total number requests to the chunk endpoint"
     ).unwrap();
+    pub(crate) static ref GAS_PRICE_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+        "gas_price_requests_counter",
+        "Total number requests to the gas_price endpoint"
+    ).unwrap();
 
     // transactions requests counters
     pub(crate) static ref TX_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
@@ -331,6 +335,35 @@ lazy_static! {
         "Chunk error 4: Failed to compare. Network or parsing error"
     ).unwrap();
     // end CHUNK
+}
+
+lazy_static! {
+    // GAS_PRICE
+    pub(crate) static ref GAS_PRICE_ERROR_0: IntCounter = try_create_int_counter(
+        "gas_price_error_0",
+        "Gas_price error 0: ReadRPC success, NEAR RPC success"
+    ).unwrap();
+
+    pub(crate) static ref GAS_PRICE_ERROR_1: IntCounter = try_create_int_counter(
+        "gas_price_error_1",
+        "Gas_price error 1: ReadRPC success, NEAR RPC error"
+    ).unwrap();
+
+    pub(crate) static ref GAS_PRICE_ERROR_2: IntCounter = try_create_int_counter(
+        "gas_price_error_2",
+        "Gas_price error 2: ReadRPC error, NEAR RPC success"
+    ).unwrap();
+
+    pub(crate) static ref GAS_PRICE_ERROR_3: IntCounter = try_create_int_counter(
+        "gas_price_error_3",
+        "Gas_price error 3: ReadRPC error, NEAR RPC error"
+    ).unwrap();
+
+    pub(crate) static ref GAS_PRICE_ERROR_4: IntCounter = try_create_int_counter(
+        "gas_price_error_4",
+        "Gas_price error 4: Failed to compare. Network or parsing error"
+    ).unwrap();
+    // end GAS_PRICE
 }
 
 lazy_static! {

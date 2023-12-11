@@ -1,8 +1,8 @@
 use crate::config::{Opts, StartOptions};
 use clap::Parser;
+use database::StateIndexerDbManager;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use database::StateIndexerDbManager;
 
 mod config;
 
@@ -28,7 +28,9 @@ async fn index_epochs(
         if let Err(e) = epoch_indexer::save_epoch_info(&epoch, &db_manager, None).await {
             tracing::warn!("Error saving epoch info: {:?}", e);
         }
-        db_manager.update_meta(indexer_id, epoch.epoch_start_height).await?;
+        db_manager
+            .update_meta(indexer_id, epoch.epoch_start_height)
+            .await?;
     }
 }
 
@@ -105,12 +107,21 @@ async fn main() -> anyhow::Result<()> {
                 &s3_client,
                 &opts.s3_bucket_name,
                 &rpc_client,
-            ).await?
+            )
+            .await?
         }
     };
     epoch_indexer::save_epoch_info(&epoch, &db_manager, None).await?;
 
-    index_epochs(&s3_client, &opts.s3_bucket_name, db_manager, rpc_client, &opts.indexer_id, epoch).await?;
+    index_epochs(
+        &s3_client,
+        &opts.s3_bucket_name,
+        db_manager,
+        rpc_client,
+        &opts.indexer_id,
+        epoch,
+    )
+    .await?;
 
     Ok(())
 }
