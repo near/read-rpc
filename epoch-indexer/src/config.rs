@@ -10,6 +10,9 @@ use clap::{Parser, Subcommand};
     setting(clap::AppSettings::NextLineHelp)
 )]
 pub struct Opts {
+    /// Indexer ID to handle meta data about the instance
+    #[clap(long, env)]
+    pub indexer_id: String,
     // Indexer bucket name
     #[clap(long, env = "AWS_BUCKET_NAME")]
     pub s3_bucket_name: String,
@@ -63,11 +66,26 @@ pub struct Opts {
 
 #[derive(Subcommand, Debug, Clone)]
 pub enum ChainId {
-    Mainnet,
-    Testnet,
+    #[clap(subcommand)]
+    Mainnet(StartOptions),
+    #[clap(subcommand)]
+    Testnet(StartOptions),
+}
+
+#[allow(clippy::enum_variant_names)]
+#[derive(Subcommand, Debug, Clone)]
+pub enum StartOptions {
+    FromGenesis,
+    FromInterruption,
 }
 
 impl Opts {
+    pub fn start_options(&self) -> &StartOptions {
+        match &self.chain_id {
+            ChainId::Mainnet(start_options) | ChainId::Testnet(start_options) => start_options,
+        }
+    }
+
     pub async fn to_additional_database_options(&self) -> database::AdditionalDatabaseOptions {
         database::AdditionalDatabaseOptions {
             #[cfg(feature = "scylla_db")]
@@ -85,8 +103,8 @@ impl Opts {
 
     pub fn rpc_url(&self) -> &str {
         match &self.chain_id {
-            ChainId::Mainnet => "https://archival-rpc.mainnet.near.org",
-            ChainId::Testnet => "https://archival-rpc.testnet.near.org",
+            ChainId::Mainnet(_) => "https://archival-rpc.mainnet.near.org",
+            ChainId::Testnet(_) => "https://archival-rpc.testnet.near.org",
         }
     }
     pub async fn to_s3_client(&self) -> near_lake_framework::s3_fetchers::LakeS3Client {

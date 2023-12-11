@@ -80,6 +80,21 @@ pub async fn get_epoch_info_by_id(
     })
 }
 
+pub async fn get_epoch_info_by_block_height(
+    block_height: u64,
+    s3_client: &near_lake_framework::s3_fetchers::LakeS3Client,
+    s3_bucket_name: &str,
+    rpc_client: &near_jsonrpc_client::JsonRpcClient,
+) -> anyhow::Result<readnode_primitives::IndexedEpochInfo> {
+    let block = near_lake_framework::s3_fetchers::fetch_block_or_retry(
+        s3_client,
+        s3_bucket_name,
+        block_height,
+    )
+        .await?;
+    get_epoch_info_by_id(block.header.next_epoch_id, rpc_client).await
+}
+
 pub async fn first_epoch(
     rpc_client: &near_jsonrpc_client::JsonRpcClient,
 ) -> anyhow::Result<readnode_primitives::IndexedEpochInfo> {

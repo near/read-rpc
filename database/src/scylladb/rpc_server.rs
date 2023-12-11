@@ -424,14 +424,14 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         &self,
         epoch_id: near_primitives::hash::CryptoHash,
     ) -> anyhow::Result<readnode_primitives::EpochValidatorsInfo> {
-        let (epoch_height, validators_info, protocol_config) = Self::execute_prepared_query(
+        let (epoch_height, validators_info) = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_validators_by_epoch_id,
             (epoch_id.to_string(),),
         )
         .await?
         .single_row()?
-        .into_typed::<(num_bigint::BigInt, String, String)>()?;
+        .into_typed::<(num_bigint::BigInt, String)>()?;
 
         let validators_info: near_primitives::views::EpochValidatorInfo =
             serde_json::from_str(&validators_info)?;
