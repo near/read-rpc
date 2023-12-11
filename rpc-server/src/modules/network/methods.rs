@@ -120,10 +120,51 @@ pub async fn protocol_config(
     data: Data<ServerContext>,
     Params(params): Params<near_jsonrpc_primitives::types::config::RpcProtocolConfigRequest>,
 ) -> Result<near_jsonrpc_primitives::types::config::RpcProtocolConfigResponse, RPCError> {
-    let config_view = protocol_config_call(data, params.block_reference)
-        .await
-        .map_err(near_jsonrpc_primitives::errors::RpcError::from)?;
-    Ok(near_jsonrpc_primitives::types::config::RpcProtocolConfigResponse { config_view })
+    tracing::debug!("`protocol_config` called with parameters: {:?}", params);
+    crate::metrics::PROTOCOL_CONFIG_REQUESTS_TOTAL.inc();
+
+    match params.block_reference {
+        near_primitives::types::BlockReference::Finality(_) => {
+            crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
+        }
+        near_primitives::types::BlockReference::SyncCheckpoint(_) => {
+            crate::metrics::SYNC_CHECKPOINT_REQUESTS_TOTAL.inc();
+        }
+        _ => {}
+    }
+
+    let config_view = protocol_config_call(&data, params.block_reference.clone()).await;
+
+    #[cfg(feature = "shadow_data_consistency")]
+    {
+        let near_rpc_client = &data.near_rpc_client.clone();
+        let meta_data = format!("{:?}", params);
+        let (read_rpc_response_json, is_response_ok) = match &config_view {
+            Ok(protocol_config) => (serde_json::to_value(protocol_config), true),
+            Err(err) => (serde_json::to_value(err), false),
+        };
+        let comparison_result = shadow_compare_results(
+            read_rpc_response_json,
+            near_rpc_client.clone(),
+            params,
+            is_response_ok,
+        )
+        .await;
+        match comparison_result {
+            Ok(_) => {
+                tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", meta_data);
+            }
+            Err(err) => {
+                crate::utils::capture_shadow_consistency_error!(err, meta_data, "PROTOCOL_CONFIG")
+            }
+        }
+    }
+
+    Ok(
+        near_jsonrpc_primitives::types::config::RpcProtocolConfigResponse {
+            config_view: config_view.map_err(near_jsonrpc_primitives::errors::RpcError::from)?,
+        },
+    )
 }
 
 async fn validators_call(
@@ -168,13 +209,13 @@ async fn validators_call(
 }
 
 async fn protocol_config_call(
-    data: Data<ServerContext>,
+    data: &Data<ServerContext>,
     block_reference: near_primitives::types::BlockReference,
 ) -> Result<
     near_chain_configs::ProtocolConfigView,
     near_jsonrpc_primitives::types::config::RpcProtocolConfigError,
 > {
-    let block = fetch_block_from_cache_or_get(&data, block_reference)
+    let block = fetch_block_from_cache_or_get(data, block_reference)
         .await
         .map_err(|err| {
             near_jsonrpc_primitives::types::config::RpcProtocolConfigError::UnknownBlock {

@@ -106,6 +106,12 @@ lazy_static! {
         "validators_requests_counter",
         "Total number requests to the validators endpoint"
     ).unwrap();
+
+    // protocol config requests counters
+    pub(crate) static ref PROTOCOL_CONFIG_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+        "protocol_config_requests_counter",
+        "Total number requests to the protocol_config endpoint"
+    ).unwrap();
 }
 
 // Error counters
@@ -401,6 +407,35 @@ lazy_static! {
         "Validators error 4: Failed to compare. Network or parsing error"
     ).unwrap();
     // end VALIDATORS
+}
+
+lazy_static! {
+    // PROTOCOL_CONFIG
+    pub(crate) static ref PROTOCOL_CONFIG_ERROR_0: IntCounter = try_create_int_counter(
+        "protocol_config_error_0",
+        "Protocol config error 0: ReadRPC success, NEAR RPC success"
+    ).unwrap();
+
+    pub(crate) static ref PROTOCOL_CONFIG_ERROR_1: IntCounter = try_create_int_counter(
+        "protocol_config_error_1",
+        "Protocol config error 1: ReadRPC success, NEAR RPC error"
+    ).unwrap();
+
+    pub(crate) static ref PROTOCOL_CONFIG_ERROR_2: IntCounter = try_create_int_counter(
+        "protocol_config_error_2",
+        "Protocol config error 2: ReadRPC error, NEAR RPC success"
+    ).unwrap();
+
+    pub(crate) static ref PROTOCOL_CONFIG_ERROR_3: IntCounter = try_create_int_counter(
+        "protocol_config_error_3",
+        "Protocol config error 3: ReadRPC error, NEAR RPC error"
+    ).unwrap();
+
+    pub(crate) static ref PROTOCOL_CONFIG_ERROR_4: IntCounter = try_create_int_counter(
+        "protocol_config_error_4",
+        "Protocol config error 4: Failed to compare. Network or parsing error"
+    ).unwrap();
+    // end PROTOCOL_CONFIG
 }
 
 lazy_static! {
