@@ -221,7 +221,17 @@ async fn main() -> anyhow::Result<()> {
 
     actix_web::HttpServer::new(move || {
         let rpc = rpc.clone();
+
+        // Configure CORS
+        let cors = actix_cors::Cors::default()
+            .allow_any_origin()
+            .allowed_methods(vec!["GET", "POST", "OPTIONS"])
+            .allowed_headers(vec![http::header::ACCEPT])
+            .expose_any_header()
+            .max_age(3600);
+
         actix_web::App::new()
+            .wrap(cors)
             .wrap(tracing_actix_web::TracingLogger::default())
             .service(
                 actix_web::web::service("/")
