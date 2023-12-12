@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 actix-web = "4.2.1"
+actix-cors = "0.6.5"
 anyhow = "1.0.70"
 assert-json-diff = { version = "2.0.2", optional = true }
 aws-credential-types = "0.53.0"
