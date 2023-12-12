@@ -159,7 +159,7 @@ impl ScyllaStorageManager for ScyllaDBManager {
                     epoch_height varint,
                     epoch_start_height varint,
                     validators_info text,
-                    PRIMARY KEY (epoch_id, epoch_start_height)
+                    PRIMARY KEY (epoch_id)
                 )
             ",
                 &[],
@@ -174,7 +174,7 @@ impl ScyllaStorageManager for ScyllaDBManager {
                     epoch_height varint,
                     epoch_start_height varint,
                     protocol_config text,
-                    PRIMARY KEY (epoch_id, epoch_start_height)
+                    PRIMARY KEY (epoch_id)
                 )
             ",
                 &[],

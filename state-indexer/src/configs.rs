@@ -94,8 +94,8 @@ impl Opts {
 
     pub fn rpc_url(&self) -> &str {
         match &self.chain_id {
-            ChainId::Mainnet(_) => "https://archival-rpc.mainnet.near.org",
-            ChainId::Testnet(_) => "https://archival-rpc.testnet.near.org",
+            ChainId::Mainnet(_) => "https://rpc.mainnet.near.org",
+            ChainId::Testnet(_) => "https://rpc.testnet.near.org",
         }
     }
 }

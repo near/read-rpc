@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS validators (
 );
 
 ALTER TABLE ONLY validators
-    ADD CONSTRAINT validators_pk PRIMARY KEY (epoch_id, epoch_start_height);
+    ADD CONSTRAINT validators_pk PRIMARY KEY (epoch_id);
 
 
 CREATE TABLE IF NOT EXISTS protocol_configs (
@@ -17,4 +17,4 @@ CREATE TABLE IF NOT EXISTS protocol_configs (
 );
 
 ALTER TABLE ONLY protocol_configs
-    ADD CONSTRAINT protocol_config_pk PRIMARY KEY (epoch_id, epoch_start_height);
+    ADD CONSTRAINT protocol_config_pk PRIMARY KEY (epoch_id);

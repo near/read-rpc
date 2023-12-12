@@ -31,7 +31,7 @@ diesel::table! {
 }
 
 diesel::table! {
-    protocol_configs (epoch_id, epoch_start_height) {
+    protocol_configs (epoch_id) {
         epoch_id -> Text,
         epoch_height -> Numeric,
         epoch_start_height -> Numeric,
@@ -123,7 +123,7 @@ diesel::table! {
 }
 
 diesel::table! {
-    validators (epoch_id, epoch_start_height) {
+    validators (epoch_id) {
         epoch_id -> Text,
         epoch_height -> Numeric,
         epoch_start_height -> Numeric,
