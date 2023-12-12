@@ -6,9 +6,8 @@ We're indexing the following epoch changes:
     2. Protocol config changes
 
 This indexer is intended for collecting the history of epochs and should not be run permanently and parallel with the state_indexer.
-State indexer will monitor the network and collecting all new epochs.
-If you run state-indexer from the genesis block, you don't need to run epoch-indexer to collect the history of epochs. 
-Epoch-indexer is designed to collect the history of epochs without reindexing a large amount of data.
+The `state-indexer` will monitor the network and collect all new epochs.
+**If you run state-indexer from the genesis block, you don't need to run epoch-indexer to collect the history of epochs.**
 
 ## Create `.env` file in the project root
 
@@ -24,9 +23,9 @@ AWS_DEFAULT_REGION=eu-central-1
 
 ### Features
 ```
-scylla_db - enable scylla db support (default)
+scylla_db - enables ScyllaDB support (default)
 ```
-See documentation [here](../database/README.md)
+See the [documentation here](../database/README.md)
 
 
 ### Command to run

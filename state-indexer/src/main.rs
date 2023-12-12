@@ -29,8 +29,9 @@ async fn handle_streamer_message(
 ) -> anyhow::Result<()> {
     let block_height = streamer_message.block.header.height;
     let block_hash = streamer_message.block.header.hash;
-
     let new_epoch_id = streamer_message.block.header.epoch_id;
+
+    tracing::debug!(target: INDEXER, "Block height {}", block_height,);
 
     // handle first indexing epoch
     let mut stats_lock = stats.write().await;
@@ -44,8 +45,6 @@ async fn handle_streamer_message(
         epoch_id
     };
     drop(stats_lock);
-
-    tracing::debug!(target: INDEXER, "Block height {}", block_height,);
 
     stats.write().await.block_heights_processing.insert(block_height);
     let handle_epoch_future = handle_epoch(

@@ -65,7 +65,7 @@ pub async fn validators(
     data: Data<ServerContext>,
     Params(params): Params<near_jsonrpc_primitives::types::validator::RpcValidatorRequest>,
 ) -> Result<near_jsonrpc_primitives::types::validator::RpcValidatorResponse, RPCError> {
-    tracing::debug!("`gas_price` called with parameters: {:?}", params);
+    tracing::debug!("`validators` called with parameters: {:?}", params);
     crate::metrics::VALIDATORS_REQUESTS_TOTAL.inc();
     let validator_info = validators_call(&data, &params).await;
 
@@ -120,7 +120,10 @@ pub async fn protocol_config(
     data: Data<ServerContext>,
     Params(params): Params<near_jsonrpc_primitives::types::config::RpcProtocolConfigRequest>,
 ) -> Result<near_jsonrpc_primitives::types::config::RpcProtocolConfigResponse, RPCError> {
-    tracing::debug!("`protocol_config` called with parameters: {:?}", params);
+    tracing::debug!(
+        "`EXPERIMENTAL_protocol_config` called with parameters: {:?}",
+        params
+    );
     crate::metrics::PROTOCOL_CONFIG_REQUESTS_TOTAL.inc();
 
     match params.block_reference {
