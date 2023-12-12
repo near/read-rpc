@@ -32,16 +32,18 @@ async fn handle_streamer_message(
 
     let new_epoch_id = streamer_message.block.header.epoch_id;
 
-    let current_epoch_id = if let Some(current_epoch_id) = stats.read().await.current_epoch_id {
+    // handle first indexing epoch
+    let mut stats_lock = stats.write().await;
+    let current_epoch_id = if let Some(current_epoch_id) = stats_lock.current_epoch_id {
         current_epoch_id
     } else {
         let (epoch_id, height) =
-            handle_epoch(new_epoch_id, None, stats.read().await.current_epoch_height, rpc_client, db_manager).await?;
-        let mut stats_lock = stats.write().await;
+            handle_epoch(new_epoch_id, None, stats_lock.current_epoch_height, rpc_client, db_manager).await?;
         stats_lock.current_epoch_id = Some(epoch_id);
         stats_lock.current_epoch_height = height;
         epoch_id
     };
+    drop(stats_lock);
 
     tracing::debug!(target: INDEXER, "Block height {}", block_height,);
 
@@ -118,7 +120,6 @@ async fn handle_epoch(
         }
         None => Some(epoch_indexer::get_epoch_info_by_id(new_epoch_id, rpc_client).await?),
     };
-
     if let Some(epoch_info) = epoch_info {
         let epoch_height = if let Some(current_epoch_id) = current_epoch_id {
             if current_epoch_id == CryptoHash::default() {
