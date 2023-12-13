@@ -101,19 +101,28 @@ impl crate::ReaderDbManager for PostgresDBManager {
         account_id: &near_primitives::types::AccountId,
         block_height: near_primitives::types::BlockHeight,
         key_data: readnode_primitives::StateKey,
-    ) -> anyhow::Result<readnode_primitives::StateValue> {
-        let result = crate::models::StateChangesData::get_state_key_value(
-            Self::get_connection(&self.pg_pool).await?,
+    ) -> (
+        readnode_primitives::StateKey,
+        readnode_primitives::StateValue,
+    ) {
+        let connection = if let Ok(pg_connection) = Self::get_connection(&self.pg_pool).await {
+            pg_connection
+        } else {
+            return (key_data, readnode_primitives::StateValue::default());
+        };
+        let result = if let Ok(result) = crate::models::StateChangesData::get_state_key_value(
+            connection,
             account_id,
             block_height,
-            hex::encode(key_data),
+            hex::encode(key_data.clone()),
         )
-        .await?;
-        if let Some(value) = result {
-            Ok(value)
+        .await
+        {
+            result.unwrap_or_default()
         } else {
-            anyhow::bail!("State value not found")
-        }
+            readnode_primitives::StateValue::default()
+        };
+        (key_data, result)
     }
 
     async fn get_account(

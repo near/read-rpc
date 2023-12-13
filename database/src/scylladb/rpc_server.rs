@@ -1,5 +1,6 @@
 use crate::scylladb::ScyllaStorageManager;
 use borsh::{BorshDeserialize, BorshSerialize};
+use futures::StreamExt;
 use num_traits::ToPrimitive;
 use scylla::{prepared_statement::PreparedStatement, IntoTypedRows};
 use std::convert::TryFrom;
@@ -169,16 +170,19 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         &self,
         account_id: &near_primitives::types::AccountId,
     ) -> anyhow::Result<Vec<readnode_primitives::StateKey>> {
-        let result = Self::execute_prepared_query(
-            &self.scylla_session,
-            &self.get_all_state_keys,
-            (account_id.to_string(),),
-        )
-        .await?
-        .rows_typed::<(String,)>()?
-        .filter_map(|row| row.ok().and_then(|(value,)| hex::decode(value).ok()));
-
-        Ok(result.collect())
+        let mut paged_query = self.get_all_state_keys.clone();
+        paged_query.set_page_size(25000);
+        let mut rows_stream = self
+            .scylla_session
+            .execute_iter(paged_query, (account_id.to_string(),))
+            .await?
+            .into_typed::<(String,)>();
+        let mut stata_keys = vec![];
+        while let Some(next_row_res) = rows_stream.next().await {
+            let (value,): (String,) = next_row_res?;
+            stata_keys.push(hex::decode(value)?);
+        }
+        Ok(stata_keys)
     }
 
     /// Returns state keys for the given account id filtered by the given prefix
@@ -209,8 +213,11 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         account_id: &near_primitives::types::AccountId,
         block_height: near_primitives::types::BlockHeight,
         key_data: readnode_primitives::StateKey,
-    ) -> anyhow::Result<readnode_primitives::StateValue> {
-        let result = Self::execute_prepared_query(
+    ) -> (
+        readnode_primitives::StateKey,
+        readnode_primitives::StateValue,
+    ) {
+        let value = match Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_state_key_value,
             (
@@ -219,10 +226,18 @@ impl crate::ReaderDbManager for ScyllaDBManager {
                 hex::encode(&key_data).to_string(),
             ),
         )
-        .await?
-        .single_row_typed::<(readnode_primitives::StateValue,)>()?;
+        .await
+        {
+            Ok(result) => {
+                let (value,) = result
+                    .single_row_typed::<(readnode_primitives::StateValue,)>()
+                    .unwrap_or_default();
+                value
+            }
+            Err(_) => readnode_primitives::StateValue::default(),
+        };
 
-        Ok(result.0)
+        (key_data, value)
     }
 
     /// Returns the near_primitives::account::Account at the given block height

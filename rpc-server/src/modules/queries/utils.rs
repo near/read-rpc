@@ -10,7 +10,7 @@ use tokio::task;
 
 use crate::config::CompiledCodeCache;
 use crate::errors::FunctionCallError;
-use crate::modules::queries::{CodeStorage, MAX_LIMIT};
+use crate::modules::queries::CodeStorage;
 
 pub struct RunContractResponse {
     pub result: Vec<u8>,
@@ -48,18 +48,19 @@ pub async fn get_state_keys_from_db(
     };
     match result {
         Ok(state_keys) => {
-            for state_key in state_keys {
-                let state_value_result = db_manager
-                    .get_state_key_value(account_id, block_height, state_key.clone())
-                    .await;
-                if let Ok(state_value) = state_value_result {
+            for state_keys_chunk in state_keys.chunks(1000) {
+                // TODO: 1000 is hardcoded value. Make it configurable.
+                let mut tasks_futures = vec![];
+                for state_key in state_keys_chunk {
+                    let state_value_result_future =
+                        db_manager.get_state_key_value(account_id, block_height, state_key.clone());
+                    tasks_futures.push(state_value_result_future);
+                }
+                let results = futures::future::join_all(tasks_futures).await;
+                for (state_key, state_value) in results.into_iter() {
                     if !state_value.is_empty() {
                         data.insert(state_key, state_value);
                     }
-                };
-                let keys_count = data.keys().len() as u8;
-                if keys_count > MAX_LIMIT {
-                    return data;
                 }
             }
             data
