@@ -5,8 +5,6 @@ use std::collections::HashMap;
 pub mod methods;
 pub mod utils;
 
-const MAX_LIMIT: u8 = 100;
-
 pub type Result<T> = ::std::result::Result<T, near_vm_runner::logic::VMLogicError>;
 
 pub struct CodeStorage {
@@ -69,14 +67,12 @@ impl near_vm_runner::logic::External for CodeStorage {
         let get_db_data =
             self.db_manager
                 .get_state_key_value(&self.account_id, self.block_height, key.to_vec());
-        match block_on(get_db_data) {
-            Ok(data) => Ok(if !data.is_empty() {
-                Some(Box::new(StorageValuePtr { value: data }) as Box<_>)
-            } else {
-                None
-            }),
-            Err(_) => Ok(None),
-        }
+        let (_, data) = block_on(get_db_data);
+        Ok(if !data.is_empty() {
+            Some(Box::new(StorageValuePtr { value: data }) as Box<_>)
+        } else {
+            None
+        })
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
@@ -109,10 +105,8 @@ impl near_vm_runner::logic::External for CodeStorage {
         let get_db_state_keys =
             self.db_manager
                 .get_state_key_value(&self.account_id, self.block_height, key.to_vec());
-        match block_on(get_db_state_keys) {
-            Ok(data) => Ok(!data.is_empty()),
-            Err(_) => Ok(false),
-        }
+        let (_, data) = block_on(get_db_state_keys);
+        Ok(!data.is_empty())
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
