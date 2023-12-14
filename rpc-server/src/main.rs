@@ -223,12 +223,7 @@ async fn main() -> anyhow::Result<()> {
         let rpc = rpc.clone();
 
         // Configure CORS
-        let cors = actix_cors::Cors::default()
-            .allow_any_origin()
-            .allowed_methods(vec!["GET", "POST", "OPTIONS"])
-            .allowed_headers(vec![http::header::ACCEPT])
-            .expose_any_header()
-            .max_age(3600);
+        let cors = actix_cors::Cors::permissive();
 
         actix_web::App::new()
             .wrap(cors)
