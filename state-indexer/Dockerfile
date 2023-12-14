@@ -8,6 +8,7 @@ RUN sed '/perf-testing/d; /rpc-server/d; /tx-indexer/d' Cargo.toml > Cargo.toml.
 COPY state-indexer/Cargo.toml state-indexer/Cargo.toml
 COPY database database
 COPY readnode-primitives readnode-primitives
+COPY epoch-indexer epoch-indexer
 RUN mkdir state-indexer/src && echo 'fn main() {}' > state-indexer/src/main.rs cargo build --release && rm -r state-indexer/src
 
 # copy your source tree
