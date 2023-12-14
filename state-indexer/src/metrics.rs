@@ -62,6 +62,8 @@ pub struct Stats {
     pub block_heights_processing: std::collections::BTreeSet<u64>,
     pub blocks_processed_count: u64,
     pub last_processed_block_height: u64,
+    pub current_epoch_id: Option<near_indexer_primitives::CryptoHash>,
+    pub current_epoch_height: u64,
 }
 
 impl Stats {
@@ -70,6 +72,8 @@ impl Stats {
             block_heights_processing: std::collections::BTreeSet::new(),
             blocks_processed_count: 0,
             last_processed_block_height: 0,
+            current_epoch_id: None,
+            current_epoch_height: 0,
         }
     }
 }

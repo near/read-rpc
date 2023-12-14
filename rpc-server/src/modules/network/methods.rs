@@ -1,9 +1,11 @@
 use crate::config::ServerContext;
 use crate::errors::RPCError;
-use crate::modules::network::{
-    friendly_memory_size_format, parse_validator_request, StatusResponse,
-};
+use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
+use crate::modules::network::{friendly_memory_size_format, StatusResponse};
+#[cfg(feature = "shadow_data_consistency")]
+use crate::utils::shadow_compare_results;
 use jsonrpc_v2::{Data, Params};
+use near_primitives::types::EpochReference;
 use serde_json::Value;
 use sysinfo::{System, SystemExt};
 
@@ -61,15 +63,43 @@ pub async fn network_info(
 
 pub async fn validators(
     data: Data<ServerContext>,
-    Params(params): Params<Value>,
+    Params(params): Params<near_jsonrpc_primitives::types::validator::RpcValidatorRequest>,
 ) -> Result<near_jsonrpc_primitives::types::validator::RpcValidatorResponse, RPCError> {
-    match parse_validator_request(params).await {
-        Ok(request) => {
-            let validator_info = data.near_rpc_client.call(request).await?;
-            Ok(near_jsonrpc_primitives::types::validator::RpcValidatorResponse { validator_info })
+    tracing::debug!("`validators` called with parameters: {:?}", params);
+    crate::metrics::VALIDATORS_REQUESTS_TOTAL.inc();
+    let validator_info = validators_call(&data, &params).await;
+
+    #[cfg(feature = "shadow_data_consistency")]
+    {
+        let near_rpc_client = &data.near_rpc_client.clone();
+        let meta_data = format!("{:?}", params);
+        let (read_rpc_response_json, is_response_ok) = match &validator_info {
+            Ok(validators) => (serde_json::to_value(&validators), true),
+            Err(err) => (serde_json::to_value(err), false),
+        };
+        let comparison_result = shadow_compare_results(
+            read_rpc_response_json,
+            near_rpc_client.clone(),
+            params,
+            is_response_ok,
+        )
+        .await;
+        match comparison_result {
+            Ok(_) => {
+                tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", meta_data);
+            }
+            Err(err) => {
+                crate::utils::capture_shadow_consistency_error!(err, meta_data, "VALIDATORS")
+            }
         }
-        Err(err) => Err(RPCError::parse_error(&err.to_string())),
     }
+
+    Ok(
+        near_jsonrpc_primitives::types::validator::RpcValidatorResponse {
+            validator_info: validator_info
+                .map_err(near_jsonrpc_primitives::errors::RpcError::from)?,
+        },
+    )
 }
 
 pub async fn validators_ordered(
@@ -90,6 +120,119 @@ pub async fn protocol_config(
     data: Data<ServerContext>,
     Params(params): Params<near_jsonrpc_primitives::types::config::RpcProtocolConfigRequest>,
 ) -> Result<near_jsonrpc_primitives::types::config::RpcProtocolConfigResponse, RPCError> {
-    let config_view = data.near_rpc_client.call(params).await?;
-    Ok(near_jsonrpc_primitives::types::config::RpcProtocolConfigResponse { config_view })
+    tracing::debug!(
+        "`EXPERIMENTAL_protocol_config` called with parameters: {:?}",
+        params
+    );
+    crate::metrics::PROTOCOL_CONFIG_REQUESTS_TOTAL.inc();
+
+    match params.block_reference {
+        near_primitives::types::BlockReference::Finality(_) => {
+            crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
+        }
+        near_primitives::types::BlockReference::SyncCheckpoint(_) => {
+            crate::metrics::SYNC_CHECKPOINT_REQUESTS_TOTAL.inc();
+        }
+        _ => {}
+    }
+
+    let config_view = protocol_config_call(&data, params.block_reference.clone()).await;
+
+    #[cfg(feature = "shadow_data_consistency")]
+    {
+        let near_rpc_client = &data.near_rpc_client.clone();
+        let meta_data = format!("{:?}", params);
+        let (read_rpc_response_json, is_response_ok) = match &config_view {
+            Ok(protocol_config) => (serde_json::to_value(protocol_config), true),
+            Err(err) => (serde_json::to_value(err), false),
+        };
+        let comparison_result = shadow_compare_results(
+            read_rpc_response_json,
+            near_rpc_client.clone(),
+            params,
+            is_response_ok,
+        )
+        .await;
+        match comparison_result {
+            Ok(_) => {
+                tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", meta_data);
+            }
+            Err(err) => {
+                crate::utils::capture_shadow_consistency_error!(err, meta_data, "PROTOCOL_CONFIG")
+            }
+        }
+    }
+
+    Ok(
+        near_jsonrpc_primitives::types::config::RpcProtocolConfigResponse {
+            config_view: config_view.map_err(near_jsonrpc_primitives::errors::RpcError::from)?,
+        },
+    )
+}
+
+async fn validators_call(
+    data: &Data<ServerContext>,
+    validator_request: &near_jsonrpc_primitives::types::validator::RpcValidatorRequest,
+) -> Result<
+    near_primitives::views::EpochValidatorInfo,
+    near_jsonrpc_primitives::types::validator::RpcValidatorError,
+> {
+    let epoch_id = match &validator_request.epoch_reference {
+        EpochReference::EpochId(epoch_id) => epoch_id.0,
+        EpochReference::BlockId(block_id) => {
+            let block_reference = near_primitives::types::BlockReference::BlockId(block_id.clone());
+            let block = fetch_block_from_cache_or_get(data, block_reference)
+                .await
+                .map_err(|_err| {
+                    near_jsonrpc_primitives::types::validator::RpcValidatorError::UnknownEpoch
+                })?;
+            block.epoch_id
+        }
+        EpochReference::Latest => {
+            crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
+            let block_reference = near_primitives::types::BlockReference::Finality(
+                near_primitives::types::Finality::Final,
+            );
+            let block = fetch_block_from_cache_or_get(data, block_reference)
+                .await
+                .map_err(|_err| {
+                    near_jsonrpc_primitives::types::validator::RpcValidatorError::UnknownEpoch
+                })?;
+            block.epoch_id
+        }
+    };
+    let validators = data
+        .db_manager
+        .get_validators_by_epoch_id(epoch_id)
+        .await
+        .map_err(|_err| {
+            near_jsonrpc_primitives::types::validator::RpcValidatorError::ValidatorInfoUnavailable
+        })?;
+    Ok(validators.validators_info)
+}
+
+async fn protocol_config_call(
+    data: &Data<ServerContext>,
+    block_reference: near_primitives::types::BlockReference,
+) -> Result<
+    near_chain_configs::ProtocolConfigView,
+    near_jsonrpc_primitives::types::config::RpcProtocolConfigError,
+> {
+    let block = fetch_block_from_cache_or_get(data, block_reference)
+        .await
+        .map_err(|err| {
+            near_jsonrpc_primitives::types::config::RpcProtocolConfigError::UnknownBlock {
+                error_message: err.to_string(),
+            }
+        })?;
+    let protocol_config = data
+        .db_manager
+        .get_protocol_config_by_epoch_id(block.epoch_id)
+        .await
+        .map_err(|err| {
+            near_jsonrpc_primitives::types::config::RpcProtocolConfigError::InternalError {
+                error_message: err.to_string(),
+            }
+        })?;
+    Ok(protocol_config)
 }

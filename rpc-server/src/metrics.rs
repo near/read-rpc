@@ -81,6 +81,12 @@ lazy_static! {
         "Total number requests to the chunk endpoint"
     ).unwrap();
 
+    // gas_price requests counters
+    pub(crate) static ref GAS_PRICE_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+        "gas_price_requests_counter",
+        "Total number requests to the gas_price endpoint"
+    ).unwrap();
+
     // transactions requests counters
     pub(crate) static ref TX_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
         "tx_requests_counter",
@@ -93,6 +99,18 @@ lazy_static! {
     pub(crate) static ref RECEIPT_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
         "receipt_requests_counter",
         "Total number requests to the receipt endpoint"
+    ).unwrap();
+
+    // validators requests counters
+    pub(crate) static ref VALIDATORS_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+        "validators_requests_counter",
+        "Total number requests to the validators endpoint"
+    ).unwrap();
+
+    // protocol config requests counters
+    pub(crate) static ref PROTOCOL_CONFIG_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+        "protocol_config_requests_counter",
+        "Total number requests to the protocol_config endpoint"
     ).unwrap();
 }
 
@@ -331,6 +349,93 @@ lazy_static! {
         "Chunk error 4: Failed to compare. Network or parsing error"
     ).unwrap();
     // end CHUNK
+}
+
+lazy_static! {
+    // GAS_PRICE
+    pub(crate) static ref GAS_PRICE_ERROR_0: IntCounter = try_create_int_counter(
+        "gas_price_error_0",
+        "Gas_price error 0: ReadRPC success, NEAR RPC success"
+    ).unwrap();
+
+    pub(crate) static ref GAS_PRICE_ERROR_1: IntCounter = try_create_int_counter(
+        "gas_price_error_1",
+        "Gas_price error 1: ReadRPC success, NEAR RPC error"
+    ).unwrap();
+
+    pub(crate) static ref GAS_PRICE_ERROR_2: IntCounter = try_create_int_counter(
+        "gas_price_error_2",
+        "Gas_price error 2: ReadRPC error, NEAR RPC success"
+    ).unwrap();
+
+    pub(crate) static ref GAS_PRICE_ERROR_3: IntCounter = try_create_int_counter(
+        "gas_price_error_3",
+        "Gas_price error 3: ReadRPC error, NEAR RPC error"
+    ).unwrap();
+
+    pub(crate) static ref GAS_PRICE_ERROR_4: IntCounter = try_create_int_counter(
+        "gas_price_error_4",
+        "Gas_price error 4: Failed to compare. Network or parsing error"
+    ).unwrap();
+    // end GAS_PRICE
+}
+
+lazy_static! {
+    // VALIDATORS
+    pub(crate) static ref VALIDATORS_ERROR_0: IntCounter = try_create_int_counter(
+        "validators_error_0",
+        "validators error 0: ReadRPC success, NEAR RPC success"
+    ).unwrap();
+
+    pub(crate) static ref VALIDATORS_ERROR_1: IntCounter = try_create_int_counter(
+        "validators_error_1",
+        "Validators error 1: ReadRPC success, NEAR RPC error"
+    ).unwrap();
+
+    pub(crate) static ref VALIDATORS_ERROR_2: IntCounter = try_create_int_counter(
+        "validators_error_2",
+        "Validators error 2: ReadRPC error, NEAR RPC success"
+    ).unwrap();
+
+    pub(crate) static ref VALIDATORS_ERROR_3: IntCounter = try_create_int_counter(
+        "validators_error_3",
+        "Validators error 3: ReadRPC error, NEAR RPC error"
+    ).unwrap();
+
+    pub(crate) static ref VALIDATORS_ERROR_4: IntCounter = try_create_int_counter(
+        "validators_error_4",
+        "Validators error 4: Failed to compare. Network or parsing error"
+    ).unwrap();
+    // end VALIDATORS
+}
+
+lazy_static! {
+    // PROTOCOL_CONFIG
+    pub(crate) static ref PROTOCOL_CONFIG_ERROR_0: IntCounter = try_create_int_counter(
+        "protocol_config_error_0",
+        "Protocol config error 0: ReadRPC success, NEAR RPC success"
+    ).unwrap();
+
+    pub(crate) static ref PROTOCOL_CONFIG_ERROR_1: IntCounter = try_create_int_counter(
+        "protocol_config_error_1",
+        "Protocol config error 1: ReadRPC success, NEAR RPC error"
+    ).unwrap();
+
+    pub(crate) static ref PROTOCOL_CONFIG_ERROR_2: IntCounter = try_create_int_counter(
+        "protocol_config_error_2",
+        "Protocol config error 2: ReadRPC error, NEAR RPC success"
+    ).unwrap();
+
+    pub(crate) static ref PROTOCOL_CONFIG_ERROR_3: IntCounter = try_create_int_counter(
+        "protocol_config_error_3",
+        "Protocol config error 3: ReadRPC error, NEAR RPC error"
+    ).unwrap();
+
+    pub(crate) static ref PROTOCOL_CONFIG_ERROR_4: IntCounter = try_create_int_counter(
+        "protocol_config_error_4",
+        "Protocol config error 4: Failed to compare. Network or parsing error"
+    ).unwrap();
+    // end PROTOCOL_CONFIG
 }
 
 lazy_static! {

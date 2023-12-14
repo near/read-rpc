@@ -46,9 +46,9 @@ AWS_DEFAULT_REGION=eu-central-1
 ```
 ### Features
 ```
-scylla_db - enable scylla db support (default)
+scylla_db - enables ScyllaDB support (default)
 ```
-See documentation [here](../database/README.md)
+See the [documentation here](../database/README.md)
 
 ### Command to run
 

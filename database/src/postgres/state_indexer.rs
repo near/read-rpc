@@ -298,4 +298,39 @@ impl crate::StateIndexerDbManager for PostgresDBManager {
             .to_u64()
             .ok_or_else(|| anyhow::anyhow!("Failed to parse `block_height` to u64"))
     }
+    async fn add_validators(
+        &self,
+        epoch_id: near_indexer_primitives::CryptoHash,
+        epoch_height: u64,
+        epoch_start_height: u64,
+        validators_info: &near_primitives::views::EpochValidatorInfo,
+    ) -> anyhow::Result<()> {
+        crate::models::Validators {
+            epoch_id: epoch_id.to_string(),
+            epoch_height: bigdecimal::BigDecimal::from(epoch_height),
+            epoch_start_height: bigdecimal::BigDecimal::from(epoch_start_height),
+            validators_info: serde_json::to_value(validators_info)?,
+        }
+        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
+        .await?;
+        Ok(())
+    }
+
+    async fn add_protocol_config(
+        &self,
+        epoch_id: near_indexer_primitives::CryptoHash,
+        epoch_height: u64,
+        epoch_start_height: u64,
+        protocol_config: &near_chain_configs::ProtocolConfigView,
+    ) -> anyhow::Result<()> {
+        crate::models::ProtocolConfig {
+            epoch_id: epoch_id.to_string(),
+            epoch_height: bigdecimal::BigDecimal::from(epoch_height),
+            epoch_start_height: bigdecimal::BigDecimal::from(epoch_start_height),
+            protocol_config: serde_json::to_value(protocol_config)?,
+        }
+        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
+        .await?;
+        Ok(())
+    }
 }

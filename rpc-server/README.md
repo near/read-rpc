@@ -67,7 +67,7 @@ This feature flag enables the tracing instrumentation for the RPC server. See th
 
 ### `scylla_db` (default: `true`)
 
-See documentation [here](../database/README.md)
+See the [documentation here](../database/README.md)
 
 ### `scylla_db_tracing` (default: `false`)
 

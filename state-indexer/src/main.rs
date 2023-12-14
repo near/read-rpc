@@ -23,15 +23,37 @@ pub(crate) const INDEXER: &str = "state_indexer";
 async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
     db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
+    rpc_client: &near_jsonrpc_client::JsonRpcClient,
     indexer_id: &str,
     stats: std::sync::Arc<tokio::sync::RwLock<metrics::Stats>>,
 ) -> anyhow::Result<()> {
     let block_height = streamer_message.block.header.height;
     let block_hash = streamer_message.block.header.hash;
+    let new_epoch_id = streamer_message.block.header.epoch_id;
+
     tracing::debug!(target: INDEXER, "Block height {}", block_height,);
 
-    stats.write().await.block_heights_processing.insert(block_height);
+    // handle first indexing epoch
+    let mut stats_lock = stats.write().await;
+    let current_epoch_id = if let Some(current_epoch_id) = stats_lock.current_epoch_id {
+        current_epoch_id
+    } else {
+        let (epoch_id, height) =
+            handle_epoch(new_epoch_id, None, stats_lock.current_epoch_height, rpc_client, db_manager).await?;
+        stats_lock.current_epoch_id = Some(epoch_id);
+        stats_lock.current_epoch_height = height;
+        epoch_id
+    };
+    drop(stats_lock);
 
+    stats.write().await.block_heights_processing.insert(block_height);
+    let handle_epoch_future = handle_epoch(
+        new_epoch_id,
+        Some(current_epoch_id),
+        stats.read().await.current_epoch_height,
+        rpc_client,
+        db_manager,
+    );
     let handle_block_future = handle_block(
         block_height,
         block_hash,
@@ -47,7 +69,7 @@ async fn handle_streamer_message(
 
     let update_meta_future = db_manager.update_meta(indexer_id, block_height);
 
-    futures::try_join!(handle_block_future, handle_state_change_future, update_meta_future)?;
+    futures::try_join!(handle_epoch_future, handle_block_future, handle_state_change_future, update_meta_future)?;
 
     metrics::BLOCK_PROCESSED_TOTAL.inc();
     // Prometheus Gauge Metric type do not support u64
@@ -58,6 +80,10 @@ async fn handle_streamer_message(
     stats_lock.block_heights_processing.remove(&block_height);
     stats_lock.blocks_processed_count += 1;
     stats_lock.last_processed_block_height = block_height;
+    if current_epoch_id != new_epoch_id {
+        stats_lock.current_epoch_id = Some(new_epoch_id);
+        stats_lock.current_epoch_height += 1;
+    }
     Ok(())
 }
 
@@ -73,6 +99,42 @@ async fn handle_block(
 
     futures::try_join!(add_block_future, add_chunks_future)?;
     Ok(())
+}
+
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(db_manager)))]
+async fn handle_epoch(
+    new_epoch_id: CryptoHash,
+    current_epoch_id: Option<CryptoHash>,
+    current_epoch_height: u64,
+    rpc_client: &near_jsonrpc_client::JsonRpcClient,
+    db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
+) -> anyhow::Result<(CryptoHash, u64)> {
+    let epoch_info = match current_epoch_id {
+        Some(current_epoch_id) => {
+            if new_epoch_id != current_epoch_id {
+                Some(epoch_indexer::get_epoch_info_by_id(new_epoch_id, rpc_client).await?)
+            } else {
+                None
+            }
+        }
+        None => Some(epoch_indexer::get_epoch_info_by_id(new_epoch_id, rpc_client).await?),
+    };
+    if let Some(epoch_info) = epoch_info {
+        let epoch_height = if let Some(current_epoch_id) = current_epoch_id {
+            if current_epoch_id == CryptoHash::default() {
+                1
+            } else {
+                current_epoch_height + 1
+            }
+        } else {
+            epoch_info.validators_info.epoch_height
+        };
+        epoch_indexer::save_epoch_info(&epoch_info, db_manager, Some(epoch_height)).await?;
+
+        Ok((new_epoch_id, epoch_height))
+    } else {
+        Ok((new_epoch_id, current_epoch_height))
+    }
 }
 
 /// This function will iterate over all StateChangesWithCauseViews in order to collect
@@ -255,10 +317,10 @@ async fn main() -> anyhow::Result<()> {
     )
     .await?;
 
-    // let scylla_session = scylla_storage.scylla_session().await;
     let config: near_lake_framework::LakeConfig = opts.to_lake_config(&db_manager).await?;
     let (sender, stream) = near_lake_framework::streamer(config);
 
+    let rpc_client = near_jsonrpc_client::JsonRpcClient::connect(opts.rpc_url());
     // Initiate metrics http server
     tokio::spawn(metrics::init_server(opts.port).expect("Failed to start metrics server"));
 
@@ -267,7 +329,13 @@ async fn main() -> anyhow::Result<()> {
 
     let mut handlers = tokio_stream::wrappers::ReceiverStream::new(stream)
         .map(|streamer_message| {
-            handle_streamer_message(streamer_message, &db_manager, &opts.indexer_id, std::sync::Arc::clone(&stats))
+            handle_streamer_message(
+                streamer_message,
+                &db_manager,
+                &rpc_client,
+                &opts.indexer_id,
+                std::sync::Arc::clone(&stats),
+            )
         })
         .buffer_unordered(opts.concurrency);
 

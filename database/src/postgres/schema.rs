@@ -31,6 +31,15 @@ diesel::table! {
 }
 
 diesel::table! {
+    protocol_configs (epoch_id) {
+        epoch_id -> Text,
+        epoch_height -> Numeric,
+        epoch_start_height -> Numeric,
+        protocol_config -> Jsonb,
+    }
+}
+
+diesel::table! {
     receipt_map (receipt_id) {
         receipt_id -> Text,
         block_height -> Numeric,
@@ -113,11 +122,21 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    validators (epoch_id) {
+        epoch_id -> Text,
+        epoch_height -> Numeric,
+        epoch_start_height -> Numeric,
+        validators_info -> Jsonb,
+    }
+}
+
 diesel::allow_tables_to_appear_in_same_query!(
     account_state,
     block,
     chunk,
     meta,
+    protocol_configs,
     receipt_map,
     receipt_outcome,
     state_changes_access_key,
@@ -127,4 +146,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     state_changes_data,
     transaction_cache,
     transaction_detail,
+    validators,
 );

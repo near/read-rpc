@@ -106,4 +106,19 @@ pub trait StateIndexerDbManager {
 
     async fn update_meta(&self, indexer_id: &str, block_height: u64) -> anyhow::Result<()>;
     async fn get_last_processed_block_height(&self, indexer_id: &str) -> anyhow::Result<u64>;
+    async fn add_validators(
+        &self,
+        epoch_id: near_indexer_primitives::CryptoHash,
+        epoch_height: u64,
+        epoch_start_height: u64,
+        validators_info: &near_primitives::views::EpochValidatorInfo,
+    ) -> anyhow::Result<()>;
+
+    async fn add_protocol_config(
+        &self,
+        epoch_id: near_indexer_primitives::CryptoHash,
+        epoch_height: u64,
+        epoch_start_height: u64,
+        protocol_config: &near_chain_configs::ProtocolConfigView,
+    ) -> anyhow::Result<()>;
 }

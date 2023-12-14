@@ -20,6 +20,8 @@ pub struct ScyllaDBManager {
     get_receipt: PreparedStatement,
     get_transaction_by_hash: PreparedStatement,
     get_stored_at_block_height_and_shard_id_by_block_height: PreparedStatement,
+    get_validators_by_epoch_id: PreparedStatement,
+    get_protocol_config_by_epoch_id: PreparedStatement,
 }
 
 #[async_trait::async_trait]
@@ -114,6 +116,14 @@ impl ScyllaStorageManager for ScyllaDBManager {
             get_stored_at_block_height_and_shard_id_by_block_height: Self::prepare_read_query(
                 &scylla_db_session,
                 "SELECT stored_at_block_height, shard_id FROM state_indexer.chunks WHERE block_height = ?",
+            ).await?,
+            get_validators_by_epoch_id: Self::prepare_read_query(
+                &scylla_db_session,
+                "SELECT epoch_height, validators_info FROM state_indexer.validators WHERE epoch_id = ?",
+            ).await?,
+            get_protocol_config_by_epoch_id: Self::prepare_read_query(
+                &scylla_db_session,
+                "SELECT protocol_config FROM state_indexer.protocol_configs WHERE epoch_id = ?",
             ).await?,
         }))
     }
@@ -408,5 +418,50 @@ impl crate::ReaderDbManager for ScyllaDBManager {
                     shard_id
                 ))
             })
+    }
+
+    async fn get_validators_by_epoch_id(
+        &self,
+        epoch_id: near_primitives::hash::CryptoHash,
+    ) -> anyhow::Result<readnode_primitives::EpochValidatorsInfo> {
+        let (epoch_height, validators_info) = Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.get_validators_by_epoch_id,
+            (epoch_id.to_string(),),
+        )
+        .await?
+        .single_row()?
+        .into_typed::<(num_bigint::BigInt, String)>()?;
+
+        let validators_info: near_primitives::views::EpochValidatorInfo =
+            serde_json::from_str(&validators_info)?;
+
+        Ok(readnode_primitives::EpochValidatorsInfo {
+            epoch_id,
+            epoch_height: epoch_height
+                .to_u64()
+                .ok_or_else(|| anyhow::anyhow!("Failed to parse `epoch_height` to u64"))?,
+            epoch_start_height: validators_info.epoch_start_height,
+            validators_info,
+        })
+    }
+
+    async fn get_protocol_config_by_epoch_id(
+        &self,
+        epoch_id: near_primitives::hash::CryptoHash,
+    ) -> anyhow::Result<near_chain_configs::ProtocolConfigView> {
+        let (protocol_config,) = Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.get_protocol_config_by_epoch_id,
+            (epoch_id.to_string(),),
+        )
+        .await?
+        .single_row()?
+        .into_typed::<(String,)>()?;
+
+        let protocol_config: near_chain_configs::ProtocolConfigView =
+            serde_json::from_str(&protocol_config)?;
+
+        Ok(protocol_config)
     }
 }
