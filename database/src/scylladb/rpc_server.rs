@@ -195,6 +195,38 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         Ok(stata_keys)
     }
 
+    async fn get_state_keys_by_page(
+        &self,
+        account_id: &near_primitives::types::AccountId,
+        page_state: Option<String>,
+    ) -> anyhow::Result<(Vec<readnode_primitives::StateKey>, Option<String>)> {
+        let mut paged_query = self.get_all_state_keys.clone();
+        paged_query.set_page_size(1000);
+
+        let result = if let Some(page_state) = page_state {
+            let page_bytes = hex::decode(page_state)?;
+            let page_state = bytes::Bytes::from(page_bytes);
+            self.scylla_session
+                .execute_paged(&paged_query, (account_id.to_string(),), Some(page_state))
+                .await?
+        } else {
+            Self::execute_prepared_query(
+                &self.scylla_session,
+                &paged_query,
+                (account_id.to_string(),),
+            )
+            .await?
+        };
+
+        let new_page_state = result.paging_state.as_ref().map(hex::encode);
+
+        let stata_keys = result
+            .rows_typed::<(String,)>()?
+            .filter_map(|row| row.ok().and_then(|(value,)| hex::decode(value).ok()));
+
+        Ok((stata_keys.collect(), new_page_state))
+    }
+
     /// Returns state keys for the given account id filtered by the given prefix
     async fn get_state_keys_by_prefix(
         &self,

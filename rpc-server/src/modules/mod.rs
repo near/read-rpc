@@ -4,4 +4,5 @@ pub mod gas;
 pub mod network;
 pub mod queries;
 pub mod receipts;
+pub mod state;
 pub mod transactions;

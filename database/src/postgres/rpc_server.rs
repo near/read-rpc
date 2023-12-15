@@ -96,6 +96,14 @@ impl crate::ReaderDbManager for PostgresDBManager {
         Ok(result.collect())
     }
 
+    async fn get_state_keys_by_page(
+        &self,
+        _account_id: &near_primitives::types::AccountId,
+        _page_state: Option<String>,
+    ) -> anyhow::Result<(Vec<readnode_primitives::StateKey>, Option<String>)> {
+        todo!()
+    }
+
     async fn get_state_key_value(
         &self,
         account_id: &near_primitives::types::AccountId,

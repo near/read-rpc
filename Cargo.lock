@@ -1700,6 +1700,7 @@ dependencies = [
  "async-trait",
  "bigdecimal 0.4.2",
  "borsh 0.10.3",
+ "bytes",
  "diesel",
  "diesel-async",
  "futures",
