@@ -1,17 +1,18 @@
 use crate::config::ServerContext;
 use crate::errors::RPCError;
 use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
-use crate::modules::network::{friendly_memory_size_format, StatusResponse};
+use crate::modules::network::{
+    friendly_memory_size_format, parse_validator_request, StatusResponse,
+};
 #[cfg(feature = "shadow_data_consistency")]
 use crate::utils::shadow_compare_results;
 use jsonrpc_v2::{Data, Params};
 use near_primitives::types::EpochReference;
-use serde_json::Value;
 use sysinfo::{System, SystemExt};
 
 pub async fn status(
     data: Data<ServerContext>,
-    Params(_params): Params<Value>,
+    Params(_params): Params<serde_json::Value>,
 ) -> Result<StatusResponse, RPCError> {
     let sys = System::new_all();
     let total_memory = sys.total_memory();
@@ -54,7 +55,7 @@ pub async fn status(
 }
 
 pub async fn network_info(
-    Params(_params): Params<Value>,
+    Params(_params): Params<serde_json::Value>,
 ) -> Result<near_jsonrpc_primitives::types::network_info::RpcNetworkInfoResponse, RPCError> {
     Err(RPCError::unimplemented_error(
         "Method is not implemented on this type of node. Please send a request to NEAR JSON RPC instead.",
@@ -63,16 +64,19 @@ pub async fn network_info(
 
 pub async fn validators(
     data: Data<ServerContext>,
-    Params(params): Params<near_jsonrpc_primitives::types::validator::RpcValidatorRequest>,
+    Params(params): Params<serde_json::Value>,
 ) -> Result<near_jsonrpc_primitives::types::validator::RpcValidatorResponse, RPCError> {
-    tracing::debug!("`validators` called with parameters: {:?}", params);
+    let request = parse_validator_request(params)
+        .await
+        .map_err(|err| RPCError::parse_error(&err.to_string()))?;
+    tracing::debug!("`validators` called with parameters: {:?}", request);
     crate::metrics::VALIDATORS_REQUESTS_TOTAL.inc();
-    let validator_info = validators_call(&data, &params).await;
+    let validator_info = validators_call(&data, &request).await;
 
     #[cfg(feature = "shadow_data_consistency")]
     {
         let near_rpc_client = &data.near_rpc_client.clone();
-        let meta_data = format!("{:?}", params);
+        let meta_data = format!("{:?}", request);
         let (read_rpc_response_json, is_response_ok) = match &validator_info {
             Ok(validators) => (serde_json::to_value(&validators), true),
             Err(err) => (serde_json::to_value(err), false),
@@ -80,7 +84,7 @@ pub async fn validators(
         let comparison_result = shadow_compare_results(
             read_rpc_response_json,
             near_rpc_client.clone(),
-            params,
+            request,
             is_response_ok,
         )
         .await;
@@ -111,7 +115,7 @@ pub async fn validators_ordered(
 
 pub async fn genesis_config(
     data: Data<ServerContext>,
-    Params(_params): Params<Value>,
+    Params(_params): Params<serde_json::Value>,
 ) -> Result<near_chain_configs::GenesisConfig, RPCError> {
     Ok(data.genesis_config.clone())
 }
