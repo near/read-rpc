@@ -18,11 +18,12 @@ pub trait ReaderDbManager {
         account_id: &near_primitives::types::AccountId,
     ) -> anyhow::Result<Vec<readnode_primitives::StateKey>>;
 
+    /// Returns state keys for the given account id by page
     async fn get_state_keys_by_page(
         &self,
         account_id: &near_primitives::types::AccountId,
-        page_state: Option<String>,
-    ) -> anyhow::Result<(Vec<readnode_primitives::StateKey>, Option<String>)>;
+        page_token: crate::PageToken,
+    ) -> anyhow::Result<(Vec<readnode_primitives::StateKey>, crate::PageToken)>;
 
     /// Returns state keys for the given account id filtered by the given prefix
     async fn get_state_keys_by_prefix(

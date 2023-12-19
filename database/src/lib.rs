@@ -1,10 +1,10 @@
 mod base;
 
-pub use crate::base::AdditionalDatabaseOptions;
 use crate::base::BaseDbManager;
 pub use crate::base::ReaderDbManager;
 pub use crate::base::StateIndexerDbManager;
 pub use crate::base::TxIndexerDbManager;
+pub use crate::base::{AdditionalDatabaseOptions, PageToken};
 
 #[cfg(feature = "scylla_db")]
 pub mod scylladb;

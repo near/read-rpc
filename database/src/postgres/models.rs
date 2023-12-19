@@ -1,4 +1,5 @@
 use crate::schema::*;
+use borsh::{BorshDeserialize, BorshSerialize};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 
@@ -296,6 +297,28 @@ impl Chunk {
     }
 }
 
+#[derive(borsh::BorshSerialize, borsh::BorshDeserialize, Clone, Debug)]
+struct PageState {
+    page_size: i64,
+    offset: i64,
+}
+
+impl PageState {
+    fn new(page_size: i64) -> Self {
+        Self {
+            page_size,
+            offset: 0,
+        }
+    }
+
+    fn next_page(&self) -> Self {
+        Self {
+            page_size: self.page_size,
+            offset: self.offset + self.page_size,
+        }
+    }
+}
+
 #[derive(Insertable, Queryable, Selectable)]
 #[diesel(table_name = account_state)]
 pub struct AccountState {
@@ -323,6 +346,7 @@ impl AccountState {
         let response = account_state::table
             .filter(account_state::account_id.eq(account_id))
             .select(Self::as_select())
+            .limit(25000)
             .load(&mut conn)
             .await?;
 
@@ -330,6 +354,39 @@ impl AccountState {
             .into_iter()
             .map(|account_state_key| account_state_key.data_key)
             .collect())
+    }
+
+    pub async fn get_state_keys_by_page(
+        mut conn: crate::postgres::PgAsyncConn,
+        account_id: &str,
+        page_token: crate::PageToken,
+    ) -> anyhow::Result<(Vec<String>, crate::PageToken)> {
+        let page_state = if let Some(page_state_token) = page_token {
+            PageState::try_from_slice(&hex::decode(page_state_token)?)?
+        } else {
+            PageState::new(1000)
+        };
+        let response = account_state::table
+            .filter(account_state::account_id.eq(account_id))
+            .select(Self::as_select())
+            .limit(page_state.page_size)
+            .offset(page_state.offset)
+            .load(&mut conn)
+            .await?;
+
+        let state_keys = response
+            .into_iter()
+            .map(|account_state_key| account_state_key.data_key)
+            .collect::<Vec<String>>();
+
+        if state_keys.len() < page_state.page_size as usize {
+            Ok((state_keys, None))
+        } else {
+            Ok((
+                state_keys,
+                Some(hex::encode(page_state.next_page().try_to_vec()?)),
+            ))
+        }
     }
 
     pub async fn get_state_keys_by_prefix(

@@ -13,17 +13,17 @@ pub async fn view_state_paginated(
         .await
         .map_err(near_jsonrpc_primitives::errors::RpcError::from)?;
 
-    let state_value = get_state_keys_from_db_paginated(
+    let state_values = get_state_keys_from_db_paginated(
         &data.db_manager,
         &params.account_id,
         block.block_height,
-        params.next_page,
+        params.next_page_token,
     )
     .await;
 
     Ok(crate::modules::state::RpcViewStatePaginatedResponse {
-        values: state_value.values,
-        next_page: state_value.next_page,
+        values: state_values.values,
+        next_page_token: state_values.next_page_token,
         block_height: block.block_height,
         block_hash: block.block_hash,
     })

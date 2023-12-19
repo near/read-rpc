@@ -49,15 +49,13 @@ pub async fn get_state_keys_from_db(
     };
     match result {
         Ok(state_keys) => {
+            // 3 nodes * 8 cpus * 100 = 2400
+            // TODO: 2400 is hardcoded value. Make it configurable.
             for state_keys_chunk in state_keys.chunks(2400) {
-                // 3 nodes * 8 cpus * 100 = 2400
-                // TODO: 2400 is hardcoded value. Make it configurable.
-                let mut tasks = futures::stream::FuturesUnordered::new();
-                for state_key in state_keys_chunk {
-                    let state_value_result_future =
-                        db_manager.get_state_key_value(account_id, block_height, state_key.clone());
-                    tasks.push(state_value_result_future);
-                }
+                let futures = state_keys_chunk.iter().map(|state_key| {
+                    db_manager.get_state_key_value(account_id, block_height, state_key.clone())
+                });
+                let mut tasks = futures::stream::FuturesUnordered::from_iter(futures);
                 while let Some((state_key, state_value)) = tasks.next().await {
                     if !state_value.is_empty() {
                         data.insert(state_key, state_value);
