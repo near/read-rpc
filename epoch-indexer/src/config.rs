@@ -117,7 +117,7 @@ impl Opts {
         );
         let s3_config = aws_sdk_s3::Config::builder()
             .credentials_provider(credentials)
-            .region(aws_sdk_s3::Region::new(self.region.clone()))
+            .region(aws_types::region::Region::new(self.region.clone()))
             .build();
 
         near_lake_framework::s3_fetchers::LakeS3Client::new(aws_sdk_s3::Client::from_conf(

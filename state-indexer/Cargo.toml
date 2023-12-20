@@ -6,8 +6,8 @@ edition = "2021"
 
 [dependencies]
 actix-web = "4.2.1"
-aws-sdk-s3 = "0.23.0"
-aws-types = "0.53.0"
+aws-sdk-s3 = "0.39.1"
+aws-types = "1.0.0"
 anyhow = "1.0.70"
 borsh = "0.10.2"
 clap = { version = "3.1.6", features = ["color", "derive", "env"] }
@@ -47,7 +47,7 @@ epoch-indexer = { path = "../epoch-indexer" }
 near-primitives = "1.36.0"
 near-indexer-primitives = "1.36.0"
 near-jsonrpc-client = "0.7.0"
-near-lake-framework = "0.7.4"
+near-lake-framework = "0.7.6"
 
 [features]
 default = ["scylla_db"]

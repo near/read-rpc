@@ -127,7 +127,7 @@ impl Opts {
         );
         aws_sdk_s3::Config::builder()
             .credentials_provider(credentials)
-            .region(aws_sdk_s3::Region::new(self.region.clone()))
+            .region(aws_types::region::Region::new(self.region.clone()))
             .build()
     }
 
