@@ -169,6 +169,10 @@ async fn main() -> anyhow::Result<()> {
     let rpc = Server::new()
         .with_data(Data::new(state))
         .with_method("query", modules::queries::methods::query)
+        .with_method(
+            "view_state_paginated",
+            modules::state::methods::view_state_paginated,
+        )
         .with_method("block", modules::blocks::methods::block)
         .with_method(
             "EXPERIMENTAL_changes",

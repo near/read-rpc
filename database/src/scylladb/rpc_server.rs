@@ -175,7 +175,11 @@ impl crate::ReaderDbManager for ScyllaDBManager {
             })
     }
 
-    /// Returns all state keys for the given account id
+    /// Returns 25000 state keys for the given account id
+    /// We limited the number of state keys returned because of the following reasons:
+    /// 1. The query is very slow and takes a lot of time to execute
+    /// 2. The contract state could be very large and we don't want to return all of it at once
+    /// To get all state keys use `get_state_keys_by_page` method
     async fn get_state_keys_all(
         &self,
         account_id: &near_primitives::types::AccountId,
@@ -187,12 +191,48 @@ impl crate::ReaderDbManager for ScyllaDBManager {
             .execute_iter(paged_query, (account_id.to_string(),))
             .await?
             .into_typed::<(String,)>();
-        let mut stata_keys = vec![];
+        let mut state_keys = vec![];
         while let Some(next_row_res) = rows_stream.next().await {
             let (value,): (String,) = next_row_res?;
-            stata_keys.push(hex::decode(value)?);
+            state_keys.push(hex::decode(value)?);
         }
-        Ok(stata_keys)
+        Ok(state_keys)
+    }
+
+    /// Return contract state keys by page
+    /// The page size is 1000 keys
+    /// The page_token is a hex string of the scylla page_state
+    /// On the first call the page_token should be None
+    /// On the last page the page_token will be None
+    async fn get_state_keys_by_page(
+        &self,
+        account_id: &near_primitives::types::AccountId,
+        page_token: crate::PageToken,
+    ) -> anyhow::Result<(Vec<readnode_primitives::StateKey>, crate::PageToken)> {
+        let mut paged_query = self.get_all_state_keys.clone();
+        paged_query.set_page_size(1000);
+
+        let result = if let Some(page_state) = page_token {
+            let page_state = bytes::Bytes::from(hex::decode(page_state)?);
+            self.scylla_session
+                .execute_paged(&paged_query, (account_id.to_string(),), Some(page_state))
+                .await?
+        } else {
+            Self::execute_prepared_query(
+                &self.scylla_session,
+                &paged_query,
+                (account_id.to_string(),),
+            )
+            .await?
+        };
+
+        let new_page_token = result.paging_state.as_ref().map(hex::encode);
+
+        let state_keys = result
+            .rows_typed::<(String,)>()?
+            .filter_map(|row| row.ok().and_then(|(value,)| hex::decode(value).ok()));
+
+        Ok((state_keys.collect(), new_page_token))
     }
 
     /// Returns state keys for the given account id filtered by the given prefix

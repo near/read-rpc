@@ -4,6 +4,7 @@ use std::ops::Deref;
 #[cfg(feature = "account_access_keys")]
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
+use futures::StreamExt;
 use near_crypto::{KeyType, PublicKey};
 use near_primitives::utils::create_random_seed;
 use tokio::task;
@@ -28,7 +29,7 @@ pub async fn get_state_keys_from_db(
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
     prefix: &[u8],
-) -> HashMap<Vec<u8>, Vec<u8>> {
+) -> HashMap<readnode_primitives::StateKey, readnode_primitives::StateValue> {
     tracing::debug!(
         "`get_state_keys_from_db` call. AccountId {}, block {}, prefix {:?}",
         account_id,
@@ -48,16 +49,14 @@ pub async fn get_state_keys_from_db(
     };
     match result {
         Ok(state_keys) => {
-            for state_keys_chunk in state_keys.chunks(1000) {
-                // TODO: 1000 is hardcoded value. Make it configurable.
-                let mut tasks_futures = vec![];
-                for state_key in state_keys_chunk {
-                    let state_value_result_future =
-                        db_manager.get_state_key_value(account_id, block_height, state_key.clone());
-                    tasks_futures.push(state_value_result_future);
-                }
-                let results = futures::future::join_all(tasks_futures).await;
-                for (state_key, state_value) in results.into_iter() {
+            // 3 nodes * 8 cpus * 100 = 2400
+            // TODO: 2400 is hardcoded value. Make it configurable.
+            for state_keys_chunk in state_keys.chunks(2400) {
+                let futures = state_keys_chunk.iter().map(|state_key| {
+                    db_manager.get_state_key_value(account_id, block_height, state_key.clone())
+                });
+                let mut tasks = futures::stream::FuturesUnordered::from_iter(futures);
+                while let Some((state_key, state_value)) = tasks.next().await {
                     if !state_value.is_empty() {
                         data.insert(state_key, state_value);
                     }
@@ -124,14 +123,13 @@ pub async fn fetch_state_from_db(
     if state_from_db.is_empty() {
         anyhow::bail!("Data not found in db")
     } else {
-        let mut values = Vec::new();
-        for (key, value) in state_from_db.iter() {
-            let state_item = near_primitives::views::StateItem {
-                key: key.to_vec().into(),
-                value: value.to_vec().into(),
-            };
-            values.push(state_item)
-        }
+        let values = state_from_db
+            .into_iter()
+            .map(|(key, value)| near_primitives::views::StateItem {
+                key: key.into(),
+                value: value.into(),
+            })
+            .collect();
         Ok(near_primitives::views::ViewStateResult {
             values,
             proof: vec![], // TODO: this is hardcoded empty value since we don't support proofs yet

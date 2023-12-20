@@ -42,6 +42,8 @@ pub struct AdditionalDatabaseOptions {
     pub database_name: Option<String>,
 }
 
+pub type PageToken = Option<String>;
+
 #[async_trait::async_trait]
 pub trait BaseDbManager {
     async fn new(
