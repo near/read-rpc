@@ -19,7 +19,7 @@ pub async fn fetch_chunk_from_s3(
         block_height,
         shard_id
     );
-    match near_lake_framework::s3_fetchers::fetch_shard_or_retry(
+    match near_lake_framework::s3_fetchers::fetch_shard(
         s3_client,
         s3_bucket_name,
         block_height,

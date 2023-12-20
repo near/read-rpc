@@ -23,4 +23,4 @@ near-vm-runner = { git = 'https://github.com/near/nearcore.git', branch = '1.36.
 # TODO: We use forks to resolve nearcore dependency conflicts.
 # After updating the dependencies, we should use the published versions of the crates.
 near-jsonrpc-client = { git = 'https://github.com/kobayurii/near-jsonrpc-client-rs.git', branch = '0.7.0' }
-near-lake-framework = { git = 'https://github.com/kobayurii/near-lake-framework-rs.git', branch = '0.7.4' }
+near-lake-framework = { git = 'https://github.com/kobayurii/near-lake-framework-rs.git', branch = '0.7.6' }

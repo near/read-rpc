@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-aws-credential-types = "0.53.0"
-aws-sdk-s3 = "0.23.0"
-aws-types = "0.53.0"
+aws-credential-types = "1.0.0"
+aws-sdk-s3 = "0.39.1"
+aws-types = "1.0.0"
 anyhow = "1.0.70"
 clap = { version = "3.1.6", features = ["color", "derive", "env"] }
 dotenv = "0.15.0"
@@ -33,7 +33,7 @@ readnode-primitives = { path = "../readnode-primitives" }
 near-jsonrpc-client = "0.7.0"
 near-chain-configs = "1.36.0"
 near-indexer-primitives = "1.36.0"
-near-lake-framework = "0.7.4"
+near-lake-framework = "0.7.6"
 
 [features]
 default = ["scylla_db"]

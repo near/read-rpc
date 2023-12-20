@@ -342,7 +342,7 @@ pub async fn fetch_block(
             },
         ),
     };
-    let block_view = near_lake_framework::s3_fetchers::fetch_block_or_retry(
+    let block_view = near_lake_framework::s3_fetchers::fetch_block(
         &data.s3_client,
         &data.s3_bucket_name,
         block_height?,
@@ -537,7 +537,7 @@ async fn fetch_shards(
         .collect::<Vec<u64>>()
         .into_iter()
         .map(|shard_id| {
-            near_lake_framework::s3_fetchers::fetch_shard_or_retry(
+            near_lake_framework::s3_fetchers::fetch_shard(
                 &data.s3_client,
                 &data.s3_bucket_name,
                 block.block_height,
