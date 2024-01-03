@@ -8,7 +8,7 @@ actix-web = "4.2.1"
 anyhow = "1.0.70"
 async-trait = "0.1.66"
 aws-credential-types = "1.0.0"
-aws-sdk-s3 = "0.39.1"
+aws-sdk-s3 = { version = "0.39.1", features = ["behavior-version-latest"] }
 aws-types = "1.0.0"
 clap = { version = "3.2.22", features = ["color", "derive", "env"] }
 dotenv = "0.15.0"

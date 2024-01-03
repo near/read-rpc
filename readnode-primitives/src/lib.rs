@@ -242,7 +242,7 @@ where
     type Error = anyhow::Error;
 
     fn try_from(value: (String, String, T, T)) -> Result<Self, Self::Error> {
-        let receipt_id = CryptoHash::try_from(value.0.as_bytes()).map_err(|err| {
+        let receipt_id = CryptoHash::from_str(&value.0).map_err(|err| {
             anyhow::anyhow!("Failed to parse `receipt_id` to CryptoHash: {}", err)
         })?;
         let parent_transaction_hash = CryptoHash::from_str(&value.1).map_err(|err| {

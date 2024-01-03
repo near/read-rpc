@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 aws-credential-types = "1.0.0"
-aws-sdk-s3 = "0.39.1"
+aws-sdk-s3 = { version = "0.39.1", features = ["behavior-version-latest"] }
 aws-types = "1.0.0"
 anyhow = "1.0.70"
 clap = { version = "3.1.6", features = ["color", "derive", "env"] }
