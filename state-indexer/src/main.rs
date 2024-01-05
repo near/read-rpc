@@ -325,7 +325,7 @@ async fn main() -> anyhow::Result<()> {
     let stats = std::sync::Arc::new(tokio::sync::RwLock::new(metrics::Stats::new()));
     tokio::spawn(metrics::state_logger(std::sync::Arc::clone(&stats), opts.rpc_url().to_string()));
     let indexer_config = configuration::read_configuration().await?;
-
+    println!("!!!!!!! indexer_config {:?}", indexer_config);
     let mut handlers = tokio_stream::wrappers::ReceiverStream::new(stream)
         .map(|streamer_message| {
             handle_streamer_message(

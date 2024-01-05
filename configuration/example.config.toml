@@ -11,14 +11,14 @@ near_rpc_url = "https://beta.rpc.mainnet.near.org"
 near_archival_rpc_url = "https://beta.rpc.mainnet.near.org" # Optional
 
 # Rpc server general configuration
-[general.rpc-server]
+[general.rpc_server]
 
 # Referer header value
 # We want to set a custom referer to let NEAR JSON RPC nodes know that we are a read-rpc instance
 referer_header_value = "read-rpc"
 
 # Port for RPC server
-port = 8000
+server_port = 8000
 
 # Max gas burnt for contract function call
 # Default value is 300_000_000_000_000
@@ -39,13 +39,13 @@ reserved_memory = 0.25
 block_cache_size = 0.125
 
 # Tx indexer general configuration
-[general.tx-indexer]
+[general.tx_indexer]
 
 # Indexer ID to handle meta data about the instance
 indexer_id = "tx-indexer" # Unique indexer ID
 
 # Port for metrics server
-port = 8080
+metrics_server_port = 8080
 
 # To restore cache from db we use smart range blocks
 # Regular transaction takes some blocks to be finalized
@@ -54,31 +54,31 @@ port = 8080
 cache_restore_blocks_range = 1000
 
 # State indexer general configuration
-[general.state-indexer]
+[general.state_indexer]
 
 # Indexer ID to handle meta data about the instance
 indexer_id = "state-indexer" # Unique indexer ID
 
 # Port for metrics server
-port = 8081
+metrics_server_port = 8081
 
 # Concurrency for state indexer
 concurrency = 1
 
 # Epoch indexer general configuration
-[general.epoch-indexer]
+[general.epoch_indexer]
 
 # Indexer ID to handle meta data about the instance
 indexer_id = "epoch-indexer" # Unique indexer ID
 
-# Tracking acconunts configuration
-[accounts]
+# Tracking acconunts and state changes configuration
+[rightsizing]
+
 # Accounts to track. By default we track all accounts.
 # You can specify a list of accounts to track.
-tracked_accounts = ["test.near"]
+#tracked_accounts = ["test.near"]
+tracked_accounts = []
 
-# Tracking state changes configuration
-[state_changes]
 # State changes to track. By default we track all state changes.
 # You can specify a list of state changes to track.
 # Possible values: "state", "access_key", "contract_code"
@@ -116,7 +116,7 @@ database_password = "password" # Optional database password
 database_name = "near-indexer" # Optional database name
 
 # Database configuration for rpc server
-[database.rpc-server]
+[database.rpc_server]
 
 # ScyllaDB preferred DataCenter
 # Accepts the DC name of the ScyllaDB to filter the connection to that DC only (preferrably).
@@ -138,7 +138,7 @@ strict_mode = false
 keepalive_interval = 60
 
 # Database configuration for tx indexer
-[database.tx-indexer]
+[database.tx_indexer]
 
 # ScyllaDB preferred DataCenter
 # Accepts the DC name of the ScyllaDB to filter the connection to that DC only (preferrably).
@@ -162,7 +162,7 @@ strict_mode = true
 max_db_parallel_queries = 144
 
 # Database configuration for state indexer
-[database.state-indexer]
+[database.state_indexer]
 
 # ScyllaDB preferred DataCenter
 # Accepts the DC name of the ScyllaDB to filter the connection to that DC only (preferrably).
@@ -181,7 +181,7 @@ max_retry = 5
 strict_mode = true
 
 # Database configuration for epoch indexer
-[database.epoch-indexer]
+[database.epoch_indexer]
 # ScyllaDB preferred DataCenter
 # Accepts the DC name of the ScyllaDB to filter the connection to that DC only (preferrably).
 # If you connect to multi-DC cluter, you might experience big latencies while working with the DB.
