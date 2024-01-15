@@ -2201,12 +2201,9 @@ name = "epoch-indexer"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aws-credential-types",
- "aws-sdk-s3",
- "aws-types",
  "clap 3.2.25",
+ "configuration",
  "database",
- "dotenv",
  "futures",
  "near-chain-configs",
  "near-indexer-primitives",

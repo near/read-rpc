@@ -47,4 +47,10 @@ impl Config {
     ) -> anyhow::Result<near_lake_framework::LakeConfig> {
         self.lake_config.lake_config(start_block_height).await
     }
+    pub async fn to_s3_client(&self) -> near_lake_framework::s3_fetchers::LakeS3Client {
+        let s3_config = self.lake_config.s3_config().await;
+        near_lake_framework::s3_fetchers::LakeS3Client::new(aws_sdk_s3::Client::from_conf(
+            s3_config,
+        ))
+    }
 }
