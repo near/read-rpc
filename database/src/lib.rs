@@ -18,20 +18,9 @@ pub use postgres::{models, schema};
 
 pub mod primitives;
 
-pub async fn prepare_db_manager<T>(
-    database_url: &str,
-    database_user: Option<&str>,
-    database_password: Option<&str>,
-    database_options: AdditionalDatabaseOptions,
-) -> anyhow::Result<T>
+pub async fn prepare_db_manager<T>(config: &configuration::DatabaseConfig) -> anyhow::Result<T>
 where
     T: BaseDbManager + Send + Sync + 'static,
 {
-    Ok(*T::new(
-        database_url,
-        database_user,
-        database_password,
-        database_options,
-    )
-    .await?)
+    Ok(*T::new(config).await?)
 }

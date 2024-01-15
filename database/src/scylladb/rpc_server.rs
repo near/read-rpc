@@ -30,21 +30,16 @@ pub struct ScyllaDBManager {
 
 #[async_trait::async_trait]
 impl crate::BaseDbManager for ScyllaDBManager {
-    async fn new(
-        database_url: &str,
-        database_user: Option<&str>,
-        database_password: Option<&str>,
-        database_options: crate::AdditionalDatabaseOptions,
-    ) -> anyhow::Result<Box<Self>> {
+    async fn new(config: &configuration::DatabaseConfig) -> anyhow::Result<Box<Self>> {
         let scylla_db_session = std::sync::Arc::new(
             Self::get_scylladb_session(
-                database_url,
-                database_user,
-                database_password,
-                database_options.preferred_dc.as_deref(),
-                database_options.keepalive_interval,
-                database_options.max_retry,
-                database_options.strict_mode,
+                &config.database_url,
+                config.database_user.as_deref(),
+                config.database_password.as_deref(),
+                config.rpc_server.preferred_dc.as_deref(),
+                Some(config.rpc_server.keepalive_interval),
+                config.rpc_server.max_retry,
+                config.rpc_server.strict_mode,
             )
             .await?,
         );

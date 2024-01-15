@@ -289,55 +289,53 @@ async fn store_state_change(
 async fn main() -> anyhow::Result<()> {
     // We use it to automatically search the for root certificates to perform HTTPS calls
     // (sending telemetry and downloading genesis)
-    dotenv::dotenv().ok();
-
     openssl_probe::init_ssl_cert_env_vars();
 
     configs::init_tracing()?;
 
     let opts: Opts = Opts::parse();
 
+    let indexer_config = configuration::read_configuration().await?;
+
     #[cfg(feature = "scylla_db")]
-    let db_manager = database::prepare_db_manager::<database::scylladb::state_indexer::ScyllaDBManager>(
-        &opts.database_url,
-        opts.database_user.as_deref(),
-        opts.database_password.as_deref(),
-        opts.to_additional_database_options().await,
-    )
-    .await?;
+    let db_manager =
+        database::prepare_db_manager::<database::scylladb::state_indexer::ScyllaDBManager>(&indexer_config.database)
+            .await?;
 
     #[cfg(all(feature = "postgres_db", not(feature = "scylla_db")))]
-    let db_manager = database::prepare_db_manager::<database::postgres::state_indexer::PostgresDBManager>(
-        &opts.database_url,
-        opts.database_user.as_deref(),
-        opts.database_password.as_deref(),
-        opts.to_additional_database_options().await,
-    )
-    .await?;
+    let db_manager =
+        database::prepare_db_manager::<database::postgres::state_indexer::PostgresDBManager>(&indexer_config.database)
+            .await?;
 
-    let config: near_lake_framework::LakeConfig = opts.to_lake_config(&db_manager).await?;
-    let (sender, stream) = near_lake_framework::streamer(config);
+    let indexer_id = &indexer_config.general.state_indexer.indexer_id;
+    let rpc_client = near_jsonrpc_client::JsonRpcClient::connect(&indexer_config.general.near_rpc_url);
+    let start_block_height =
+        configs::get_start_block_height(&rpc_client, &db_manager, &opts.start_options, indexer_id).await?;
 
-    let rpc_client = near_jsonrpc_client::JsonRpcClient::connect(opts.rpc_url());
+    let lake_config = indexer_config.to_lake_config(start_block_height).await?;
+    let (sender, stream) = near_lake_framework::streamer(lake_config);
+
     // Initiate metrics http server
-    tokio::spawn(metrics::init_server(opts.port).expect("Failed to start metrics server"));
+    tokio::spawn(
+        metrics::init_server(indexer_config.general.state_indexer.metrics_server_port)
+            .expect("Failed to start metrics server"),
+    );
 
     let stats = std::sync::Arc::new(tokio::sync::RwLock::new(metrics::Stats::new()));
-    tokio::spawn(metrics::state_logger(std::sync::Arc::clone(&stats), opts.rpc_url().to_string()));
-    let indexer_config = configuration::read_configuration().await?;
-    println!("!!!!!!! indexer_config {:?}", indexer_config);
+    tokio::spawn(metrics::state_logger(std::sync::Arc::clone(&stats), rpc_client.clone()));
+
     let mut handlers = tokio_stream::wrappers::ReceiverStream::new(stream)
         .map(|streamer_message| {
             handle_streamer_message(
                 streamer_message,
                 &db_manager,
                 &rpc_client,
-                &opts.indexer_id,
+                indexer_id,
                 indexer_config.clone(),
                 std::sync::Arc::clone(&stats),
             )
         })
-        .buffer_unordered(opts.concurrency);
+        .buffer_unordered(indexer_config.general.state_indexer.concurrency);
 
     while let Some(_handle_message) = handlers.next().await {
         if let Err(err) = _handle_message {

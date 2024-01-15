@@ -15,7 +15,7 @@ pub trait PostgresStorageManager {
         database_url: &str,
         database_user: Option<&str>,
         database_password: Option<&str>,
-        database_options: crate::AdditionalDatabaseOptions,
+        database_name: Option<&str>,
     ) -> anyhow::Result<PgAsyncPool> {
         let connection_string = if database_url.starts_with("postgres://") {
             database_url.to_string()
@@ -25,7 +25,7 @@ pub trait PostgresStorageManager {
                 database_user.unwrap(),
                 database_password.unwrap(),
                 database_url,
-                database_options.database_name.unwrap()
+                database_name.unwrap()
             )
         };
         let config = diesel_async::pooled_connection::AsyncDieselConnectionManager::<
