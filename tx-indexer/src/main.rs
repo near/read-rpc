@@ -13,11 +13,11 @@ pub(crate) const INDEXER: &str = "tx_indexer";
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    dotenv::dotenv().ok();
-
     init_tracing()?;
 
     let opts: Opts = Opts::parse();
+
+    let indexer_config = configuration::read_configuration().await?;
 
     tracing::info!(target: INDEXER, "Connecting to db...");
     #[cfg(feature = "scylla_db")]
@@ -25,10 +25,7 @@ async fn main() -> anyhow::Result<()> {
         Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>,
     > = std::sync::Arc::new(Box::new(
         database::prepare_db_manager::<database::scylladb::tx_indexer::ScyllaDBManager>(
-            &opts.database_url,
-            opts.database_user.as_deref(),
-            opts.database_password.as_deref(),
-            opts.to_additional_database_options().await,
+            &indexer_config.database,
         )
         .await?,
     ));
@@ -37,50 +34,55 @@ async fn main() -> anyhow::Result<()> {
         Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>,
     > = std::sync::Arc::new(Box::new(
         database::prepare_db_manager::<database::postgres::tx_indexer::PostgresDBManager>(
-            &opts.database_url,
-            opts.database_user.as_deref(),
-            opts.database_password.as_deref(),
-            opts.to_additional_database_options().await,
+            &indexer_config.database,
         )
         .await?,
     ));
+    let indexer_id = &indexer_config.general.tx_indexer.indexer_id;
+    let rpc_client =
+        near_jsonrpc_client::JsonRpcClient::connect(&indexer_config.general.near_rpc_url);
+    let start_block_height =
+        config::get_start_block_height(&rpc_client, &db_manager, &opts.start_options, indexer_id)
+            .await?;
 
-    let start_block_height = config::get_start_block_height(&opts, &db_manager).await?;
     tracing::info!(target: INDEXER, "Generating LakeConfig...");
-    let config: near_lake_framework::LakeConfig = opts.to_lake_config(start_block_height).await?;
+    let lake_config = indexer_config.to_lake_config(start_block_height).await?;
 
     tracing::info!(target: INDEXER, "Creating hash storage...");
     let tx_collecting_storage = std::sync::Arc::new(
         storage::database::HashStorageWithDB::init_with_restore(
             db_manager.clone(),
             start_block_height,
-            opts.cache_restore_blocks_range,
-            opts.max_db_parallel_queries,
+            indexer_config.general.tx_indexer.cache_restore_blocks_range,
+            indexer_config.database.tx_indexer.max_db_parallel_queries,
         )
         .await?,
     );
 
     tracing::info!(target: INDEXER, "Instantiating the stream...",);
-    let (sender, stream) = near_lake_framework::streamer(config);
+    let (sender, stream) = near_lake_framework::streamer(lake_config);
 
     // Initiate metrics http server
-    tokio::spawn(metrics::init_server(opts.port).expect("Failed to start metrics server"));
+    tokio::spawn(
+        metrics::init_server(indexer_config.general.tx_indexer.metrics_server_port)
+            .expect("Failed to start metrics server"),
+    );
 
     let stats = std::sync::Arc::new(tokio::sync::RwLock::new(metrics::Stats::new()));
     tokio::spawn(metrics::state_logger(
         std::sync::Arc::clone(&stats),
-        opts.rpc_url().to_string(),
+        rpc_client.clone(),
     ));
 
     tracing::info!(target: INDEXER, "Starting tx indexer...",);
     let mut handlers = tokio_stream::wrappers::ReceiverStream::new(stream)
         .map(|streamer_message| {
             handle_streamer_message(
-                opts.chain_id.clone(),
+                indexer_config.general.chain_id.clone(),
                 streamer_message,
                 &db_manager,
                 &tx_collecting_storage,
-                &opts.indexer_id,
+                indexer_id,
                 std::sync::Arc::clone(&stats),
             )
         })
@@ -103,7 +105,7 @@ async fn main() -> anyhow::Result<()> {
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn handle_streamer_message(
-    chain_id: config::ChainId,
+    chain_id: configuration::ChainId,
     streamer_message: near_indexer_primitives::StreamerMessage,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<impl storage::base::TxCollectingStorage>,

@@ -1,5 +1,5 @@
 pub(crate) mod database;
-mod general;
+pub(crate) mod general;
 mod lake;
 mod rightsizing;
 

@@ -2,6 +2,7 @@ use std::path::Path;
 mod configs;
 
 pub use crate::configs::database::DatabaseConfig;
+pub use crate::configs::general::ChainId;
 pub use crate::configs::Config;
 
 pub async fn read_configuration_from_file(path_file: &str) -> anyhow::Result<Config> {

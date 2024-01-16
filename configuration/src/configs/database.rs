@@ -85,7 +85,7 @@ pub struct DatabaseTxIndexerConfig {
         deserialize_with = "deserialize_data_or_env",
         default = "DatabaseTxIndexerConfig::default_max_db_parallel_queries"
     )]
-    pub max_db_parallel_queries: u16,
+    pub max_db_parallel_queries: i64,
 }
 
 impl DatabaseTxIndexerConfig {
@@ -97,7 +97,7 @@ impl DatabaseTxIndexerConfig {
         true
     }
 
-    pub fn default_max_db_parallel_queries() -> u16 {
+    pub fn default_max_db_parallel_queries() -> i64 {
         144
     }
 }
