@@ -12,3 +12,35 @@ pub struct CacheBlock {
     pub state_root: near_primitives::hash::CryptoHash,
     pub epoch_id: near_primitives::hash::CryptoHash,
 }
+
+#[derive(Debug)]
+pub struct FinaleBlockInfo {
+    pub final_block_cache: CacheBlock,
+    pub current_protocol_config: near_chain_configs::ProtocolConfigView,
+}
+
+impl FinaleBlockInfo {
+    pub async fn new(
+        near_rpc_client: &crate::utils::JsonRpcClient,
+        blocks_cache: &std::sync::Arc<
+            std::sync::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>,
+        >,
+    ) -> Self {
+        let final_block = crate::utils::get_final_cache_block(near_rpc_client)
+            .await
+            .expect("Error to get final block");
+        let protocol_config = crate::utils::get_current_protocol_config(near_rpc_client)
+            .await
+            .expect("Error to get protocol_config");
+
+        blocks_cache
+            .write()
+            .unwrap()
+            .put(final_block.block_height, final_block);
+
+        Self {
+            final_block_cache: final_block,
+            current_protocol_config: protocol_config,
+        }
+    }
+}

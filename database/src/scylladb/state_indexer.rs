@@ -176,6 +176,15 @@ impl ScyllaStorageManager for ScyllaDBManager {
         scylla_db_session
             .query(
                 "
+                CREATE INDEX IF NOT EXISTS validators_epoch_end_height ON validators (epoch_end_height);
+            ",
+                &[],
+            )
+            .await?;
+
+        scylla_db_session
+            .query(
+                "
                 CREATE TABLE IF NOT EXISTS protocol_configs (
                     epoch_id varchar,
                     epoch_height varint,

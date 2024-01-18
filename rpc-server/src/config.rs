@@ -1,4 +1,4 @@
-use crate::modules::blocks::CacheBlock;
+use crate::modules::blocks::{CacheBlock, FinaleBlockInfo};
 use clap::Parser;
 
 #[derive(Parser)]
@@ -154,7 +154,7 @@ pub struct ServerContext {
     pub genesis_config: near_chain_configs::GenesisConfig,
     pub blocks_cache:
         std::sync::Arc<std::sync::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>>,
-    pub final_block_height: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    pub final_block_info: std::sync::Arc<std::sync::RwLock<FinaleBlockInfo>>,
     pub compiled_contract_code_cache: std::sync::Arc<CompiledCodeCache>,
     pub contract_code_cache: std::sync::Arc<
         std::sync::RwLock<crate::cache::LruMemoryCache<near_primitives::hash::CryptoHash, Vec<u8>>>,
@@ -173,7 +173,7 @@ impl ServerContext {
         blocks_cache: std::sync::Arc<
             std::sync::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>,
         >,
-        final_block_height: std::sync::Arc<std::sync::atomic::AtomicU64>,
+        final_block_info: std::sync::Arc<std::sync::RwLock<FinaleBlockInfo>>,
         compiled_contract_code_cache: std::sync::Arc<CompiledCodeCache>,
         contract_code_cache: std::sync::Arc<
             std::sync::RwLock<
@@ -189,7 +189,7 @@ impl ServerContext {
             s3_bucket_name,
             genesis_config,
             blocks_cache,
-            final_block_height,
+            final_block_info,
             compiled_contract_code_cache,
             contract_code_cache,
             max_gas_burnt,

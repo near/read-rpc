@@ -709,6 +709,18 @@ impl Validators {
 
         Ok(response)
     }
+    pub async fn get_validators_epoch_end_height(
+        mut conn: crate::postgres::PgAsyncConn,
+        epoch_end_height: bigdecimal::BigDecimal,
+    ) -> anyhow::Result<Self> {
+        let response = validators::table
+            .filter(validators::epoch_end_height.eq(epoch_end_height))
+            .select(Self::as_select())
+            .first(&mut conn)
+            .await?;
+
+        Ok(response)
+    }
 }
 
 #[derive(Insertable, Queryable, Selectable)]

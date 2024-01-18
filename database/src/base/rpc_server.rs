@@ -90,11 +90,20 @@ pub trait ReaderDbManager {
         block_height: near_primitives::types::BlockHeight,
         shard_id: near_primitives::types::ShardId,
     ) -> anyhow::Result<readnode_primitives::BlockHeightShardId>;
+
+    /// Returns epoch validators info by the given epoch id
     async fn get_validators_by_epoch_id(
         &self,
         epoch_id: near_primitives::hash::CryptoHash,
     ) -> anyhow::Result<readnode_primitives::EpochValidatorsInfo>;
 
+    /// Return epoch validators info by the given epoch end block height
+    async fn get_validators_by_end_block_height(
+        &self,
+        block_height: near_primitives::types::BlockHeight,
+    ) -> anyhow::Result<readnode_primitives::EpochValidatorsInfo>;
+
+    /// Return protocol config by the given epoch id
     async fn get_protocol_config_by_epoch_id(
         &self,
         epoch_id: near_primitives::hash::CryptoHash,

@@ -1,3 +1,4 @@
+use crate::modules::blocks::FinaleBlockInfo;
 use crate::utils::{
     get_final_cache_block, gigabytes_to_bytes, update_final_block_height_regularly,
 };
@@ -103,12 +104,9 @@ async fn main() -> anyhow::Result<()> {
         block_cache_size_in_bytes,
     )));
 
-    let final_block_height =
-        std::sync::Arc::new(std::sync::atomic::AtomicU64::new(final_block.block_height));
-    blocks_cache
-        .write()
-        .unwrap()
-        .put(final_block.block_height, final_block);
+    let finale_block_info = std::sync::Arc::new(std::sync::RwLock::new(
+        FinaleBlockInfo::new(&near_rpc_client, &blocks_cache).await,
+    ));
 
     let compiled_contract_code_cache = std::sync::Arc::new(config::CompiledCodeCache {
         local_cache: std::sync::Arc::new(std::sync::RwLock::new(cache::LruMemoryCache::new(
@@ -151,19 +149,24 @@ async fn main() -> anyhow::Result<()> {
             s3_config,
         )),
         db_manager,
-        near_rpc_client,
+        near_rpc_client.clone(),
         opts.s3_bucket_name.clone(),
         genesis_config,
         std::sync::Arc::clone(&blocks_cache),
-        std::sync::Arc::clone(&final_block_height),
+        std::sync::Arc::clone(&finale_block_info),
         compiled_contract_code_cache,
         contract_code_cache,
         opts.max_gas_burnt,
     );
 
     tokio::spawn(async move {
-        update_final_block_height_regularly(final_block_height.clone(), blocks_cache, lake_config)
-            .await
+        update_final_block_height_regularly(
+            blocks_cache,
+            finale_block_info,
+            lake_config,
+            near_rpc_client,
+        )
+        .await
     });
 
     let rpc = Server::new()

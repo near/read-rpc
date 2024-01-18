@@ -328,8 +328,11 @@ pub async fn fetch_block(
         },
         near_primitives::types::BlockReference::Finality(finality) => match finality {
             near_primitives::types::Finality::Final => Ok(data
-                .final_block_height
-                .load(std::sync::atomic::Ordering::SeqCst)),
+                .final_block_info
+                .read()
+                .unwrap()
+                .final_block_cache
+                .block_height),
             _ => Err(
                 near_jsonrpc_primitives::types::blocks::RpcBlockError::InternalError {
                     error_message: "Finality other than final is not supported".to_string(),
