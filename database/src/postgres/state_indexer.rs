@@ -287,7 +287,7 @@ impl crate::StateIndexerDbManager for PostgresDBManager {
             Self::get_connection(&self.pg_pool).await?,
             block_hash,
         )
-            .await?;
+        .await?;
         block_height
             .to_u64()
             .ok_or_else(|| anyhow::anyhow!("Failed to parse `block_height` to u64"))

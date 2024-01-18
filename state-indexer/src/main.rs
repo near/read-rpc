@@ -29,28 +29,19 @@ async fn handle_streamer_message(
 ) -> anyhow::Result<()> {
     let block_height = streamer_message.block.header.height;
     let block_hash = streamer_message.block.header.hash;
-    let new_epoch_id = streamer_message.block.header.epoch_id;
+
+    let current_epoch_id = streamer_message.block.header.epoch_id;
+    let next_epoch_id = streamer_message.block.header.next_epoch_id;
 
     tracing::debug!(target: INDEXER, "Block height {}", block_height,);
 
-    // handle first indexing epoch
-    let mut stats_lock = stats.write().await;
-    let current_epoch_id = if let Some(current_epoch_id) = stats_lock.current_epoch_id {
-        current_epoch_id
-    } else {
-        let (epoch_id, height) =
-            handle_epoch(new_epoch_id, None, stats_lock.current_epoch_height, rpc_client, db_manager).await?;
-        stats_lock.current_epoch_id = Some(epoch_id);
-        stats_lock.current_epoch_height = height;
-        epoch_id
-    };
-    drop(stats_lock);
-
     stats.write().await.block_heights_processing.insert(block_height);
+
     let handle_epoch_future = handle_epoch(
-        new_epoch_id,
-        Some(current_epoch_id),
+        stats.read().await.current_epoch_id,
         stats.read().await.current_epoch_height,
+        current_epoch_id,
+        next_epoch_id,
         rpc_client,
         db_manager,
     );
@@ -80,9 +71,20 @@ async fn handle_streamer_message(
     stats_lock.block_heights_processing.remove(&block_height);
     stats_lock.blocks_processed_count += 1;
     stats_lock.last_processed_block_height = block_height;
-    if current_epoch_id != new_epoch_id {
-        stats_lock.current_epoch_id = Some(new_epoch_id);
-        stats_lock.current_epoch_height += 1;
+    if let Some(stats_epoch_id) = stats_lock.current_epoch_id {
+        if current_epoch_id != stats_epoch_id {
+            stats_lock.current_epoch_id = Some(current_epoch_id);
+            if stats_epoch_id == CryptoHash::default() {
+                stats_lock.current_epoch_height = 1;
+            } else {
+                stats_lock.current_epoch_height += 1;
+            }
+        }
+    } else {
+        // handle first indexing epoch
+        let epoch_info = epoch_indexer::get_epoch_info_by_id(current_epoch_id, rpc_client).await?;
+        stats_lock.current_epoch_id = Some(current_epoch_id);
+        stats_lock.current_epoch_height = epoch_info.epoch_height;
     }
     Ok(())
 }
@@ -103,37 +105,27 @@ async fn handle_block(
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(db_manager)))]
 async fn handle_epoch(
-    new_epoch_id: CryptoHash,
-    current_epoch_id: Option<CryptoHash>,
-    current_epoch_height: u64,
+    stats_current_epoch_id: Option<CryptoHash>,
+    stats_current_epoch_height: u64,
+    current_epoch_id: CryptoHash,
+    next_epoch_id: CryptoHash,
     rpc_client: &near_jsonrpc_client::JsonRpcClient,
     db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
-) -> anyhow::Result<(CryptoHash, u64)> {
-    let epoch_info = match current_epoch_id {
-        Some(current_epoch_id) => {
-            if new_epoch_id != current_epoch_id {
-                Some(epoch_indexer::get_epoch_info_by_id(new_epoch_id, rpc_client).await?)
-            } else {
-                None
-            }
-        }
-        None => Some(epoch_indexer::get_epoch_info_by_id(new_epoch_id, rpc_client).await?),
-    };
-    if let Some(epoch_info) = epoch_info {
-        let epoch_height = if let Some(current_epoch_id) = current_epoch_id {
-            if current_epoch_id == CryptoHash::default() {
-                1
-            } else {
-                current_epoch_height + 1
-            }
+) -> anyhow::Result<()> {
+    if let Some(stats_epoch_id) = stats_current_epoch_id {
+        if stats_epoch_id == current_epoch_id {
+            // If epoch didn't change, we don't need handle it
+            Ok(())
         } else {
-            epoch_info.validators_info.epoch_height
-        };
-        epoch_indexer::save_epoch_info(&epoch_info, db_manager, Some(epoch_height)).await?;
-
-        Ok((new_epoch_id, epoch_height))
+            // If epoch changed, we need to save epoch info and update epoch_end_height
+            let epoch_info = epoch_indexer::get_epoch_info_by_id(stats_epoch_id, rpc_client).await?;
+            epoch_indexer::save_epoch_info(&epoch_info, db_manager, Some(stats_current_epoch_height)).await?;
+            epoch_indexer::update_epoch_end_height(db_manager, Some(stats_epoch_id), next_epoch_id).await?;
+            Ok(())
+        }
     } else {
-        Ok((new_epoch_id, current_epoch_height))
+        // If stats_current_epoch_id is None, we don't need handle it
+        Ok(())
     }
 }
 

@@ -110,11 +110,9 @@ async fn main() -> anyhow::Result<()> {
     let rpc_client = near_jsonrpc_client::JsonRpcClient::connect(opts.rpc_url());
 
     let epoch = match opts.start_options() {
-        StartOptions::FromGenesis => epoch_indexer::first_epoch(
-            &s3_client,
-            &opts.s3_bucket_name,
-            &rpc_client,
-        ).await?,
+        StartOptions::FromGenesis => {
+            epoch_indexer::first_epoch(&s3_client, &opts.s3_bucket_name, &rpc_client).await?
+        }
         StartOptions::FromInterruption => {
             let block_height = db_manager
                 .get_last_processed_block_height(opts.indexer_id.as_str())

@@ -125,7 +125,6 @@ pub async fn get_epoch_info_by_block_height(
             next_epoch_id: block.header.next_epoch_id,
         },
     )
-
 }
 
 pub async fn first_epoch(
@@ -139,12 +138,14 @@ pub async fn first_epoch(
         s3_bucket_name,
         epoch_info.epoch_start_height,
     )
-        .await?;
-    Ok(readnode_primitives::IndexedEpochInfoWithPreviousAndNextEpochId {
-        previous_epoch_id: None,
-        epoch_info,
-        next_epoch_id: first_epoch_block.header.next_epoch_id,
-    })
+    .await?;
+    Ok(
+        readnode_primitives::IndexedEpochInfoWithPreviousAndNextEpochId {
+            previous_epoch_id: None,
+            epoch_info,
+            next_epoch_id: first_epoch_block.header.next_epoch_id,
+        },
+    )
 }
 
 pub async fn get_next_epoch(
@@ -153,7 +154,6 @@ pub async fn get_next_epoch(
     s3_bucket_name: &str,
     rpc_client: &near_jsonrpc_client::JsonRpcClient,
 ) -> anyhow::Result<readnode_primitives::IndexedEpochInfoWithPreviousAndNextEpochId> {
-
     let mut epoch_info = get_epoch_info_by_id(current_epoch.next_epoch_id, rpc_client).await?;
 
     let epoch_info_first_block = near_lake_framework::s3_fetchers::fetch_block_or_retry(
@@ -161,7 +161,7 @@ pub async fn get_next_epoch(
         s3_bucket_name,
         epoch_info.epoch_start_height,
     )
-        .await?;
+    .await?;
     if current_epoch.epoch_info.epoch_id == CryptoHash::default() {
         epoch_info.epoch_height = 1;
     } else {
@@ -183,7 +183,7 @@ pub async fn update_epoch_end_height(
 ) -> anyhow::Result<()> {
     if let Some(epoch_id) = epoch_id {
         tracing::info!(
-            "Update epoch_end_height: epoch_id: {:?}, epoch_end_height: {}",
+            "Update epoch_end_height: epoch_id: {:?}, epoch_end_height_hash: {}",
             epoch_id,
             epoch_end_block_hash
         );
@@ -223,7 +223,7 @@ pub async fn save_epoch_info(
     tracing::info!(
         "Save epoch info: epoch_id: {:?}, epoch_height: {:?}, epoch_start_height: {}",
         epoch.epoch_id,
-        epoch.epoch_height,
+        epoch_height,
         epoch.epoch_start_height,
     );
     Ok(())

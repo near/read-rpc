@@ -355,7 +355,8 @@ impl ScyllaStorageManager for ScyllaDBManager {
             get_block_by_hash: Self::prepare_read_query(
                 &scylla_db_session,
                 "SELECT block_height FROM state_indexer.blocks WHERE block_hash = ?",
-            ).await?,
+            )
+            .await?,
             add_chunk: Self::prepare_write_query(
                 &scylla_db_session,
                 "INSERT INTO state_indexer.chunks
@@ -707,9 +708,9 @@ impl crate::StateIndexerDbManager for ScyllaDBManager {
             &self.get_block_by_hash,
             (block_hash.to_string(),),
         )
-            .await?
-            .single_row()?
-            .into_typed::<(num_bigint::BigInt,)>()?;
+        .await?
+        .single_row()?
+        .into_typed::<(num_bigint::BigInt,)>()?;
 
         result
             .to_u64()
