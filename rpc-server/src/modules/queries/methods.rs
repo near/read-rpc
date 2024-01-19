@@ -319,6 +319,7 @@ async fn function_call(
         data.db_manager.clone(),
         &data.compiled_contract_code_cache,
         &data.contract_code_cache,
+        &data.final_block_info,
         block,
         data.max_gas_burnt,
     )

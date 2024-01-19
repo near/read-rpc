@@ -126,6 +126,15 @@ pub async fn get_current_protocol_config(
     Ok(near_rpc_client.call(params).await?)
 }
 
+pub async fn get_current_validators(
+    near_rpc_client: &JsonRpcClient,
+) -> anyhow::Result<near_primitives::views::EpochValidatorInfo> {
+    let params = near_jsonrpc_client::methods::validators::RpcValidatorRequest {
+        epoch_reference: near_primitives::types::EpochReference::Latest,
+    };
+    Ok(near_rpc_client.call(params).await?)
+}
+
 async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
     blocks_cache: std::sync::Arc<
@@ -154,6 +163,8 @@ async fn handle_streamer_message(
         );
         finale_block_info.write().await.current_protocol_config =
             get_current_protocol_config(near_rpc_client).await?;
+        finale_block_info.write().await.current_validators =
+            get_current_validators(near_rpc_client).await?;
     }
     finale_block_info.write().await.final_block_cache = block;
     blocks_cache.write().await.put(block.block_height, block);
