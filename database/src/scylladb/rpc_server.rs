@@ -1,11 +1,12 @@
-use crate::scylladb::ScyllaStorageManager;
-use borsh::{BorshDeserialize, BorshSerialize};
-use futures::StreamExt;
-use near_indexer_primitives::CryptoHash;
-use num_traits::ToPrimitive;
-use scylla::{prepared_statement::PreparedStatement, IntoTypedRows};
 use std::convert::TryFrom;
 use std::str::FromStr;
+
+use borsh::{BorshDeserialize, BorshSerialize};
+use futures::StreamExt;
+use num_traits::ToPrimitive;
+use scylla::{prepared_statement::PreparedStatement, IntoTypedRows};
+
+use crate::scylladb::ScyllaStorageManager;
 
 pub struct ScyllaDBManager {
     scylla_session: std::sync::Arc<scylla::Session>,
@@ -506,7 +507,7 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         .single_row()?
         .into_typed::<(String, num_bigint::BigInt, String)>()?;
 
-        let epoch_id = CryptoHash::from_str(&epoch_id)
+        let epoch_id = near_indexer_primitives::CryptoHash::from_str(&epoch_id)
             .map_err(|err| anyhow::anyhow!("Failed to parse `epoch_id` to CryptoHash: {}", err))?;
 
         let validators_info: near_primitives::views::EpochValidatorInfo =

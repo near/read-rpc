@@ -57,7 +57,7 @@ pub fn friendly_memory_size_format(memory_size_bytes: usize) -> String {
     }
 }
 
-/// cannot move out of dereference of `std::sync::RwLockReadGuard<FinaleBlockInfo>`
+/// cannot move out of dereference of `futures_locks::RwLockReadGuard<FinalBlockInfo>`
 /// move occurs because value `current_protocol_config` has type `ProtocolConfigView`,
 /// which does not implement the `Copy` trait
 pub fn clone_protocol_config(

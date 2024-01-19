@@ -16,13 +16,9 @@ pub async fn status(
     let sys = System::new_all();
     let total_memory = sys.total_memory();
     let used_memory = sys.used_memory();
-    let blocks_cache = data.blocks_cache.read().unwrap();
-    let contract_code_cache = data.contract_code_cache.read().unwrap();
-    let compiled_contract_code_cache = data
-        .compiled_contract_code_cache
-        .local_cache
-        .read()
-        .unwrap();
+    let blocks_cache = data.blocks_cache.read().await;
+    let contract_code_cache = data.contract_code_cache.read().await;
+    let compiled_contract_code_cache = data.compiled_contract_code_cache.local_cache.read().await;
     let status = StatusResponse {
         total_memory: friendly_memory_size_format(total_memory as usize),
         used_memory: friendly_memory_size_format(used_memory as usize),
@@ -49,7 +45,7 @@ pub async fn status(
         final_block_height: data
             .final_block_info
             .read()
-            .unwrap()
+            .await
             .final_block_cache
             .block_height,
     };
@@ -87,7 +83,7 @@ pub async fn validators(
         if data
             .final_block_info
             .read()
-            .unwrap()
+            .await
             .final_block_cache
             .epoch_id
             == epoch_id.0
@@ -254,16 +250,12 @@ async fn protocol_config_call(
     let protocol_config = if data
         .final_block_info
         .read()
-        .unwrap()
+        .await
         .final_block_cache
         .epoch_id
         == block.epoch_id
     {
-        let protocol_config = &data
-            .final_block_info
-            .read()
-            .unwrap()
-            .current_protocol_config;
+        let protocol_config = &data.final_block_info.read().await.current_protocol_config;
         clone_protocol_config(protocol_config)
     } else {
         data.db_manager

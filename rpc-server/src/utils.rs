@@ -1,4 +1,4 @@
-use crate::modules::blocks::{CacheBlock, FinaleBlockInfo};
+use crate::modules::blocks::{CacheBlock, FinalBlockInfo};
 #[cfg(feature = "shadow_data_consistency")]
 use assert_json_diff::{assert_json_matches_no_panic, CompareMode, Config, NumericMode};
 use futures::StreamExt;
@@ -128,8 +128,10 @@ pub async fn get_current_protocol_config(
 
 async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
-    blocks_cache: std::sync::Arc<std::sync::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>>,
-    finale_block_info: std::sync::Arc<std::sync::RwLock<FinaleBlockInfo>>,
+    blocks_cache: std::sync::Arc<
+        futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>,
+    >,
+    finale_block_info: std::sync::Arc<futures_locks::RwLock<FinalBlockInfo>>,
     near_rpc_client: &JsonRpcClient,
 ) -> anyhow::Result<()> {
     let block = CacheBlock {
@@ -143,28 +145,27 @@ async fn handle_streamer_message(
         epoch_id: streamer_message.block.header.epoch_id,
     };
 
-    // let mut finale_block_info_lock = finale_block_info.write().await;
-    // let current_epoch_id = finale_block_info_lock.final_block_cache.epoch_id;
-    if finale_block_info.read().unwrap().final_block_cache.epoch_id
+    if finale_block_info.read().await.final_block_cache.epoch_id
         != streamer_message.block.header.epoch_id
     {
         tracing::info!(
             "New epoch started: {:?}",
             streamer_message.block.header.epoch_id
         );
-        // let protocol_config = ;
-        finale_block_info.write().unwrap().current_protocol_config =
-            get_current_protocol_config(near_rpc_client).await.unwrap();
+        finale_block_info.write().await.current_protocol_config =
+            get_current_protocol_config(near_rpc_client).await?;
     }
-    finale_block_info.write().unwrap().final_block_cache = block;
-    blocks_cache.write().unwrap().put(block.block_height, block);
+    finale_block_info.write().await.final_block_cache = block;
+    blocks_cache.write().await.put(block.block_height, block);
     crate::metrics::FINAL_BLOCK_HEIGHT.set(i64::try_from(block.block_height)?);
     Ok(())
 }
 
 pub async fn update_final_block_height_regularly(
-    blocks_cache: std::sync::Arc<std::sync::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>>,
-    finale_block_info: std::sync::Arc<std::sync::RwLock<FinaleBlockInfo>>,
+    blocks_cache: std::sync::Arc<
+        futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>,
+    >,
+    finale_block_info: std::sync::Arc<futures_locks::RwLock<FinalBlockInfo>>,
     lake_config: near_lake_framework::LakeConfig,
     near_rpc_client: JsonRpcClient,
 ) -> anyhow::Result<()> {

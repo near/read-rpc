@@ -1,6 +1,7 @@
+use std::collections::HashMap;
+
 use database::ReaderDbManager;
 use futures::executor::block_on;
-use std::collections::HashMap;
 
 pub mod methods;
 pub mod utils;

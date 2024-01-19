@@ -14,16 +14,16 @@ pub struct CacheBlock {
 }
 
 #[derive(Debug)]
-pub struct FinaleBlockInfo {
+pub struct FinalBlockInfo {
     pub final_block_cache: CacheBlock,
     pub current_protocol_config: near_chain_configs::ProtocolConfigView,
 }
 
-impl FinaleBlockInfo {
+impl FinalBlockInfo {
     pub async fn new(
         near_rpc_client: &crate::utils::JsonRpcClient,
         blocks_cache: &std::sync::Arc<
-            std::sync::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>,
+            futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>,
         >,
     ) -> Self {
         let final_block = crate::utils::get_final_cache_block(near_rpc_client)
@@ -35,7 +35,7 @@ impl FinaleBlockInfo {
 
         blocks_cache
             .write()
-            .unwrap()
+            .await
             .put(final_block.block_height, final_block);
 
         Self {

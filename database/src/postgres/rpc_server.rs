@@ -1,8 +1,10 @@
-use crate::postgres::PostgresStorageManager;
-use crate::AdditionalDatabaseOptions;
+use std::str::FromStr;
+
 use bigdecimal::ToPrimitive;
 use borsh::{BorshDeserialize, BorshSerialize};
-use std::str::FromStr;
+
+use crate::postgres::PostgresStorageManager;
+use crate::AdditionalDatabaseOptions;
 
 pub struct PostgresDBManager {
     pg_pool: crate::postgres::PgAsyncPool,

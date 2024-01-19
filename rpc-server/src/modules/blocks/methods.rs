@@ -330,7 +330,7 @@ pub async fn fetch_block(
             near_primitives::types::Finality::Final => Ok(data
                 .final_block_info
                 .read()
-                .unwrap()
+                .await
                 .final_block_cache
                 .block_height),
             _ => Err(

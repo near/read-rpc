@@ -99,7 +99,7 @@ pub async fn fetch_block_from_cache_or_get(
             Ok(data
                 .final_block_info
                 .read()
-                .unwrap()
+                .await
                 .final_block_cache
                 .block_height)
         }
@@ -110,12 +110,7 @@ pub async fn fetch_block_from_cache_or_get(
             },
         ),
     };
-    let block = data
-        .blocks_cache
-        .write()
-        .unwrap()
-        .get(&block_height?)
-        .cloned();
+    let block = data.blocks_cache.write().await.get(&block_height?).cloned();
     match block {
         Some(block) => Ok(block),
         None => {
@@ -133,7 +128,7 @@ pub async fn fetch_block_from_cache_or_get(
 
             data.blocks_cache
                 .write()
-                .unwrap()
+                .await
                 .put(block_from_s3.block_view.header.height, block);
             Ok(block)
         }

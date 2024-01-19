@@ -224,7 +224,9 @@ pub async fn run_contract(
     db_manager: std::sync::Arc<Box<dyn database::ReaderDbManager + Sync + Send + 'static>>,
     compiled_contract_code_cache: &std::sync::Arc<CompiledCodeCache>,
     contract_code_cache: &std::sync::Arc<
-        std::sync::RwLock<crate::cache::LruMemoryCache<near_primitives::hash::CryptoHash, Vec<u8>>>,
+        futures_locks::RwLock<
+            crate::cache::LruMemoryCache<near_primitives::hash::CryptoHash, Vec<u8>>,
+        >,
     >,
     block: crate::modules::blocks::CacheBlock,
     max_gas_burnt: near_primitives::types::Gas,
@@ -238,7 +240,7 @@ pub async fn run_contract(
 
     let code: Option<Vec<u8>> = contract_code_cache
         .write()
-        .unwrap()
+        .await
         .get(&contract.data.code_hash())
         .cloned();
 
@@ -255,7 +257,7 @@ pub async fn run_contract(
                 })?;
             contract_code_cache
                 .write()
-                .unwrap()
+                .await
                 .put(contract.data.code_hash(), code.data.clone());
             near_primitives::contract::ContractCode::new(code.data, Some(contract.data.code_hash()))
         }

@@ -1,4 +1,4 @@
-use crate::modules::blocks::FinaleBlockInfo;
+use crate::modules::blocks::FinalBlockInfo;
 use crate::utils::{
     get_final_cache_block, gigabytes_to_bytes, update_final_block_height_regularly,
 };
@@ -100,20 +100,20 @@ async fn main() -> anyhow::Result<()> {
     )
     .await;
 
-    let blocks_cache = std::sync::Arc::new(std::sync::RwLock::new(cache::LruMemoryCache::new(
+    let blocks_cache = std::sync::Arc::new(futures_locks::RwLock::new(cache::LruMemoryCache::new(
         block_cache_size_in_bytes,
     )));
 
-    let finale_block_info = std::sync::Arc::new(std::sync::RwLock::new(
-        FinaleBlockInfo::new(&near_rpc_client, &blocks_cache).await,
+    let finale_block_info = std::sync::Arc::new(futures_locks::RwLock::new(
+        FinalBlockInfo::new(&near_rpc_client, &blocks_cache).await,
     ));
 
     let compiled_contract_code_cache = std::sync::Arc::new(config::CompiledCodeCache {
-        local_cache: std::sync::Arc::new(std::sync::RwLock::new(cache::LruMemoryCache::new(
+        local_cache: std::sync::Arc::new(futures_locks::RwLock::new(cache::LruMemoryCache::new(
             contract_code_cache_size,
         ))),
     });
-    let contract_code_cache = std::sync::Arc::new(std::sync::RwLock::new(
+    let contract_code_cache = std::sync::Arc::new(futures_locks::RwLock::new(
         cache::LruMemoryCache::new(contract_code_cache_size),
     ));
 

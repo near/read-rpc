@@ -1,9 +1,11 @@
-use crate::{TestResult, TxInfo};
+use std::time::{Duration, Instant};
+
 use futures::future::join_all;
 use near_jsonrpc_client::{methods, JsonRpcClient};
 use near_jsonrpc_primitives::types::chunks::ChunkReference;
 use near_primitives::types::{BlockHeight, BlockId};
-use std::time::{Duration, Instant};
+
+use crate::{TestResult, TxInfo};
 
 // While testing chunks, it's important to collect accounts and transactions for further tests
 async fn get_random_chunk(
