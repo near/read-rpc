@@ -17,6 +17,7 @@ pub struct CacheBlock {
 pub struct FinalBlockInfo {
     pub final_block_cache: CacheBlock,
     pub current_protocol_config: near_chain_configs::ProtocolConfigView,
+    pub current_validators: near_primitives::views::EpochValidatorInfo,
 }
 
 impl FinalBlockInfo {
@@ -33,6 +34,10 @@ impl FinalBlockInfo {
             .await
             .expect("Error to get protocol_config");
 
+        let validators = crate::utils::get_current_validators(near_rpc_client)
+            .await
+            .expect("Error to get protocol_config");
+
         blocks_cache
             .write()
             .await
@@ -41,6 +46,7 @@ impl FinalBlockInfo {
         Self {
             final_block_cache: final_block,
             current_protocol_config: protocol_config,
+            current_validators: validators,
         }
     }
 }

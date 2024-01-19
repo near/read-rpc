@@ -11,6 +11,7 @@ use tokio::task;
 
 use crate::config::CompiledCodeCache;
 use crate::errors::FunctionCallError;
+use crate::modules::blocks::FinalBlockInfo;
 use crate::modules::queries::CodeStorage;
 
 pub struct RunContractResponse {
@@ -228,6 +229,7 @@ pub async fn run_contract(
             crate::cache::LruMemoryCache<near_primitives::hash::CryptoHash, Vec<u8>>,
         >,
     >,
+    final_block_info: &std::sync::Arc<futures_locks::RwLock<FinalBlockInfo>>,
     block: crate::modules::blocks::CacheBlock,
     max_gas_burnt: near_primitives::types::Gas,
 ) -> Result<RunContractResponse, FunctionCallError> {
@@ -262,12 +264,23 @@ pub async fn run_contract(
             near_primitives::contract::ContractCode::new(code.data, Some(contract.data.code_hash()))
         }
     };
-    let validators = db_manager
-        .get_validators_by_epoch_id(block.epoch_id)
-        .await
-        .map_err(|_| FunctionCallError::InternalError {
-            error_message: "Failed to get epoch info".to_string(),
-        })?;
+
+    let (epoch_height, epoch_validators) =
+        if final_block_info.read().await.final_block_cache.epoch_id == block.epoch_id {
+            let validators = final_block_info.read().await.current_validators.clone();
+            (validators.epoch_height, validators.current_validators)
+        } else {
+            let validators = db_manager
+                .get_validators_by_epoch_id(block.epoch_id)
+                .await
+                .map_err(|_| FunctionCallError::InternalError {
+                    error_message: "Failed to get epoch info".to_string(),
+                })?;
+            (
+                validators.epoch_height,
+                validators.validators_info.current_validators,
+            )
+        };
 
     let public_key = PublicKey::empty(KeyType::ED25519);
     let random_seed = create_random_seed(
@@ -283,7 +296,7 @@ pub async fn run_contract(
         input: args.into(),
         block_height: block.block_height,
         block_timestamp: block.block_timestamp,
-        epoch_height: validators.epoch_height,
+        epoch_height,
         account_balance: contract.data.amount(),
         account_locked_balance: contract.data.locked(),
         storage_usage: contract.data.storage_usage(),
@@ -298,9 +311,7 @@ pub async fn run_contract(
         db_manager.clone(),
         account_id.clone(),
         block.block_height,
-        validators
-            .validators_info
-            .current_validators
+        epoch_validators
             .iter()
             .map(|validator| (validator.account_id.clone(), validator.stake))
             .collect(),
