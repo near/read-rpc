@@ -1,5 +1,6 @@
-use futures::StreamExt;
 use std::collections::HashMap;
+
+use futures::StreamExt;
 
 #[cfg_attr(
     feature = "tracing-instrumentation",

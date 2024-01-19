@@ -1,4 +1,4 @@
-use crate::modules::blocks::CacheBlock;
+use crate::modules::blocks::{CacheBlock, FinalBlockInfo};
 #[cfg(feature = "shadow_data_consistency")]
 use assert_json_diff::{assert_json_matches_no_panic, CompareMode, Config, NumericMode};
 use futures::StreamExt;
@@ -114,10 +114,25 @@ pub async fn get_final_cache_block(near_rpc_client: &JsonRpcClient) -> Option<Ca
     }
 }
 
+pub async fn get_current_protocol_config(
+    near_rpc_client: &JsonRpcClient,
+) -> anyhow::Result<near_chain_configs::ProtocolConfigView> {
+    let params =
+        near_jsonrpc_client::methods::EXPERIMENTAL_protocol_config::RpcProtocolConfigRequest {
+            block_reference: near_primitives::types::BlockReference::Finality(
+                near_primitives::types::Finality::Final,
+            ),
+        };
+    Ok(near_rpc_client.call(params).await?)
+}
+
 async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
-    blocks_cache: std::sync::Arc<std::sync::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>>,
-    final_block_height: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    blocks_cache: std::sync::Arc<
+        futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>,
+    >,
+    finale_block_info: std::sync::Arc<futures_locks::RwLock<FinalBlockInfo>>,
+    near_rpc_client: &JsonRpcClient,
 ) -> anyhow::Result<()> {
     let block = CacheBlock {
         block_hash: streamer_message.block.header.hash,
@@ -129,16 +144,30 @@ async fn handle_streamer_message(
         state_root: streamer_message.block.header.prev_state_root,
         epoch_id: streamer_message.block.header.epoch_id,
     };
-    final_block_height.store(block.block_height, std::sync::atomic::Ordering::SeqCst);
-    blocks_cache.write().unwrap().put(block.block_height, block);
+
+    if finale_block_info.read().await.final_block_cache.epoch_id
+        != streamer_message.block.header.epoch_id
+    {
+        tracing::info!(
+            "New epoch started: {:?}",
+            streamer_message.block.header.epoch_id
+        );
+        finale_block_info.write().await.current_protocol_config =
+            get_current_protocol_config(near_rpc_client).await?;
+    }
+    finale_block_info.write().await.final_block_cache = block;
+    blocks_cache.write().await.put(block.block_height, block);
     crate::metrics::FINAL_BLOCK_HEIGHT.set(i64::try_from(block.block_height)?);
     Ok(())
 }
 
 pub async fn update_final_block_height_regularly(
-    final_block_height: std::sync::Arc<std::sync::atomic::AtomicU64>,
-    blocks_cache: std::sync::Arc<std::sync::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>>,
+    blocks_cache: std::sync::Arc<
+        futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>,
+    >,
+    finale_block_info: std::sync::Arc<futures_locks::RwLock<FinalBlockInfo>>,
     lake_config: near_lake_framework::LakeConfig,
+    near_rpc_client: JsonRpcClient,
 ) -> anyhow::Result<()> {
     tracing::info!("Task to get and store final block in the cache started");
     let (sender, stream) = near_lake_framework::streamer(lake_config);
@@ -147,7 +176,8 @@ pub async fn update_final_block_height_regularly(
             handle_streamer_message(
                 streamer_message,
                 std::sync::Arc::clone(&blocks_cache),
-                std::sync::Arc::clone(&final_block_height),
+                std::sync::Arc::clone(&finale_block_info),
+                &near_rpc_client,
             )
         })
         .buffer_unordered(1usize);

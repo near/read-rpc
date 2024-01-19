@@ -23,10 +23,16 @@ pub struct ScyllaDBManager {
     delete_account: PreparedStatement,
 
     add_block: PreparedStatement,
+    get_block_by_hash: PreparedStatement,
     add_chunk: PreparedStatement,
+
     add_validators: PreparedStatement,
     add_protocol_config: PreparedStatement,
+    update_validators_epoch_end_height: PreparedStatement,
+    update_protocol_config_epoch_end_height: PreparedStatement,
+
     add_account_state: PreparedStatement,
+
     update_meta: PreparedStatement,
     last_processed_block_height: PreparedStatement,
 }
@@ -158,9 +164,19 @@ impl ScyllaStorageManager for ScyllaDBManager {
                     epoch_id varchar,
                     epoch_height varint,
                     epoch_start_height varint,
+                    epoch_end_height varint,
                     validators_info text,
                     PRIMARY KEY (epoch_id)
                 )
+            ",
+                &[],
+            )
+            .await?;
+
+        scylla_db_session
+            .query(
+                "
+                CREATE INDEX IF NOT EXISTS validators_epoch_end_height ON validators (epoch_end_height);
             ",
                 &[],
             )
@@ -173,6 +189,7 @@ impl ScyllaStorageManager for ScyllaDBManager {
                     epoch_id varchar,
                     epoch_height varint,
                     epoch_start_height varint,
+                    epoch_end_height varint,
                     protocol_config text,
                     PRIMARY KEY (epoch_id)
                 )
@@ -344,6 +361,11 @@ impl ScyllaStorageManager for ScyllaDBManager {
                     VALUES (?, ?)",
             )
             .await?,
+            get_block_by_hash: Self::prepare_read_query(
+                &scylla_db_session,
+                "SELECT block_height FROM state_indexer.blocks WHERE block_hash = ?",
+            )
+            .await?,
             add_chunk: Self::prepare_write_query(
                 &scylla_db_session,
                 "INSERT INTO state_indexer.chunks
@@ -354,15 +376,25 @@ impl ScyllaStorageManager for ScyllaDBManager {
             add_validators: Self::prepare_write_query(
                 &scylla_db_session,
                 "INSERT INTO state_indexer.validators
-                    (epoch_id, epoch_height, epoch_start_height, validators_info)
-                    VALUES (?, ?, ?, ?)",
+                    (epoch_id, epoch_height, epoch_start_height, epoch_end_height, validators_info)
+                    VALUES (?, ?, ?, NULL, ?)",
             )
             .await?,
             add_protocol_config: Self::prepare_write_query(
                 &scylla_db_session,
                 "INSERT INTO state_indexer.protocol_configs
-                    (epoch_id, epoch_height, epoch_start_height, protocol_config)
-                    VALUES (?, ?, ?, ?)",
+                    (epoch_id, epoch_height, epoch_start_height, epoch_end_height, protocol_config)
+                    VALUES (?, ?, ?, NULL, ?)",
+            )
+            .await?,
+            update_validators_epoch_end_height: Self::prepare_write_query(
+                &scylla_db_session,
+                "UPDATE state_indexer.validators SET epoch_end_height = ? WHERE epoch_id = ?",
+            )
+            .await?,
+            update_protocol_config_epoch_end_height: Self::prepare_write_query(
+                &scylla_db_session,
+                "UPDATE state_indexer.protocol_configs SET epoch_end_height = ? WHERE epoch_id = ?",
             )
             .await?,
             add_account_state: Self::prepare_write_query(
@@ -514,10 +546,10 @@ impl crate::StateIndexerDbManager for ScyllaDBManager {
     ) -> anyhow::Result<()> {
         let public_key_hex = hex::encode(public_key).to_string();
 
-        let mut account_keys = match self.get_access_keys(account_id.clone(), block_height).await {
-            Ok(account_keys) => account_keys,
-            Err(_) => std::collections::HashMap::new(),
-        };
+        let mut account_keys = self
+            .get_access_keys(account_id.clone(), block_height)
+            .await
+            .unwrap_or_default();
 
         match access_key {
             Some(access_key) => {
@@ -676,6 +708,24 @@ impl crate::StateIndexerDbManager for ScyllaDBManager {
         Ok(())
     }
 
+    async fn get_block_by_hash(
+        &self,
+        block_hash: near_primitives::hash::CryptoHash,
+    ) -> anyhow::Result<u64> {
+        let (result,) = Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.get_block_by_hash,
+            (block_hash.to_string(),),
+        )
+        .await?
+        .single_row()?
+        .into_typed::<(num_bigint::BigInt,)>()?;
+
+        result
+            .to_u64()
+            .ok_or_else(|| anyhow::anyhow!("Failed to parse `block_height` to u64"))
+    }
+
     async fn update_meta(&self, indexer_id: &str, block_height: u64) -> anyhow::Result<()> {
         Self::execute_prepared_query(
             &self.scylla_session,
@@ -739,6 +789,33 @@ impl crate::StateIndexerDbManager for ScyllaDBManager {
             ),
         )
         .await?;
+        Ok(())
+    }
+
+    async fn update_epoch_end_height(
+        &self,
+        epoch_id: near_indexer_primitives::CryptoHash,
+        epoch_end_block_hash: near_indexer_primitives::CryptoHash,
+    ) -> anyhow::Result<()> {
+        let epoch_end_height = self.get_block_by_hash(epoch_end_block_hash).await?;
+
+        let validators_future = Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.update_validators_epoch_end_height,
+            (
+                num_bigint::BigInt::from(epoch_end_height),
+                epoch_id.to_string(),
+            ),
+        );
+        let protocol_config_future = Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.update_protocol_config_epoch_end_height,
+            (
+                num_bigint::BigInt::from(epoch_end_height),
+                epoch_id.to_string(),
+            ),
+        );
+        futures::future::try_join(validators_future, protocol_config_future).await?;
         Ok(())
     }
 }

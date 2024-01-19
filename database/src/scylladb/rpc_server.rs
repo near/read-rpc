@@ -1,9 +1,12 @@
-use crate::scylladb::ScyllaStorageManager;
+use std::convert::TryFrom;
+use std::str::FromStr;
+
 use borsh::{BorshDeserialize, BorshSerialize};
 use futures::StreamExt;
 use num_traits::ToPrimitive;
 use scylla::{prepared_statement::PreparedStatement, IntoTypedRows};
-use std::convert::TryFrom;
+
+use crate::scylladb::ScyllaStorageManager;
 
 pub struct ScyllaDBManager {
     scylla_session: std::sync::Arc<scylla::Session>,
@@ -21,6 +24,7 @@ pub struct ScyllaDBManager {
     get_transaction_by_hash: PreparedStatement,
     get_stored_at_block_height_and_shard_id_by_block_height: PreparedStatement,
     get_validators_by_epoch_id: PreparedStatement,
+    get_validators_by_end_block_height: PreparedStatement,
     get_protocol_config_by_epoch_id: PreparedStatement,
 }
 
@@ -120,6 +124,10 @@ impl ScyllaStorageManager for ScyllaDBManager {
             get_validators_by_epoch_id: Self::prepare_read_query(
                 &scylla_db_session,
                 "SELECT epoch_height, validators_info FROM state_indexer.validators WHERE epoch_id = ?",
+            ).await?,
+            get_validators_by_end_block_height: Self::prepare_read_query(
+                &scylla_db_session,
+                "SELECT epoch_id, epoch_height, validators_info FROM state_indexer.validators WHERE epoch_end_height = ?",
             ).await?,
             get_protocol_config_by_epoch_id: Self::prepare_read_query(
                 &scylla_db_session,
@@ -472,6 +480,35 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         .await?
         .single_row()?
         .into_typed::<(num_bigint::BigInt, String)>()?;
+
+        let validators_info: near_primitives::views::EpochValidatorInfo =
+            serde_json::from_str(&validators_info)?;
+
+        Ok(readnode_primitives::EpochValidatorsInfo {
+            epoch_id,
+            epoch_height: epoch_height
+                .to_u64()
+                .ok_or_else(|| anyhow::anyhow!("Failed to parse `epoch_height` to u64"))?,
+            epoch_start_height: validators_info.epoch_start_height,
+            validators_info,
+        })
+    }
+
+    async fn get_validators_by_end_block_height(
+        &self,
+        block_height: near_primitives::types::BlockHeight,
+    ) -> anyhow::Result<readnode_primitives::EpochValidatorsInfo> {
+        let (epoch_id, epoch_height, validators_info) = Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.get_validators_by_end_block_height,
+            (num_bigint::BigInt::from(block_height),),
+        )
+        .await?
+        .single_row()?
+        .into_typed::<(String, num_bigint::BigInt, String)>()?;
+
+        let epoch_id = near_indexer_primitives::CryptoHash::from_str(&epoch_id)
+            .map_err(|err| anyhow::anyhow!("Failed to parse `epoch_id` to CryptoHash: {}", err))?;
 
         let validators_info: near_primitives::views::EpochValidatorInfo =
             serde_json::from_str(&validators_info)?;

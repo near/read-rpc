@@ -12,25 +12,38 @@ async fn index_epochs(
     db_manager: impl StateIndexerDbManager + Sync + Send + 'static,
     rpc_client: near_jsonrpc_client::JsonRpcClient,
     indexer_id: &str,
-    start_epoch: readnode_primitives::IndexedEpochInfo,
+    start_epoch: readnode_primitives::IndexedEpochInfoWithPreviousAndNextEpochId,
 ) -> anyhow::Result<()> {
     let mut epoch = start_epoch;
     loop {
-        epoch = match epoch_indexer::get_next_epoch(&epoch, s3_client, s3_bucket_name, &rpc_client)
-            .await
-        {
-            Ok(epoch) => epoch,
-            Err(e) => {
-                anyhow::bail!("Error fetching next epoch: {:?}", e);
-            }
-        };
+        let epoch_info =
+            match epoch_indexer::get_next_epoch(&epoch, s3_client, s3_bucket_name, &rpc_client)
+                .await
+            {
+                Ok(next_epoch) => next_epoch,
+                Err(e) => {
+                    anyhow::bail!("Error fetching next epoch: {:?}", e);
+                }
+            };
 
-        if let Err(e) = epoch_indexer::save_epoch_info(&epoch, &db_manager, None).await {
+        if let Err(e) =
+            epoch_indexer::save_epoch_info(&epoch_info.epoch_info, &db_manager, None).await
+        {
             tracing::warn!("Error saving epoch info: {:?}", e);
         }
+        if let Err(e) = epoch_indexer::update_epoch_end_height(
+            &db_manager,
+            epoch_info.previous_epoch_id,
+            epoch_info.next_epoch_id,
+        )
+        .await
+        {
+            tracing::warn!("Error update epoch_end_height: {:?}", e);
+        }
         db_manager
-            .update_meta(indexer_id, epoch.epoch_start_height)
+            .update_meta(indexer_id, epoch.epoch_info.epoch_start_height)
             .await?;
+        epoch = epoch_info;
     }
 }
 
@@ -97,7 +110,9 @@ async fn main() -> anyhow::Result<()> {
     let rpc_client = near_jsonrpc_client::JsonRpcClient::connect(opts.rpc_url());
 
     let epoch = match opts.start_options() {
-        StartOptions::FromGenesis => epoch_indexer::first_epoch(&rpc_client).await?,
+        StartOptions::FromGenesis => {
+            epoch_indexer::first_epoch(&s3_client, &opts.s3_bucket_name, &rpc_client).await?
+        }
         StartOptions::FromInterruption => {
             let block_height = db_manager
                 .get_last_processed_block_height(opts.indexer_id.as_str())
@@ -111,7 +126,7 @@ async fn main() -> anyhow::Result<()> {
             .await?
         }
     };
-    epoch_indexer::save_epoch_info(&epoch, &db_manager, None).await?;
+    epoch_indexer::save_epoch_info(&epoch.epoch_info, &db_manager, None).await?;
 
     index_epochs(
         &s3_client,

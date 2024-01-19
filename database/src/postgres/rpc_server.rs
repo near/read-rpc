@@ -1,7 +1,10 @@
-use crate::postgres::PostgresStorageManager;
-use crate::AdditionalDatabaseOptions;
+use std::str::FromStr;
+
 use bigdecimal::ToPrimitive;
 use borsh::{BorshDeserialize, BorshSerialize};
+
+use crate::postgres::PostgresStorageManager;
+use crate::AdditionalDatabaseOptions;
 
 pub struct PostgresDBManager {
     pg_pool: crate::postgres::PgAsyncPool,
@@ -322,6 +325,36 @@ impl crate::ReaderDbManager for PostgresDBManager {
             epoch_id,
         )
         .await?;
+        let epoch_height = epoch
+            .epoch_height
+            .to_u64()
+            .ok_or_else(|| anyhow::anyhow!("Failed to parse `epoch_height` to u64"))?;
+        let epoch_start_height = epoch
+            .epoch_start_height
+            .to_u64()
+            .ok_or_else(|| anyhow::anyhow!("Failed to parse `epoch_start_height` to u64"))?;
+        let (validators_info,) = serde_json::from_value::<(
+            near_indexer_primitives::views::EpochValidatorInfo,
+        )>(epoch.validators_info)?;
+        Ok(readnode_primitives::EpochValidatorsInfo {
+            epoch_id,
+            epoch_height,
+            epoch_start_height,
+            validators_info,
+        })
+    }
+
+    async fn get_validators_by_end_block_height(
+        &self,
+        block_height: near_primitives::types::BlockHeight,
+    ) -> anyhow::Result<readnode_primitives::EpochValidatorsInfo> {
+        let epoch = crate::models::Validators::get_validators_epoch_end_height(
+            Self::get_connection(&self.pg_pool).await?,
+            bigdecimal::BigDecimal::from(block_height),
+        )
+        .await?;
+        let epoch_id = near_indexer_primitives::CryptoHash::from_str(&epoch.epoch_id)
+            .map_err(|err| anyhow::anyhow!("Failed to parse `epoch_id` to CryptoHash: {}", err))?;
         let epoch_height = epoch
             .epoch_height
             .to_u64()

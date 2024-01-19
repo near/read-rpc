@@ -1,5 +1,7 @@
-use near_jsonrpc_client::errors::{JsonRpcError, JsonRpcServerError};
 use std::ops::{Deref, DerefMut};
+
+use near_jsonrpc_client::errors::{JsonRpcError, JsonRpcServerError};
+
 type BoxedSerialize = Box<dyn erased_serde::Serialize + Send>;
 
 #[derive(Debug, serde::Serialize)]

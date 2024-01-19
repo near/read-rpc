@@ -1,5 +1,6 @@
-use crate::modules::blocks::CacheBlock;
+use crate::modules::blocks::{CacheBlock, FinalBlockInfo};
 use clap::Parser;
+use futures::executor::block_on;
 
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -153,11 +154,13 @@ pub struct ServerContext {
     pub s3_bucket_name: String,
     pub genesis_config: near_chain_configs::GenesisConfig,
     pub blocks_cache:
-        std::sync::Arc<std::sync::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>>,
-    pub final_block_height: std::sync::Arc<std::sync::atomic::AtomicU64>,
+        std::sync::Arc<futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>>,
+    pub final_block_info: std::sync::Arc<futures_locks::RwLock<FinalBlockInfo>>,
     pub compiled_contract_code_cache: std::sync::Arc<CompiledCodeCache>,
     pub contract_code_cache: std::sync::Arc<
-        std::sync::RwLock<crate::cache::LruMemoryCache<near_primitives::hash::CryptoHash, Vec<u8>>>,
+        futures_locks::RwLock<
+            crate::cache::LruMemoryCache<near_primitives::hash::CryptoHash, Vec<u8>>,
+        >,
     >,
     pub max_gas_burnt: near_primitives::types::Gas,
 }
@@ -171,12 +174,12 @@ impl ServerContext {
         s3_bucket_name: String,
         genesis_config: near_chain_configs::GenesisConfig,
         blocks_cache: std::sync::Arc<
-            std::sync::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>,
+            futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>,
         >,
-        final_block_height: std::sync::Arc<std::sync::atomic::AtomicU64>,
+        final_block_info: std::sync::Arc<futures_locks::RwLock<FinalBlockInfo>>,
         compiled_contract_code_cache: std::sync::Arc<CompiledCodeCache>,
         contract_code_cache: std::sync::Arc<
-            std::sync::RwLock<
+            futures_locks::RwLock<
                 crate::cache::LruMemoryCache<near_primitives::hash::CryptoHash, Vec<u8>>,
             >,
         >,
@@ -189,7 +192,7 @@ impl ServerContext {
             s3_bucket_name,
             genesis_config,
             blocks_cache,
-            final_block_height,
+            final_block_info,
             compiled_contract_code_cache,
             contract_code_cache,
             max_gas_burnt,
@@ -198,7 +201,7 @@ impl ServerContext {
 }
 pub struct CompiledCodeCache {
     pub local_cache: std::sync::Arc<
-        std::sync::RwLock<
+        futures_locks::RwLock<
             crate::cache::LruMemoryCache<
                 near_primitives::hash::CryptoHash,
                 near_vm_runner::logic::CompiledContract,
@@ -213,7 +216,7 @@ impl near_vm_runner::logic::CompiledContractCache for CompiledCodeCache {
         key: &near_primitives::hash::CryptoHash,
         value: near_vm_runner::logic::CompiledContract,
     ) -> std::io::Result<()> {
-        self.local_cache.write().unwrap().put(*key, value);
+        block_on(self.local_cache.write()).put(*key, value);
         Ok(())
     }
 
@@ -221,10 +224,10 @@ impl near_vm_runner::logic::CompiledContractCache for CompiledCodeCache {
         &self,
         key: &near_primitives::hash::CryptoHash,
     ) -> std::io::Result<Option<near_vm_runner::logic::CompiledContract>> {
-        Ok(self.local_cache.write().unwrap().get(key).cloned())
+        Ok(block_on(self.local_cache.write()).get(key).cloned())
     }
 
     fn has(&self, key: &near_primitives::hash::CryptoHash) -> std::io::Result<bool> {
-        Ok(self.local_cache.write().unwrap().contains(key))
+        Ok(block_on(self.local_cache.write()).contains(key))
     }
 }

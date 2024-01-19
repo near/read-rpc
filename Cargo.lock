@@ -4550,6 +4550,7 @@ dependencies = [
  "dotenv",
  "erased-serde",
  "futures",
+ "futures-locks",
  "hex",
  "http",
  "jsonrpc-v2",

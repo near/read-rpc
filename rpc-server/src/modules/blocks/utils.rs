@@ -97,8 +97,11 @@ pub async fn fetch_block_from_cache_or_get(
         near_primitives::types::BlockReference::Finality(_) => {
             // Returns the final_block_height for all the finalities.
             Ok(data
-                .final_block_height
-                .load(std::sync::atomic::Ordering::SeqCst))
+                .final_block_info
+                .read()
+                .await
+                .final_block_cache
+                .block_height)
         }
         // TODO: return the height of the first block height from S3 (cache it once on the start)
         near_primitives::types::BlockReference::SyncCheckpoint(_) => Err(
@@ -107,12 +110,7 @@ pub async fn fetch_block_from_cache_or_get(
             },
         ),
     };
-    let block = data
-        .blocks_cache
-        .write()
-        .unwrap()
-        .get(&block_height?)
-        .cloned();
+    let block = data.blocks_cache.write().await.get(&block_height?).cloned();
     match block {
         Some(block) => Ok(block),
         None => {
@@ -130,7 +128,7 @@ pub async fn fetch_block_from_cache_or_get(
 
             data.blocks_cache
                 .write()
-                .unwrap()
+                .await
                 .put(block_from_s3.block_view.header.height, block);
             Ok(block)
         }

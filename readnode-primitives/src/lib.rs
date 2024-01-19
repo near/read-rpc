@@ -1,9 +1,10 @@
+use std::convert::TryFrom;
+use std::str::FromStr;
+
 use borsh::{BorshDeserialize, BorshSerialize};
 use near_indexer_primitives::{views, CryptoHash, IndexerTransactionWithOutcome};
 use num_traits::ToPrimitive;
 use serde::{Deserialize, Serialize};
-use std::convert::TryFrom;
-use std::str::FromStr;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 pub struct TransactionKey {
@@ -180,8 +181,16 @@ pub struct IndexedEpochInfo {
     pub epoch_id: CryptoHash,
     pub epoch_height: u64,
     pub epoch_start_height: u64,
+    pub epoch_end_height: Option<u64>,
     pub validators_info: views::EpochValidatorInfo,
     pub protocol_config: near_chain_configs::ProtocolConfigView,
+}
+
+#[derive(Debug)]
+pub struct IndexedEpochInfoWithPreviousAndNextEpochId {
+    pub previous_epoch_id: Option<CryptoHash>,
+    pub epoch_info: IndexedEpochInfo,
+    pub next_epoch_id: CryptoHash,
 }
 
 // TryFrom impls for defined types

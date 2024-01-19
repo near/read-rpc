@@ -667,6 +667,7 @@ pub struct Validators {
     pub epoch_id: String,
     pub epoch_height: bigdecimal::BigDecimal,
     pub epoch_start_height: bigdecimal::BigDecimal,
+    pub epoch_end_height: Option<bigdecimal::BigDecimal>,
     pub validators_info: serde_json::Value,
 }
 
@@ -678,6 +679,19 @@ impl Validators {
         diesel::insert_into(validators::table)
             .values(self)
             .on_conflict_do_nothing()
+            .execute(&mut conn)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn update_epoch_end_height(
+        mut conn: crate::postgres::PgAsyncConn,
+        epoch_id: near_indexer_primitives::CryptoHash,
+        epoch_end_height: bigdecimal::BigDecimal,
+    ) -> anyhow::Result<()> {
+        diesel::update(validators::table)
+            .filter(validators::epoch_id.eq(epoch_id.to_string()))
+            .set(validators::epoch_end_height.eq(epoch_end_height))
             .execute(&mut conn)
             .await?;
         Ok(())
@@ -695,6 +709,18 @@ impl Validators {
 
         Ok(response)
     }
+    pub async fn get_validators_epoch_end_height(
+        mut conn: crate::postgres::PgAsyncConn,
+        epoch_end_height: bigdecimal::BigDecimal,
+    ) -> anyhow::Result<Self> {
+        let response = validators::table
+            .filter(validators::epoch_end_height.eq(epoch_end_height))
+            .select(Self::as_select())
+            .first(&mut conn)
+            .await?;
+
+        Ok(response)
+    }
 }
 
 #[derive(Insertable, Queryable, Selectable)]
@@ -703,6 +729,7 @@ pub struct ProtocolConfig {
     pub epoch_id: String,
     pub epoch_height: bigdecimal::BigDecimal,
     pub epoch_start_height: bigdecimal::BigDecimal,
+    pub epoch_end_height: Option<bigdecimal::BigDecimal>,
     pub protocol_config: serde_json::Value,
 }
 
@@ -714,6 +741,19 @@ impl ProtocolConfig {
         diesel::insert_into(protocol_configs::table)
             .values(self)
             .on_conflict_do_nothing()
+            .execute(&mut conn)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn update_epoch_end_height(
+        mut conn: crate::postgres::PgAsyncConn,
+        epoch_id: near_indexer_primitives::CryptoHash,
+        epoch_end_height: bigdecimal::BigDecimal,
+    ) -> anyhow::Result<()> {
+        diesel::update(protocol_configs::table)
+            .filter(protocol_configs::epoch_id.eq(epoch_id.to_string()))
+            .set(protocol_configs::epoch_end_height.eq(epoch_end_height))
             .execute(&mut conn)
             .await?;
         Ok(())

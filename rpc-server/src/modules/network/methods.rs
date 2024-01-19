@@ -2,12 +2,11 @@ use crate::config::ServerContext;
 use crate::errors::RPCError;
 use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
 use crate::modules::network::{
-    friendly_memory_size_format, parse_validator_request, StatusResponse,
+    clone_protocol_config, friendly_memory_size_format, parse_validator_request, StatusResponse,
 };
 #[cfg(feature = "shadow_data_consistency")]
 use crate::utils::shadow_compare_results;
 use jsonrpc_v2::{Data, Params};
-use near_primitives::types::EpochReference;
 use sysinfo::{System, SystemExt};
 
 pub async fn status(
@@ -17,13 +16,9 @@ pub async fn status(
     let sys = System::new_all();
     let total_memory = sys.total_memory();
     let used_memory = sys.used_memory();
-    let blocks_cache = data.blocks_cache.read().unwrap();
-    let contract_code_cache = data.contract_code_cache.read().unwrap();
-    let compiled_contract_code_cache = data
-        .compiled_contract_code_cache
-        .local_cache
-        .read()
-        .unwrap();
+    let blocks_cache = data.blocks_cache.read().await;
+    let contract_code_cache = data.contract_code_cache.read().await;
+    let compiled_contract_code_cache = data.compiled_contract_code_cache.local_cache.read().await;
     let status = StatusResponse {
         total_memory: friendly_memory_size_format(total_memory as usize),
         used_memory: friendly_memory_size_format(used_memory as usize),
@@ -48,8 +43,11 @@ pub async fn status(
         ),
 
         final_block_height: data
-            .final_block_height
-            .load(std::sync::atomic::Ordering::SeqCst),
+            .final_block_info
+            .read()
+            .await
+            .final_block_cache
+            .block_height,
     };
     Ok(status)
 }
@@ -71,6 +69,32 @@ pub async fn validators(
         .map_err(|err| RPCError::parse_error(&err.to_string()))?;
     tracing::debug!("`validators` called with parameters: {:?}", request);
     crate::metrics::VALIDATORS_REQUESTS_TOTAL.inc();
+    // Latest epoch validators fetches from the Near RPC node
+    if let near_primitives::types::EpochReference::Latest = &request.epoch_reference {
+        crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
+        let validator_info = data.near_rpc_client.call(request).await?;
+        return Ok(
+            near_jsonrpc_primitives::types::validator::RpcValidatorResponse { validator_info },
+        );
+    };
+
+    // Current epoch validators fetches from the Near RPC node
+    if let near_primitives::types::EpochReference::EpochId(epoch_id) = &request.epoch_reference {
+        if data
+            .final_block_info
+            .read()
+            .await
+            .final_block_cache
+            .epoch_id
+            == epoch_id.0
+        {
+            let validator_info = data.near_rpc_client.call(request).await?;
+            return Ok(
+                near_jsonrpc_primitives::types::validator::RpcValidatorResponse { validator_info },
+            );
+        }
+    };
+
     let validator_info = validators_call(&data, &request).await;
 
     #[cfg(feature = "shadow_data_consistency")]
@@ -181,37 +205,31 @@ async fn validators_call(
     near_primitives::views::EpochValidatorInfo,
     near_jsonrpc_primitives::types::validator::RpcValidatorError,
 > {
-    let epoch_id = match &validator_request.epoch_reference {
-        EpochReference::EpochId(epoch_id) => epoch_id.0,
-        EpochReference::BlockId(block_id) => {
+    let validators = match &validator_request.epoch_reference {
+        near_primitives::types::EpochReference::EpochId(epoch_id) => data
+            .db_manager
+            .get_validators_by_epoch_id(epoch_id.0)
+            .await
+            .map_err(|_err| {
+                near_jsonrpc_primitives::types::validator::RpcValidatorError::UnknownEpoch
+            })?,
+        near_primitives::types::EpochReference::BlockId(block_id) => {
             let block_reference = near_primitives::types::BlockReference::BlockId(block_id.clone());
             let block = fetch_block_from_cache_or_get(data, block_reference)
                 .await
                 .map_err(|_err| {
                     near_jsonrpc_primitives::types::validator::RpcValidatorError::UnknownEpoch
                 })?;
-            block.epoch_id
+            data.db_manager
+                .get_validators_by_end_block_height(block.block_height)
+                .await.map_err(|_err| {
+                near_jsonrpc_primitives::types::validator::RpcValidatorError::ValidatorInfoUnavailable
+            })?
         }
-        EpochReference::Latest => {
-            crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
-            let block_reference = near_primitives::types::BlockReference::Finality(
-                near_primitives::types::Finality::Final,
-            );
-            let block = fetch_block_from_cache_or_get(data, block_reference)
-                .await
-                .map_err(|_err| {
-                    near_jsonrpc_primitives::types::validator::RpcValidatorError::UnknownEpoch
-                })?;
-            block.epoch_id
+        _ => {
+            return Err(near_jsonrpc_primitives::types::validator::RpcValidatorError::UnknownEpoch)
         }
     };
-    let validators = data
-        .db_manager
-        .get_validators_by_epoch_id(epoch_id)
-        .await
-        .map_err(|_err| {
-            near_jsonrpc_primitives::types::validator::RpcValidatorError::ValidatorInfoUnavailable
-        })?;
     Ok(validators.validators_info)
 }
 
@@ -229,14 +247,25 @@ async fn protocol_config_call(
                 error_message: err.to_string(),
             }
         })?;
-    let protocol_config = data
-        .db_manager
-        .get_protocol_config_by_epoch_id(block.epoch_id)
+    let protocol_config = if data
+        .final_block_info
+        .read()
         .await
-        .map_err(|err| {
-            near_jsonrpc_primitives::types::config::RpcProtocolConfigError::InternalError {
-                error_message: err.to_string(),
-            }
-        })?;
+        .final_block_cache
+        .epoch_id
+        == block.epoch_id
+    {
+        let protocol_config = &data.final_block_info.read().await.current_protocol_config;
+        clone_protocol_config(protocol_config)
+    } else {
+        data.db_manager
+            .get_protocol_config_by_epoch_id(block.epoch_id)
+            .await
+            .map_err(|err| {
+                near_jsonrpc_primitives::types::config::RpcProtocolConfigError::InternalError {
+                    error_message: err.to_string(),
+                }
+            })?
+    };
     Ok(protocol_config)
 }

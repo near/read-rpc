@@ -35,6 +35,7 @@ diesel::table! {
         epoch_id -> Text,
         epoch_height -> Numeric,
         epoch_start_height -> Numeric,
+        epoch_end_height -> Nullable<Numeric>,
         protocol_config -> Jsonb,
     }
 }
@@ -127,6 +128,7 @@ diesel::table! {
         epoch_id -> Text,
         epoch_height -> Numeric,
         epoch_start_height -> Numeric,
+        epoch_end_height -> Nullable<Numeric>,
         validators_info -> Jsonb,
     }
 }
