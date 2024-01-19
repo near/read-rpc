@@ -110,12 +110,9 @@ pub async fn get_epoch_info_by_block_height(
         block_height,
     )
     .await?;
-    let block = near_lake_framework::s3_fetchers::fetch_block_or_retry(
-        s3_client,
-        s3_bucket_name,
-        block_heights[0],
-    )
-    .await?;
+    let block =
+        near_lake_framework::s3_fetchers::fetch_block(s3_client, s3_bucket_name, block_heights[0])
+            .await?;
     let epoch_info = get_epoch_info_by_id(block.header.epoch_id, rpc_client).await?;
 
     Ok(
@@ -133,7 +130,7 @@ pub async fn first_epoch(
     rpc_client: &near_jsonrpc_client::JsonRpcClient,
 ) -> anyhow::Result<readnode_primitives::IndexedEpochInfoWithPreviousAndNextEpochId> {
     let epoch_info = get_epoch_info_by_id(CryptoHash::default(), rpc_client).await?;
-    let first_epoch_block = near_lake_framework::s3_fetchers::fetch_block_or_retry(
+    let first_epoch_block = near_lake_framework::s3_fetchers::fetch_block(
         s3_client,
         s3_bucket_name,
         epoch_info.epoch_start_height,
@@ -156,12 +153,29 @@ pub async fn get_next_epoch(
 ) -> anyhow::Result<readnode_primitives::IndexedEpochInfoWithPreviousAndNextEpochId> {
     let mut epoch_info = get_epoch_info_by_id(current_epoch.next_epoch_id, rpc_client).await?;
 
-    let epoch_info_first_block = near_lake_framework::s3_fetchers::fetch_block_or_retry(
+    let epoch_info_first_block = match near_lake_framework::s3_fetchers::fetch_block(
         s3_client,
         s3_bucket_name,
         epoch_info.epoch_start_height,
     )
-    .await?;
+    .await
+    {
+        Ok(block_view) => block_view,
+        Err(_) => {
+            let blocks_height = near_lake_framework::s3_fetchers::list_block_heights(
+                s3_client,
+                s3_bucket_name,
+                epoch_info.epoch_start_height,
+            )
+            .await?;
+            near_lake_framework::s3_fetchers::fetch_block(
+                s3_client,
+                s3_bucket_name,
+                blocks_height[0],
+            )
+            .await?
+        }
+    };
     if current_epoch.epoch_info.epoch_id == CryptoHash::default() {
         epoch_info.epoch_height = 1;
     } else {
