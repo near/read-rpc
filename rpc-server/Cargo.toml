@@ -8,17 +8,11 @@ actix-web = "4.2.1"
 actix-cors = "0.6.5"
 anyhow = "1.0.70"
 assert-json-diff = { version = "2.0.2", optional = true }
-aws-credential-types = "1.0.0"
-aws-sdk-s3 = { version = "0.39.1", features = ["behavior-version-latest"] }
-aws-types = "1.0.0"
 borsh = "0.10.2"
-clap = { version = "3.2.22", features = ["color", "derive", "env"] }
-dotenv = "0.15.0"
 erased-serde = "0.3.23"
 futures = "0.3.24"
 futures-locks = "0.7.1"
 hex = "0.4.3"
-http = "0.2.8"
 jsonrpc-v2 = { git = "https://github.com/kobayurii/jsonrpc-v2", rev = "95e7b1d2567ae841163af212a3f25abb6862becb" }
 lazy_static = "1.4.0"
 lru = "0.11.1"
@@ -45,6 +39,7 @@ sysinfo = "0.29.10"
 tracing-opentelemetry = { version = "0.17" }
 tracing-stackdriver = "0.7.2" # GCP logs
 
+configuration = { path = "../configuration" }
 database = { path = "../database" }
 readnode-primitives = { path = "../readnode-primitives" }
 

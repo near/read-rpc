@@ -19,12 +19,10 @@ impl JsonRpcClient {
     /// Creates a new JsonRpcClient.
     /// The client is capable of handling requests to both regular and archival nodes.
     /// If the `archival_rpc_url` is not provided, the client will use the regular endpoint for both
-    pub fn new(rpc_url: http::Uri, archival_rpc_url: Option<http::Uri>) -> Self {
-        let regular_client = near_jsonrpc_client::JsonRpcClient::connect(rpc_url.to_string());
+    pub fn new(rpc_url: String, archival_rpc_url: Option<String>) -> Self {
+        let regular_client = near_jsonrpc_client::JsonRpcClient::connect(rpc_url);
         let archival_client = match archival_rpc_url {
-            Some(archival_rpc_url) => {
-                near_jsonrpc_client::JsonRpcClient::connect(archival_rpc_url.to_string())
-            }
+            Some(archival_rpc_url) => near_jsonrpc_client::JsonRpcClient::connect(archival_rpc_url),
             None => regular_client.clone(),
         };
         Self {

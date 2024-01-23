@@ -2,9 +2,6 @@ use crate::modules::blocks::FinalBlockInfo;
 use crate::utils::{
     get_final_cache_block, gigabytes_to_bytes, update_final_block_height_regularly,
 };
-use clap::Parser;
-use config::{Opts, ServerContext};
-use dotenv::dotenv;
 use jsonrpc_v2::{Data, Server};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -65,9 +62,10 @@ fn init_logging(use_tracer: bool) -> anyhow::Result<()> {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    dotenv().ok();
+    // dotenv().ok();
 
-    let opts: Opts = Opts::parse();
+    // let opts: Opts = Opts::parse();
+    let rpc_server_config = configuration::read_configuration().await?;
 
     #[cfg(feature = "tracing-instrumentation")]
     init_logging(true)?;
@@ -75,23 +73,34 @@ async fn main() -> anyhow::Result<()> {
     #[cfg(not(feature = "tracing-instrumentation"))]
     init_logging(false)?;
 
-    let near_rpc_client =
-        utils::JsonRpcClient::new(opts.rpc_url.clone(), opts.archival_rpc_url.clone());
+    let near_rpc_client = utils::JsonRpcClient::new(
+        rpc_server_config.general.near_rpc_url.clone(),
+        rpc_server_config.general.near_archival_rpc_url.clone(),
+    );
     // We want to set a custom referer to let NEAR JSON RPC nodes know that we are a read-rpc instance
-    let near_rpc_client =
-        near_rpc_client.header("Referer".to_string(), opts.referer_header_value.clone())?;
+    let near_rpc_client = near_rpc_client.header(
+        "Referer".to_string(),
+        rpc_server_config
+            .general
+            .rpc_server
+            .referer_header_value
+            .clone(),
+    )?;
 
     let final_block = get_final_cache_block(&near_rpc_client)
         .await
         .expect("Error to get final block");
 
-    let limit_memory_cache_in_bytes = if let Some(limit_memory_cache) = opts.limit_memory_cache {
-        Some(gigabytes_to_bytes(limit_memory_cache).await)
-    } else {
-        None
-    };
-    let reserved_memory_in_bytes = gigabytes_to_bytes(opts.reserved_memory).await;
-    let block_cache_size_in_bytes = gigabytes_to_bytes(opts.block_cache_size).await;
+    let limit_memory_cache_in_bytes =
+        if let Some(limit_memory_cache) = rpc_server_config.general.rpc_server.limit_memory_cache {
+            Some(gigabytes_to_bytes(limit_memory_cache).await)
+        } else {
+            None
+        };
+    let reserved_memory_in_bytes =
+        gigabytes_to_bytes(rpc_server_config.general.rpc_server.reserved_memory).await;
+    let block_cache_size_in_bytes =
+        gigabytes_to_bytes(rpc_server_config.general.rpc_server.block_cache_size).await;
 
     let contract_code_cache_size = utils::calculate_contract_code_cache_sizes(
         reserved_memory_in_bytes,
@@ -121,42 +130,35 @@ async fn main() -> anyhow::Result<()> {
     let genesis_config = near_rpc_client
         .call(near_jsonrpc_client::methods::EXPERIMENTAL_genesis_config::RpcGenesisConfigRequest)
         .await?;
-    let lake_config = opts.to_lake_config(final_block.block_height).await?;
-    let s3_config = opts.to_s3_config().await;
+    let lake_config = rpc_server_config
+        .to_lake_config(final_block.block_height)
+        .await?;
+    let lake_s3_client = rpc_server_config.to_s3_client().await;
 
     #[cfg(feature = "scylla_db")]
     let db_manager =
         database::prepare_db_manager::<database::scylladb::rpc_server::ScyllaDBManager>(
-            opts.database_url.as_str(),
-            opts.database_user.as_deref(),
-            opts.database_password.as_deref(),
-            opts.to_additional_database_options().await,
+            &rpc_server_config.database,
         )
         .await?;
 
     #[cfg(all(feature = "postgres_db", not(feature = "scylla_db")))]
-    let db_manager =
-        database::prepare_db_manager::<database::postgres::rpc_server::PostgresDBManager>(
-            opts.database_url.as_str(),
-            opts.database_user.as_deref(),
-            opts.database_password.as_deref(),
-            opts.to_additional_database_options().await,
-        )
-        .await?;
+    let db_manager = database::prepare_db_manager::<
+        database::postgres::rpc_server::PostgresDBManager,
+    >(&rpc_server_config.database)
+    .await?;
 
-    let state = ServerContext::new(
-        near_lake_framework::s3_fetchers::LakeS3Client::new(aws_sdk_s3::Client::from_conf(
-            s3_config,
-        )),
+    let state = config::ServerContext::new(
+        lake_s3_client,
         db_manager,
         near_rpc_client.clone(),
-        opts.s3_bucket_name.clone(),
+        rpc_server_config.lake_config.aws_bucket_name.clone(),
         genesis_config,
         std::sync::Arc::clone(&blocks_cache),
         std::sync::Arc::clone(&finale_block_info),
         compiled_contract_code_cache,
         contract_code_cache,
-        opts.max_gas_burnt,
+        rpc_server_config.general.rpc_server.max_gas_burnt,
     );
 
     tokio::spawn(async move {
@@ -242,7 +244,10 @@ async fn main() -> anyhow::Result<()> {
             )
             .service(metrics::get_metrics)
     })
-    .bind(format!("0.0.0.0:{:0>5}", opts.server_port))?
+    .bind(format!(
+        "0.0.0.0:{:0>5}",
+        rpc_server_config.general.rpc_server.server_port
+    ))?
     .run()
     .await?;
 
