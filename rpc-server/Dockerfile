@@ -6,6 +6,7 @@ COPY Cargo.lock ./
 COPY Cargo.toml ./
 RUN sed '/perf-testing/d; /state-indexer/d; /tx-indexer/d; /epoch-indexer/d' Cargo.toml > Cargo.toml.new && mv Cargo.toml.new Cargo.toml
 COPY rpc-server/Cargo.toml rpc-server/Cargo.toml
+COPY configuration configuration
 COPY database database
 COPY readnode-primitives readnode-primitives
 RUN mkdir rpc-server/src && echo 'fn main() {}' > rpc-server/src/main.rs cargo build --release && rm -r rpc-server/src

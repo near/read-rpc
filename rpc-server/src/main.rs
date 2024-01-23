@@ -60,9 +60,7 @@ fn init_logging(use_tracer: bool) -> anyhow::Result<()> {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // dotenv().ok();
 
-    // let opts: Opts = Opts::parse();
     let rpc_server_config = configuration::read_configuration().await?;
 
     #[cfg(feature = "tracing-instrumentation")]

@@ -1,15 +1,15 @@
-use crate::configs::deserialize_data_or_env;
+use crate::configs::{deserialize_data_or_env, deserialize_optional_data_or_env};
 use serde_derive::Deserialize;
 
 #[derive(Deserialize, Debug, Clone, Default)]
 pub struct DatabaseConfig {
     #[serde(deserialize_with = "deserialize_data_or_env")]
     pub database_url: String,
-    #[serde(deserialize_with = "deserialize_data_or_env", default)]
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub database_user: Option<String>,
-    #[serde(deserialize_with = "deserialize_data_or_env", default)]
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub database_password: Option<String>,
-    #[serde(deserialize_with = "deserialize_data_or_env", default)]
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub database_name: Option<String>,
     #[serde(default)]
     pub rpc_server: DatabaseRpcServerConfig,
@@ -21,7 +21,7 @@ pub struct DatabaseConfig {
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct DatabaseRpcServerConfig {
-    #[serde(deserialize_with = "deserialize_data_or_env", default)]
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub preferred_dc: Option<String>,
     #[serde(
         deserialize_with = "deserialize_data_or_env",
@@ -67,7 +67,7 @@ impl Default for DatabaseRpcServerConfig {
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct DatabaseTxIndexerConfig {
-    #[serde(deserialize_with = "deserialize_data_or_env", default)]
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub preferred_dc: Option<String>,
     #[serde(
         deserialize_with = "deserialize_data_or_env",
@@ -113,7 +113,7 @@ impl Default for DatabaseTxIndexerConfig {
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct DatabaseStateIndexerConfig {
-    #[serde(deserialize_with = "deserialize_data_or_env", default)]
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub preferred_dc: Option<String>,
     #[serde(
         deserialize_with = "deserialize_data_or_env",

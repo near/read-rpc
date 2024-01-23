@@ -6,6 +6,7 @@ COPY Cargo.lock ./
 COPY Cargo.toml ./
 RUN sed '/perf-testing/d; /rpc-server/d; /tx-indexer/d' Cargo.toml > Cargo.toml.new && mv Cargo.toml.new Cargo.toml
 COPY state-indexer/Cargo.toml state-indexer/Cargo.toml
+COPY configuration configuration
 COPY database database
 COPY readnode-primitives readnode-primitives
 COPY epoch-indexer epoch-indexer

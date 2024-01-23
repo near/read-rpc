@@ -1,5 +1,6 @@
-use crate::configs::deserialize_data_or_env;
+use crate::configs::{deserialize_data_or_env, deserialize_optional_data_or_env};
 use serde_derive::Deserialize;
+use std::str::FromStr;
 
 #[derive(Deserialize, Debug, Clone, Default)]
 pub struct GeneralConfig {
@@ -7,7 +8,7 @@ pub struct GeneralConfig {
     pub chain_id: ChainId,
     #[serde(deserialize_with = "deserialize_data_or_env")]
     pub near_rpc_url: String,
-    #[serde(deserialize_with = "deserialize_data_or_env", default)]
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub near_archival_rpc_url: Option<String>,
     #[serde(default)]
     pub rpc_server: GeneralRpcServerConfig,
@@ -27,6 +28,18 @@ pub enum ChainId {
     Testnet,
 }
 
+impl FromStr for ChainId {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "mainnet" => Ok(ChainId::Mainnet),
+            "testnet" => Ok(ChainId::Testnet),
+            _ => Err(anyhow::anyhow!("Invalid chain id")),
+        }
+    }
+}
+
 #[derive(Deserialize, Debug, Clone)]
 pub struct GeneralRpcServerConfig {
     #[serde(
@@ -44,7 +57,7 @@ pub struct GeneralRpcServerConfig {
         default = "GeneralRpcServerConfig::default_max_gas_burnt"
     )]
     pub max_gas_burnt: u64,
-    #[serde(deserialize_with = "deserialize_data_or_env", default)]
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub limit_memory_cache: Option<f64>,
     #[serde(
         deserialize_with = "deserialize_data_or_env",

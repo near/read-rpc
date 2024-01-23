@@ -5,26 +5,49 @@ mod rightsizing;
 
 use near_indexer_primitives::views::StateChangeValueView;
 use serde::Deserialize;
+use std::str::FromStr;
 
 lazy_static::lazy_static! {
     static ref RE_NAME_ENV: regex::Regex = regex::Regex::new(r"\$\{(?<env_name>\w+)}").unwrap();
 }
 
+fn get_env_var<T>(env_var_name: &str) -> anyhow::Result<T>
+where
+    T: FromStr,
+    T::Err: std::fmt::Debug,
+{
+    let var = dotenv::var(env_var_name)?;
+    var.parse::<T>().map_err(|err| {
+        anyhow::anyhow!(
+            "Failed to parse env var: {:?}. Error: {:?}",
+            env_var_name,
+            err
+        )
+    })
+}
+
 fn deserialize_data_or_env<'de, D, T>(data: D) -> Result<T, D::Error>
 where
     D: serde::Deserializer<'de>,
-    T: serde::de::DeserializeOwned,
+    T: serde::de::DeserializeOwned + FromStr,
+    <T as FromStr>::Err: std::fmt::Debug,
 {
     let value = serde_json::Value::deserialize(data)?;
     if let serde_json::Value::String(value) = &value {
         if let Some(caps) = RE_NAME_ENV.captures(value) {
-            if let Ok(env_value) = std::env::var(&caps["env_name"]) {
-                let value = serde_json::Value::from(env_value);
-                return serde_json::from_value(value).map_err(serde::de::Error::custom);
-            }
+            return Ok(get_env_var::<T>(&caps["env_name"]).map_err(serde::de::Error::custom)?);
         }
     }
-    serde_json::from_value(value).map_err(serde::de::Error::custom)
+    serde_json::from_value::<T>(value).map_err(serde::de::Error::custom)
+}
+
+fn deserialize_optional_data_or_env<'de, D, T>(data: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::de::DeserializeOwned + FromStr,
+    <T as FromStr>::Err: std::fmt::Debug,
+{
+    Ok(Some(deserialize_data_or_env(data)?))
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]
