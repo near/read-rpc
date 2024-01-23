@@ -17,7 +17,7 @@ near_rpc_url = "https://beta.rpc.mainnet.near.org"
 #near_archival_rpc_url = "https://beta.rpc.mainnet.near.org"
 
 ### Rpc server general configuration
-#[general.rpc_server]
+[general.rpc_server]
 
 ## Referer header value
 ## We want to set a custom referer to let NEAR JSON RPC nodes know that we are a read-rpc instance
@@ -48,7 +48,7 @@ near_rpc_url = "https://beta.rpc.mainnet.near.org"
 #block_cache_size = 0.125
 
 ### Tx indexer general configuration
-#[general.tx_indexer]
+[general.tx_indexer]
 
 ## Indexer ID to handle meta data about the instance
 ## Unique indexer ID
@@ -67,7 +67,7 @@ near_rpc_url = "https://beta.rpc.mainnet.near.org"
 #cache_restore_blocks_range = 1000
 
 ### State indexer general configuration
-#[general.state_indexer]
+[general.state_indexer]
 
 ## Indexer ID to handle meta data about the instance
 ## Unique indexer ID
@@ -84,7 +84,7 @@ near_rpc_url = "https://beta.rpc.mainnet.near.org"
 #concurrency = 1
 
 ## Epoch indexer general configuration
-#[general.epoch_indexer]
+[general.epoch_indexer]
 
 ## Indexer ID to handle meta data about the instance
 ## Unique indexer ID
@@ -93,7 +93,7 @@ near_rpc_url = "https://beta.rpc.mainnet.near.org"
 #indexer_id = "epoch-indexer"
 
 ### Tracking acconunts and state changes configuration
-#[rightsizing]
+[rightsizing]
 
 ## Accounts to track. By default we track all accounts.
 ## You can specify a list of accounts to track.
@@ -159,7 +159,7 @@ database_url = "postgresql://postgres:password@localhost:5432/near-indexer"
 #database_password = "password"
 
 ### Database configuration for rpc server
-#[database.rpc_server]
+[database.rpc_server]
 
 ## ScyllaDB preferred DataCenter
 ## Accepts the DC name of the ScyllaDB to filter the connection to that DC only (preferrably).
@@ -186,7 +186,7 @@ database_url = "postgresql://postgres:password@localhost:5432/near-indexer"
 #keepalive_interval = 60
 
 ### Database configuration for tx indexer
-#[database.tx_indexer]
+[database.tx_indexer]
 
 ## ScyllaDB preferred DataCenter
 ## Accepts the DC name of the ScyllaDB to filter the connection to that DC only (preferrably).
@@ -213,7 +213,7 @@ database_url = "postgresql://postgres:password@localhost:5432/near-indexer"
 #max_db_parallel_queries = 144
 
 ## Database configuration for state indexer
-#[database.state_indexer]
+[database.state_indexer]
 
 ## ScyllaDB preferred DataCenter
 ## Accepts the DC name of the ScyllaDB to filter the connection to that DC only (preferrably).
@@ -223,28 +223,6 @@ database_url = "postgresql://postgres:password@localhost:5432/near-indexer"
 ## Example: "DC1" where DC1 is located in the same region as the application.
 ## Default value is None
 #preferred_dc = "DC1"
-
-## Max retry count for ScyllaDB if `strict_mode` is `false`
-## For indexers we use 5 attempts by default
-#max_retry = 5
-
-## Attempts to store data in the database should be infinite to ensure no data is missing.
-## Disable it to perform a limited write attempts (`max_retry`)
-## before giving up, and moving to the next piece of data
-## For indexers we use true by default
-#strict_mode = true
-
-## Database configuration for epoch indexer
-#[database.epoch_indexer]
-
-## ScyllaDB preferred DataCenter
-## Accepts the DC name of the ScyllaDB to filter the connection to that DC only (preferrably).
-## If you connect to multi-DC cluter, you might experience big latencies while working with the DB.
-## This is due to the fact that ScyllaDB driver tries to connect to any of the nodes in the cluster disregarding of the location of the DC.
-## This option allows to filter the connection to the DC you need.
-## Example: "DC1" where DC1 is located in the same region as the application.
-## Default value is None
-#preferred_dc = "DC1" # Optional
 
 ## Max retry count for ScyllaDB if `strict_mode` is `false`
 ## For indexers we use 5 attempts by default

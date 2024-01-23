@@ -9,7 +9,7 @@ const DEFAULT_RETRY_COUNT: u8 = 3;
 
 /// JsonRpcClient represents a client capable of interacting with NEAR JSON-RPC endpoints,
 /// The client is capable of handling requests to both regular and archival nodes.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct JsonRpcClient {
     regular_client: near_jsonrpc_client::JsonRpcClient,
     archival_client: near_jsonrpc_client::JsonRpcClient,
@@ -108,7 +108,10 @@ pub async fn get_final_cache_block(near_rpc_client: &JsonRpcClient) -> Option<Ca
                 epoch_id: block_view.header.epoch_id,
             })
         }
-        Err(_) => None,
+        Err(err) => {
+            tracing::warn!("Error to get final block: {:?}", err);
+            None
+        }
     }
 }
 

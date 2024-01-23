@@ -1,7 +1,5 @@
 use crate::modules::blocks::FinalBlockInfo;
-use crate::utils::{
-    get_final_cache_block, gigabytes_to_bytes, update_final_block_height_regularly,
-};
+use crate::utils::{gigabytes_to_bytes, update_final_block_height_regularly};
 use jsonrpc_v2::{Data, Server};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -87,10 +85,6 @@ async fn main() -> anyhow::Result<()> {
             .clone(),
     )?;
 
-    let final_block = get_final_cache_block(&near_rpc_client)
-        .await
-        .expect("Error to get final block");
-
     let limit_memory_cache_in_bytes =
         if let Some(limit_memory_cache) = rpc_server_config.general.rpc_server.limit_memory_cache {
             Some(gigabytes_to_bytes(limit_memory_cache).await)
@@ -131,7 +125,13 @@ async fn main() -> anyhow::Result<()> {
         .call(near_jsonrpc_client::methods::EXPERIMENTAL_genesis_config::RpcGenesisConfigRequest)
         .await?;
     let lake_config = rpc_server_config
-        .to_lake_config(final_block.block_height)
+        .to_lake_config(
+            finale_block_info
+                .read()
+                .await
+                .final_block_cache
+                .block_height,
+        )
         .await?;
     let lake_s3_client = rpc_server_config.to_s3_client().await;
 

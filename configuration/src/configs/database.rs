@@ -17,8 +17,6 @@ pub struct DatabaseConfig {
     pub tx_indexer: DatabaseTxIndexerConfig,
     #[serde(default)]
     pub state_indexer: DatabaseStateIndexerConfig,
-    #[serde(default)]
-    pub epoch_indexer: DatabaseEpochIndexerConfig,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -140,42 +138,6 @@ impl DatabaseStateIndexerConfig {
 }
 
 impl Default for DatabaseStateIndexerConfig {
-    fn default() -> Self {
-        Self {
-            preferred_dc: Default::default(),
-            max_retry: Self::default_max_retry(),
-            strict_mode: Self::default_strict_mode(),
-        }
-    }
-}
-
-#[derive(Deserialize, Debug, Clone)]
-pub struct DatabaseEpochIndexerConfig {
-    #[serde(deserialize_with = "deserialize_data_or_env", default)]
-    pub preferred_dc: Option<String>,
-    #[serde(
-        deserialize_with = "deserialize_data_or_env",
-        default = "DatabaseEpochIndexerConfig::default_max_retry"
-    )]
-    pub max_retry: u32,
-    #[serde(
-        deserialize_with = "deserialize_data_or_env",
-        default = "DatabaseEpochIndexerConfig::default_strict_mode"
-    )]
-    pub strict_mode: bool,
-}
-
-impl DatabaseEpochIndexerConfig {
-    pub fn default_max_retry() -> u32 {
-        5
-    }
-
-    pub fn default_strict_mode() -> bool {
-        true
-    }
-}
-
-impl Default for DatabaseEpochIndexerConfig {
     fn default() -> Self {
         Self {
             preferred_dc: Default::default(),
