@@ -376,9 +376,9 @@ pub async fn fetch_chunk(
                 .db_manager
                 .get_block_by_height_and_shard_id(block_height, shard_id)
                 .await
-                .map_err(|err| {
-                    near_jsonrpc_primitives::types::chunks::RpcChunkError::InternalError {
-                        error_message: err.to_string(),
+                .map_err(|_err| {
+                    near_jsonrpc_primitives::types::chunks::RpcChunkError::InvalidShardId {
+                        shard_id,
                     }
                 })
                 .map(|block_height_shard_id| (block_height_shard_id.0, block_height_shard_id.1))?,
@@ -388,7 +388,7 @@ pub async fn fetch_chunk(
                     .get_block_by_hash(block_hash)
                     .await
                     .map_err(|err| {
-                        near_jsonrpc_primitives::types::chunks::RpcChunkError::InternalError {
+                        near_jsonrpc_primitives::types::chunks::RpcChunkError::UnknownBlock {
                             error_message: err.to_string(),
                         }
                     })?;
@@ -400,8 +400,8 @@ pub async fn fetch_chunk(
             .get_block_by_chunk_hash(chunk_id)
             .await
             .map_err(
-                |err| near_jsonrpc_primitives::types::chunks::RpcChunkError::InternalError {
-                    error_message: err.to_string(),
+                |_err| near_jsonrpc_primitives::types::chunks::RpcChunkError::UnknownChunk {
+                    chunk_hash: chunk_id.into(),
                 },
             )
             .map(|block_height_shard_id| (block_height_shard_id.0, block_height_shard_id.1))?,
@@ -426,7 +426,7 @@ async fn fetch_changes_in_block(
     near_jsonrpc_primitives::types::changes::RpcStateChangesError,
 > {
     let shards = fetch_shards(data, block).await.map_err(|err| {
-        near_jsonrpc_primitives::types::changes::RpcStateChangesError::InternalError {
+        near_jsonrpc_primitives::types::changes::RpcStateChangesError::UnknownBlock {
             error_message: err.to_string(),
         }
     })?;
@@ -514,7 +514,7 @@ async fn fetch_changes_in_block_by_type(
     near_jsonrpc_primitives::types::changes::RpcStateChangesError,
 > {
     let shards = fetch_shards(data, block).await.map_err(|err| {
-        near_jsonrpc_primitives::types::changes::RpcStateChangesError::InternalError {
+        near_jsonrpc_primitives::types::changes::RpcStateChangesError::UnknownBlock {
             error_message: err.to_string(),
         }
     })?;

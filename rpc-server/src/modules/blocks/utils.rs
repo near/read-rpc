@@ -80,37 +80,35 @@ pub async fn fetch_block_from_cache_or_get(
     data: &jsonrpc_v2::Data<ServerContext>,
     block_reference: near_primitives::types::BlockReference,
 ) -> Result<CacheBlock, near_jsonrpc_primitives::types::blocks::RpcBlockError> {
-    let block_height = match block_reference.clone() {
-        near_primitives::types::BlockReference::BlockId(block_id) => match block_id {
-            near_primitives::types::BlockId::Height(block_height) => Ok(block_height),
-            near_primitives::types::BlockId::Hash(hash) => {
-                match data.db_manager.get_block_by_hash(hash).await {
-                    Ok(block_height) => Ok(block_height),
-                    Err(err) => Err(
+    let block = match block_reference.clone() {
+        near_primitives::types::BlockReference::BlockId(block_id) => {
+            let block_height = match block_id {
+                near_primitives::types::BlockId::Height(block_height) => block_height,
+                near_primitives::types::BlockId::Hash(hash) => data
+                    .db_manager
+                    .get_block_by_hash(hash)
+                    .await
+                    .map_err(|err| {
                         near_jsonrpc_primitives::types::blocks::RpcBlockError::UnknownBlock {
                             error_message: err.to_string(),
-                        },
-                    ),
-                }
-            }
-        },
+                        }
+                    })?,
+            };
+            data.blocks_cache.write().await.get(&block_height).cloned()
+        }
         near_primitives::types::BlockReference::Finality(_) => {
             // Returns the final_block_height for all the finalities.
-            Ok(data
-                .final_block_info
-                .read()
-                .await
-                .final_block_cache
-                .block_height)
+            Some(data.final_block_info.read().await.final_block_cache)
         }
         // TODO: return the height of the first block height from S3 (cache it once on the start)
-        near_primitives::types::BlockReference::SyncCheckpoint(_) => Err(
-            near_jsonrpc_primitives::types::blocks::RpcBlockError::InternalError {
-                error_message: "Finality other than final is not supported".to_string(),
-            },
-        ),
+        near_primitives::types::BlockReference::SyncCheckpoint(_) => {
+            return Err(
+                near_jsonrpc_primitives::types::blocks::RpcBlockError::InternalError {
+                    error_message: "Finality other than final is not supported".to_string(),
+                },
+            )
+        }
     };
-    let block = data.blocks_cache.write().await.get(&block_height?).cloned();
     match block {
         Some(block) => Ok(block),
         None => {
