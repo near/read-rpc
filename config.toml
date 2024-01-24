@@ -1,0 +1,18 @@
+[general]
+chain_id = "${CHAIN_ID}"
+near_rpc_url = "${NEAR_RPC_URL}"
+near_archival_rpc_url = "${ARCHIVAL_NEAR_RPC_URL}"
+
+[general.rpc_server]
+server_port = "${SERVER_PORT}"
+
+[lake_config]
+aws_access_key_id = "${AWS_ACCESS_KEY_ID}"
+aws_secret_access_key = "${AWS_SECRET_ACCESS_KEY}"
+aws_default_region = "${AWS_DEFAULT_REGION}"
+aws_bucket_name = "${AWS_BUCKET_NAME}"
+
+[database]
+database_url = "${DATABASE_URL}"
+database_user = "${DATABASE_USER}"
+database_password = "${DATABASE_PASSWORD}"

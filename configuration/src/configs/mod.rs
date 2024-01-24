@@ -16,7 +16,13 @@ where
     T: FromStr,
     T::Err: std::fmt::Debug,
 {
-    let var = dotenv::var(env_var_name)?;
+    let var = dotenv::var(env_var_name).map_err(|err| {
+        anyhow::anyhow!(
+            "Failed to get env var: {:?}. Error: {:?}",
+            env_var_name,
+            err
+        )
+    })?;
     var.parse::<T>().map_err(|err| {
         anyhow::anyhow!(
             "Failed to parse env var: {:?}. Error: {:?}",
@@ -35,7 +41,7 @@ where
     let value = serde_json::Value::deserialize(data)?;
     if let serde_json::Value::String(value) = &value {
         if let Some(caps) = RE_NAME_ENV.captures(value) {
-            return Ok(get_env_var::<T>(&caps["env_name"]).map_err(serde::de::Error::custom)?);
+            return get_env_var::<T>(&caps["env_name"]).map_err(serde::de::Error::custom);
         }
     }
     serde_json::from_value::<T>(value).map_err(serde::de::Error::custom)
@@ -47,7 +53,13 @@ where
     T: serde::de::DeserializeOwned + FromStr,
     <T as FromStr>::Err: std::fmt::Debug,
 {
-    Ok(Some(deserialize_data_or_env(data)?))
+    Ok(match deserialize_data_or_env(data) {
+        Ok(value) => Some(value),
+        Err(err) => {
+            tracing::warn!("Failed to deserialize_optional_data_or_env: {:?}", err);
+            None
+        }
+    })
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]

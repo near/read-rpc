@@ -4,4 +4,3 @@
 .env
 .env.*
 *.log
-config.toml
