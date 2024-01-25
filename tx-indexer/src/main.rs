@@ -38,12 +38,16 @@ async fn main() -> anyhow::Result<()> {
         )
         .await?,
     ));
-    let indexer_id = &indexer_config.general.tx_indexer.indexer_id;
+
     let rpc_client =
         near_jsonrpc_client::JsonRpcClient::connect(&indexer_config.general.near_rpc_url);
-    let start_block_height =
-        config::get_start_block_height(&rpc_client, &db_manager, &opts.start_options, indexer_id)
-            .await?;
+    let start_block_height = config::get_start_block_height(
+        &rpc_client,
+        &db_manager,
+        &opts.start_options,
+        &indexer_config.general.tx_indexer.indexer_id,
+    )
+    .await?;
 
     tracing::info!(target: INDEXER, "Generating LakeConfig...");
     let lake_config = indexer_config.to_lake_config(start_block_height).await?;
@@ -78,11 +82,10 @@ async fn main() -> anyhow::Result<()> {
     let mut handlers = tokio_stream::wrappers::ReceiverStream::new(stream)
         .map(|streamer_message| {
             handle_streamer_message(
-                indexer_config.general.chain_id.clone(),
                 streamer_message,
                 &db_manager,
                 &tx_collecting_storage,
-                indexer_id,
+                indexer_config.clone(),
                 std::sync::Arc::clone(&stats),
             )
         })
@@ -105,11 +108,10 @@ async fn main() -> anyhow::Result<()> {
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn handle_streamer_message(
-    chain_id: configuration::ChainId,
     streamer_message: near_indexer_primitives::StreamerMessage,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<impl storage::base::TxCollectingStorage>,
-    indexer_id: &str,
+    indexer_config: configuration::Config,
     stats: std::sync::Arc<tokio::sync::RwLock<metrics::Stats>>,
 ) -> anyhow::Result<u64> {
     let block_height = streamer_message.block.header.height;
@@ -122,14 +124,16 @@ async fn handle_streamer_message(
         .insert(block_height);
 
     let tx_future = collector::index_transactions(
-        chain_id,
         &streamer_message,
         db_manager,
         tx_collecting_storage,
+        &indexer_config,
     );
 
-    let update_meta_future =
-        db_manager.update_meta(indexer_id, streamer_message.block.header.height);
+    let update_meta_future = db_manager.update_meta(
+        &indexer_config.general.tx_indexer.indexer_id,
+        streamer_message.block.header.height,
+    );
 
     match futures::try_join!(tx_future, update_meta_future) {
         Ok(_) => tracing::debug!(

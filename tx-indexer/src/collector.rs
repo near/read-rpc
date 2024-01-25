@@ -19,14 +19,20 @@ const PROBLEMATIC_BLOCKS: [near_indexer_primitives::CryptoHash; 2] = [
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 pub(crate) async fn index_transactions(
-    chain_id: configuration::ChainId,
     streamer_message: &near_indexer_primitives::StreamerMessage,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
+    indexer_config: &configuration::Config,
 ) -> anyhow::Result<()> {
-    extract_transactions_to_collect(streamer_message, db_manager, tx_collecting_storage).await?;
+    extract_transactions_to_collect(
+        streamer_message,
+        db_manager,
+        tx_collecting_storage,
+        indexer_config,
+    )
+    .await?;
     collect_receipts_and_outcomes(
-        chain_id,
+        indexer_config.general.chain_id.clone(),
         streamer_message,
         db_manager,
         tx_collecting_storage,
@@ -56,6 +62,7 @@ async fn extract_transactions_to_collect(
     streamer_message: &near_indexer_primitives::StreamerMessage,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
+    indexer_config: &configuration::Config,
 ) -> anyhow::Result<()> {
     let block_height = streamer_message.block.header.height;
 
@@ -72,6 +79,7 @@ async fn extract_transactions_to_collect(
                     shard_id,
                     db_manager,
                     tx_collecting_storage,
+                    indexer_config,
                 )
             })
         });
@@ -88,7 +96,12 @@ async fn new_transaction_details_to_collecting_pool(
     shard_id: u64,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
+    indexer_config: &configuration::Config,
 ) -> anyhow::Result<()> {
+    if !indexer_config.tx_should_be_indexed(transaction) {
+        return Ok(());
+    };
+
     let converted_into_receipt_id = transaction
         .outcome
         .execution_outcome

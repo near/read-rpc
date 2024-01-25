@@ -72,8 +72,15 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn should_be_indexed(&self, state_change_value: &StateChangeValueView) -> bool {
-        self.rightsizing.should_be_indexed(state_change_value)
+    pub fn state_should_be_indexed(&self, state_change_value: &StateChangeValueView) -> bool {
+        self.rightsizing.state_should_be_indexed(state_change_value)
+    }
+
+    pub fn tx_should_be_indexed(
+        &self,
+        transaction: &near_indexer_primitives::IndexerTransactionWithOutcome,
+    ) -> bool {
+        self.rightsizing.tx_should_be_indexed(transaction)
     }
 
     pub async fn to_lake_config(

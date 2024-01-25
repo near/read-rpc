@@ -188,15 +188,17 @@ impl HashStorageWithDB {
 #[async_trait::async_trait]
 impl TxCollectingStorage for HashStorageWithDB {
     async fn restore_transaction_by_receipt_id(&self, receipt_id: &str) -> anyhow::Result<()> {
-        let transaction_details = self
+        if let Ok(transaction_details) = self
             .db_manager
             .get_transaction_by_receipt_id(receipt_id)
+            .await
+        {
+            self.restore_transaction_with_receipts(
+                &transaction_details.transaction_key(),
+                &transaction_details,
+            )
             .await?;
-        self.restore_transaction_with_receipts(
-            &transaction_details.transaction_key(),
-            &transaction_details,
-        )
-        .await?;
+        }
         Ok(())
     }
 

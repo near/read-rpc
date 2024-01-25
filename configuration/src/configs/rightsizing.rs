@@ -34,7 +34,7 @@ impl RightsizingConfig {
         }
     }
 
-    pub fn should_be_indexed(&self, state_change_value: &StateChangeValueView) -> bool {
+    pub fn state_should_be_indexed(&self, state_change_value: &StateChangeValueView) -> bool {
         match state_change_value {
             StateChangeValueView::DataUpdate { account_id, .. }
             | StateChangeValueView::DataDeletion { account_id, .. } => {
@@ -54,5 +54,17 @@ impl RightsizingConfig {
                 self.is_indexed_account(account_id)
             }
         }
+    }
+
+    /// For now we index only transactions that are related to indexed accounts as signer_id and receiver_id
+    /// But we know about transactions which include indexing accounts not only as signer_id and receiver_id
+    /// but also include indexing accounts in a args of a function call
+    /// So in future we should to index such transactions too if it will be needed
+    pub fn tx_should_be_indexed(
+        &self,
+        transaction: &near_indexer_primitives::IndexerTransactionWithOutcome,
+    ) -> bool {
+        self.is_indexed_account(&transaction.transaction.signer_id)
+            || self.is_indexed_account(&transaction.transaction.receiver_id)
     }
 }
