@@ -23,10 +23,8 @@ See the [documentation here](../database/README.md)
 ### Command to run
 
 ```
-cargo run --release -- <chain_id> <start_options>
+cargo run --release -- <start_options>
 ```
-
-- `chain_id` (\*) `testnet` or `mainnet`
 - `start_options`:
     - `from-latest` fetches the final block height from the RPC and starts indexing from that block
     - `from-interruption <N?>` is used to retrieve the `last_processed_block_height` from the Scylla database. This value is used as the starting point for processing blocks. If a specific value `<N?>` is provided, it will be used as the fallback option. If `<N?>` is not provided or if the database does not have a record (for example, in the case of a fresh start with an empty storage), the fallback option will be `from-latest`.

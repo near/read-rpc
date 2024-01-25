@@ -1,8 +1,6 @@
 use crate::modules::blocks::FinalBlockInfo;
 use crate::utils::{gigabytes_to_bytes, update_final_block_height_regularly};
 use jsonrpc_v2::{Data, Server};
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
 
 #[macro_use]
 extern crate lazy_static;
@@ -14,59 +12,13 @@ mod metrics;
 mod modules;
 mod utils;
 
-fn init_logging(use_tracer: bool) -> anyhow::Result<()> {
-    // Filter based on level - trace, debug, info, warn, error
-    // Tunable via `RUST_LOG` env variable
-    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or(tracing_subscriber::EnvFilter::new("info"));
-
-    // Combined them all together in a `tracing` subscriber
-    let subscriber = tracing_subscriber::Registry::default().with(env_filter);
-
-    if use_tracer {
-        let app_name = "read_rpc_server";
-        // Start a new Jaeger trace pipeline.
-        // Spans are exported in batch - recommended setup for a production application.
-        opentelemetry::global::set_text_map_propagator(
-            opentelemetry::sdk::propagation::TraceContextPropagator::new(),
-        );
-        let tracer = opentelemetry_jaeger::new_pipeline()
-            .with_service_name(app_name)
-            .install_simple()?;
-        // Create a `tracing` layer using the Jaeger tracer
-        let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
-
-        if std::env::var("ENABLE_JSON_LOGS").is_ok() {
-            subscriber
-                .with(telemetry)
-                .with(tracing_subscriber::fmt::Layer::default().json())
-                .try_init()?;
-        } else {
-            subscriber
-                .with(telemetry)
-                .with(tracing_subscriber::fmt::Layer::default().compact())
-                .try_init()?;
-        };
-    } else if std::env::var("ENABLE_JSON_LOGS").is_ok() {
-        subscriber.with(tracing_stackdriver::layer()).try_init()?;
-    } else {
-        subscriber
-            .with(tracing_subscriber::fmt::Layer::default().compact())
-            .try_init()?;
-    };
-
-    Ok(())
-}
+// Categories for logging
+pub(crate) const RPC_SERVER: &str = "read_rpc_server";
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    configuration::init_tracing(RPC_SERVER).await?;
     let rpc_server_config = configuration::read_configuration().await?;
-
-    #[cfg(feature = "tracing-instrumentation")]
-    init_logging(true)?;
-
-    #[cfg(not(feature = "tracing-instrumentation"))]
-    init_logging(false)?;
 
     let near_rpc_client = utils::JsonRpcClient::new(
         rpc_server_config.general.near_rpc_url.clone(),

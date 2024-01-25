@@ -1,10 +1,11 @@
 use crate::config::{Opts, StartOptions};
 use clap::Parser;
 use database::StateIndexerDbManager;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
 
 mod config;
+
+// Categories for logging
+pub(crate) const INDEXER: &str = "epoch_indexer";
 
 async fn index_epochs(
     s3_client: &near_lake_framework::s3_fetchers::LakeS3Client,
@@ -47,43 +48,12 @@ async fn index_epochs(
     }
 }
 
-pub(crate) fn init_tracing() -> anyhow::Result<()> {
-    let mut env_filter = tracing_subscriber::EnvFilter::new("epoch_indexer=info");
-
-    if let Ok(rust_log) = std::env::var("RUST_LOG") {
-        if !rust_log.is_empty() {
-            for directive in rust_log.split(',').filter_map(|s| match s.parse() {
-                Ok(directive) => Some(directive),
-                Err(err) => {
-                    eprintln!("Ignoring directive `{}`: {}", s, err);
-                    None
-                }
-            }) {
-                env_filter = env_filter.add_directive(directive);
-            }
-        }
-    }
-
-    opentelemetry::global::shutdown_tracer_provider();
-
-    opentelemetry::global::set_text_map_propagator(
-        opentelemetry::sdk::propagation::TraceContextPropagator::new(),
-    );
-
-    let subscriber = tracing_subscriber::Registry::default().with(env_filter);
-    subscriber
-        .with(tracing_subscriber::fmt::Layer::default().compact())
-        .try_init()?;
-
-    Ok(())
-}
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    init_tracing()?;
+    configuration::init_tracing(INDEXER).await?;
+    let indexer_config = configuration::read_configuration().await?;
 
     let opts: Opts = Opts::parse();
-    let indexer_config = configuration::read_configuration().await?;
 
     #[cfg(feature = "scylla_db")]
     let db_manager = database::prepare_db_manager::<

@@ -290,11 +290,10 @@ async fn main() -> anyhow::Result<()> {
     // (sending telemetry and downloading genesis)
     openssl_probe::init_ssl_cert_env_vars();
 
-    configs::init_tracing()?;
+    configuration::init_tracing(INDEXER).await?;
+    let indexer_config = configuration::read_configuration().await?;
 
     let opts: Opts = Opts::parse();
-
-    let indexer_config = configuration::read_configuration().await?;
 
     #[cfg(feature = "scylla_db")]
     let db_manager =

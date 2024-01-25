@@ -593,11 +593,8 @@ pub(crate) async fn get_metrics() -> impl Responder {
         tracing::error!("could not encode metrics: {}", e);
     };
 
-    match String::from_utf8(buffer.clone()) {
-        Ok(v) => v,
-        Err(e) => {
-            tracing::error!("custom metrics could not be from_utf8'd: {}", e);
-            String::default()
-        }
-    }
+    String::from_utf8(buffer.clone()).unwrap_or_else(|err| {
+        tracing::error!("custom metrics could not be from_utf8'd: {}", err);
+        String::default()
+    })
 }

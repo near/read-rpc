@@ -1,4 +1,3 @@
-use crate::config::{init_tracing, Opts};
 use clap::Parser;
 use futures::StreamExt;
 mod collector;
@@ -13,11 +12,10 @@ pub(crate) const INDEXER: &str = "tx_indexer";
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    init_tracing()?;
-
-    let opts: Opts = Opts::parse();
-
+    configuration::init_tracing(INDEXER).await?;
     let indexer_config = configuration::read_configuration().await?;
+
+    let opts = config::Opts::parse();
 
     tracing::info!(target: INDEXER, "Connecting to db...");
     #[cfg(feature = "scylla_db")]
