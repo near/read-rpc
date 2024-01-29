@@ -22,7 +22,7 @@ The indexer built on top of Lake Framework that watches the network and stores t
 
 ### [config](configuration/README.md)
 
-The configuration module is responsible for managing the configuration settings of the NEAR readnode project.
+The configuration module is responsible for managing the configuration settings of the NEAR ReadRPC project.
 
 ## Docker compose
 

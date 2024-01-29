@@ -1,11 +1,14 @@
+use std::str::FromStr;
+
+use near_lake_framework::{
+    near_indexer_primitives, near_indexer_primitives::views::StateChangeValueView,
+};
+use serde::Deserialize;
+
 pub(crate) mod database;
 pub(crate) mod general;
 mod lake;
 mod rightsizing;
-
-use near_indexer_primitives::views::StateChangeValueView;
-use serde::Deserialize;
-use std::str::FromStr;
 
 lazy_static::lazy_static! {
     static ref RE_NAME_ENV: regex::Regex = regex::Regex::new(r"\$\{(?<env_name>\w+)}").unwrap();
@@ -89,6 +92,7 @@ impl Config {
     ) -> anyhow::Result<near_lake_framework::LakeConfig> {
         self.lake_config.lake_config(start_block_height).await
     }
+
     pub async fn to_s3_client(&self) -> near_lake_framework::s3_fetchers::LakeS3Client {
         let s3_config = self.lake_config.s3_config().await;
         near_lake_framework::s3_fetchers::LakeS3Client::new(aws_sdk_s3::Client::from_conf(

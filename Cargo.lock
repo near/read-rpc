@@ -1335,7 +1335,6 @@ dependencies = [
  "aws-types",
  "dotenv",
  "lazy_static",
- "near-indexer-primitives",
  "near-lake-framework",
  "opentelemetry",
  "opentelemetry-jaeger",

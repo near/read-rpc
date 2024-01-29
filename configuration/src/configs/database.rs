@@ -1,5 +1,6 @@
-use crate::configs::{deserialize_data_or_env, deserialize_optional_data_or_env};
 use serde_derive::Deserialize;
+
+use crate::configs::{deserialize_data_or_env, deserialize_optional_data_or_env};
 
 #[derive(Deserialize, Debug, Clone, Default)]
 pub struct DatabaseConfig {

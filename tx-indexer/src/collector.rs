@@ -32,7 +32,7 @@ pub(crate) async fn index_transactions(
     )
     .await?;
     collect_receipts_and_outcomes(
-        indexer_config.general.chain_id.clone(),
+        &indexer_config.general.chain_id,
         streamer_message,
         db_manager,
         tx_collecting_storage,
@@ -144,7 +144,7 @@ async fn new_transaction_details_to_collecting_pool(
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn collect_receipts_and_outcomes(
-    chain_id: configuration::ChainId,
+    chain_id: &configuration::ChainId,
     streamer_message: &near_indexer_primitives::StreamerMessage,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
@@ -154,7 +154,7 @@ async fn collect_receipts_and_outcomes(
 
     let shard_futures = streamer_message.shards.iter().map(|shard| {
         process_shard(
-            chain_id.clone(),
+            chain_id,
             db_manager,
             tx_collecting_storage,
             block_height,
@@ -170,7 +170,7 @@ async fn collect_receipts_and_outcomes(
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn process_shard(
-    chain_id: configuration::ChainId,
+    chain_id: &configuration::ChainId,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
     block_height: u64,
@@ -183,7 +183,7 @@ async fn process_shard(
             .iter()
             .map(|receipt_execution_outcome| {
                 process_receipt_execution_outcome(
-                    chain_id.clone(),
+                    chain_id,
                     db_manager,
                     tx_collecting_storage,
                     block_height,
@@ -200,7 +200,7 @@ async fn process_shard(
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn process_receipt_execution_outcome(
-    chain_id: configuration::ChainId,
+    chain_id: &configuration::ChainId,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
     block_height: u64,

@@ -1,4 +1,6 @@
-use near_indexer_primitives::views::StateChangeValueView;
+use near_lake_framework::{
+    near_indexer_primitives, near_indexer_primitives::views::StateChangeValueView,
+};
 use serde_derive::Deserialize;
 
 #[derive(Deserialize, Debug, Clone, Default)]

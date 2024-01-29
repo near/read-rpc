@@ -1,6 +1,6 @@
 # Configuration
 
-The configuration module is responsible for managing the configuration settings of the NEAR readnode project.
+The configuration module is responsible for managing the configuration settings of the NEAR ReadRPC project.
 It reads and parses the configuration from a TOML file and provides these settings to other parts of the application.
 
 ## Environment Variables
@@ -13,7 +13,7 @@ For example, `${DATABASE_URL}` specifies the `DATABASE_URL` environment variable
 
 ## Files
 
-- `example.config.toml`: This file contains an example configuration for the NEAR readnode. 
+- `example.config.toml`: This file contains an example configuration for the NEAR ReadRPC. 
 It includes settings for the general configuration, 
 RPC server, transaction indexer, state indexer, epoch indexer, rightsizing, lake framework, and database.
 

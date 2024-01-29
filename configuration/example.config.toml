@@ -1,12 +1,11 @@
-### General configuration for NEAR readnode
+### General configuration for NEAR ReadRPC
 [general]
 
 ## Chain ID: testnet or mainnet
-## mainnet or testnet
 chain_id = "mainnet"
 
 ## Near network rpc url
-## Using for proxying some requests to near network and to hendle finality block
+## Using for proxying some requests to near network and to handle finality block
 near_rpc_url = "https://beta.rpc.mainnet.near.org"
 
 ## near network archival rpc url
