@@ -1,9 +1,10 @@
 version: '3.4'
 
 x-common-variables: &common-variables
+  CHAIN_ID: mainnet
   DATABASE_URL: scylla:9042
-  DATABASE_USER: ${SCYLLA_USER}
-  DATABASE_PASSWORD: ${SCYLLA_PASSWORD}
+  DATABASE_USER: ${DATABASE_USER}
+  DATABASE_PASSWORD: ${DATABASE_PASSWORD}
   AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
   AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
   AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
@@ -21,15 +22,14 @@ services:
       context: .
       dockerfile: rpc-server/Dockerfile
       args:
-        features: "tracing-instrumentation,shadow_data_consistency"
+        features: "scylla_db,tracing-instrumentation,shadow_data_consistency"
     environment:
       <<: *common-variables
-      AWS_BUCKET_NAME: near-lake-data-mainnet
-      SERVER_PORT: 8080
+      SERVER_PORT: 8000
       RUST_LOG: "read_rpc_server=debug,shadow_data_consistency=debug"
     restart: on-failure
     ports:
-      - 8080:8080
+      - 8000:8000
     depends_on:
       - scylla
       - jaeger
@@ -42,8 +42,10 @@ services:
         features: tracing-instrumentation
     environment:
       <<: *common-variables
-      INDEXER_ID: state-indexer-local
-    command: [ "mainnet", "from-interruption" ]
+      STATE_INDEXER_ID: state-indexer-local
+    command: [ "from-interruption" ]
+    ports:
+      - 8080:8080
     depends_on:
       - scylla
       - jaeger
@@ -57,8 +59,10 @@ services:
         features: tracing-instrumentation
     environment:
       <<: *common-variables
-      INDEXER_ID: tx-indexer-local
-    command: [ "mainnet", "from-interruption" ]
+      TX_INDEXER_ID: tx-indexer-local
+    command: [ "from-interruption" ]
+    ports:
+      - 8081:8081
     depends_on:
       - scylla
       - jaeger

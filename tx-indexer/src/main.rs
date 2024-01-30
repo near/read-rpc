@@ -13,7 +13,8 @@ pub(crate) const INDEXER: &str = "tx_indexer";
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     configuration::init_tracing(INDEXER).await?;
-    let indexer_config = configuration::read_configuration().await?;
+    let indexer_config =
+        configuration::read_configuration::<configuration::TxIndexerConfig>().await?;
 
     let opts = config::Opts::parse();
 
@@ -43,20 +44,23 @@ async fn main() -> anyhow::Result<()> {
         &rpc_client,
         &db_manager,
         &opts.start_options,
-        &indexer_config.general.tx_indexer.indexer_id,
+        &indexer_config.general.indexer_id,
     )
     .await?;
 
     tracing::info!(target: INDEXER, "Generating LakeConfig...");
-    let lake_config = indexer_config.to_lake_config(start_block_height).await?;
+    let lake_config = indexer_config
+        .lake_config
+        .lake_config(start_block_height)
+        .await?;
 
     tracing::info!(target: INDEXER, "Creating hash storage...");
     let tx_collecting_storage = std::sync::Arc::new(
         storage::database::HashStorageWithDB::init_with_restore(
             db_manager.clone(),
             start_block_height,
-            indexer_config.general.tx_indexer.cache_restore_blocks_range,
-            indexer_config.database.tx_indexer.max_db_parallel_queries,
+            indexer_config.general.cache_restore_blocks_range,
+            indexer_config.database.max_db_parallel_queries,
         )
         .await?,
     );
@@ -66,7 +70,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Initiate metrics http server
     tokio::spawn(
-        metrics::init_server(indexer_config.general.tx_indexer.metrics_server_port)
+        metrics::init_server(indexer_config.general.metrics_server_port)
             .expect("Failed to start metrics server"),
     );
 
@@ -109,7 +113,7 @@ async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<impl storage::base::TxCollectingStorage>,
-    indexer_config: configuration::Config,
+    indexer_config: configuration::TxIndexerConfig,
     stats: std::sync::Arc<tokio::sync::RwLock<metrics::Stats>>,
 ) -> anyhow::Result<u64> {
     let block_height = streamer_message.block.header.height;
@@ -129,7 +133,7 @@ async fn handle_streamer_message(
     );
 
     let update_meta_future = db_manager.update_meta(
-        &indexer_config.general.tx_indexer.indexer_id,
+        &indexer_config.general.indexer_id,
         streamer_message.block.header.height,
     );
 

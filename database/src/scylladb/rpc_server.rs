@@ -36,10 +36,10 @@ impl crate::BaseDbManager for ScyllaDBManager {
                 &config.database_url,
                 config.database_user.as_deref(),
                 config.database_password.as_deref(),
-                config.rpc_server.preferred_dc.as_deref(),
-                Some(config.rpc_server.keepalive_interval),
-                config.rpc_server.max_retry,
-                config.rpc_server.strict_mode,
+                config.preferred_dc.as_deref(),
+                config.keepalive_interval,
+                config.max_retry,
+                config.strict_mode,
             )
             .await?,
         );

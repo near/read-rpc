@@ -6,12 +6,18 @@ mod configs;
 
 pub use crate::configs::database::DatabaseConfig;
 pub use crate::configs::general::ChainId;
-pub use crate::configs::Config;
+pub use crate::configs::{
+    EpochIndexerConfig, RpcServerConfig, StateIndexerConfig, TxIndexerConfig,
+};
 
-pub async fn read_configuration() -> anyhow::Result<Config> {
+pub async fn read_configuration<T>() -> anyhow::Result<T>
+where
+    T: configs::Config + Send + Sync + 'static,
+{
     let path_root = project_root::get_project_root()?;
     load_env(path_root.clone()).await?;
-    read_toml_file(path_root).await
+    let common_config = read_toml_file(path_root).await?;
+    Ok(T::from_common_config(common_config))
 }
 
 pub async fn init_tracing(service_name: &str) -> anyhow::Result<()> {
@@ -84,10 +90,10 @@ async fn load_env(mut path_root: PathBuf) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn read_toml_file(mut path_root: PathBuf) -> anyhow::Result<Config> {
+async fn read_toml_file(mut path_root: PathBuf) -> anyhow::Result<configs::CommonConfig> {
     path_root.push("config.toml");
     match std::fs::read_to_string(path_root.as_path()) {
-        Ok(content) => match toml::from_str::<Config>(&content) {
+        Ok(content) => match toml::from_str::<configs::CommonConfig>(&content) {
             Ok(config) => Ok(config),
             Err(err) => {
                 anyhow::bail!(

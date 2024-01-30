@@ -22,7 +22,7 @@ pub(crate) async fn index_transactions(
     streamer_message: &near_indexer_primitives::StreamerMessage,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
-    indexer_config: &configuration::Config,
+    indexer_config: &configuration::TxIndexerConfig,
 ) -> anyhow::Result<()> {
     extract_transactions_to_collect(
         streamer_message,
@@ -62,7 +62,7 @@ async fn extract_transactions_to_collect(
     streamer_message: &near_indexer_primitives::StreamerMessage,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
-    indexer_config: &configuration::Config,
+    indexer_config: &configuration::TxIndexerConfig,
 ) -> anyhow::Result<()> {
     let block_height = streamer_message.block.header.height;
 
@@ -96,7 +96,7 @@ async fn new_transaction_details_to_collecting_pool(
     shard_id: u64,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
-    indexer_config: &configuration::Config,
+    indexer_config: &configuration::TxIndexerConfig,
 ) -> anyhow::Result<()> {
     if !indexer_config.tx_should_be_indexed(transaction) {
         return Ok(());

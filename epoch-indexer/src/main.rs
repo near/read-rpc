@@ -51,7 +51,8 @@ async fn index_epochs(
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     configuration::init_tracing(INDEXER).await?;
-    let indexer_config = configuration::read_configuration().await?;
+    let indexer_config =
+        configuration::read_configuration::<configuration::EpochIndexerConfig>().await?;
 
     let opts: Opts = Opts::parse();
 
@@ -67,8 +68,8 @@ async fn main() -> anyhow::Result<()> {
     >(&indexer_config.database)
     .await?;
 
-    let indexer_id = &indexer_config.general.state_indexer.indexer_id;
-    let s3_client = indexer_config.to_s3_client().await;
+    let indexer_id = &indexer_config.general.indexer_id;
+    let s3_client = indexer_config.lake_config.lake_s3_client().await;
     let rpc_client =
         near_jsonrpc_client::JsonRpcClient::connect(&indexer_config.general.near_rpc_url);
 

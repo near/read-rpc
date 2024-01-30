@@ -4,8 +4,49 @@ use serde_derive::Deserialize;
 
 use crate::configs::{deserialize_data_or_env, deserialize_optional_data_or_env};
 
+#[derive(Debug, Clone)]
+pub struct GeneralRpcServerConfig {
+    pub chain_id: ChainId,
+    pub near_rpc_url: String,
+    pub near_archival_rpc_url: Option<String>,
+    pub referer_header_value: String,
+    pub server_port: u16,
+    pub max_gas_burnt: u64,
+    pub limit_memory_cache: Option<f64>,
+    pub reserved_memory: f64,
+    pub block_cache_size: f64,
+}
+
+#[derive(Debug, Clone)]
+pub struct GeneralTxIndexerConfig {
+    pub chain_id: ChainId,
+    pub near_rpc_url: String,
+    pub near_archival_rpc_url: Option<String>,
+    pub indexer_id: String,
+    pub metrics_server_port: u16,
+    pub cache_restore_blocks_range: u64,
+}
+
+#[derive(Debug, Clone)]
+pub struct GeneralStateIndexerConfig {
+    pub chain_id: ChainId,
+    pub near_rpc_url: String,
+    pub near_archival_rpc_url: Option<String>,
+    pub indexer_id: String,
+    pub metrics_server_port: u16,
+    pub concurrency: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct GeneralEpochIndexerConfig {
+    pub chain_id: ChainId,
+    pub near_rpc_url: String,
+    pub near_archival_rpc_url: Option<String>,
+    pub indexer_id: String,
+}
+
 #[derive(Deserialize, Debug, Clone, Default)]
-pub struct GeneralConfig {
+pub struct CommonGeneralConfig {
     #[serde(deserialize_with = "deserialize_data_or_env")]
     pub chain_id: ChainId,
     #[serde(deserialize_with = "deserialize_data_or_env")]
@@ -13,13 +54,13 @@ pub struct GeneralConfig {
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub near_archival_rpc_url: Option<String>,
     #[serde(default)]
-    pub rpc_server: GeneralRpcServerConfig,
+    pub rpc_server: CommonGeneralRpcServerConfig,
     #[serde(default)]
-    pub tx_indexer: GeneralTxIndexerConfig,
+    pub tx_indexer: CommonGeneralTxIndexerConfig,
     #[serde(default)]
-    pub state_indexer: GeneralStateIndexerConfig,
+    pub state_indexer: CommonGeneralStateIndexerConfig,
     #[serde(default)]
-    pub epoch_indexer: GeneralEpochIndexerConfig,
+    pub epoch_indexer: CommonGeneralEpochIndexerConfig,
 }
 
 #[derive(Deserialize, PartialEq, Debug, Clone, Default)]
@@ -43,37 +84,22 @@ impl FromStr for ChainId {
 }
 
 #[derive(Deserialize, Debug, Clone)]
-pub struct GeneralRpcServerConfig {
-    #[serde(
-        deserialize_with = "deserialize_data_or_env",
-        default = "GeneralRpcServerConfig::default_referer_header_value"
-    )]
-    pub referer_header_value: String,
-    #[serde(
-        deserialize_with = "deserialize_data_or_env",
-        default = "GeneralRpcServerConfig::default_server_port"
-    )]
-    pub server_port: u16,
-    #[serde(
-        deserialize_with = "deserialize_data_or_env",
-        default = "GeneralRpcServerConfig::default_max_gas_burnt"
-    )]
-    pub max_gas_burnt: u64,
+pub struct CommonGeneralRpcServerConfig {
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    pub referer_header_value: Option<String>,
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    pub server_port: Option<u16>,
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    pub max_gas_burnt: Option<u64>,
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub limit_memory_cache: Option<f64>,
-    #[serde(
-        deserialize_with = "deserialize_data_or_env",
-        default = "GeneralRpcServerConfig::default_reserved_memory"
-    )]
-    pub reserved_memory: f64,
-    #[serde(
-        deserialize_with = "deserialize_data_or_env",
-        default = "GeneralRpcServerConfig::default_block_cache_size"
-    )]
-    pub block_cache_size: f64,
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    pub reserved_memory: Option<f64>,
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    pub block_cache_size: Option<f64>,
 }
 
-impl GeneralRpcServerConfig {
+impl CommonGeneralRpcServerConfig {
     pub fn default_referer_header_value() -> String {
         "read-rpc".to_string()
     }
@@ -95,39 +121,30 @@ impl GeneralRpcServerConfig {
     }
 }
 
-impl Default for GeneralRpcServerConfig {
+impl Default for CommonGeneralRpcServerConfig {
     fn default() -> Self {
         Self {
-            referer_header_value: Self::default_referer_header_value(),
-            server_port: Self::default_server_port(),
-            max_gas_burnt: Self::default_max_gas_burnt(),
+            referer_header_value: Some(Self::default_referer_header_value()),
+            server_port: Some(Self::default_server_port()),
+            max_gas_burnt: Some(Self::default_max_gas_burnt()),
             limit_memory_cache: Default::default(),
-            reserved_memory: Self::default_reserved_memory(),
-            block_cache_size: Self::default_block_cache_size(),
+            reserved_memory: Some(Self::default_reserved_memory()),
+            block_cache_size: Some(Self::default_block_cache_size()),
         }
     }
 }
 
 #[derive(Deserialize, Debug, Clone)]
-pub struct GeneralTxIndexerConfig {
-    #[serde(
-        deserialize_with = "deserialize_data_or_env",
-        default = "GeneralTxIndexerConfig::default_indexer_id"
-    )]
-    pub indexer_id: String,
-    #[serde(
-        deserialize_with = "deserialize_data_or_env",
-        default = "GeneralTxIndexerConfig::default_metrics_server_port"
-    )]
-    pub metrics_server_port: u16,
-    #[serde(
-        deserialize_with = "deserialize_data_or_env",
-        default = "GeneralTxIndexerConfig::default_cache_restore_blocks_range"
-    )]
-    pub cache_restore_blocks_range: u64,
+pub struct CommonGeneralTxIndexerConfig {
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    pub indexer_id: Option<String>,
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    pub metrics_server_port: Option<u16>,
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    pub cache_restore_blocks_range: Option<u64>,
 }
 
-impl GeneralTxIndexerConfig {
+impl CommonGeneralTxIndexerConfig {
     pub fn default_indexer_id() -> String {
         "tx-indexer".to_string()
     }
@@ -141,36 +158,27 @@ impl GeneralTxIndexerConfig {
     }
 }
 
-impl Default for GeneralTxIndexerConfig {
+impl Default for CommonGeneralTxIndexerConfig {
     fn default() -> Self {
         Self {
-            indexer_id: Self::default_indexer_id(),
-            metrics_server_port: Self::default_metrics_server_port(),
-            cache_restore_blocks_range: Self::default_cache_restore_blocks_range(),
+            indexer_id: Some(Self::default_indexer_id()),
+            metrics_server_port: Some(Self::default_metrics_server_port()),
+            cache_restore_blocks_range: Some(Self::default_cache_restore_blocks_range()),
         }
     }
 }
 
 #[derive(Deserialize, Debug, Clone)]
-pub struct GeneralStateIndexerConfig {
-    #[serde(
-        deserialize_with = "deserialize_data_or_env",
-        default = "GeneralStateIndexerConfig::default_indexer_id"
-    )]
-    pub indexer_id: String,
-    #[serde(
-        deserialize_with = "deserialize_data_or_env",
-        default = "GeneralStateIndexerConfig::default_metrics_server_port"
-    )]
-    pub metrics_server_port: u16,
-    #[serde(
-        deserialize_with = "deserialize_data_or_env",
-        default = "GeneralStateIndexerConfig::default_concurrency"
-    )]
-    pub concurrency: usize,
+pub struct CommonGeneralStateIndexerConfig {
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    pub indexer_id: Option<String>,
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    pub metrics_server_port: Option<u16>,
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    pub concurrency: Option<usize>,
 }
 
-impl GeneralStateIndexerConfig {
+impl CommonGeneralStateIndexerConfig {
     pub fn default_indexer_id() -> String {
         "state-indexer".to_string()
     }
@@ -184,35 +192,121 @@ impl GeneralStateIndexerConfig {
     }
 }
 
-impl Default for GeneralStateIndexerConfig {
+impl Default for CommonGeneralStateIndexerConfig {
     fn default() -> Self {
         Self {
-            indexer_id: Self::default_indexer_id(),
-            metrics_server_port: Self::default_metrics_server_port(),
-            concurrency: Self::default_concurrency(),
+            indexer_id: Some(Self::default_indexer_id()),
+            metrics_server_port: Some(Self::default_metrics_server_port()),
+            concurrency: Some(Self::default_concurrency()),
         }
     }
 }
 
 #[derive(Deserialize, Debug, Clone)]
-pub struct GeneralEpochIndexerConfig {
-    #[serde(
-        deserialize_with = "deserialize_data_or_env",
-        default = "GeneralEpochIndexerConfig::default_indexer_id"
-    )]
-    pub indexer_id: String,
+pub struct CommonGeneralEpochIndexerConfig {
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    pub indexer_id: Option<String>,
 }
 
-impl GeneralEpochIndexerConfig {
+impl CommonGeneralEpochIndexerConfig {
     pub fn default_indexer_id() -> String {
         "epoch-indexer".to_string()
     }
 }
 
-impl Default for GeneralEpochIndexerConfig {
+impl Default for CommonGeneralEpochIndexerConfig {
     fn default() -> Self {
         Self {
-            indexer_id: Self::default_indexer_id(),
+            indexer_id: Some(Self::default_indexer_id()),
+        }
+    }
+}
+
+impl From<CommonGeneralConfig> for GeneralRpcServerConfig {
+    fn from(common_config: CommonGeneralConfig) -> Self {
+        Self {
+            chain_id: common_config.chain_id,
+            near_rpc_url: common_config.near_rpc_url,
+            near_archival_rpc_url: common_config.near_archival_rpc_url,
+            referer_header_value: common_config
+                .rpc_server
+                .referer_header_value
+                .unwrap_or_else(CommonGeneralRpcServerConfig::default_referer_header_value),
+            server_port: common_config
+                .rpc_server
+                .server_port
+                .unwrap_or_else(CommonGeneralRpcServerConfig::default_server_port),
+            max_gas_burnt: common_config
+                .rpc_server
+                .max_gas_burnt
+                .unwrap_or_else(CommonGeneralRpcServerConfig::default_max_gas_burnt),
+            limit_memory_cache: common_config.rpc_server.limit_memory_cache,
+            reserved_memory: common_config
+                .rpc_server
+                .reserved_memory
+                .unwrap_or_else(CommonGeneralRpcServerConfig::default_reserved_memory),
+            block_cache_size: common_config
+                .rpc_server
+                .block_cache_size
+                .unwrap_or_else(CommonGeneralRpcServerConfig::default_block_cache_size),
+        }
+    }
+}
+
+impl From<CommonGeneralConfig> for GeneralTxIndexerConfig {
+    fn from(common_config: CommonGeneralConfig) -> Self {
+        Self {
+            chain_id: common_config.chain_id,
+            near_rpc_url: common_config.near_rpc_url,
+            near_archival_rpc_url: common_config.near_archival_rpc_url,
+            indexer_id: common_config
+                .tx_indexer
+                .indexer_id
+                .unwrap_or_else(CommonGeneralTxIndexerConfig::default_indexer_id),
+            metrics_server_port: common_config
+                .tx_indexer
+                .metrics_server_port
+                .unwrap_or_else(CommonGeneralTxIndexerConfig::default_metrics_server_port),
+            cache_restore_blocks_range: common_config
+                .tx_indexer
+                .cache_restore_blocks_range
+                .unwrap_or_else(CommonGeneralTxIndexerConfig::default_cache_restore_blocks_range),
+        }
+    }
+}
+
+impl From<CommonGeneralConfig> for GeneralStateIndexerConfig {
+    fn from(common_config: CommonGeneralConfig) -> Self {
+        Self {
+            chain_id: common_config.chain_id,
+            near_rpc_url: common_config.near_rpc_url,
+            near_archival_rpc_url: common_config.near_archival_rpc_url,
+            indexer_id: common_config
+                .state_indexer
+                .indexer_id
+                .unwrap_or_else(CommonGeneralStateIndexerConfig::default_indexer_id),
+            metrics_server_port: common_config
+                .state_indexer
+                .metrics_server_port
+                .unwrap_or_else(CommonGeneralStateIndexerConfig::default_metrics_server_port),
+            concurrency: common_config
+                .state_indexer
+                .concurrency
+                .unwrap_or_else(CommonGeneralStateIndexerConfig::default_concurrency),
+        }
+    }
+}
+
+impl From<CommonGeneralConfig> for GeneralEpochIndexerConfig {
+    fn from(common_config: CommonGeneralConfig) -> Self {
+        Self {
+            chain_id: common_config.chain_id,
+            near_rpc_url: common_config.near_rpc_url,
+            near_archival_rpc_url: common_config.near_archival_rpc_url,
+            indexer_id: common_config
+                .epoch_indexer
+                .indexer_id
+                .unwrap_or_else(CommonGeneralEpochIndexerConfig::default_indexer_id),
         }
     }
 }

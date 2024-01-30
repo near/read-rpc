@@ -66,37 +66,103 @@ where
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]
-pub struct Config {
-    pub general: general::GeneralConfig,
+pub struct CommonConfig {
+    pub general: general::CommonGeneralConfig,
     #[serde(default)]
+    pub rightsizing: rightsizing::CommonRightsizingConfig,
+    pub lake_config: lake::LakeConfig,
+    pub database: database::CommonDatabaseConfig,
+}
+
+pub trait Config {
+    fn from_common_config(common_config: CommonConfig) -> Self;
+}
+
+#[derive(Debug, Clone)]
+pub struct RpcServerConfig {
+    pub general: general::GeneralRpcServerConfig,
+    pub lake_config: lake::LakeConfig,
+    pub database: database::DatabaseConfig,
+}
+
+impl Config for RpcServerConfig {
+    fn from_common_config(common_config: CommonConfig) -> Self {
+        Self {
+            general: common_config.general.into(),
+            lake_config: common_config.lake_config,
+            database: database::DatabaseRpcServerConfig::from(common_config.database).into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TxIndexerConfig {
+    pub general: general::GeneralTxIndexerConfig,
     pub rightsizing: rightsizing::RightsizingConfig,
     pub lake_config: lake::LakeConfig,
     pub database: database::DatabaseConfig,
 }
 
-impl Config {
-    pub fn state_should_be_indexed(&self, state_change_value: &StateChangeValueView) -> bool {
-        self.rightsizing.state_should_be_indexed(state_change_value)
-    }
-
+impl TxIndexerConfig {
     pub fn tx_should_be_indexed(
         &self,
         transaction: &near_indexer_primitives::IndexerTransactionWithOutcome,
     ) -> bool {
         self.rightsizing.tx_should_be_indexed(transaction)
     }
+}
 
-    pub async fn to_lake_config(
-        &self,
-        start_block_height: near_indexer_primitives::types::BlockHeight,
-    ) -> anyhow::Result<near_lake_framework::LakeConfig> {
-        self.lake_config.lake_config(start_block_height).await
+impl Config for TxIndexerConfig {
+    fn from_common_config(common_config: CommonConfig) -> Self {
+        Self {
+            general: common_config.general.into(),
+            rightsizing: common_config.rightsizing.into(),
+            lake_config: common_config.lake_config,
+            database: database::DatabaseTxIndexerConfig::from(common_config.database).into(),
+        }
     }
+}
 
-    pub async fn to_s3_client(&self) -> near_lake_framework::s3_fetchers::LakeS3Client {
-        let s3_config = self.lake_config.s3_config().await;
-        near_lake_framework::s3_fetchers::LakeS3Client::new(aws_sdk_s3::Client::from_conf(
-            s3_config,
-        ))
+#[derive(Debug, Clone)]
+pub struct StateIndexerConfig {
+    pub general: general::GeneralStateIndexerConfig,
+    pub rightsizing: rightsizing::RightsizingConfig,
+    pub lake_config: lake::LakeConfig,
+    pub database: database::DatabaseConfig,
+}
+
+impl StateIndexerConfig {
+    pub fn state_should_be_indexed(&self, state_change_value: &StateChangeValueView) -> bool {
+        self.rightsizing.state_should_be_indexed(state_change_value)
+    }
+}
+
+impl Config for StateIndexerConfig {
+    fn from_common_config(common_config: CommonConfig) -> Self {
+        Self {
+            general: common_config.general.into(),
+            rightsizing: common_config.rightsizing.into(),
+            lake_config: common_config.lake_config,
+            database: database::DatabaseStateIndexerConfig::from(common_config.database).into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct EpochIndexerConfig {
+    pub general: general::GeneralEpochIndexerConfig,
+    pub rightsizing: rightsizing::RightsizingConfig,
+    pub lake_config: lake::LakeConfig,
+    pub database: database::DatabaseConfig,
+}
+
+impl Config for EpochIndexerConfig {
+    fn from_common_config(common_config: CommonConfig) -> Self {
+        Self {
+            general: common_config.general.into(),
+            rightsizing: common_config.rightsizing.into(),
+            lake_config: common_config.lake_config,
+            database: database::DatabaseStateIndexerConfig::from(common_config.database).into(),
+        }
     }
 }

@@ -18,7 +18,8 @@ pub(crate) const RPC_SERVER: &str = "read_rpc_server";
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     configuration::init_tracing(RPC_SERVER).await?;
-    let rpc_server_config = configuration::read_configuration().await?;
+    let rpc_server_config =
+        configuration::read_configuration::<configuration::RpcServerConfig>().await?;
 
     let near_rpc_client = utils::JsonRpcClient::new(
         rpc_server_config.general.near_rpc_url.clone(),
@@ -27,23 +28,19 @@ async fn main() -> anyhow::Result<()> {
     // We want to set a custom referer to let NEAR JSON RPC nodes know that we are a read-rpc instance
     let near_rpc_client = near_rpc_client.header(
         "Referer".to_string(),
-        rpc_server_config
-            .general
-            .rpc_server
-            .referer_header_value
-            .clone(),
+        rpc_server_config.general.referer_header_value.clone(),
     )?;
 
     let limit_memory_cache_in_bytes =
-        if let Some(limit_memory_cache) = rpc_server_config.general.rpc_server.limit_memory_cache {
+        if let Some(limit_memory_cache) = rpc_server_config.general.limit_memory_cache {
             Some(gigabytes_to_bytes(limit_memory_cache).await)
         } else {
             None
         };
     let reserved_memory_in_bytes =
-        gigabytes_to_bytes(rpc_server_config.general.rpc_server.reserved_memory).await;
+        gigabytes_to_bytes(rpc_server_config.general.reserved_memory).await;
     let block_cache_size_in_bytes =
-        gigabytes_to_bytes(rpc_server_config.general.rpc_server.block_cache_size).await;
+        gigabytes_to_bytes(rpc_server_config.general.block_cache_size).await;
 
     let contract_code_cache_size = utils::calculate_contract_code_cache_sizes(
         reserved_memory_in_bytes,
@@ -74,7 +71,8 @@ async fn main() -> anyhow::Result<()> {
         .call(near_jsonrpc_client::methods::EXPERIMENTAL_genesis_config::RpcGenesisConfigRequest)
         .await?;
     let lake_config = rpc_server_config
-        .to_lake_config(
+        .lake_config
+        .lake_config(
             finale_block_info
                 .read()
                 .await
@@ -82,7 +80,7 @@ async fn main() -> anyhow::Result<()> {
                 .block_height,
         )
         .await?;
-    let lake_s3_client = rpc_server_config.to_s3_client().await;
+    let lake_s3_client = rpc_server_config.lake_config.lake_s3_client().await;
 
     #[cfg(feature = "scylla_db")]
     let db_manager =
@@ -107,7 +105,7 @@ async fn main() -> anyhow::Result<()> {
         std::sync::Arc::clone(&finale_block_info),
         compiled_contract_code_cache,
         contract_code_cache,
-        rpc_server_config.general.rpc_server.max_gas_burnt,
+        rpc_server_config.general.max_gas_burnt,
     );
 
     tokio::spawn(async move {
@@ -195,7 +193,7 @@ async fn main() -> anyhow::Result<()> {
     })
     .bind(format!(
         "0.0.0.0:{:0>5}",
-        rpc_server_config.general.rpc_server.server_port
+        rpc_server_config.general.server_port
     ))?
     .run()
     .await?;

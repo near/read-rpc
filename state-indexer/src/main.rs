@@ -24,7 +24,7 @@ async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
     db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
     rpc_client: &near_jsonrpc_client::JsonRpcClient,
-    indexer_config: configuration::Config,
+    indexer_config: configuration::StateIndexerConfig,
     stats: std::sync::Arc<tokio::sync::RwLock<metrics::Stats>>,
 ) -> anyhow::Result<()> {
     let block_height = streamer_message.block.header.height;
@@ -59,7 +59,7 @@ async fn handle_streamer_message(
     let handle_state_change_future =
         handle_state_changes(streamer_message, db_manager, block_height, block_hash, &indexer_config);
 
-    let update_meta_future = db_manager.update_meta(&indexer_config.general.state_indexer.indexer_id, block_height);
+    let update_meta_future = db_manager.update_meta(&indexer_config.general.indexer_id, block_height);
 
     futures::try_join!(handle_epoch_future, handle_block_future, handle_state_change_future, update_meta_future)?;
 
@@ -146,7 +146,7 @@ async fn handle_state_changes(
     db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
     block_height: u64,
     block_hash: CryptoHash,
-    indexer_config: &configuration::Config,
+    indexer_config: &configuration::StateIndexerConfig,
 ) -> anyhow::Result<Vec<()>> {
     let mut state_changes_to_store =
         std::collections::HashMap::<String, near_indexer_primitives::views::StateChangeWithCauseView>::new();
@@ -291,8 +291,7 @@ async fn main() -> anyhow::Result<()> {
     openssl_probe::init_ssl_cert_env_vars();
 
     configuration::init_tracing(INDEXER).await?;
-    let indexer_config = configuration::read_configuration().await?;
-
+    let indexer_config = configuration::read_configuration::<configuration::StateIndexerConfig>().await?;
     let opts: Opts = Opts::parse();
 
     #[cfg(feature = "scylla_db")]
@@ -310,17 +309,16 @@ async fn main() -> anyhow::Result<()> {
         &rpc_client,
         &db_manager,
         &opts.start_options,
-        &indexer_config.general.state_indexer.indexer_id,
+        &indexer_config.general.indexer_id,
     )
     .await?;
 
-    let lake_config = indexer_config.to_lake_config(start_block_height).await?;
+    let lake_config = indexer_config.lake_config.lake_config(start_block_height).await?;
     let (sender, stream) = near_lake_framework::streamer(lake_config);
 
     // Initiate metrics http server
     tokio::spawn(
-        metrics::init_server(indexer_config.general.state_indexer.metrics_server_port)
-            .expect("Failed to start metrics server"),
+        metrics::init_server(indexer_config.general.metrics_server_port).expect("Failed to start metrics server"),
     );
 
     let stats = std::sync::Arc::new(tokio::sync::RwLock::new(metrics::Stats::new()));
@@ -336,7 +334,7 @@ async fn main() -> anyhow::Result<()> {
                 std::sync::Arc::clone(&stats),
             )
         })
-        .buffer_unordered(indexer_config.general.state_indexer.concurrency);
+        .buffer_unordered(indexer_config.general.concurrency);
 
     while let Some(_handle_message) = handlers.next().await {
         if let Err(err) = _handle_message {

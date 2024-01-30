@@ -18,6 +18,7 @@ COPY rpc-server/src ./rpc-server/src
 RUN cargo build --release --no-default-features --features "$features"
 
 FROM ubuntu:22.04
-RUN apt update && apt install -yy openssl ca-certificates
+RUN apt update && apt install -yy openssl ca-certificates libcurl4
+COPY config.toml .
 COPY --from=builder /tmp/target/release/read-rpc-server .
 ENTRYPOINT ["./read-rpc-server"]

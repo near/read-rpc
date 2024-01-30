@@ -19,5 +19,6 @@ RUN cargo build --release --features "$features"
 
 FROM ubuntu:22.04
 RUN apt update && apt install -yy openssl ca-certificates libcurl4
+COPY config.toml .
 COPY --from=builder /tmp/target/release/tx-indexer .
 ENTRYPOINT ["./tx-indexer"]
