@@ -26,7 +26,7 @@ services:
     environment:
       <<: *common-variables
       SERVER_PORT: 8000
-      RUST_LOG: "read_rpc_server=debug,shadow_data_consistency=debug"
+      RUST_LOG: "read_rpc_server=debug,shadow_data_consistency=debug,info"
     restart: on-failure
     ports:
       - 8000:8000
@@ -43,6 +43,7 @@ services:
     environment:
       <<: *common-variables
       STATE_INDEXER_ID: state-indexer-local
+      RUST_LOG: "info"
     command: [ "from-interruption" ]
     ports:
       - 8080:8080
@@ -60,6 +61,7 @@ services:
     environment:
       <<: *common-variables
       TX_INDEXER_ID: tx-indexer-local
+      RUST_LOG: "info"
     command: [ "from-interruption" ]
     ports:
       - 8081:8081

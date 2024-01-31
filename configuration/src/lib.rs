@@ -14,14 +14,14 @@ pub async fn read_configuration<T>() -> anyhow::Result<T>
 where
     T: configs::Config + Send + Sync + 'static,
 {
-    let path_root = project_root::get_project_root()?;
+    let path_root = find_configs_root().await?;
     load_env(path_root.clone()).await?;
     let common_config = read_toml_file(path_root).await?;
     Ok(T::from_common_config(common_config))
 }
 
 pub async fn init_tracing(service_name: &str) -> anyhow::Result<()> {
-    let path_root = project_root::get_project_root()?;
+    let path_root = find_configs_root().await?;
     load_env(path_root.clone()).await?;
 
     let mut env_filter = tracing_subscriber::EnvFilter::new(format!("{}=info", service_name));
@@ -111,4 +111,18 @@ async fn read_toml_file(mut path_root: PathBuf) -> anyhow::Result<configs::Commo
             );
         }
     }
+}
+
+async fn find_configs_root() -> anyhow::Result<PathBuf> {
+    let current_path = std::env::current_dir()?;
+
+    for path_config in current_path.as_path().ancestors() {
+        let has_config = std::fs::read_dir(path_config)?.any(|path| {
+            path.unwrap().file_name() == std::ffi::OsString::from(String::from("config.toml"))
+        });
+        if has_config {
+            return Ok(PathBuf::from(path_config));
+        }
+    }
+    anyhow::bail!("Ran out of places to find config.toml")
 }

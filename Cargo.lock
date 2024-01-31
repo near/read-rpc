@@ -1338,7 +1338,6 @@ dependencies = [
  "near-lake-framework",
  "opentelemetry",
  "opentelemetry-jaeger",
- "project-root",
  "regex",
  "serde",
  "serde_derive",
@@ -4321,12 +4320,6 @@ checksum = "907a61bd0f64c2f29cd1cf1dc34d05176426a3f504a78010f08416ddb7b13708"
 dependencies = [
  "unicode-ident",
 ]
-
-[[package]]
-name = "project-root"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8bccbff07d5ed689c4087d20d7307a52ab6141edeedf487c3876a55b86cf63df"
 
 [[package]]
 name = "prometheus"

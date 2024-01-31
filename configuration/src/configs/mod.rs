@@ -151,7 +151,6 @@ impl Config for StateIndexerConfig {
 #[derive(Debug, Clone)]
 pub struct EpochIndexerConfig {
     pub general: general::GeneralEpochIndexerConfig,
-    pub rightsizing: rightsizing::RightsizingConfig,
     pub lake_config: lake::LakeConfig,
     pub database: database::DatabaseConfig,
 }
@@ -160,7 +159,6 @@ impl Config for EpochIndexerConfig {
     fn from_common_config(common_config: CommonConfig) -> Self {
         Self {
             general: common_config.general.into(),
-            rightsizing: common_config.rightsizing.into(),
             lake_config: common_config.lake_config,
             database: database::DatabaseStateIndexerConfig::from(common_config.database).into(),
         }
