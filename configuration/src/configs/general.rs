@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use serde_derive::Deserialize;
+use serde::Deserialize;
 
 use crate::configs::{deserialize_data_or_env, deserialize_optional_data_or_env};
 

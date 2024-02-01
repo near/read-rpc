@@ -1,14 +1,6 @@
 use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug)]
-#[clap(
-    version,
-    author,
-    about,
-    setting(clap::AppSettings::DisableHelpSubcommand),
-    setting(clap::AppSettings::PropagateVersion),
-    setting(clap::AppSettings::NextLineHelp)
-)]
 pub struct Opts {
     #[clap(subcommand)]
     pub start_options: StartOptions,

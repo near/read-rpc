@@ -4,41 +4,42 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.70"
-async-trait = "0.1.66"
+anyhow = "1.0.79"
+async-trait = "0.1.77"
 bigdecimal = { version = "0.4.2", optional = true }
-borsh = "0.10.2"
-bytes = "1.0.1"
-diesel = { version = "2.1.3", features = ["postgres", "numeric", "serde_json"], optional = true }
+borsh = "1.3.1"
+bytes = "1.5.0"
+diesel = { version = "2.1.4", features = ["postgres", "numeric", "serde_json"], optional = true }
 diesel-async = { version = "0.4.1", features = ["postgres", "deadpool"], optional = true }
-futures = "0.3.5"
+futures = "0.3.30"
 hex = "0.4.3"
 prettytable-rs = { version = "0.10", optional = true }
 num-bigint = { version = "0.3", optional = true }
-num-traits = { version = "0.2.15", optional = true }
-scylla = { version = "0.9.0", optional = true }
-serde = { version = "1.0.145", features = ["derive"]}
+num-traits = { version = "0.2.17", optional = true }
+scylla = { version = "0.11.1", optional = true }
+scylla-cql = { version = "0.0.11", optional = true }
+serde = { version = "1.0.145", features = ["derive"] }
 serde_json = "1.0.85"
-tokio = { version = "1.19.2", features = [
+tokio = { version = "1.35.1", features = [
     "sync",
     "time",
     "macros",
     "rt-multi-thread",
 ] }
-tracing = "0.1.34"
-uuid = { version = "1.3.0", optional = true }
+tracing = "0.1.40"
+uuid = { version = "1.7.0", optional = true }
 
 configuration = { path = "../configuration" }
 readnode-primitives = { path = "../readnode-primitives" }
 
-near-chain-configs = "1.36.0"
-near-primitives = "1.36.0"
-near-crypto = "1.36.0"
-near-indexer-primitives = "1.36.0"
+near-chain-configs = "0.20.0"
+near-primitives = "0.20.0"
+near-crypto = "0.20.0"
+near-indexer-primitives = "0.20.0"
 
 [features]
 default = ["scylla_db"]
 postgres_db = ["dep:diesel", "dep:diesel-async", "dep:bigdecimal"]
-scylla_db = ["dep:scylla", "dep:num-bigint", "dep:num-traits"]
+scylla_db = ["dep:scylla", "dep:scylla-cql", "dep:num-bigint", "dep:num-traits"]
 scylla_db_tracing = ["dep:prettytable-rs", "dep:uuid", "scylla_db"]
 account_access_keys = []

@@ -7,7 +7,7 @@ use crate::modules::network::{
 #[cfg(feature = "shadow_data_consistency")]
 use crate::utils::shadow_compare_results;
 use jsonrpc_v2::{Data, Params};
-use sysinfo::{System, SystemExt};
+use sysinfo::System;
 
 pub async fn status(
     data: Data<ServerContext>,

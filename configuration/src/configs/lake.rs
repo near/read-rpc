@@ -1,5 +1,5 @@
 use near_lake_framework::near_indexer_primitives::near_primitives;
-use serde_derive::Deserialize;
+use serde::Deserialize;
 
 use crate::configs::deserialize_data_or_env;
 

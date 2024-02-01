@@ -4,31 +4,31 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-actix-web = "4.2.1"
-anyhow = "1.0.70"
-async-trait = "0.1.66"
-clap = { version = "3.2.22", features = ["color", "derive", "env"] }
-futures = "0.3.5"
+actix-web = "4.4.1"
+anyhow = "1.0.79"
+async-trait = "0.1.77"
+clap = "4.4.18"
+futures = "0.3.30"
 futures-locks = "0.7.1"
 humantime = "2.1.0"
 lazy_static = "1.4.0"
-prometheus = "0.13.1"
-tokio = { version = "1.28.2", features = [
+prometheus = "0.13.3"
+tokio = { version = "1.35.1", features = [
     "sync",
     "time",
     "macros",
     "rt-multi-thread",
 ] }
-tokio-stream = { version = "0.1.12" }
-tracing = "0.1.34"
+tokio-stream = { version = "0.1.14" }
+tracing = "0.1.40"
 
 configuration = { path = "../configuration" }
 database = { path = "../database" }
 readnode-primitives = { path = "../readnode-primitives" }
 
-near-indexer-primitives = "1.36.0"
-near-jsonrpc-client = "0.7.0"
-near-lake-framework = "0.7.6"
+near-indexer-primitives = "0.20.0"
+near-jsonrpc-client = "0.8.0"
+near-lake-framework = "0.7.7"
 
 [features]
 default = ["scylla_db"]

@@ -6,23 +6,24 @@ use serde_json::Value;
 pub async fn parse_transaction_status_common_request(
     value: Value,
 ) -> Result<
-    near_jsonrpc_primitives::types::transactions::RpcTransactionStatusCommonRequest,
+    near_jsonrpc_primitives::types::transactions::RpcTransactionStatusRequest,
     near_jsonrpc_primitives::errors::RpcError,
 > {
     tracing::debug!("`parse_transaction_status_common_request` call.");
-    if let Ok((hash, account_id)) = serde_json::from_value::<(
+    if let Ok((tx_hash, sender_account_id)) = serde_json::from_value::<(
         near_primitives::hash::CryptoHash,
         near_primitives::types::AccountId,
     )>(value.clone())
     {
         let transaction_info =
             near_jsonrpc_primitives::types::transactions::TransactionInfo::TransactionId {
-                hash,
-                account_id,
+                tx_hash,
+                sender_account_id,
             };
         Ok(
-            near_jsonrpc_primitives::types::transactions::RpcTransactionStatusCommonRequest {
+            near_jsonrpc_primitives::types::transactions::RpcTransactionStatusRequest {
                 transaction_info,
+                wait_until: Default::default(), // TODO!
             },
         )
     } else {
@@ -32,11 +33,14 @@ pub async fn parse_transaction_status_common_request(
 
         let transaction_info =
             near_jsonrpc_primitives::types::transactions::TransactionInfo::Transaction(
-                signed_transaction,
+                near_jsonrpc_primitives::types::transactions::SignedTransaction::SignedTransaction(
+                    signed_transaction,
+                ),
             );
         Ok(
-            near_jsonrpc_primitives::types::transactions::RpcTransactionStatusCommonRequest {
+            near_jsonrpc_primitives::types::transactions::RpcTransactionStatusRequest {
                 transaction_info,
+                wait_until: Default::default(), // TODO!
             },
         )
     }

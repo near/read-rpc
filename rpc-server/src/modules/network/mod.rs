@@ -94,5 +94,10 @@ pub fn clone_protocol_config(
         protocol_treasury_account: protocol_config.protocol_treasury_account.clone(),
         fishermen_threshold: protocol_config.fishermen_threshold,
         minimum_stake_divisor: protocol_config.minimum_stake_divisor,
+        max_kickout_stake_perc: protocol_config.max_kickout_stake_perc,
+        minimum_stake_ratio: protocol_config.minimum_stake_ratio,
+        minimum_validators_per_shard: protocol_config.minimum_validators_per_shard,
+        num_chunk_only_producer_seats: protocol_config.num_chunk_only_producer_seats,
+        shard_layout: protocol_config.shard_layout.clone(),
     }
 }

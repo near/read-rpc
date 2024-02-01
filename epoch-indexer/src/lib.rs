@@ -15,7 +15,7 @@ pub async fn get_epoch_validators(
             Ok(response) => return Ok(response),
             Err(e) => {
                 attempt_counter += 1;
-                tracing::debug!(
+                tracing::warn!(
                     "Attempt: {}.Epoch_id: {}. Error fetching epoch validators: {:?}",
                     attempt_counter,
                     epoch_id,
@@ -53,7 +53,7 @@ pub async fn get_protocol_config(
                 if try_another_blocks {
                     block_height += 1;
                 }
-                tracing::debug!(
+                tracing::warn!(
                     "Attempt: {}. Epoch_start_height {}. Error fetching protocol config: {:?}",
                     attempt_counter,
                     block_height,

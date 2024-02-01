@@ -1,12 +1,8 @@
-use std::collections::HashMap;
-use std::ops::Deref;
-
-#[cfg(feature = "account_access_keys")]
-use borsh::BorshDeserialize;
-use borsh::BorshSerialize;
 use futures::StreamExt;
 use near_crypto::{KeyType, PublicKey};
 use near_primitives::utils::create_random_seed;
+use std::collections::HashMap;
+use std::ops::Deref;
 use tokio::task;
 
 use crate::config::CompiledCodeCache;
@@ -91,12 +87,11 @@ pub async fn fetch_list_access_keys_from_db(
         .into_iter()
         .map(
             |(public_key_hex, access_key)| near_primitives::views::AccessKeyInfoView {
-                public_key: near_crypto::PublicKey::try_from_slice(
-                    &hex::decode(public_key_hex).unwrap(),
-                )
-                .unwrap(),
+                public_key: borsh::from_slice::<PublicKey>(&hex::decode(public_key_hex).unwrap())
+                    .expect("Failed to deserialize PublicKey"),
                 access_key: near_primitives::views::AccessKeyView::from(
-                    near_primitives::account::AccessKey::try_from_slice(&access_key).unwrap(),
+                    borsh::from_slice::<near_primitives::account::AccessKey>(&access_key)
+                        .expect("Failed to deserialize AccessKey"),
                 ),
             },
         )
@@ -144,15 +139,60 @@ pub async fn fetch_state_from_db(
     tracing::instrument(skip(context, code_storage, contract_code, compiled_contract_code_cache))
 )]
 async fn run_code_in_vm_runner(
-    contract_code: near_primitives::contract::ContractCode,
+    contract_code: near_vm_runner::ContractCode,
     method_name: &str,
     context: near_vm_runner::logic::VMContext,
     mut code_storage: CodeStorage,
-    latest_protocol_version: near_primitives::types::ProtocolVersion,
     compiled_contract_code_cache: &std::sync::Arc<CompiledCodeCache>,
 ) -> Result<near_vm_runner::logic::VMOutcome, near_primitives::errors::RuntimeError> {
     let contract_method_name = String::from(method_name);
     let code_cache = std::sync::Arc::clone(compiled_contract_code_cache);
+
+    let mut near_vm_runner_config = near_vm_runner::logic::Config {
+        ext_costs: near_parameters::ExtCostsConfig::test(),
+        grow_mem_cost: 0,
+        regular_op_cost: 0,
+        vm_kind: near_parameters::vm::VMKind::Wasmer0,
+        disable_9393_fix: false,
+        storage_get_mode: near_vm_runner::logic::StorageGetMode::FlatStorage,
+        fix_contract_loading_cost: false,
+        implicit_account_creation: false,
+        math_extension: false,
+        ed25519_verify: false,
+        alt_bn128: false,
+        function_call_weight: false,
+        eth_implicit_accounts: false,
+        limit_config: near_parameters::vm::LimitConfig {
+            max_gas_burnt: 0,
+            max_stack_height: 0,
+            contract_prepare_version: near_parameters::vm::ContractPrepareVersion::V0,
+            initial_memory_pages: 0,
+            max_memory_pages: 0,
+            registers_memory_limit: 0,
+            max_register_size: 0,
+            max_number_registers: 0,
+            max_number_logs: 0,
+            max_total_log_length: 0,
+            max_total_prepaid_gas: 0,
+            max_actions_per_receipt: 0,
+            max_number_bytes_method_names: 0,
+            max_length_method_name: 0,
+            max_arguments_length: 0,
+            max_length_returned_data: 0,
+            max_contract_size: 0,
+            max_transaction_size: 0,
+            max_length_storage_key: 0,
+            max_length_storage_value: 0,
+            max_promises_per_function_call_action: 0,
+            max_number_input_data_dependencies: 0,
+            max_functions_number_per_contract: None,
+            wasmer2_stack_limit: 0,
+            max_locals_per_contract: None,
+            account_id_validity_rules_version:
+                near_primitives::config::AccountIdValidityRulesVersion::V0,
+        },
+    };
+    near_vm_runner_config.make_free();
 
     let results = task::spawn_blocking(move || {
         near_vm_runner::run(
@@ -160,10 +200,9 @@ async fn run_code_in_vm_runner(
             &contract_method_name,
             &mut code_storage,
             context,
-            &near_vm_runner::logic::VMConfig::free(),
-            &near_primitives::runtime::fees::RuntimeFeesConfig::free(),
+            &near_vm_runner_config,
+            &near_parameters::RuntimeFeesConfig::free(),
             &[],
-            latest_protocol_version,
             Some(code_cache.deref()),
         )
     })
@@ -247,9 +286,7 @@ pub async fn run_contract(
         .cloned();
 
     let contract_code = match code {
-        Some(code) => {
-            near_primitives::contract::ContractCode::new(code, Some(contract.data.code_hash()))
-        }
+        Some(code) => near_vm_runner::ContractCode::new(code, Some(contract.data.code_hash())),
         None => {
             let code = db_manager
                 .get_contract_code(&account_id, block.block_height)
@@ -261,7 +298,7 @@ pub async fn run_contract(
                 .write()
                 .await
                 .put(contract.data.code_hash(), code.data.clone());
-            near_primitives::contract::ContractCode::new(code.data, Some(contract.data.code_hash()))
+            near_vm_runner::ContractCode::new(code.data, Some(contract.data.code_hash()))
         }
     };
 
@@ -289,10 +326,10 @@ pub async fn run_contract(
         block.state_root,
     );
     let context = near_vm_runner::logic::VMContext {
-        current_account_id: account_id.parse().unwrap(),
-        signer_account_id: account_id.parse().unwrap(),
-        signer_account_pk: public_key.try_to_vec().expect("Failed to serialize"),
-        predecessor_account_id: account_id.parse().unwrap(),
+        current_account_id: account_id.clone(),
+        signer_account_id: account_id.clone(),
+        signer_account_pk: borsh::to_vec(&public_key).unwrap(),
+        predecessor_account_id: account_id.clone(),
         input: args.into(),
         block_height: block.block_height,
         block_timestamp: block.block_timestamp,
@@ -303,13 +340,13 @@ pub async fn run_contract(
         attached_deposit: 0,
         prepaid_gas: max_gas_burnt,
         random_seed,
-        view_config: Some(near_vm_runner::logic::ViewConfig { max_gas_burnt }),
+        view_config: Some(near_primitives::config::ViewConfig { max_gas_burnt }),
         output_data_receivers: vec![],
     };
 
     let code_storage = CodeStorage::init(
         db_manager.clone(),
-        account_id.clone(),
+        account_id,
         block.block_height,
         epoch_validators
             .iter()
@@ -322,7 +359,6 @@ pub async fn run_contract(
         method_name,
         context,
         code_storage,
-        block.latest_protocol_version,
         compiled_contract_code_cache,
     )
     .await

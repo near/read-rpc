@@ -2,7 +2,7 @@ use crate::modules::blocks::{CacheBlock, FinalBlockInfo};
 #[cfg(feature = "shadow_data_consistency")]
 use assert_json_diff::{assert_json_matches_no_panic, CompareMode, Config, NumericMode};
 use futures::StreamExt;
-use sysinfo::{System, SystemExt};
+use sysinfo::System;
 
 #[cfg(feature = "shadow_data_consistency")]
 const DEFAULT_RETRY_COUNT: u8 = 3;
@@ -47,8 +47,8 @@ impl JsonRpcClient {
         params: M,
         is_archival: bool,
     ) -> near_jsonrpc_client::MethodCallResult<M::Response, M::Error>
-    where
-        M: near_jsonrpc_client::methods::RpcMethod + std::fmt::Debug,
+        where
+            M: near_jsonrpc_client::methods::RpcMethod + std::fmt::Debug,
     {
         if is_archival {
             self.archival_client.call(params).await
@@ -62,8 +62,8 @@ impl JsonRpcClient {
         &self,
         params: M,
     ) -> near_jsonrpc_client::MethodCallResult<M::Response, M::Error>
-    where
-        M: near_jsonrpc_client::methods::RpcMethod + std::fmt::Debug,
+        where
+            M: near_jsonrpc_client::methods::RpcMethod + std::fmt::Debug,
     {
         tracing::debug!("PROXY call. {:?}", params);
         self.rpc_call(params, false).await
@@ -74,66 +74,62 @@ impl JsonRpcClient {
         &self,
         params: M,
     ) -> near_jsonrpc_client::MethodCallResult<M::Response, M::Error>
-    where
-        M: near_jsonrpc_client::methods::RpcMethod + std::fmt::Debug,
+        where
+            M: near_jsonrpc_client::methods::RpcMethod + std::fmt::Debug,
     {
         tracing::debug!("ARCHIVAL PROXY call. {:?}", params);
         self.rpc_call(params, true).await
     }
-}
 
-pub async fn get_final_cache_block(near_rpc_client: &JsonRpcClient) -> Option<CacheBlock> {
-    let block_request_method = near_jsonrpc_client::methods::block::RpcBlockRequest {
-        block_reference: near_primitives::types::BlockReference::Finality(
-            near_primitives::types::Finality::Final,
-        ),
-    };
-    match near_rpc_client.call(block_request_method).await {
-        Ok(block_view) => {
-            // Updating the metric to expose the block height considered as final by the server
-            // this metric can be used to calculate the lag between the server and the network
-            // Prometheus Gauge Metric type do not support u64
-            // https://github.com/tikv/rust-prometheus/issues/470
-            crate::metrics::FINAL_BLOCK_HEIGHT
-                .set(i64::try_from(block_view.header.height).unwrap());
-
-            Some(CacheBlock {
-                block_hash: block_view.header.hash,
-                block_height: block_view.header.height,
-                block_timestamp: block_view.header.timestamp,
-                gas_price: block_view.header.gas_price,
-                latest_protocol_version: block_view.header.latest_protocol_version,
-                chunks_included: block_view.header.chunks_included,
-                state_root: block_view.header.prev_state_root,
-                epoch_id: block_view.header.epoch_id,
-            })
-        }
-        Err(err) => {
-            tracing::warn!("Error to get final block: {:?}", err);
-            None
-        }
-    }
-}
-
-pub async fn get_current_protocol_config(
-    near_rpc_client: &JsonRpcClient,
-) -> anyhow::Result<near_chain_configs::ProtocolConfigView> {
-    let params =
-        near_jsonrpc_client::methods::EXPERIMENTAL_protocol_config::RpcProtocolConfigRequest {
+    pub async fn get_final_cache_block(&self) -> Option<CacheBlock> {
+        let block_request_method = near_jsonrpc_client::methods::block::RpcBlockRequest {
             block_reference: near_primitives::types::BlockReference::Finality(
                 near_primitives::types::Finality::Final,
             ),
         };
-    Ok(near_rpc_client.call(params).await?)
-}
+        match self.call(block_request_method).await {
+            Ok(block_view) => {
+                // Updating the metric to expose the block height considered as final by the server
+                // this metric can be used to calculate the lag between the server and the network
+                // Prometheus Gauge Metric type do not support u64
+                // https://github.com/tikv/rust-prometheus/issues/470
+                crate::metrics::FINAL_BLOCK_HEIGHT
+                    .set(i64::try_from(block_view.header.height).unwrap());
 
-pub async fn get_current_validators(
-    near_rpc_client: &JsonRpcClient,
-) -> anyhow::Result<near_primitives::views::EpochValidatorInfo> {
-    let params = near_jsonrpc_client::methods::validators::RpcValidatorRequest {
-        epoch_reference: near_primitives::types::EpochReference::Latest,
-    };
-    Ok(near_rpc_client.call(params).await?)
+                Some(CacheBlock {
+                    block_hash: block_view.header.hash,
+                    block_height: block_view.header.height,
+                    block_timestamp: block_view.header.timestamp,
+                    gas_price: block_view.header.gas_price,
+                    latest_protocol_version: block_view.header.latest_protocol_version,
+                    chunks_included: block_view.header.chunks_included,
+                    state_root: block_view.header.prev_state_root,
+                    epoch_id: block_view.header.epoch_id,
+                })
+            }
+            Err(err) => {
+                tracing::warn!("Error to get final block: {:?}", err);
+                None
+            }
+        }
+    }
+
+    pub async fn get_current_protocol_config(&self) -> anyhow::Result<near_chain_configs::ProtocolConfigView> {
+        let params =
+            near_jsonrpc_client::methods::EXPERIMENTAL_protocol_config::RpcProtocolConfigRequest {
+                block_reference: near_primitives::types::BlockReference::Finality(
+                    near_primitives::types::Finality::Final,
+                ),
+            };
+        Ok(self.call(params).await?)
+    }
+
+    pub async fn get_current_validators(&self) -> anyhow::Result<near_primitives::views::EpochValidatorInfo> {
+        let params = near_jsonrpc_client::methods::validators::RpcValidatorRequest {
+            epoch_reference: near_primitives::types::EpochReference::Latest,
+        };
+        Ok(self.call(params).await?)
+    }
 }
 
 async fn handle_streamer_message(
@@ -163,9 +159,9 @@ async fn handle_streamer_message(
             streamer_message.block.header.epoch_id
         );
         finale_block_info.write().await.current_protocol_config =
-            get_current_protocol_config(near_rpc_client).await?;
+            near_rpc_client.get_current_protocol_config().await?;
         finale_block_info.write().await.current_validators =
-            get_current_validators(near_rpc_client).await?;
+            near_rpc_client.get_current_validators().await?;
     }
     finale_block_info.write().await.final_block_cache = block;
     blocks_cache.write().await.put(block.block_height, block);

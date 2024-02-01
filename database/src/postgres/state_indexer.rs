@@ -112,7 +112,7 @@ impl crate::StateIndexerDbManager for PostgresDBManager {
     ) -> anyhow::Result<std::collections::HashMap<String, Vec<u8>>> {
         let active_access_keys = crate::models::StateChangesAccessKeys::get_active_access_keys(
             Self::get_connection(&self.pg_pool).await?,
-            &account_id,
+            account_id.as_str(),
             block_height,
         )
         .await?;

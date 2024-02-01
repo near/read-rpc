@@ -1,4 +1,3 @@
-use borsh::BorshSerialize;
 use clap::Parser;
 use futures::StreamExt;
 
@@ -168,7 +167,7 @@ async fn handle_state_changes(
                 // returning a hex-encoded key to ensure we store data changes to the key
                 // (if there is more than one change to the same key)
                 let key: &[u8] = key.as_ref();
-                format!("{}_data_{}", account_id.as_ref(), hex::encode(key))
+                format!("{}_data_{}", account_id.as_str(), hex::encode(key))
             }
             StateChangeValueView::AccessKeyUpdate {
                 account_id, public_key, ..
@@ -176,16 +175,14 @@ async fn handle_state_changes(
             | StateChangeValueView::AccessKeyDeletion { account_id, public_key } => {
                 // returning a hex-encoded key to ensure we store data changes to the key
                 // (if there is more than one change to the same key)
-                let data_key = public_key
-                    .try_to_vec()
-                    .expect("Failed to borsh-serialize the PublicKey");
-                format!("{}_access_key_{}", account_id.as_ref(), hex::encode(data_key))
+                let data_key = borsh::to_vec(&public_key)?;
+                format!("{}_access_key_{}", account_id.as_str(), hex::encode(data_key))
             }
             // ContractCode and Account changes is not separate-able by any key, we can omit the suffix
             StateChangeValueView::ContractCodeUpdate { account_id, .. }
-            | StateChangeValueView::ContractCodeDeletion { account_id } => format!("{}_contract", account_id.as_ref()),
+            | StateChangeValueView::ContractCodeDeletion { account_id } => format!("{}_contract", account_id.as_str()),
             StateChangeValueView::AccountUpdate { account_id, .. }
-            | StateChangeValueView::AccountDeletion { account_id } => format!("{}_account", account_id.as_ref()),
+            | StateChangeValueView::AccountDeletion { account_id } => format!("{}_account", account_id.as_str()),
         };
         // This will override the previous record for this account_id + state change kind + suffix
         state_changes_to_store.insert(key, state_change);
@@ -225,12 +222,8 @@ async fn store_state_change(
             public_key,
             access_key,
         } => {
-            let data_key = public_key
-                .try_to_vec()
-                .expect("Failed to borsh-serialize the PublicKey");
-            let data_value = access_key
-                .try_to_vec()
-                .expect("Failed to borsh-serialize the AccessKey");
+            let data_key = borsh::to_vec(&public_key)?;
+            let data_value = borsh::to_vec(&access_key)?;
             let add_access_key_future =
                 db_manager.add_access_key(account_id.clone(), block_height, block_hash, &data_key, &data_value);
 
@@ -244,9 +237,7 @@ async fn store_state_change(
             add_access_key_future.await?;
         }
         StateChangeValueView::AccessKeyDeletion { account_id, public_key } => {
-            let data_key = public_key
-                .try_to_vec()
-                .expect("Failed to borsh-serialize the PublicKey");
+            let data_key = borsh::to_vec(&public_key)?;
             let delete_access_key_future =
                 db_manager.delete_access_key(account_id.clone(), block_height, block_hash, &data_key);
 
@@ -270,9 +261,7 @@ async fn store_state_change(
                 .await?
         }
         StateChangeValueView::AccountUpdate { account_id, account } => {
-            let value = Account::from(account)
-                .try_to_vec()
-                .expect("Failed to borsh-serialize the Account");
+            let value = borsh::to_vec(&Account::from(account))?;
             db_manager
                 .add_account(account_id, block_height, block_hash, value)
                 .await?

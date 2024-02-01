@@ -27,14 +27,14 @@ impl FinalBlockInfo {
             futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>,
         >,
     ) -> Self {
-        let final_block = crate::utils::get_final_cache_block(near_rpc_client)
+        let final_block = near_rpc_client.get_final_cache_block()
             .await
             .expect("Error to get final block");
-        let protocol_config = crate::utils::get_current_protocol_config(near_rpc_client)
+        let protocol_config = near_rpc_client.get_current_protocol_config()
             .await
             .expect("Error to get protocol_config");
 
-        let validators = crate::utils::get_current_validators(near_rpc_client)
+        let validators = near_rpc_client.get_current_validators()
             .await
             .expect("Error to get protocol_config");
 

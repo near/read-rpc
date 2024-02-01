@@ -1,7 +1,6 @@
 use std::convert::TryFrom;
 use std::str::FromStr;
 
-use borsh::{BorshDeserialize, BorshSerialize};
 use futures::StreamExt;
 use num_traits::ToPrimitive;
 use scylla::{prepared_statement::PreparedStatement, IntoTypedRows};
@@ -354,7 +353,7 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         request_block_height: near_primitives::types::BlockHeight,
         public_key: near_crypto::PublicKey,
     ) -> anyhow::Result<readnode_primitives::QueryData<near_primitives::account::AccessKey>> {
-        let key_data = public_key.try_to_vec()?;
+        let key_data = borsh::to_vec(&public_key)?;
         let (block_height, block_hash, data_blob) = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_access_key,
@@ -428,9 +427,7 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         .single_row()?
         .into_typed::<(Vec<u8>,)>()?;
 
-        Ok(readnode_primitives::TransactionDetails::try_from_slice(
-            &data_value,
-        )?)
+        Ok(borsh::from_slice::<readnode_primitives::TransactionDetails>(&data_value)?)
     }
 
     /// Returns the block height and shard id by the given block height

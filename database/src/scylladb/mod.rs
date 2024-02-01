@@ -5,6 +5,7 @@ pub mod tx_indexer;
 use scylla::prepared_statement::PreparedStatement;
 use scylla::retry_policy::{QueryInfo, RetryDecision};
 use scylla::transport::errors::QueryError;
+use scylla_cql::types::serialize::row::SerializeRow;
 
 #[derive(Debug)]
 pub struct CustomDBRetryPolicy {
@@ -81,7 +82,7 @@ impl Default for CustomRetrySession {
 impl scylla::retry_policy::RetrySession for CustomRetrySession {
     /// Called after the query failed - decide what to do next
     fn decide_should_retry(&mut self, query_info: QueryInfo) -> RetryDecision {
-        if let scylla::frame::types::LegacyConsistency::Serial(_) = query_info.consistency {
+        if query_info.consistency.is_serial() {
             return RetryDecision::DontRetry;
         };
         tracing::warn!("ScyllaDB QueryError: {:?}", query_info.error);
@@ -338,7 +339,7 @@ pub trait ScyllaStorageManager {
     async fn execute_prepared_query(
         scylla_session: &scylla::Session,
         query: &PreparedStatement,
-        values: impl scylla::frame::value::ValueList + std::marker::Send,
+        values: impl SerializeRow + std::marker::Send,
     ) -> anyhow::Result<scylla::QueryResult> {
         let result = scylla_session.execute(query, values).await?;
 
@@ -391,7 +392,7 @@ pub trait ScyllaStorageManager {
         }
 
         if let Some(start_at) = tracing_info.started_at {
-            tracing_info_table.add_row(prettytable::row!["Started at", start_at]);
+            tracing_info_table.add_row(prettytable::row!["Started at", start_at.0]);
         }
 
         let mut events_table =
