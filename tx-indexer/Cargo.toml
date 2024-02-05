@@ -28,7 +28,7 @@ readnode-primitives = { path = "../readnode-primitives" }
 
 near-indexer-primitives = "1.36.0"
 near-jsonrpc-client = "0.7.0"
-near-lake-framework = "0.7.6"
+near-lake-framework = "0.7.9"
 
 [features]
 default = ["scylla_db"]
