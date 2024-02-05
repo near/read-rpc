@@ -18,13 +18,13 @@ pub(crate) const INDEXER: &str = "state_indexer";
 
 #[cfg_attr(
     feature = "tracing-instrumentation",
-    tracing::instrument(skip(streamer_message, db_manager, indexer_id))
+    tracing::instrument(skip(streamer_message, db_manager))
 )]
 async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
     db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
     rpc_client: &near_jsonrpc_client::JsonRpcClient,
-    indexer_id: &str,
+    indexer_config: configuration::StateIndexerConfig,
     stats: std::sync::Arc<tokio::sync::RwLock<metrics::Stats>>,
 ) -> anyhow::Result<()> {
     let block_height = streamer_message.block.header.height;
@@ -56,9 +56,10 @@ async fn handle_streamer_message(
             .collect(),
         db_manager,
     );
-    let handle_state_change_future = handle_state_changes(streamer_message, db_manager, block_height, block_hash);
+    let handle_state_change_future =
+        handle_state_changes(streamer_message, db_manager, block_height, block_hash, &indexer_config);
 
-    let update_meta_future = db_manager.update_meta(indexer_id, block_height);
+    let update_meta_future = db_manager.update_meta(&indexer_config.general.indexer_id, block_height);
 
     futures::try_join!(handle_epoch_future, handle_block_future, handle_state_change_future, update_meta_future)?;
 
@@ -145,6 +146,7 @@ async fn handle_state_changes(
     db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
     block_height: u64,
     block_hash: CryptoHash,
+    indexer_config: &configuration::StateIndexerConfig,
 ) -> anyhow::Result<Vec<()>> {
     let mut state_changes_to_store =
         std::collections::HashMap::<String, near_indexer_primitives::views::StateChangeWithCauseView>::new();
@@ -157,6 +159,9 @@ async fn handle_state_changes(
     // Collecting a unique list of StateChangeWithCauseView for account_id + change kind + suffix
     // by overwriting the records in the HashMap
     for state_change in initial_state_changes {
+        if !indexer_config.state_should_be_indexed(&state_change.value) {
+            continue;
+        };
         let key = match &state_change.value {
             StateChangeValueView::DataUpdate { account_id, key, .. }
             | StateChangeValueView::DataDeletion { account_id, key } => {
@@ -283,41 +288,41 @@ async fn store_state_change(
 async fn main() -> anyhow::Result<()> {
     // We use it to automatically search the for root certificates to perform HTTPS calls
     // (sending telemetry and downloading genesis)
-    dotenv::dotenv().ok();
-
     openssl_probe::init_ssl_cert_env_vars();
 
-    configs::init_tracing()?;
-
+    configuration::init_tracing(INDEXER).await?;
+    let indexer_config = configuration::read_configuration::<configuration::StateIndexerConfig>().await?;
     let opts: Opts = Opts::parse();
 
     #[cfg(feature = "scylla_db")]
-    let db_manager = database::prepare_db_manager::<database::scylladb::state_indexer::ScyllaDBManager>(
-        &opts.database_url,
-        opts.database_user.as_deref(),
-        opts.database_password.as_deref(),
-        opts.to_additional_database_options().await,
-    )
-    .await?;
+    let db_manager =
+        database::prepare_db_manager::<database::scylladb::state_indexer::ScyllaDBManager>(&indexer_config.database)
+            .await?;
 
     #[cfg(all(feature = "postgres_db", not(feature = "scylla_db")))]
-    let db_manager = database::prepare_db_manager::<database::postgres::state_indexer::PostgresDBManager>(
-        &opts.database_url,
-        opts.database_user.as_deref(),
-        opts.database_password.as_deref(),
-        opts.to_additional_database_options().await,
+    let db_manager =
+        database::prepare_db_manager::<database::postgres::state_indexer::PostgresDBManager>(&indexer_config.database)
+            .await?;
+
+    let rpc_client = near_jsonrpc_client::JsonRpcClient::connect(&indexer_config.general.near_rpc_url);
+    let start_block_height = configs::get_start_block_height(
+        &rpc_client,
+        &db_manager,
+        &opts.start_options,
+        &indexer_config.general.indexer_id,
     )
     .await?;
 
-    let config: near_lake_framework::LakeConfig = opts.to_lake_config(&db_manager).await?;
-    let (sender, stream) = near_lake_framework::streamer(config);
+    let lake_config = indexer_config.lake_config.lake_config(start_block_height).await?;
+    let (sender, stream) = near_lake_framework::streamer(lake_config);
 
-    let rpc_client = near_jsonrpc_client::JsonRpcClient::connect(opts.rpc_url());
     // Initiate metrics http server
-    tokio::spawn(metrics::init_server(opts.port).expect("Failed to start metrics server"));
+    tokio::spawn(
+        metrics::init_server(indexer_config.general.metrics_server_port).expect("Failed to start metrics server"),
+    );
 
     let stats = std::sync::Arc::new(tokio::sync::RwLock::new(metrics::Stats::new()));
-    tokio::spawn(metrics::state_logger(std::sync::Arc::clone(&stats), opts.rpc_url().to_string()));
+    tokio::spawn(metrics::state_logger(std::sync::Arc::clone(&stats), rpc_client.clone()));
 
     let mut handlers = tokio_stream::wrappers::ReceiverStream::new(stream)
         .map(|streamer_message| {
@@ -325,11 +330,11 @@ async fn main() -> anyhow::Result<()> {
                 streamer_message,
                 &db_manager,
                 &rpc_client,
-                &opts.indexer_id,
+                indexer_config.clone(),
                 std::sync::Arc::clone(&stats),
             )
         })
-        .buffer_unordered(opts.concurrency);
+        .buffer_unordered(indexer_config.general.concurrency);
 
     while let Some(_handle_message) = handlers.next().await {
         if let Err(err) = _handle_message {

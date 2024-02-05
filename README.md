@@ -20,6 +20,9 @@ The indexer built on top of Lake Framework that watches the network and stores t
 
 The indexer built on top of Lake Framework that watches the network and stores the `Transactions` along with all the related entities (`Receipts`, `ExecutionOutcomes`) into the Storage (ScyllaDB) using the specifically defined `TransactionDetails` structure in a dumped way (using the simplest key-value schema)
 
+### [config](configuration/README.md)
+
+The configuration module is responsible for managing the configuration settings of the NEAR ReadRPC project.
 
 ## Docker compose
 
@@ -27,13 +30,8 @@ The indexer built on top of Lake Framework that watches the network and stores t
 
 ### Run the entire project
 
-Add the `.env` file (update the credentials with your own to access the S3 bucket)
-
-```
-AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
-AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
-AWS_DEFAULT_REGION=eu-central-1
-```
+Put TOML file `config.toml` with configuration in the home root of the project.
+See the example [here](./configuration/example.config.toml).
 
 Run the docker compose:
 

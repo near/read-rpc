@@ -46,10 +46,5 @@ pub type PageToken = Option<String>;
 
 #[async_trait::async_trait]
 pub trait BaseDbManager {
-    async fn new(
-        database_url: &str,
-        database_user: Option<&str>,
-        database_password: Option<&str>,
-        database_options: AdditionalDatabaseOptions,
-    ) -> anyhow::Result<Box<Self>>;
+    async fn new(config: &configuration::DatabaseConfig) -> anyhow::Result<Box<Self>>;
 }

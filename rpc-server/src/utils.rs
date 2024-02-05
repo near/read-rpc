@@ -9,7 +9,7 @@ const DEFAULT_RETRY_COUNT: u8 = 3;
 
 /// JsonRpcClient represents a client capable of interacting with NEAR JSON-RPC endpoints,
 /// The client is capable of handling requests to both regular and archival nodes.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct JsonRpcClient {
     regular_client: near_jsonrpc_client::JsonRpcClient,
     archival_client: near_jsonrpc_client::JsonRpcClient,
@@ -19,12 +19,10 @@ impl JsonRpcClient {
     /// Creates a new JsonRpcClient.
     /// The client is capable of handling requests to both regular and archival nodes.
     /// If the `archival_rpc_url` is not provided, the client will use the regular endpoint for both
-    pub fn new(rpc_url: http::Uri, archival_rpc_url: Option<http::Uri>) -> Self {
-        let regular_client = near_jsonrpc_client::JsonRpcClient::connect(rpc_url.to_string());
+    pub fn new(rpc_url: String, archival_rpc_url: Option<String>) -> Self {
+        let regular_client = near_jsonrpc_client::JsonRpcClient::connect(rpc_url);
         let archival_client = match archival_rpc_url {
-            Some(archival_rpc_url) => {
-                near_jsonrpc_client::JsonRpcClient::connect(archival_rpc_url.to_string())
-            }
+            Some(archival_rpc_url) => near_jsonrpc_client::JsonRpcClient::connect(archival_rpc_url),
             None => regular_client.clone(),
         };
         Self {
@@ -110,7 +108,10 @@ pub async fn get_final_cache_block(near_rpc_client: &JsonRpcClient) -> Option<Ca
                 epoch_id: block_view.header.epoch_id,
             })
         }
-        Err(_) => None,
+        Err(err) => {
+            tracing::warn!("Error to get final block: {:?}", err);
+            None
+        }
     }
 }
 

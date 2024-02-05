@@ -1,11 +1,9 @@
+use crate::storage::base::TxCollectingStorage;
 use futures::{
     future::{join_all, try_join_all},
     StreamExt,
 };
 use near_indexer_primitives::IndexerTransactionWithOutcome;
-
-use crate::config;
-use crate::storage::base::TxCollectingStorage;
 
 /// Blocks #47317863 and #47317864 with restored receipts.
 const PROBLEMATIC_BLOCKS: [near_indexer_primitives::CryptoHash; 2] = [
@@ -21,14 +19,20 @@ const PROBLEMATIC_BLOCKS: [near_indexer_primitives::CryptoHash; 2] = [
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 pub(crate) async fn index_transactions(
-    chain_id: config::ChainId,
     streamer_message: &near_indexer_primitives::StreamerMessage,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
+    indexer_config: &configuration::TxIndexerConfig,
 ) -> anyhow::Result<()> {
-    extract_transactions_to_collect(streamer_message, db_manager, tx_collecting_storage).await?;
+    extract_transactions_to_collect(
+        streamer_message,
+        db_manager,
+        tx_collecting_storage,
+        indexer_config,
+    )
+    .await?;
     collect_receipts_and_outcomes(
-        chain_id,
+        &indexer_config.general.chain_id,
         streamer_message,
         db_manager,
         tx_collecting_storage,
@@ -58,6 +62,7 @@ async fn extract_transactions_to_collect(
     streamer_message: &near_indexer_primitives::StreamerMessage,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
+    indexer_config: &configuration::TxIndexerConfig,
 ) -> anyhow::Result<()> {
     let block_height = streamer_message.block.header.height;
 
@@ -74,6 +79,7 @@ async fn extract_transactions_to_collect(
                     shard_id,
                     db_manager,
                     tx_collecting_storage,
+                    indexer_config,
                 )
             })
         });
@@ -90,7 +96,12 @@ async fn new_transaction_details_to_collecting_pool(
     shard_id: u64,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
+    indexer_config: &configuration::TxIndexerConfig,
 ) -> anyhow::Result<()> {
+    if !indexer_config.tx_should_be_indexed(transaction) {
+        return Ok(());
+    };
+
     let converted_into_receipt_id = transaction
         .outcome
         .execution_outcome
@@ -133,7 +144,7 @@ async fn new_transaction_details_to_collecting_pool(
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn collect_receipts_and_outcomes(
-    chain_id: config::ChainId,
+    chain_id: &configuration::ChainId,
     streamer_message: &near_indexer_primitives::StreamerMessage,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
@@ -143,7 +154,7 @@ async fn collect_receipts_and_outcomes(
 
     let shard_futures = streamer_message.shards.iter().map(|shard| {
         process_shard(
-            chain_id.clone(),
+            chain_id,
             db_manager,
             tx_collecting_storage,
             block_height,
@@ -159,7 +170,7 @@ async fn collect_receipts_and_outcomes(
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn process_shard(
-    chain_id: config::ChainId,
+    chain_id: &configuration::ChainId,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
     block_height: u64,
@@ -172,7 +183,7 @@ async fn process_shard(
             .iter()
             .map(|receipt_execution_outcome| {
                 process_receipt_execution_outcome(
-                    chain_id.clone(),
+                    chain_id,
                     db_manager,
                     tx_collecting_storage,
                     block_height,
@@ -189,7 +200,7 @@ async fn process_shard(
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn process_receipt_execution_outcome(
-    chain_id: config::ChainId,
+    chain_id: &configuration::ChainId,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
     block_height: u64,
@@ -198,7 +209,7 @@ async fn process_receipt_execution_outcome(
     receipt_execution_outcome: &near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
 ) -> anyhow::Result<()> {
     if PROBLEMATIC_BLOCKS.contains(&block_hash) {
-        if let config::ChainId::Mainnet(_) = chain_id {
+        if let configuration::ChainId::Mainnet = chain_id {
             tx_collecting_storage
                 .restore_transaction_by_receipt_id(
                     &receipt_execution_outcome.receipt.receipt_id.to_string(),

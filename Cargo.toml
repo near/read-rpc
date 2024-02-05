@@ -3,6 +3,7 @@
 resolver = "2"
 
 members = [
+    "configuration",
     "database",
     "epoch-indexer",
     "perf-testing",

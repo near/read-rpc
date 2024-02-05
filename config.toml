@@ -1,0 +1,61 @@
+# This file to present all confiuration around th environment variables
+# Not present environment variables will be set to default values
+# See more details and information about each parameter in configuration/README.md and configuration/example.config.toml
+[general]
+chain_id = "${CHAIN_ID}"
+near_rpc_url = "${NEAR_RPC_URL}"
+near_archival_rpc_url = "${ARCHIVAL_NEAR_RPC_URL}"
+
+[general.rpc_server]
+referer_header_value = "${REFERER_HEADER_VALUE}"
+server_port = "${SERVER_PORT}"
+max_gas_burnt = "${MAX_GAS_BURNT}"
+limit_memory_cache = "${LIMIT_MEMORY_CACHE}"
+reserved_memory = "${RESERVED_MEMORY}"
+block_cache_size = "${BLOCK_CACHE_SIZE}"
+
+[general.tx_indexer]
+indexer_id = "${TX_INDEXER_ID}"
+metrics_server_port = "${TX_SERVER_PORT}"
+cache_restore_blocks_range = "${CACHE_RESTORE_BLOCKS_RANGE}"
+
+[general.state_indexer]
+indexer_id = "${STATE_INDEXER_ID}"
+metrics_server_port = "${STATE_SERVER_PORT}"
+concurrency = "${CONCURRENCY}"
+
+[general.epoch_indexer]
+indexer_id = "${EPOCH_INDEXER_ID}"
+
+[rightsizing]
+tracked_accounts = "${TRACKED_ACCOUNTS}"
+tracked_changes = "${TRACKED_CHANGES}"
+
+[lake_config]
+aws_access_key_id = "${AWS_ACCESS_KEY_ID}"
+aws_secret_access_key = "${AWS_SECRET_ACCESS_KEY}"
+aws_default_region = "${AWS_DEFAULT_REGION}"
+aws_bucket_name = "${AWS_BUCKET_NAME}"
+
+[database]
+database_url = "${DATABASE_URL}"
+database_user = "${DATABASE_USER}"
+database_password = "${DATABASE_PASSWORD}"
+database_name = "${DATABASE_NAME}"
+
+[database.rpc_server]
+preferred_dc = "${RPC_PREFERRED_DC}"
+max_retry = "${RPC_MAX_RETRY}"
+strict_mode = "${RPC_STRICT_MODE}"
+keepalive_interval = "${KEEPALIVE_INTERVAL}"
+
+[database.tx_indexer]
+preferred_dc = "${TX_PREFERRED_DC}"
+max_retry = "${TX_MAX_RETRY}"
+strict_mode = "${TX_STRICT_MODE}"
+max_db_parallel_queries = "${MAX_DB_PARALLEL_QUERIES}"
+
+[database.state_indexer]
+preferred_dc = "${STATE_PREFERRED_DC}"
+max_retry = "${STATE_MAX_RETRY}"
+strict_mode = "${STATE_STRICT_MODE}"

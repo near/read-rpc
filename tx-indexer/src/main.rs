@@ -1,4 +1,3 @@
-use crate::config::{init_tracing, Opts};
 use clap::Parser;
 use futures::StreamExt;
 mod collector;
@@ -13,11 +12,11 @@ pub(crate) const INDEXER: &str = "tx_indexer";
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    dotenv::dotenv().ok();
+    configuration::init_tracing(INDEXER).await?;
+    let indexer_config =
+        configuration::read_configuration::<configuration::TxIndexerConfig>().await?;
 
-    init_tracing()?;
-
-    let opts: Opts = Opts::parse();
+    let opts = config::Opts::parse();
 
     tracing::info!(target: INDEXER, "Connecting to db...");
     #[cfg(feature = "scylla_db")]
@@ -25,10 +24,7 @@ async fn main() -> anyhow::Result<()> {
         Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>,
     > = std::sync::Arc::new(Box::new(
         database::prepare_db_manager::<database::scylladb::tx_indexer::ScyllaDBManager>(
-            &opts.database_url,
-            opts.database_user.as_deref(),
-            opts.database_password.as_deref(),
-            opts.to_additional_database_options().await,
+            &indexer_config.database,
         )
         .await?,
     ));
@@ -37,50 +33,61 @@ async fn main() -> anyhow::Result<()> {
         Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>,
     > = std::sync::Arc::new(Box::new(
         database::prepare_db_manager::<database::postgres::tx_indexer::PostgresDBManager>(
-            &opts.database_url,
-            opts.database_user.as_deref(),
-            opts.database_password.as_deref(),
-            opts.to_additional_database_options().await,
+            &indexer_config.database,
         )
         .await?,
     ));
 
-    let start_block_height = config::get_start_block_height(&opts, &db_manager).await?;
+    let rpc_client =
+        near_jsonrpc_client::JsonRpcClient::connect(&indexer_config.general.near_rpc_url);
+    let start_block_height = config::get_start_block_height(
+        &rpc_client,
+        &db_manager,
+        &opts.start_options,
+        &indexer_config.general.indexer_id,
+    )
+    .await?;
+
     tracing::info!(target: INDEXER, "Generating LakeConfig...");
-    let config: near_lake_framework::LakeConfig = opts.to_lake_config(start_block_height).await?;
+    let lake_config = indexer_config
+        .lake_config
+        .lake_config(start_block_height)
+        .await?;
 
     tracing::info!(target: INDEXER, "Creating hash storage...");
     let tx_collecting_storage = std::sync::Arc::new(
         storage::database::HashStorageWithDB::init_with_restore(
             db_manager.clone(),
             start_block_height,
-            opts.cache_restore_blocks_range,
-            opts.max_db_parallel_queries,
+            indexer_config.general.cache_restore_blocks_range,
+            indexer_config.database.max_db_parallel_queries,
         )
         .await?,
     );
 
     tracing::info!(target: INDEXER, "Instantiating the stream...",);
-    let (sender, stream) = near_lake_framework::streamer(config);
+    let (sender, stream) = near_lake_framework::streamer(lake_config);
 
     // Initiate metrics http server
-    tokio::spawn(metrics::init_server(opts.port).expect("Failed to start metrics server"));
+    tokio::spawn(
+        metrics::init_server(indexer_config.general.metrics_server_port)
+            .expect("Failed to start metrics server"),
+    );
 
     let stats = std::sync::Arc::new(tokio::sync::RwLock::new(metrics::Stats::new()));
     tokio::spawn(metrics::state_logger(
         std::sync::Arc::clone(&stats),
-        opts.rpc_url().to_string(),
+        rpc_client.clone(),
     ));
 
     tracing::info!(target: INDEXER, "Starting tx indexer...",);
     let mut handlers = tokio_stream::wrappers::ReceiverStream::new(stream)
         .map(|streamer_message| {
             handle_streamer_message(
-                opts.chain_id.clone(),
                 streamer_message,
                 &db_manager,
                 &tx_collecting_storage,
-                &opts.indexer_id,
+                indexer_config.clone(),
                 std::sync::Arc::clone(&stats),
             )
         })
@@ -103,11 +110,10 @@ async fn main() -> anyhow::Result<()> {
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn handle_streamer_message(
-    chain_id: config::ChainId,
     streamer_message: near_indexer_primitives::StreamerMessage,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<impl storage::base::TxCollectingStorage>,
-    indexer_id: &str,
+    indexer_config: configuration::TxIndexerConfig,
     stats: std::sync::Arc<tokio::sync::RwLock<metrics::Stats>>,
 ) -> anyhow::Result<u64> {
     let block_height = streamer_message.block.header.height;
@@ -120,14 +126,16 @@ async fn handle_streamer_message(
         .insert(block_height);
 
     let tx_future = collector::index_transactions(
-        chain_id,
         &streamer_message,
         db_manager,
         tx_collecting_storage,
+        &indexer_config,
     );
 
-    let update_meta_future =
-        db_manager.update_meta(indexer_id, streamer_message.block.header.height);
+    let update_meta_future = db_manager.update_meta(
+        &indexer_config.general.indexer_id,
+        streamer_message.block.header.height,
+    );
 
     match futures::try_join!(tx_future, update_meta_future) {
         Ok(_) => tracing::debug!(

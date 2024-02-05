@@ -6,12 +6,9 @@ edition = "2021"
 
 [dependencies]
 actix-web = "4.2.1"
-aws-sdk-s3 = { version = "0.39.1", features = ["behavior-version-latest"] }
-aws-types = "1.0.0"
 anyhow = "1.0.70"
 borsh = "0.10.2"
-clap = { version = "3.1.6", features = ["color", "derive", "env"] }
-dotenv = "0.15.0"
+clap = { version = "3.1.6", features = ["color", "derive"] }
 futures = "0.3.5"
 hex = "0.4.3"
 humantime = "2.1.0"
@@ -26,21 +23,7 @@ tokio = { version = "1.28.2", features = [
 ] }
 tokio-stream = { version = "0.1" }
 tracing = "0.1.34"
-tracing-subscriber = { version = "0.3.15", features = [
-    "fmt",
-    "env-filter",
-    "std",
-    "json",
-] }
-opentelemetry = { version = "0.19", features = ["rt-tokio-current-thread"] }
-opentelemetry-jaeger = { version = "0.18", features = [
-    "rt-tokio-current-thread",
-    "collector_client",
-    "isahc_collector_client",
-] }
-tracing-opentelemetry = { version = "0.19" }
-tracing-stackdriver = "0.7.2" # GCP logs
-
+configuration = { path = "../configuration" }
 database = { path = "../database" }
 epoch-indexer = { path = "../epoch-indexer" }
 
@@ -51,7 +34,7 @@ near-lake-framework = "0.7.6"
 
 [features]
 default = ["scylla_db"]
-tracing-instrumentation = []
+tracing-instrumentation = ["configuration/tracing-instrumentation"]
 postgres_db = ["database/postgres_db"]
 scylla_db = ["database/scylla_db"]
 scylla_db_tracing = ["database/scylla_db_tracing", "scylla_db"]

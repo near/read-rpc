@@ -1,5 +1,4 @@
 use crate::postgres::PostgresStorageManager;
-use crate::AdditionalDatabaseOptions;
 use bigdecimal::ToPrimitive;
 
 pub struct PostgresDBManager {
@@ -8,17 +7,12 @@ pub struct PostgresDBManager {
 
 #[async_trait::async_trait]
 impl crate::BaseDbManager for PostgresDBManager {
-    async fn new(
-        database_url: &str,
-        database_user: Option<&str>,
-        database_password: Option<&str>,
-        database_options: AdditionalDatabaseOptions,
-    ) -> anyhow::Result<Box<Self>> {
+    async fn new(config: &configuration::DatabaseConfig) -> anyhow::Result<Box<Self>> {
         let pg_pool = Self::create_pool(
-            database_url,
-            database_user,
-            database_password,
-            database_options,
+            &config.database_url,
+            config.database_user.as_deref(),
+            config.database_password.as_deref(),
+            config.database_name.as_deref(),
         )
         .await?;
         Ok(Box::new(Self { pg_pool }))
