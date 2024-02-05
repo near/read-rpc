@@ -45,6 +45,9 @@ This will spin up:
 - `tx-indexer` - the indexer that watches the network and stores the `Transactions` along with all the related entities (`Receipts`, `ExecutionOutcomes`) into the Storage (ScyllaDB) using the specifically defined `TransactionDetails` structure in a dumped way (using the simplest key-value schema)
 - `jaeger` - the Jaeger instance for tracing (http://localhost:16686)
 
+### Examples: 
+See examples [here](./examples/README.md).
+
 ### TODO:
 
 - [ ] Setup all the services to use volumes for the codebase and using `cargo watch` to recompile the code on the fly
