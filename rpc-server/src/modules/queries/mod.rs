@@ -147,14 +147,18 @@ impl near_vm_runner::logic::External for CodeStorage {
         _receipt_indices: Vec<near_vm_runner::logic::types::ReceiptIndex>,
         _receiver_id: near_primitives::types::AccountId,
     ) -> Result<near_vm_runner::logic::types::ReceiptIndex> {
-        todo!()
+        Err(near_vm_runner::logic::VMLogicError::HostError(
+            near_vm_runner::logic::HostError::ProhibitedInView {
+                method_name: String::from("create_receipt"),
+            },
+        ))
     }
 
     fn append_action_create_account(
         &mut self,
         _receipt_index: near_vm_runner::logic::types::ReceiptIndex,
     ) -> Result<()> {
-        todo!()
+        Ok(())
     }
 
     fn append_action_deploy_contract(
@@ -162,7 +166,7 @@ impl near_vm_runner::logic::External for CodeStorage {
         _receipt_index: near_vm_runner::logic::types::ReceiptIndex,
         _code: Vec<u8>,
     ) -> Result<()> {
-        todo!()
+        Ok(())
     }
 
     fn append_action_function_call_weight(
@@ -174,7 +178,7 @@ impl near_vm_runner::logic::External for CodeStorage {
         _prepaid_gas: near_primitives::types::Gas,
         _gas_weight: near_primitives::types::GasWeight,
     ) -> Result<()> {
-        todo!()
+        Ok(())
     }
 
     fn append_action_transfer(
@@ -182,7 +186,7 @@ impl near_vm_runner::logic::External for CodeStorage {
         _receipt_index: near_vm_runner::logic::types::ReceiptIndex,
         _deposit: near_primitives::types::Balance,
     ) -> Result<()> {
-        todo!()
+        Ok(())
     }
 
     fn append_action_stake(
@@ -191,7 +195,6 @@ impl near_vm_runner::logic::External for CodeStorage {
         _stake: near_primitives::types::Balance,
         _public_key: near_crypto::PublicKey,
     ) {
-        todo!()
     }
 
     fn append_action_add_key_with_full_access(
@@ -200,7 +203,6 @@ impl near_vm_runner::logic::External for CodeStorage {
         _public_key: near_crypto::PublicKey,
         _nonce: near_primitives::types::Nonce,
     ) {
-        todo!()
     }
 
     fn append_action_add_key_with_function_call(
@@ -212,7 +214,7 @@ impl near_vm_runner::logic::External for CodeStorage {
         _receiver_id: near_primitives::types::AccountId,
         _method_names: Vec<Vec<u8>>,
     ) -> Result<()> {
-        todo!()
+        Ok(())
     }
 
     fn append_action_delete_key(
@@ -220,7 +222,6 @@ impl near_vm_runner::logic::External for CodeStorage {
         _receipt_index: near_vm_runner::logic::types::ReceiptIndex,
         _public_key: near_crypto::PublicKey,
     ) {
-        todo!()
     }
 
     fn append_action_delete_account(
@@ -228,13 +229,13 @@ impl near_vm_runner::logic::External for CodeStorage {
         _receipt_index: near_vm_runner::logic::types::ReceiptIndex,
         _beneficiary_id: near_primitives::types::AccountId,
     ) -> Result<()> {
-        todo!()
+        Ok(())
     }
 
     fn get_receipt_receiver(
         &self,
         _receipt_index: near_vm_runner::logic::types::ReceiptIndex,
     ) -> &near_primitives::types::AccountId {
-        todo!()
+        panic!("Prohibited in view. `get_receipt_receiver`");
     }
 }

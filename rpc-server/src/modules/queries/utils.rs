@@ -142,53 +142,17 @@ async fn run_code_in_vm_runner(
     method_name: &str,
     context: near_vm_runner::logic::VMContext,
     mut code_storage: CodeStorage,
+    protocol_version: near_primitives::types::ProtocolVersion,
     compiled_contract_code_cache: &std::sync::Arc<CompiledCodeCache>,
 ) -> Result<near_vm_runner::logic::VMOutcome, near_primitives::errors::RuntimeError> {
     let contract_method_name = String::from(method_name);
     let code_cache = std::sync::Arc::clone(compiled_contract_code_cache);
+
+    let store = near_parameters::RuntimeConfigStore::free();
+    let config = store.get_config(protocol_version).wasm_config.clone();
     let mut vm_config = near_parameters::vm::Config {
-        ext_costs: near_parameters::ExtCostsConfig::test(),
-        grow_mem_cost: 0,
-        regular_op_cost: 0,
-        vm_kind: near_parameters::vm::VMKind::Wasmer0,
-        disable_9393_fix: false,
-        storage_get_mode: near_parameters::vm::StorageGetMode::FlatStorage,
-        fix_contract_loading_cost: false,
-        implicit_account_creation: false,
-        math_extension: false,
-        ed25519_verify: false,
-        alt_bn128: false,
-        function_call_weight: false,
-        eth_implicit_accounts: false,
-        limit_config: near_parameters::vm::LimitConfig {
-            max_gas_burnt: 0,
-            max_stack_height: 0,
-            contract_prepare_version: near_parameters::vm::ContractPrepareVersion::V0,
-            initial_memory_pages: 0,
-            max_memory_pages: 0,
-            registers_memory_limit: 0,
-            max_register_size: 0,
-            max_number_registers: 0,
-            max_number_logs: 0,
-            max_total_log_length: 0,
-            max_total_prepaid_gas: 0,
-            max_actions_per_receipt: 0,
-            max_number_bytes_method_names: 0,
-            max_length_method_name: 0,
-            max_arguments_length: 0,
-            max_length_returned_data: 0,
-            max_contract_size: 0,
-            max_transaction_size: 0,
-            max_length_storage_key: 0,
-            max_length_storage_value: 0,
-            max_promises_per_function_call_action: 0,
-            max_number_input_data_dependencies: 0,
-            max_functions_number_per_contract: None,
-            wasmer2_stack_limit: 0,
-            max_locals_per_contract: None,
-            account_id_validity_rules_version:
-                near_primitives::config::AccountIdValidityRulesVersion::V0,
-        },
+        vm_kind: config.vm_kind.replace_with_wasmtime_if_unsupported(),
+        ..config
     };
     vm_config.make_free();
     let results = tokio::task::spawn_blocking(move || {
@@ -356,6 +320,7 @@ pub async fn run_contract(
         method_name,
         context,
         code_storage,
+        block.latest_protocol_version,
         compiled_contract_code_cache,
     )
     .await
