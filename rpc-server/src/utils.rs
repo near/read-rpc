@@ -2,7 +2,6 @@ use crate::modules::blocks::{CacheBlock, FinalBlockInfo};
 #[cfg(feature = "shadow_data_consistency")]
 use assert_json_diff::{assert_json_matches_no_panic, CompareMode, Config, NumericMode};
 use futures::StreamExt;
-use sysinfo::{System, SystemExt};
 
 #[cfg(feature = "shadow_data_consistency")]
 const DEFAULT_RETRY_COUNT: u8 = 3;
@@ -214,7 +213,7 @@ pub(crate) async fn calculate_contract_code_cache_sizes(
     block_cache_size: usize,
     limit_memory_cache: Option<usize>,
 ) -> usize {
-    let sys = System::new_all();
+    let sys = sysinfo::System::new_all();
     let total_memory = sys.total_memory() as usize; // Total memory in bytes
     let used_memory = sys.used_memory() as usize; // Used memory in bytes
     let available_memory = total_memory - used_memory - reserved_memory; // Available memory in bytes

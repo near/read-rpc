@@ -1,5 +1,4 @@
 use crate::schema::*;
-use borsh::{BorshDeserialize, BorshSerialize};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 
@@ -362,7 +361,7 @@ impl AccountState {
         page_token: crate::PageToken,
     ) -> anyhow::Result<(Vec<String>, crate::PageToken)> {
         let page_state = if let Some(page_state_token) = page_token {
-            PageState::try_from_slice(&hex::decode(page_state_token)?)?
+            borsh::from_slice::<PageState>(&hex::decode(page_state_token)?)?
         } else {
             PageState::new(1000)
         };
@@ -384,7 +383,7 @@ impl AccountState {
         } else {
             Ok((
                 state_keys,
-                Some(hex::encode(page_state.next_page().try_to_vec()?)),
+                Some(hex::encode(borsh::to_vec(&page_state.next_page())?)),
             ))
         }
     }

@@ -9,9 +9,9 @@ license.workspace = true
 
 [dependencies]
 anyhow = "1.0.70"
-clap = { version = "3.1.6", features = ["color", "derive", "env"] }
+clap = "4.4.18"
 futures = "0.3.5"
-tokio = { version = "1.28.2", features = [
+tokio = { version = "1.36.0", features = [
     "sync",
     "time",
     "macros",
@@ -23,10 +23,10 @@ configuration = { path = "../configuration" }
 database = { path = "../database" }
 readnode-primitives = { path = "../readnode-primitives" }
 
-near-jsonrpc-client = "0.7.0"
-near-chain-configs = "1.36.0"
-near-indexer-primitives = "1.36.0"
-near-lake-framework = "0.7.9"
+near-jsonrpc-client = "0.8.0"
+near-chain-configs = "0.20.0"
+near-indexer-primitives = "0.20.0"
+near-lake-framework = "0.7.7"
 
 [features]
 default = ["scylla_db"]

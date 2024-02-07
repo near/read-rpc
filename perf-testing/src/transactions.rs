@@ -10,8 +10,8 @@ async fn get_random_transaction(tx: &TxInfo, client: &JsonRpcClient) -> anyhow::
     let _ = client
         .call(methods::tx::RpcTransactionStatusRequest {
             transaction_info: TransactionInfo::TransactionId {
-                hash: tx.hash,
-                account_id: tx.sender_id.clone(),
+                tx_hash: tx.hash,
+                sender_account_id: tx.sender_id.clone(),
             },
         })
         .await?;

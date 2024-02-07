@@ -301,12 +301,10 @@ async fn view_code(
         )?;
     Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc_primitives::types::query::QueryResponseKind::ViewCode(
-            near_primitives::views::ContractCodeView::from(
-                near_primitives::contract::ContractCode::new(
-                    contract_code.data,
-                    Some(contract.data.code_hash()),
-                ),
-            ),
+            near_primitives::views::ContractCodeView {
+                code: contract_code.data,
+                hash: contract.data.code_hash(),
+            }
         ),
         block_height: block.block_height,
         block_hash: block.block_hash,

@@ -8,42 +8,43 @@ repository.workspace = true
 license.workspace = true
 
 [dependencies]
-actix-web = "4.2.1"
-actix-cors = "0.6.5"
+actix-web = "4.5.1"
+actix-cors = "0.7.0"
 anyhow = "1.0.70"
 assert-json-diff = { version = "2.0.2", optional = true }
-borsh = "0.10.2"
-erased-serde = "0.3.23"
+borsh = "1.3.1"
+erased-serde = "0.3"
 futures = "0.3.24"
 futures-locks = "0.7.1"
 hex = "0.4.3"
 jsonrpc-v2 = { git = "https://github.com/kobayurii/jsonrpc-v2", rev = "95e7b1d2567ae841163af212a3f25abb6862becb" }
 lazy_static = "1.4.0"
-lru = "0.11.1"
+lru = "0.12.2"
 paste = "1.0.14"
 prometheus = "0.13.1"
 serde = { version = "1.0.145", features = ["derive"] }
 serde_json = "1.0.85"
 thiserror = "1.0.40"
-tokio = { version = "1.28.2", features = ["full", "tracing"] }
+tokio = { version = "1.36.0", features = ["full", "tracing"] }
 tokio-stream = { version = "0.1.12" }
 tracing = { version = "0.1.36", features = ["std"] }
-tracing-actix-web = "0.6.1"
-sysinfo = "0.29.10"
+tracing-actix-web = "0.7.9"
+sysinfo = "0.30.5"
 
 
 configuration = { path = "../configuration" }
 database = { path = "../database" }
 readnode-primitives = { path = "../readnode-primitives" }
 
-near-chain-configs = "1.36.0"
-near-crypto = "1.36.0"
-near-jsonrpc-client = "0.7.0"
-near-jsonrpc-primitives = "1.36.0"
-near-indexer-primitives = "1.36.0"
-near-lake-framework = "0.7.9"
-near-primitives = "1.36.0"
-near-vm-runner = "1.36.0"
+near-chain-configs = "0.20.0"
+near-crypto = "0.20.0"
+near-jsonrpc-client = "0.8.0"
+near-jsonrpc-primitives = "0.20.0"
+near-indexer-primitives = "0.20.0"
+near-lake-framework = "0.7.7"
+near-primitives = "0.20.0"
+near-parameters = "0.20.0"
+near-vm-runner = "0.20.0"
 
 [features]
 default = ["send_tx_methods", "scylla_db"]

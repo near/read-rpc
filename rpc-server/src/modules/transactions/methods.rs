@@ -127,7 +127,8 @@ pub async fn send_tx_commit(
         match data.near_rpc_client.call(proxy_params).await {
             Ok(resp) => Ok(
                 near_jsonrpc_primitives::types::transactions::RpcTransactionResponse {
-                    final_execution_outcome: FinalExecutionOutcome(resp),
+                    final_execution_outcome: Some(FinalExecutionOutcome(resp)),
+                    final_execution_status: Default::default(),
                 },
             ),
             Err(err) => Err(RPCError::from(err)),
@@ -153,13 +154,13 @@ async fn tx_status_common(
 > {
     tracing::debug!("`tx_status_common` call.");
     let tx_hash = match &transaction_info {
-        near_jsonrpc_primitives::types::transactions::TransactionInfo::Transaction(tx) => {
-            tx.get_hash()
-        }
+        near_jsonrpc_primitives::types::transactions::TransactionInfo::Transaction(
+            near_jsonrpc_primitives::types::transactions::SignedTransaction::SignedTransaction(tx),
+        ) => tx.get_hash(),
         near_jsonrpc_primitives::types::transactions::TransactionInfo::TransactionId {
-            hash,
+            tx_hash,
             ..
-        } => *hash,
+        } => *tx_hash,
     };
 
     let transaction_details = data
@@ -175,17 +176,19 @@ async fn tx_status_common(
     if fetch_receipt {
         Ok(
             near_jsonrpc_primitives::types::transactions::RpcTransactionResponse {
-                final_execution_outcome: FinalExecutionOutcomeWithReceipt(
+                final_execution_outcome: Some(FinalExecutionOutcomeWithReceipt(
                     transaction_details.to_final_execution_outcome_with_receipts(),
-                ),
+                )),
+                final_execution_status: Default::default(),
             },
         )
     } else {
         Ok(
             near_jsonrpc_primitives::types::transactions::RpcTransactionResponse {
-                final_execution_outcome: FinalExecutionOutcome(
+                final_execution_outcome: Some(FinalExecutionOutcome(
                     transaction_details.to_final_execution_outcome(),
-                ),
+                )),
+                final_execution_status: Default::default(),
             },
         )
     }
