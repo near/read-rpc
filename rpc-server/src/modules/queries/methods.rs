@@ -304,7 +304,7 @@ async fn view_code(
             near_primitives::views::ContractCodeView {
                 code: contract_code.data,
                 hash: contract.data.code_hash(),
-            }
+            },
         ),
         block_height: block.block_height,
         block_hash: block.block_hash,

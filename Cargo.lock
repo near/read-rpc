@@ -1820,9 +1820,9 @@ checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 
 [[package]]
 name = "erased-serde"
-version = "0.3.31"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c138974f9d5e7fe373eb04df7cae98833802ae4b11c24ac7039a21d5af4b26c"
+checksum = "55d05712b2d8d88102bc9868020c9e5c7a1f5527c452b9b97450a1d006140ba7"
 dependencies = [
  "serde",
 ]
@@ -2507,7 +2507,7 @@ checksum = "9dbbfed4e59ba9750e15ba154fdfd9329cee16ff3df539c2666b70f58cc32105"
 [[package]]
 name = "jsonrpc-v2"
 version = "0.11.0"
-source = "git+https://github.com/kobayurii/jsonrpc-v2?rev=95e7b1d2567ae841163af212a3f25abb6862becb#95e7b1d2567ae841163af212a3f25abb6862becb"
+source = "git+https://github.com/kobayurii/jsonrpc-v2?branch=master#ee01c71bcd2e131d787988728b7288734c2371df"
 dependencies = [
  "actix-service",
  "actix-web",
@@ -3935,7 +3935,6 @@ dependencies = [
  "borsh",
  "near-chain-configs",
  "near-indexer-primitives",
- "num-bigint 0.3.3",
  "num-traits",
  "serde",
  "serde_json",
