@@ -2,87 +2,73 @@ version: '3.7'
 
 x-common-variables: &common-variables
   CHAIN_ID: mainnet
-  DATABASE_URL: scylla:9042
-  DATABASE_USER: ${DATABASE_USER}
-  DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+  DATABASE_URL: postgres:5432
+  DATABASE_USER: postgres
+  DATABASE_PASSWORD: password
+  DATABASE_NAME: near_data
   AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
   AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
   AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
-  OTEL_EXPORTER_JAEGER_AGENT_HOST: jaeger
-  OTEL_EXPORTER_JAEGER_AGENT_PORT: 6831
-  OTEL_EXPORTER_JAEGER_ENDPOINT: http://jaeger:14268/api/traces
 
   NEAR_RPC_URL: https://rpc.mainnet.near.org
   ARCHIVAL_NEAR_RPC_URL: https://archival-rpc.mainnet.near.org
   AWS_BUCKET_NAME: near-lake-data-mainnet
+  RUST_LOG: info
 
 services:
   rpc-server:
     build:
-      context: .
+      context: ../
       dockerfile: rpc-server/Dockerfile
       args:
-        features: "scylla_db,tracing-instrumentation,shadow_data_consistency"
+        features: "postgres_db"
     environment:
       <<: *common-variables
       SERVER_PORT: 8000
-      RUST_LOG: "read_rpc_server=debug,shadow_data_consistency=debug,info"
-    restart: on-failure
     ports:
       - 8000:8000
     depends_on:
-      - scylla
-      - jaeger
+      - postgres
+    restart: on-failure
 
   state-indexer:
     build:
-      context: .
+      context: ../
       dockerfile: state-indexer/Dockerfile
       args:
-        features: "scylla_db,tracing-instrumentation"
+        features: "postgres_db"
     environment:
       <<: *common-variables
       STATE_INDEXER_ID: state-indexer-local
-      RUST_LOG: "info"
     command: [ "from-interruption" ]
     ports:
       - 8080:8080
     depends_on:
-      - scylla
-      - jaeger
+      - postgres
     restart: on-failure
 
   tx-indexer:
     build:
-      context: .
+      context: ../
       dockerfile: tx-indexer/Dockerfile
       args:
-        features: "scylla_db,tracing-instrumentation"
+        features: "postgres_db"
     environment:
       <<: *common-variables
       TX_INDEXER_ID: tx-indexer-local
-      RUST_LOG: "info"
     command: [ "from-interruption" ]
     ports:
       - 8081:8081
     depends_on:
-      - scylla
-      - jaeger
+      - postgres
     restart: on-failure
 
-  jaeger:
-    image: jaegertracing/all-in-one:1.37
+  postgres:
+    image: postgres:14
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: near_data
+      POSTGRES_PASSWORD: password
     ports:
-      - 5775:5775/udp
-      - 6831:6831/udp
-      - 6832:6832/udp
-      - 5778:5778
-      - 16686:16686
-      - 14268:14268
-      - 9411:9411
-
-  scylla:
-    image: scylladb/scylla
-    ports:
-      - 9042:9042
-    command: [ "--smp", "1" ]
+      - 5432:5432

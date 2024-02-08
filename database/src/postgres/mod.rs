@@ -1,3 +1,6 @@
+use diesel::Connection;
+use diesel_migrations::MigrationHarness;
+
 pub mod models;
 pub mod rpc_server;
 pub mod schema;
@@ -8,6 +11,9 @@ pub type PgAsyncPool =
     diesel_async::pooled_connection::deadpool::Pool<diesel_async::AsyncPgConnection>;
 pub type PgAsyncConn =
     diesel_async::pooled_connection::deadpool::Object<diesel_async::AsyncPgConnection>;
+
+pub const MIGRATIONS: diesel_migrations::EmbeddedMigrations =
+    diesel_migrations::embed_migrations!("src/postgres/migrations");
 
 #[async_trait::async_trait]
 pub trait PostgresStorageManager {
@@ -28,6 +34,7 @@ pub trait PostgresStorageManager {
                 database_name.unwrap()
             )
         };
+        Self::run_migrations(connection_string.clone()).await?;
         let config = diesel_async::pooled_connection::AsyncDieselConnectionManager::<
             diesel_async::AsyncPgConnection,
         >::new(connection_string);
@@ -37,5 +44,12 @@ pub trait PostgresStorageManager {
 
     async fn get_connection(pool: &PgAsyncPool) -> anyhow::Result<PgAsyncConn> {
         Ok(pool.get().await?)
+    }
+
+    async fn run_migrations(connection_string: String) -> anyhow::Result<()> {
+        let mut conn = diesel::PgConnection::establish(&connection_string)?;
+        conn.run_pending_migrations(MIGRATIONS)
+            .map_err(|err| anyhow::anyhow!("Failed to run migrations: {:?}", err))?;
+        Ok(())
     }
 }
