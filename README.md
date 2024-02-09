@@ -4,7 +4,7 @@ This workspace holds the collection of components for the Read RPC.
 
 ## Current content
 
-### [rpc-server](rpc_server/README.md)
+### [rpc-server](rpc-server/README.md)
 
 
 The JSON RPC server implementation that repeats all the APIs current real NEAR JSON RPC but using a different data sources:
