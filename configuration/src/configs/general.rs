@@ -15,6 +15,7 @@ pub struct GeneralRpcServerConfig {
     pub limit_memory_cache: Option<f64>,
     pub reserved_memory: f64,
     pub block_cache_size: f64,
+    pub shadow_data_consistency_rate: f64,
 }
 
 #[derive(Debug, Clone)]
@@ -97,6 +98,8 @@ pub struct CommonGeneralRpcServerConfig {
     pub reserved_memory: Option<f64>,
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub block_cache_size: Option<f64>,
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    pub shadow_data_consistency_rate: Option<f64>,
 }
 
 impl CommonGeneralRpcServerConfig {
@@ -119,6 +122,10 @@ impl CommonGeneralRpcServerConfig {
     pub fn default_block_cache_size() -> f64 {
         0.125
     }
+
+    pub fn default_shadow_data_consistency_rate() -> f64 {
+        100.0
+    }
 }
 
 impl Default for CommonGeneralRpcServerConfig {
@@ -130,6 +137,7 @@ impl Default for CommonGeneralRpcServerConfig {
             limit_memory_cache: Default::default(),
             reserved_memory: Some(Self::default_reserved_memory()),
             block_cache_size: Some(Self::default_block_cache_size()),
+            shadow_data_consistency_rate: Some(Self::default_shadow_data_consistency_rate()),
         }
     }
 }
@@ -249,6 +257,10 @@ impl From<CommonGeneralConfig> for GeneralRpcServerConfig {
                 .rpc_server
                 .block_cache_size
                 .unwrap_or_else(CommonGeneralRpcServerConfig::default_block_cache_size),
+            shadow_data_consistency_rate: common_config
+                .rpc_server
+                .shadow_data_consistency_rate
+                .unwrap_or_else(CommonGeneralRpcServerConfig::default_shadow_data_consistency_rate),
         }
     }
 }

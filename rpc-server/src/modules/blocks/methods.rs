@@ -212,39 +212,27 @@ async fn changes_in_block_call(
 ) -> Result<near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockByTypeResponse, RPCError>
 {
     crate::metrics::CHNGES_IN_BLOCK_REQUESTS_TOTAL.inc();
+    #[cfg(feature = "shadow_data_consistency")]
+    let total_requests = crate::metrics::CHNGES_IN_BLOCK_REQUESTS_TOTAL.get();
     let block = fetch_block_from_cache_or_get(&data, params.block_reference.clone())
         .await
         .map_err(near_jsonrpc_primitives::errors::RpcError::from)?;
     let result = fetch_changes_in_block(&data, block).await;
     #[cfg(feature = "shadow_data_consistency")]
     {
-        let near_rpc_client = data.near_rpc_client.clone();
         if let near_primitives::types::BlockReference::Finality(_) = params.block_reference {
             params.block_reference = near_primitives::types::BlockReference::from(
                 near_primitives::types::BlockId::Height(block.block_height),
             )
         }
-        let meta_data = format!("{:?}", params);
-        let (read_rpc_response_json, is_response_ok) = match &result {
-            Ok(res) => (serde_json::to_value(res), true),
-            Err(err) => (serde_json::to_value(err), false),
-        };
-        let comparison_result = shadow_compare_results(
-            read_rpc_response_json,
-            near_rpc_client,
+        crate::utils::shadow_compare_results_handler(
+            total_requests,
+            data.shadow_data_consistency_rate,
+            &result,
+            data.near_rpc_client.clone(),
             params,
-            is_response_ok,
-        )
-        .await;
-
-        match comparison_result {
-            Ok(_) => {
-                tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", meta_data);
-            }
-            Err(err) => {
-                crate::utils::capture_shadow_consistency_error!(err, meta_data, "CHANGES_IN_BLOCK")
-            }
-        }
+            "CHANGES_IN_BLOCK",
+        ).await;
     }
 
     Ok(result.map_err(near_jsonrpc_primitives::errors::RpcError::from)?)

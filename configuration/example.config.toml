@@ -46,6 +46,12 @@ near_rpc_url = "https://beta.rpc.mainnet.near.org"
 ## In 128MB we can put 1_398_101 cache_blocks
 #block_cache_size = 0.125
 
+## How many requests we should check for data consistency
+## By default we use 100% of requests
+## If you want to check 1% of requests, you should set 1
+## thet means for every method calls will be checked every 100th request
+#shadow_data_consistency_rate = 100
+
 ### Tx indexer general configuration
 [general.tx_indexer]
 

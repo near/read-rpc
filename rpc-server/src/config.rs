@@ -17,6 +17,7 @@ pub struct ServerContext {
         >,
     >,
     pub max_gas_burnt: near_primitives::types::Gas,
+    pub shadow_data_consistency_rate: f64,
 }
 
 impl ServerContext {
@@ -38,6 +39,7 @@ impl ServerContext {
             >,
         >,
         max_gas_burnt: near_primitives::types::Gas,
+        shadow_data_consistency_rate: f64,
     ) -> Self {
         Self {
             s3_client,
@@ -50,6 +52,7 @@ impl ServerContext {
             compiled_contract_code_cache,
             contract_code_cache,
             max_gas_burnt,
+            shadow_data_consistency_rate,
         }
     }
 }
