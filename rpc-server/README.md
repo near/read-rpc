@@ -1,6 +1,7 @@
 # read-rpc-server
 
-## Create `.env` file in the project root
+## Create `.env` file in the project root or modify the existing configuration file. 
+## See configuration [here](../configuration/README.md).
 ```
 AWS_ACCESS_KEY_ID=ACCESS_KEY
 AWS_SECRET_ACCESS_KEY=SECRET_ACCESS_KEY
@@ -13,6 +14,11 @@ DATABASE_PASSWORD=password
 SERVER_PORT=8888
 RUST_LOG=info
 ```
+
+## Available RPC methods
+#### See the [NEAR RPC API](https://docs.near.org/api/rpc/introduction) for the full list of available methods.
+#### Table of rpc method states [here](../docs/RPC_METHODS.md).
+#### Custom rpc methods [here](../docs/CUSTOM_RPC_METHODS.md).
 
 ### Compile
 
