@@ -106,6 +106,7 @@ async fn main() -> anyhow::Result<()> {
         compiled_contract_code_cache,
         contract_code_cache,
         rpc_server_config.general.max_gas_burnt,
+        rpc_server_config.general.shadow_data_consistency_rate,
     );
 
     tokio::spawn(async move {

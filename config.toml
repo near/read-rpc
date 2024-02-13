@@ -13,6 +13,7 @@ max_gas_burnt = "${MAX_GAS_BURNT}"
 limit_memory_cache = "${LIMIT_MEMORY_CACHE}"
 reserved_memory = "${RESERVED_MEMORY}"
 block_cache_size = "${BLOCK_CACHE_SIZE}"
+shadow_data_consistency_rate = "${SHADOW_DATA_CONSISTENCY_RATE}"
 
 [general.tx_indexer]
 indexer_id = "${TX_INDEXER_ID}"

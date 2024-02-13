@@ -4,8 +4,6 @@ use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
 use crate::modules::network::{
     clone_protocol_config, friendly_memory_size_format, parse_validator_request, StatusResponse,
 };
-#[cfg(feature = "shadow_data_consistency")]
-use crate::utils::shadow_compare_results;
 use jsonrpc_v2::{Data, Params};
 use sysinfo::{System, SystemExt};
 
@@ -99,27 +97,18 @@ pub async fn validators(
 
     #[cfg(feature = "shadow_data_consistency")]
     {
-        let near_rpc_client = &data.near_rpc_client.clone();
-        let meta_data = format!("{:?}", request);
-        let (read_rpc_response_json, is_response_ok) = match &validator_info {
-            Ok(validators) => (serde_json::to_value(&validators), true),
-            Err(err) => (serde_json::to_value(err), false),
-        };
-        let comparison_result = shadow_compare_results(
-            read_rpc_response_json,
-            near_rpc_client.clone(),
+        if let Some(err_code) = crate::utils::shadow_compare_results_handler(
+            crate::metrics::VALIDATORS_REQUESTS_TOTAL.get(),
+            data.shadow_data_consistency_rate,
+            &validator_info,
+            data.near_rpc_client.clone(),
             request,
-            is_response_ok,
+            "VALIDATORS",
         )
-        .await;
-        match comparison_result {
-            Ok(_) => {
-                tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", meta_data);
-            }
-            Err(err) => {
-                crate::utils::capture_shadow_consistency_error!(err, meta_data, "VALIDATORS")
-            }
-        }
+        .await
+        {
+            crate::utils::capture_shadow_consistency_error!(err_code, "VALIDATORS")
+        };
     }
 
     Ok(
@@ -168,27 +157,18 @@ pub async fn protocol_config(
 
     #[cfg(feature = "shadow_data_consistency")]
     {
-        let near_rpc_client = &data.near_rpc_client.clone();
-        let meta_data = format!("{:?}", params);
-        let (read_rpc_response_json, is_response_ok) = match &config_view {
-            Ok(protocol_config) => (serde_json::to_value(protocol_config), true),
-            Err(err) => (serde_json::to_value(err), false),
-        };
-        let comparison_result = shadow_compare_results(
-            read_rpc_response_json,
-            near_rpc_client.clone(),
+        if let Some(err_code) = crate::utils::shadow_compare_results_handler(
+            crate::metrics::PROTOCOL_CONFIG_REQUESTS_TOTAL.get(),
+            data.shadow_data_consistency_rate,
+            &config_view,
+            data.near_rpc_client.clone(),
             params,
-            is_response_ok,
+            "PROTOCOL_CONFIG",
         )
-        .await;
-        match comparison_result {
-            Ok(_) => {
-                tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", meta_data);
-            }
-            Err(err) => {
-                crate::utils::capture_shadow_consistency_error!(err, meta_data, "PROTOCOL_CONFIG")
-            }
-        }
+        .await
+        {
+            crate::utils::capture_shadow_consistency_error!(err_code, "PROTOCOL_CONFIG")
+        };
     }
 
     Ok(

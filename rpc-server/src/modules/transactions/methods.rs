@@ -3,8 +3,6 @@ use crate::errors::RPCError;
 use crate::modules::transactions::{
     parse_signed_transaction, parse_transaction_status_common_request,
 };
-#[cfg(feature = "shadow_data_consistency")]
-use crate::utils::shadow_compare_results;
 use jsonrpc_v2::{Data, Params};
 use near_primitives::views::FinalExecutionOutcomeViewEnum::{
     FinalExecutionOutcome, FinalExecutionOutcomeWithReceipt,
@@ -26,34 +24,23 @@ pub async fn tx(
 
     #[cfg(feature = "shadow_data_consistency")]
     {
-        let near_rpc_client = data.near_rpc_client.clone();
-        let meta_data = format!("{:?}", params);
-        let (read_rpc_response_json, is_response_ok) = match &result {
-            Ok(res) => (serde_json::to_value(res), true),
-            Err(err) => (serde_json::to_value(err), false),
-        };
-
-        let comparison_result = shadow_compare_results(
-            read_rpc_response_json,
-            near_rpc_client,
+        if let Some(err_code) = crate::utils::shadow_compare_results_handler(
+            crate::metrics::TX_REQUESTS_TOTAL.get(),
+            data.shadow_data_consistency_rate,
+            &result,
+            data.near_rpc_client.clone(),
             // Note there is a difference in the implementation of the `tx` method in the `near_jsonrpc_client`
             // The method is `near_jsonrpc_client::methods::tx::RpcTransactionStatusRequest` in the client
             // so we can't just pass `params` there, instead we need to craft a request manually
             near_jsonrpc_client::methods::tx::RpcTransactionStatusRequest {
                 transaction_info: tx_status_request.transaction_info,
             },
-            is_response_ok,
+            "TX",
         )
-        .await;
-
-        match comparison_result {
-            Ok(_) => {
-                tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", meta_data);
-            }
-            Err(err) => {
-                crate::utils::capture_shadow_consistency_error!(err, meta_data, "TX");
-            }
-        }
+        .await
+        {
+            crate::utils::capture_shadow_consistency_error!(err_code, "TX")
+        };
     }
 
     Ok(result.map_err(near_jsonrpc_primitives::errors::RpcError::from)?)
@@ -74,39 +61,23 @@ pub async fn tx_status(
 
     #[cfg(feature = "shadow_data_consistency")]
     {
-        let near_rpc_client = data.near_rpc_client.clone();
-        let meta_data = format!("{:?}", params);
-
-        let (read_rpc_response_json, is_response_ok) = match &result {
-            Ok(res) => (serde_json::to_value(res), true),
-            Err(err) => (serde_json::to_value(err), false),
-        };
-
-        let comparison_result = shadow_compare_results(
-            read_rpc_response_json,
-            near_rpc_client,
+        if let Some(err_code) = crate::utils::shadow_compare_results_handler(
+            crate::metrics::TX_STATUS_REQUESTS_TOTAL.get(),
+            data.shadow_data_consistency_rate,
+            &result,
+            data.near_rpc_client.clone(),
             // Note there is a difference in the implementation of the `EXPERIMENTAL_tx_status` method in the `near_jsonrpc_client`
             // The method is `near_jsonrpc_client::methods::EXPERIMENTAL_tx_status` in the client
             // so we can't just pass `params` there, instead we need to craft a request manually
             near_jsonrpc_client::methods::EXPERIMENTAL_tx_status::RpcTransactionStatusRequest {
                 transaction_info: tx_status_request.transaction_info,
             },
-            is_response_ok,
+            "EXPERIMENTAL_TX_STATUS",
         )
-        .await;
-
-        match comparison_result {
-            Ok(_) => {
-                tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", meta_data);
-            }
-            Err(err) => {
-                crate::utils::capture_shadow_consistency_error!(
-                    err,
-                    meta_data,
-                    "EXPERIMENTAL_TX_STATUS"
-                );
-            }
-        }
+        .await
+        {
+            crate::utils::capture_shadow_consistency_error!(err_code, "EXPERIMENTAL_TX_STATUS")
+        };
     }
 
     Ok(result.map_err(near_jsonrpc_primitives::errors::RpcError::from)?)

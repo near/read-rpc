@@ -2,8 +2,6 @@ use crate::config::ServerContext;
 use crate::errors::RPCError;
 use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
 use crate::modules::blocks::CacheBlock;
-#[cfg(feature = "shadow_data_consistency")]
-use crate::utils::shadow_compare_results;
 use jsonrpc_v2::{Data, Params};
 
 #[allow(unused_mut)]
@@ -27,37 +25,31 @@ pub async fn gas_price(
 
     #[cfg(feature = "shadow_data_consistency")]
     {
-        let near_rpc_client = data.near_rpc_client.clone();
-        let meta_data = format!("{:?}", params);
-        let (read_rpc_response_json, is_response_ok) = match &cache_block {
+        let result = match &cache_block {
             Ok(block) => {
                 if let None = params.block_id {
                     params.block_id =
                         Some(near_primitives::types::BlockId::Height(block.block_height));
                 };
-                let gas_price = near_primitives::views::GasPriceView {
+                Ok(near_primitives::views::GasPriceView {
                     gas_price: block.gas_price,
-                };
-                (serde_json::to_value(&gas_price), true)
+                })
             }
-            Err(err) => (serde_json::to_value(err), false),
+            Err(err) => Err(err),
         };
-        let comparison_result = shadow_compare_results(
-            read_rpc_response_json,
-            near_rpc_client,
-            params,
-            is_response_ok,
-        )
-        .await;
 
-        match comparison_result {
-            Ok(_) => {
-                tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", meta_data);
-            }
-            Err(err) => {
-                crate::utils::capture_shadow_consistency_error!(err, meta_data, "GAS_PRICE")
-            }
-        }
+        if let Some(err_code) = crate::utils::shadow_compare_results_handler(
+            crate::metrics::GAS_PRICE_REQUESTS_TOTAL.get(),
+            data.shadow_data_consistency_rate,
+            &result,
+            data.near_rpc_client.clone(),
+            params,
+            "GAS_PRICE",
+        )
+        .await
+        {
+            crate::utils::capture_shadow_consistency_error!(err_code, "GAS_PRICE")
+        };
     };
     let gas_price_view = near_primitives::views::GasPriceView {
         gas_price: cache_block
