@@ -3,8 +3,6 @@ use crate::errors::RPCError;
 use crate::modules::blocks::utils::{
     fetch_block_from_cache_or_get, fetch_chunk_from_s3, is_matching_change,
 };
-#[cfg(feature = "shadow_data_consistency")]
-use crate::utils::shadow_compare_results;
 use jsonrpc_v2::{Data, Params};
 use near_primitives::trie_key::TrieKey;
 use near_primitives::views::StateChangeValueView;
@@ -56,26 +54,18 @@ pub async fn chunk(
     let result = fetch_chunk(&data, params.chunk_reference.clone()).await;
     #[cfg(feature = "shadow_data_consistency")]
     {
-        let near_rpc_client = data.near_rpc_client.clone();
-        let meta_data = format!("{:?}", params);
-        let (read_rpc_response_json, is_response_ok) = match &result {
-            Ok(res) => (serde_json::to_value(&res.chunk_view), true),
-            Err(err) => (serde_json::to_value(err), false),
-        };
-        let comparison_result = shadow_compare_results(
-            read_rpc_response_json,
-            near_rpc_client,
+        if let Some(err_code) = crate::utils::shadow_compare_results_handler(
+            crate::metrics::CHUNK_REQUESTS_TOTAL.get(),
+            data.shadow_data_consistency_rate,
+            &result,
+            data.near_rpc_client.clone(),
             params,
-            is_response_ok,
+            "CHUNK",
         )
-        .await;
-
-        match comparison_result {
-            Ok(_) => {
-                tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", meta_data);
-            }
-            Err(err) => crate::utils::capture_shadow_consistency_error!(err, meta_data, "CHUNK"),
-        }
+        .await
+        {
+            crate::utils::capture_shadow_consistency_error!(err_code, "CHUNK")
+        };
     }
     Ok(result.map_err(near_jsonrpc_primitives::errors::RpcError::from)?)
 }
@@ -168,34 +158,26 @@ async fn block_call(
 
     #[cfg(feature = "shadow_data_consistency")]
     {
-        let near_rpc_client = data.near_rpc_client.clone();
-        let meta_data = format!("{:?}", params);
-        let (read_rpc_response_json, is_response_ok) = match &result {
-            Ok(res) => {
-                if let near_primitives::types::BlockReference::Finality(_) = params.block_reference
-                {
-                    params.block_reference = near_primitives::types::BlockReference::from(
-                        near_primitives::types::BlockId::Height(res.block_view.header.height),
-                    )
-                };
-                (serde_json::to_value(&res.block_view), true)
+        if let Ok(res) = &result {
+            if let near_primitives::types::BlockReference::Finality(_) = params.block_reference {
+                params.block_reference = near_primitives::types::BlockReference::from(
+                    near_primitives::types::BlockId::Height(res.block_view.header.height),
+                )
             }
-            Err(err) => (serde_json::to_value(err), false),
         };
-        let comparison_result = shadow_compare_results(
-            read_rpc_response_json,
-            near_rpc_client,
-            params,
-            is_response_ok,
-        )
-        .await;
 
-        match comparison_result {
-            Ok(_) => {
-                tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", meta_data);
-            }
-            Err(err) => crate::utils::capture_shadow_consistency_error!(err, meta_data, "BLOCK"),
-        }
+        if let Some(err_code) = crate::utils::shadow_compare_results_handler(
+            crate::metrics::BLOCK_REQUESTS_TOTAL.get(),
+            data.shadow_data_consistency_rate,
+            &result,
+            data.near_rpc_client.clone(),
+            params,
+            "BLOCK",
+        )
+        .await
+        {
+            crate::utils::capture_shadow_consistency_error!(err_code, "BLOCK")
+        };
     };
 
     Ok(result.map_err(near_jsonrpc_primitives::errors::RpcError::from)?)
@@ -212,8 +194,6 @@ async fn changes_in_block_call(
 ) -> Result<near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockByTypeResponse, RPCError>
 {
     crate::metrics::CHNGES_IN_BLOCK_REQUESTS_TOTAL.inc();
-    #[cfg(feature = "shadow_data_consistency")]
-    let total_requests = crate::metrics::CHNGES_IN_BLOCK_REQUESTS_TOTAL.get();
     let block = fetch_block_from_cache_or_get(&data, params.block_reference.clone())
         .await
         .map_err(near_jsonrpc_primitives::errors::RpcError::from)?;
@@ -225,14 +205,18 @@ async fn changes_in_block_call(
                 near_primitives::types::BlockId::Height(block.block_height),
             )
         }
-        crate::utils::shadow_compare_results_handler(
-            total_requests,
+        if let Some(err_code) = crate::utils::shadow_compare_results_handler(
+            crate::metrics::CHNGES_IN_BLOCK_REQUESTS_TOTAL.get(),
             data.shadow_data_consistency_rate,
             &result,
             data.near_rpc_client.clone(),
             params,
             "CHANGES_IN_BLOCK",
-        ).await;
+        )
+        .await
+        {
+            crate::utils::capture_shadow_consistency_error!(err_code, "CHANGES_IN_BLOCK")
+        };
     }
 
     Ok(result.map_err(near_jsonrpc_primitives::errors::RpcError::from)?)
@@ -255,37 +239,23 @@ async fn changes_in_block_by_type_call(
 
     #[cfg(feature = "shadow_data_consistency")]
     {
-        let near_rpc_client = data.near_rpc_client.clone();
         if let near_primitives::types::BlockReference::Finality(_) = params.block_reference {
             params.block_reference = near_primitives::types::BlockReference::from(
                 near_primitives::types::BlockId::Height(block.block_height),
             )
         }
-        let meta_data = format!("{:?}", params);
-        let (read_rpc_response_json, is_response_ok) = match &result {
-            Ok(res) => (serde_json::to_value(res), true),
-            Err(err) => (serde_json::to_value(err), false),
-        };
-        let comparison_result = shadow_compare_results(
-            read_rpc_response_json,
-            near_rpc_client,
+        if let Some(err_code) = crate::utils::shadow_compare_results_handler(
+            crate::metrics::CHNGES_IN_BLOCK_BY_TYPE_REQUESTS_TOTAL.get(),
+            data.shadow_data_consistency_rate,
+            &result,
+            data.near_rpc_client.clone(),
             params,
-            is_response_ok,
+            "CHANGES_IN_BLOCK_BY_TYPE",
         )
-        .await;
-
-        match comparison_result {
-            Ok(_) => {
-                tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", meta_data);
-            }
-            Err(err) => {
-                crate::utils::capture_shadow_consistency_error!(
-                    err,
-                    meta_data,
-                    "CHANGES_IN_BLOCK_BY_TYPE"
-                )
-            }
-        }
+        .await
+        {
+            crate::utils::capture_shadow_consistency_error!(err_code, "CHANGES_IN_BLOCK_BY_TYPE")
+        };
     }
 
     Ok(result.map_err(near_jsonrpc_primitives::errors::RpcError::from)?)

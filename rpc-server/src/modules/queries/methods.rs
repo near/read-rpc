@@ -5,8 +5,6 @@ use crate::modules::blocks::CacheBlock;
 #[cfg(feature = "account_access_keys")]
 use crate::modules::queries::utils::fetch_list_access_keys_from_db;
 use crate::modules::queries::utils::{fetch_state_from_db, run_contract};
-#[cfg(feature = "shadow_data_consistency")]
-use crate::utils::shadow_compare_results;
 use jsonrpc_v2::{Data, Params};
 
 /// `query` rpc method implementation
@@ -112,8 +110,6 @@ async fn query_call(
     #[cfg(feature = "shadow_data_consistency")]
     {
         let request_copy = params.request.clone();
-        let meta_data = format!("{:?}", params);
-        let near_rpc_client = data.near_rpc_client.clone();
 
         // Since we do queries with the clause WHERE block_height <= X, we need to
         // make sure that the block we are doing a shadow data consistency check for
@@ -129,79 +125,103 @@ async fn query_call(
             near_primitives::types::BlockId::Height(block_height),
         );
 
-        let (read_rpc_response_json, is_response_ok) = match &result {
-            Ok(res) => (serde_json::to_value(res), true),
-            Err(err) => (serde_json::to_value(err), false),
-        };
-
-        let comparison_result = shadow_compare_results(
-            read_rpc_response_json,
-            near_rpc_client,
-            params,
-            is_response_ok,
-        )
-        .await;
-
-        match comparison_result {
-            Ok(_) => {
-                tracing::info!(
-                    target: "shadow_data_consistency",
-                    "Shadow data check: CORRECT\n{}",
-                    format!("QUERY: {:?}", meta_data)
-                );
-            }
-            Err(err) => {
-                // When the data check fails, we want to emit the log message and increment the
-                // corresponding metric. Despite the metrics have "proxies" in their names, we
-                // are not proxying the requests anymore and respond with the error to the client.
-                // Since we already have the dashboard using these metric names, we don't want to
-                // change them and reuse them for the observability of the shadow data consistency checks.
-                match request_copy {
-                    near_primitives::views::QueryRequest::ViewAccount { .. } => {
-                        crate::utils::capture_shadow_consistency_error!(
-                            err,
-                            meta_data,
-                            "QUERY_VIEW_ACCOUNT"
-                        );
-                    }
-                    near_primitives::views::QueryRequest::ViewCode { .. } => {
-                        crate::utils::capture_shadow_consistency_error!(
-                            err,
-                            meta_data,
-                            "QUERY_VIEW_CODE"
-                        );
-                    }
-                    near_primitives::views::QueryRequest::ViewAccessKey { .. } => {
-                        crate::utils::capture_shadow_consistency_error!(
-                            err,
-                            meta_data,
-                            "QUERY_VIEW_ACCESS_KEY"
-                        );
-                    }
-                    near_primitives::views::QueryRequest::ViewState { .. } => {
-                        crate::utils::capture_shadow_consistency_error!(
-                            err,
-                            meta_data,
-                            "QUERY_VIEW_STATE"
-                        );
-                    }
-                    near_primitives::views::QueryRequest::CallFunction { .. } => {
-                        crate::utils::capture_shadow_consistency_error!(
-                            err,
-                            meta_data,
-                            "QUERY_FUNCTION_CALL"
-                        );
-                    }
-                    near_primitives::views::QueryRequest::ViewAccessKeyList { .. } => {
-                        crate::utils::capture_shadow_consistency_error!(
-                            err,
-                            meta_data,
-                            "QUERY_VIEW_ACCESS_KEY_LIST"
-                        );
-                    }
+        // When the data check fails, we want to emit the log message and increment the
+        // corresponding metric. Despite the metrics have "proxies" in their names, we
+        // are not proxying the requests anymore and respond with the error to the client.
+        // Since we already have the dashboard using these metric names, we don't want to
+        // change them and reuse them for the observability of the shadow data consistency checks.
+        match request_copy {
+            near_primitives::views::QueryRequest::ViewAccount { .. } => {
+                if let Some(err_code) = crate::utils::shadow_compare_results_handler(
+                    crate::metrics::QUERY_VIEW_ACCOUNT_REQUESTS_TOTAL.get(),
+                    data.shadow_data_consistency_rate,
+                    &result,
+                    data.near_rpc_client.clone(),
+                    params,
+                    "QUERY_VIEW_ACCOUNT",
+                )
+                .await
+                {
+                    crate::utils::capture_shadow_consistency_error!(err_code, "QUERY_VIEW_ACCOUNT")
                 };
             }
-        }
+            near_primitives::views::QueryRequest::ViewCode { .. } => {
+                if let Some(err_code) = crate::utils::shadow_compare_results_handler(
+                    crate::metrics::QUERY_VIEW_CODE_REQUESTS_TOTAL.get(),
+                    data.shadow_data_consistency_rate,
+                    &result,
+                    data.near_rpc_client.clone(),
+                    params,
+                    "QUERY_VIEW_CODE",
+                )
+                .await
+                {
+                    crate::utils::capture_shadow_consistency_error!(err_code, "QUERY_VIEW_CODE")
+                };
+            }
+            near_primitives::views::QueryRequest::ViewAccessKey { .. } => {
+                if let Some(err_code) = crate::utils::shadow_compare_results_handler(
+                    crate::metrics::QUERY_VIEW_ACCESS_KEY_REQUESTS_TOTAL.get(),
+                    data.shadow_data_consistency_rate,
+                    &result,
+                    data.near_rpc_client.clone(),
+                    params,
+                    "QUERY_VIEW_ACCESS_KEY",
+                )
+                .await
+                {
+                    crate::utils::capture_shadow_consistency_error!(
+                        err_code,
+                        "QUERY_VIEW_ACCESS_KEY"
+                    )
+                };
+            }
+            near_primitives::views::QueryRequest::ViewState { .. } => {
+                if let Some(err_code) = crate::utils::shadow_compare_results_handler(
+                    crate::metrics::QUERY_VIEW_STATE_REQUESTS_TOTAL.get(),
+                    data.shadow_data_consistency_rate,
+                    &result,
+                    data.near_rpc_client.clone(),
+                    params,
+                    "QUERY_VIEW_STATE",
+                )
+                .await
+                {
+                    crate::utils::capture_shadow_consistency_error!(err_code, "QUERY_VIEW_STATE")
+                };
+            }
+            near_primitives::views::QueryRequest::CallFunction { .. } => {
+                if let Some(err_code) = crate::utils::shadow_compare_results_handler(
+                    crate::metrics::QUERY_FUNCTION_CALL_REQUESTS_TOTAL.get(),
+                    data.shadow_data_consistency_rate,
+                    &result,
+                    data.near_rpc_client.clone(),
+                    params,
+                    "QUERY_FUNCTION_CALL",
+                )
+                .await
+                {
+                    crate::utils::capture_shadow_consistency_error!(err_code, "QUERY_FUNCTION_CALL")
+                };
+            }
+            near_primitives::views::QueryRequest::ViewAccessKeyList { .. } => {
+                if let Some(err_code) = crate::utils::shadow_compare_results_handler(
+                    crate::metrics::QUERY_VIEW_ACCESS_KEYS_LIST_REQUESTS_TOTAL.get(),
+                    data.shadow_data_consistency_rate,
+                    &result,
+                    data.near_rpc_client.clone(),
+                    params,
+                    "QUERY_VIEW_ACCESS_KEY_LIST",
+                )
+                .await
+                {
+                    crate::utils::capture_shadow_consistency_error!(
+                        err_code,
+                        "QUERY_VIEW_ACCESS_KEY_LIST"
+                    )
+                };
+            }
+        };
     }
 
     Ok(result.map_err(near_jsonrpc_primitives::errors::RpcError::from)?)

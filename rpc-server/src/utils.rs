@@ -245,6 +245,7 @@ pub(crate) async fn gigabytes_to_bytes(gigabytes: f64) -> usize {
     (gigabytes * 1024.0 * 1024.0 * 1024.0) as usize
 }
 
+#[cfg(feature = "shadow_data_consistency")]
 pub async fn shadow_compare_results_handler<T, E, M>(
     method_total_requests: u64,
     shadow_rate: f64,
@@ -252,18 +253,15 @@ pub async fn shadow_compare_results_handler<T, E, M>(
     near_rpc_client: JsonRpcClient,
     params: M,
     method_metric_name: &str,
-) where
+) -> Option<usize>
+where
     M: near_jsonrpc_client::methods::RpcMethod + std::fmt::Debug,
     <M as near_jsonrpc_client::methods::RpcMethod>::Response: serde::ser::Serialize,
     <M as near_jsonrpc_client::methods::RpcMethod>::Error: std::fmt::Debug + serde::ser::Serialize,
     T: serde::ser::Serialize,
     E: std::fmt::Debug + serde::ser::Serialize,
 {
-    if is_should_shadow_compare_results(
-        method_total_requests,
-        shadow_rate,
-    )
-        .await {
+    if is_should_shadow_compare_results(method_total_requests, shadow_rate).await {
         let meta_data = format!("{:?}", params);
         let (read_rpc_response_json, is_response_ok) = match read_rpc_result {
             Ok(res) => (serde_json::to_value(res), true),
@@ -275,20 +273,38 @@ pub async fn shadow_compare_results_handler<T, E, M>(
             params,
             is_response_ok,
         )
-            .await;
+        .await;
 
         match comparison_result {
             Ok(_) => {
                 tracing::info!(target: "shadow_data_consistency", "Shadow data check: CORRECT\n{}", meta_data);
+                None
             }
             Err(err) => {
-                self::capture_shadow_consistency_error!(
-                        err,
+                if let ShadowDataConsistencyError::ResultsDontMatch {
+                    reason,
+                    read_rpc_response,
+                    near_rpc_response,
+                    ..
+                } = &err
+                {
+                    tracing::warn!(
+                        target: "shadow_data_consistency",
+                        "Shadow data check: ERROR\n{}:{}: {}\n{}",
+                        method_metric_name,
+                        reason.code(),
                         meta_data,
-                        method_metric_name
-                    )
+                        format!("{}, ReadRPC: {:?}, NearRPC: {:?}", reason.reason(), read_rpc_response, near_rpc_response),
+                    );
+                    Some(reason.code())
+                } else {
+                    tracing::warn!(target: "shadow_data_consistency", "Shadow data check: ERROR\n{}:4: {}\n{:?}", method_metric_name, meta_data, err);
+                    Some(4)
+                }
             }
         }
+    } else {
+        None
     }
 }
 
@@ -576,54 +592,36 @@ fn generate_array_key(value: &serde_json::Value) -> String {
 
 #[cfg(feature = "shadow_data_consistency")]
 macro_rules! capture_shadow_consistency_error {
-    ($err:ident, $meta_data:ident, $method_metric_name:expr) => {
-        match $err {
-            crate::utils::ShadowDataConsistencyError::ResultsDontMatch {
-                reason,
-                read_rpc_response,
-                near_rpc_response,
-                ..
-            } => {
-                tracing::warn!(
-                    target: "shadow_data_consistency",
-                    "Shadow data check: ERROR\n{}:{}: {}\n{}",
-                    $method_metric_name,
-                    reason.code(),
-                    $meta_data,
-                    format!("{}, ReadRPC: {:?}, NearRPC: {:?}", reason.reason(), read_rpc_response, near_rpc_response),
-                );
-                match reason.code() {
-                    0 => {
-                        paste::paste!{
-                            crate::metrics::[<$method_metric_name _ERROR_0>].inc();
-                        }
-                    },
-                    1 => {
-                        paste::paste!{
-                            crate::metrics::[<$method_metric_name _ERROR_1>].inc();
-                        }
-                    },
-                    2 => {
-                        paste::paste!{
-                            crate::metrics::[<$method_metric_name _ERROR_2>].inc();
-                        }
-                    },
-                    3 => {
-                        paste::paste!{
-                            crate::metrics::[<$method_metric_name _ERROR_3>].inc();
-                        }
-                    },
-                    _ => panic!("Received unexpected reason code: {}", reason.code()),
-                };
-            },
+    ($err_code:ident, $method_metric_name:expr) => {
+        match $err_code {
+            0 => {
+                paste::paste! {
+                    crate::metrics::[<$method_metric_name _ERROR_0>].inc();
+                }
+            }
+            1 => {
+                paste::paste! {
+                    crate::metrics::[<$method_metric_name _ERROR_1>].inc();
+                }
+            }
+            2 => {
+                paste::paste! {
+                    crate::metrics::[<$method_metric_name _ERROR_2>].inc();
+                }
+            }
+            3 => {
+                paste::paste! {
+                    crate::metrics::[<$method_metric_name _ERROR_3>].inc();
+                }
+            }
             _ => {
-                tracing::warn!(target: "shadow_data_consistency", "Shadow data check: ERROR\n{}: {}\n{:?}", $method_metric_name, $meta_data, $err);
-                paste::paste!{
+                paste::paste! {
                     crate::metrics::[<$method_metric_name _ERROR_4>].inc();
                 }
             }
         }
     };
 }
+
 #[cfg(feature = "shadow_data_consistency")]
 pub(crate) use capture_shadow_consistency_error;
