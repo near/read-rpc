@@ -1802,7 +1802,6 @@ dependencies = [
  "clap",
  "configuration",
  "database",
- "futures",
  "near-chain-configs",
  "near-indexer-primitives",
  "near-jsonrpc-client",
