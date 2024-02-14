@@ -1,7 +1,13 @@
+[workspace.package]
+version = "0.1.0"
+authors = ["Near Inc <hello@nearprotocol.com>"]
+edition = "2021"
+rust-version = "1.73.0"
+repository = "https://github.com/near/read-rpc"
+license = "MIT OR Apache-2.0"
+
 [workspace]
-
 resolver = "2"
-
 members = [
     "configuration",
     "database",
