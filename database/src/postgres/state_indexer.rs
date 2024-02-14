@@ -325,43 +325,18 @@ impl crate::StateIndexerDbManager for PostgresDBManager {
         Ok(())
     }
 
-    async fn add_protocol_config(
-        &self,
-        epoch_id: near_indexer_primitives::CryptoHash,
-        epoch_height: u64,
-        epoch_start_height: u64,
-        protocol_config: &near_chain_configs::ProtocolConfigView,
-    ) -> anyhow::Result<()> {
-        crate::models::ProtocolConfig {
-            epoch_id: epoch_id.to_string(),
-            epoch_height: bigdecimal::BigDecimal::from(epoch_height),
-            epoch_start_height: bigdecimal::BigDecimal::from(epoch_start_height),
-            epoch_end_height: None,
-            protocol_config: serde_json::to_value(protocol_config)?,
-        }
-        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
-        .await?;
-        Ok(())
-    }
-
     async fn update_epoch_end_height(
         &self,
         epoch_id: near_indexer_primitives::CryptoHash,
         epoch_end_block_hash: near_indexer_primitives::CryptoHash,
     ) -> anyhow::Result<()> {
         let epoch_end_height = self.get_block_by_hash(epoch_end_block_hash).await?;
-
-        let validators_future = crate::models::Validators::update_epoch_end_height(
+        crate::models::Validators::update_epoch_end_height(
             Self::get_connection(&self.pg_pool).await?,
             epoch_id,
             bigdecimal::BigDecimal::from(epoch_end_height),
-        );
-        let protocol_config_future = crate::models::ProtocolConfig::update_epoch_end_height(
-            Self::get_connection(&self.pg_pool).await?,
-            epoch_id,
-            bigdecimal::BigDecimal::from(epoch_end_height),
-        );
-        futures::future::try_join(validators_future, protocol_config_future).await?;
+        )
+        .await?;
         Ok(())
     }
 }

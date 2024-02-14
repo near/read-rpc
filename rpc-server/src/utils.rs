@@ -120,18 +120,6 @@ pub async fn get_final_cache_block(near_rpc_client: &JsonRpcClient) -> Option<Ca
     }
 }
 
-pub async fn get_current_protocol_config(
-    near_rpc_client: &JsonRpcClient,
-) -> anyhow::Result<near_chain_configs::ProtocolConfigView> {
-    let params =
-        near_jsonrpc_client::methods::EXPERIMENTAL_protocol_config::RpcProtocolConfigRequest {
-            block_reference: near_primitives::types::BlockReference::Finality(
-                near_primitives::types::Finality::Final,
-            ),
-        };
-    Ok(near_rpc_client.call(params).await?)
-}
-
 pub async fn get_current_validators(
     near_rpc_client: &JsonRpcClient,
 ) -> anyhow::Result<near_primitives::views::EpochValidatorInfo> {
@@ -153,8 +141,6 @@ async fn handle_streamer_message(
 
     if final_block_info.read().await.final_block_cache.epoch_id != block.epoch_id {
         tracing::info!("New epoch started: {:?}", block.epoch_id);
-        final_block_info.write().await.current_protocol_config =
-            get_current_protocol_config(near_rpc_client).await?;
         final_block_info.write().await.current_validators =
             get_current_validators(near_rpc_client).await?;
     }

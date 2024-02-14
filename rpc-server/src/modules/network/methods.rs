@@ -235,25 +235,16 @@ async fn protocol_config_call(
                 error_message: err.to_string(),
             }
         })?;
-    let protocol_config = if data
-        .final_block_info
-        .read()
-        .await
-        .final_block_cache
-        .epoch_id
-        == block.epoch_id
-    {
-        let protocol_config = &data.final_block_info.read().await.current_protocol_config;
-        clone_protocol_config(protocol_config)
-    } else {
-        data.db_manager
-            .get_protocol_config_by_epoch_id(block.epoch_id)
-            .await
-            .map_err(|err| {
-                near_jsonrpc_primitives::types::config::RpcProtocolConfigError::InternalError {
-                    error_message: err.to_string(),
-                }
-            })?
+
+    let store = near_parameters::RuntimeConfigStore::for_chain_id(&data.genesis_config.chain_id);
+    let runtime_config = store.get_config(block.latest_protocol_version);
+    let protocol_config = near_chain_configs::ProtocolConfig {
+        genesis_config: data.genesis_config.clone(),
+        runtime_config: near_parameters::RuntimeConfig {
+            fees: runtime_config.fees.clone(),
+            wasm_config: runtime_config.wasm_config.clone(),
+            account_creation_config: runtime_config.account_creation_config.clone(),
+        },
     };
-    Ok(protocol_config)
+    Ok(protocol_config.into())
 }
