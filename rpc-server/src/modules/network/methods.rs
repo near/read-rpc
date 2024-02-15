@@ -7,6 +7,37 @@ use crate::errors::RPCError;
 use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
 use crate::modules::network::{clone_protocol_config, parse_validator_request};
 
+pub async fn client_config(
+    _data: Data<ServerContext>,
+    Params(_params): Params<serde_json::Value>,
+) -> Result<(), RPCError> {
+    Err(RPCError::unimplemented_error("client_config"))
+}
+
+pub async fn health(
+    data: Data<ServerContext>,
+    Params(_params): Params<serde_json::Value>,
+) -> Result<near_jsonrpc_primitives::types::status::RpcHealthResponse, RPCError> {
+    Ok(data
+        .near_rpc_client
+        .call(near_jsonrpc_client::methods::health::RpcHealthRequest)
+        .await?)
+}
+
+pub async fn maintenance_windows(
+    _data: Data<ServerContext>,
+    Params(_params): Params<serde_json::Value>,
+) -> Result<(), RPCError> {
+    Err(RPCError::unimplemented_error("maintenance_windows"))
+}
+
+pub async fn split_storage_info(
+    _data: Data<ServerContext>,
+    Params(_params): Params<serde_json::Value>,
+) -> Result<(), RPCError> {
+    Err(RPCError::unimplemented_error("split_storage_info"))
+}
+
 pub async fn status(
     data: Data<ServerContext>,
     Params(_params): Params<serde_json::Value>,
@@ -70,11 +101,13 @@ pub async fn health(
 }
 
 pub async fn network_info(
+    data: Data<ServerContext>,
     Params(_params): Params<serde_json::Value>,
 ) -> Result<near_jsonrpc_primitives::types::network_info::RpcNetworkInfoResponse, RPCError> {
-    Err(RPCError::unimplemented_error(
-        "Method is not implemented on this type of node. Please send a request to NEAR JSON RPC instead.",
-    ))
+    Ok(data
+        .near_rpc_client
+        .call(near_jsonrpc_client::methods::network_info::RpcNetworkInfoRequest)
+        .await?)
 }
 
 pub async fn validators(

@@ -71,7 +71,7 @@ async fn main() -> anyhow::Result<()> {
         )
         .with_method("chunk", modules::blocks::methods::chunk)
         .with_method("gas_price", modules::gas::methods::gas_price)
-        // TODO: .with_method("health", modules::health::methods::health)
+        .with_method("health", modules::network::methods::health)
         .with_method(
             "light_client_proof",
             modules::clients::methods::light_client_proof,
@@ -81,11 +81,11 @@ async fn main() -> anyhow::Result<()> {
             modules::clients::methods::next_light_client_block,
         )
         .with_method("network_info", modules::network::methods::network_info)
-        // TODO: .with_method("send_tx", modules::send_tx::methods::send_tx)
+        .with_method("send_tx", modules::transactions::methods::send_tx)
         .with_method("status", modules::network::methods::status)
         .with_method("tx", modules::transactions::methods::tx)
         .with_method("validators", modules::network::methods::validators)
-        // TODO: .with_method("client_config", modules::client_config::methods::client_config)
+        .with_method("client_config", modules::network::methods::client_config)
         .with_method(
             "EXPERIMENTAL_changes",
             modules::blocks::methods::changes_in_block_by_type,
@@ -115,14 +115,14 @@ async fn main() -> anyhow::Result<()> {
             "EXPERIMENTAL_validators_ordered",
             modules::network::methods::validators_ordered,
         )
-        // TODO: .with_method(
-        //     "EXPERIMENTAL_maintenance_windows",
-        //     modules::maintenance_windows::methods::maintenance_windows,
-        // )
-        // TODO: .with_method(
-        //     "EXPERIMENTAL_split_storage_info",
-        //     modules::split_storage_info::methods::split_storage_info,
-        // )
+        .with_method(
+            "EXPERIMENTAL_maintenance_windows",
+            modules::network::methods::maintenance_windows,
+        )
+        .with_method(
+            "EXPERIMENTAL_split_storage_info",
+            modules::network::methods::split_storage_info,
+        )
         .finish();
 
     actix_web::HttpServer::new(move || {

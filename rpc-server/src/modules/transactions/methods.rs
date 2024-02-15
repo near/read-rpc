@@ -9,6 +9,13 @@ use near_primitives::views::FinalExecutionOutcomeViewEnum::{
 };
 use serde_json::Value;
 
+pub async fn send_tx(
+    _data: Data<ServerContext>,
+    Params(_params): Params<Value>,
+) -> Result<(), RPCError> {
+    Err(RPCError::unimplemented_error("send_tx"))
+}
+
 /// Queries status of a transaction by hash and returns the final transaction result.
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn tx(
@@ -128,7 +135,10 @@ pub async fn send_tx_commit(
             Ok(resp) => Ok(
                 near_jsonrpc_primitives::types::transactions::RpcTransactionResponse {
                     final_execution_outcome: Some(FinalExecutionOutcome(resp)),
-                    final_execution_status: Default::default(),
+                    // With the fact that we don't support non-finalised data yet,
+                    // final_execution_status field can be always filled with FINAL.
+                    // This logic will be more complicated when we add support of optimistic blocks.
+                    final_execution_status: near_primitives::views::TxExecutionStatus::Final,
                 },
             ),
             Err(err) => Err(RPCError::from(err)),
@@ -179,7 +189,10 @@ async fn tx_status_common(
                 final_execution_outcome: Some(FinalExecutionOutcomeWithReceipt(
                     transaction_details.to_final_execution_outcome_with_receipts(),
                 )),
-                final_execution_status: Default::default(),
+                // With the fact that we don't support non-finalised data yet,
+                // final_execution_status field can be always filled with FINAL.
+                // This logic will be more complicated when we add support of optimistic blocks.
+                final_execution_status: near_primitives::views::TxExecutionStatus::Final,
             },
         )
     } else {
@@ -188,7 +201,10 @@ async fn tx_status_common(
                 final_execution_outcome: Some(FinalExecutionOutcome(
                     transaction_details.to_final_execution_outcome(),
                 )),
-                final_execution_status: Default::default(),
+                // With the fact that we don't support non-finalised data yet,
+                // final_execution_status field can be always filled with FINAL.
+                // This logic will be more complicated when we add support of optimistic blocks.
+                final_execution_status: near_primitives::views::TxExecutionStatus::Final,
             },
         )
     }
