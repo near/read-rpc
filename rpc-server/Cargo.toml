@@ -38,7 +38,8 @@ readnode-primitives = { path = "../readnode-primitives" }
 
 near-chain-configs = "0.20.0"
 near-crypto = "0.20.0"
-near-jsonrpc-client = "0.8.0"
+#near-jsonrpc-client = "0.8.0" Supports of nearcore 1.37 will be released in the next version
+near-jsonrpc-client = {git = "https://github.com/near/near-jsonrpc-client-rs.git", branch = "telezhnaya/wait_until"}
 near-jsonrpc-primitives = "0.20.0"
 near-indexer-primitives = "0.20.0"
 near-lake-framework = "0.7.7"

@@ -63,11 +63,11 @@ async fn main() -> anyhow::Result<()> {
         .with_method("block", modules::blocks::methods::block)
         .with_method(
             "broadcast_tx_async",
-            modules::transactions::methods::send_tx_async,
+            modules::transactions::methods::broadcast_tx_async,
         )
         .with_method(
             "broadcast_tx_commit",
-            modules::transactions::methods::send_tx_commit,
+            modules::transactions::methods::broadcast_tx_commit,
         )
         .with_method("chunk", modules::blocks::methods::chunk)
         .with_method("gas_price", modules::gas::methods::gas_price)

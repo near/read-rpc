@@ -23,7 +23,7 @@ pub async fn parse_transaction_status_common_request(
         Ok(
             near_jsonrpc_primitives::types::transactions::RpcTransactionStatusRequest {
                 transaction_info,
-                wait_until: Default::default(),
+                wait_until: near_primitives::views::TxExecutionStatus::Final,
             },
         )
     } else {
@@ -40,7 +40,7 @@ pub async fn parse_transaction_status_common_request(
         Ok(
             near_jsonrpc_primitives::types::transactions::RpcTransactionStatusRequest {
                 transaction_info,
-                wait_until: Default::default(),
+                wait_until: near_primitives::views::TxExecutionStatus::Final,
             },
         )
     }

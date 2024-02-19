@@ -16,8 +16,8 @@
 | light_client_proof               | Proxy         |                                                                             |
 | next_light_client_block          | Proxy         |                                                                             |
 | network_info                     | Proxy         | PROXY_ONLY. Immediately proxy to a real RPC.                                |
-| send_tx                          | Unimplemented |                                                                             |
 | status                           | Included      |                                                                             |
+| send_tx                          | Proxy         | PROXY_ONLY. Immediately proxy to a real RPC.                                |
 | tx                               | Included      |                                                                             |
 | validators                       | Included      |                                                                             |
 | client_config                    | Unimplemented |                                                                             |
