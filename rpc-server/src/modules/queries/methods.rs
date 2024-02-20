@@ -9,7 +9,7 @@ use jsonrpc_v2::{Data, Params};
 
 /// `query` rpc method implementation
 /// calls proxy_rpc_call to get `query` from near-rpc if request parameters not supported by read-rpc
-/// as example: BlockReference for SyncCheckpoint is not supported by read-rpc
+/// as example: BlockReference for Finality::None is not supported by read-rpc
 /// another way to get `query` from read-rpc using `query_call`
 #[allow(unused_mut)]
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
@@ -17,29 +17,16 @@ pub async fn query(
     data: Data<ServerContext>,
     Params(mut params): Params<near_jsonrpc_primitives::types::query::RpcQueryRequest>,
 ) -> Result<near_jsonrpc_primitives::types::query::RpcQueryResponse, RPCError> {
-    match &params.block_reference {
-        near_primitives::types::BlockReference::SyncCheckpoint(_) => {
-            // Increase the SYNC_CHECKPOINT_REQUESTS_TOTAL metric if the request has
-            // genesis sync_checkpoint or earliest_available sync_checkpoint
+    if let near_primitives::types::BlockReference::Finality(finality) = &params.block_reference {
+        if finality != &near_primitives::types::Finality::Final {
+            // Increase the OPTIMISTIC_REQUESTS_TOTAL metric if the request has
+            // optimistic finality or doom_slug finality
             // and proxy to near-rpc
-            crate::metrics::SYNC_CHECKPOINT_REQUESTS_TOTAL.inc();
-            Ok(data.near_rpc_client.call(params).await?)
+            crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
+            return Ok(data.near_rpc_client.call(params).await?);
         }
-        near_primitives::types::BlockReference::Finality(finality) => {
-            if finality != &near_primitives::types::Finality::Final {
-                // Increase the OPTIMISTIC_REQUESTS_TOTAL metric if the request has
-                // optimistic finality or doom_slug finality
-                // and proxy to near-rpc
-                crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
-                Ok(data.near_rpc_client.call(params).await?)
-            } else {
-                query_call(data, Params(params)).await
-            }
-        }
-        near_primitives::types::BlockReference::BlockId(_) => {
-            query_call(data, Params(params)).await
-        }
-    }
+    };
+    query_call(data, Params(params)).await
 }
 
 /// fetch query result from read-rpc

@@ -1,12 +1,42 @@
 use crate::modules::blocks::{CacheBlock, FinalBlockInfo};
 use futures::executor::block_on;
 
+#[derive(Debug)]
+pub struct GenesisInfo {
+    pub genesis_config: near_chain_configs::GenesisConfig,
+    pub genesis_block_cache: CacheBlock,
+}
+
+impl GenesisInfo {
+    pub async fn get(near_rpc_client: &crate::utils::JsonRpcClient) -> Self {
+        tracing::info!("Get genesis config...");
+        let genesis_config = near_rpc_client
+            .call(
+                near_jsonrpc_client::methods::EXPERIMENTAL_genesis_config::RpcGenesisConfigRequest,
+            )
+            .await
+            .expect("Error to get genesis config");
+        let genesis_block = near_rpc_client
+            .archival_call(near_jsonrpc_client::methods::block::RpcBlockRequest {
+                block_reference: near_primitives::types::BlockReference::BlockId(
+                    near_primitives::types::BlockId::Height(genesis_config.genesis_height),
+                ),
+            })
+            .await
+            .expect("Error to get genesis block");
+        Self {
+            genesis_config,
+            genesis_block_cache: genesis_block.into(),
+        }
+    }
+}
+
 pub struct ServerContext {
     pub s3_client: near_lake_framework::s3_fetchers::LakeS3Client,
     pub db_manager: std::sync::Arc<Box<dyn database::ReaderDbManager + Sync + Send + 'static>>,
     pub near_rpc_client: crate::utils::JsonRpcClient,
     pub s3_bucket_name: String,
-    pub genesis_config: near_chain_configs::GenesisConfig,
+    pub genesis_info: GenesisInfo,
     pub blocks_cache:
         std::sync::Arc<futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>>,
     pub final_block_info: std::sync::Arc<futures_locks::RwLock<FinalBlockInfo>>,
@@ -27,7 +57,7 @@ impl ServerContext {
         db_manager: impl database::ReaderDbManager + Sync + Send + 'static,
         near_rpc_client: crate::utils::JsonRpcClient,
         s3_bucket_name: String,
-        genesis_config: near_chain_configs::GenesisConfig,
+        genesis_info: GenesisInfo,
         blocks_cache: std::sync::Arc<
             futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>,
         >,
@@ -46,7 +76,7 @@ impl ServerContext {
             db_manager: std::sync::Arc::new(Box::new(db_manager)),
             near_rpc_client,
             s3_bucket_name,
-            genesis_config,
+            genesis_info,
             blocks_cache,
             final_block_info,
             compiled_contract_code_cache,

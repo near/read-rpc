@@ -97,16 +97,7 @@ pub async fn get_final_cache_block(near_rpc_client: &JsonRpcClient) -> Option<Ca
             crate::metrics::FINAL_BLOCK_HEIGHT
                 .set(i64::try_from(block_view.header.height).unwrap());
 
-            Some(CacheBlock {
-                block_hash: block_view.header.hash,
-                block_height: block_view.header.height,
-                block_timestamp: block_view.header.timestamp,
-                gas_price: block_view.header.gas_price,
-                latest_protocol_version: block_view.header.latest_protocol_version,
-                chunks_included: block_view.header.chunks_included,
-                state_root: block_view.header.prev_state_root,
-                epoch_id: block_view.header.epoch_id,
-            })
+            Some(block_view.into())
         }
         Err(err) => {
             tracing::warn!("Error to get final block: {:?}", err);
@@ -144,24 +135,10 @@ async fn handle_streamer_message(
     finale_block_info: std::sync::Arc<futures_locks::RwLock<FinalBlockInfo>>,
     near_rpc_client: &JsonRpcClient,
 ) -> anyhow::Result<()> {
-    let block = CacheBlock {
-        block_hash: streamer_message.block.header.hash,
-        block_height: streamer_message.block.header.height,
-        block_timestamp: streamer_message.block.header.timestamp,
-        gas_price: streamer_message.block.header.gas_price,
-        latest_protocol_version: streamer_message.block.header.latest_protocol_version,
-        chunks_included: streamer_message.block.header.chunks_included,
-        state_root: streamer_message.block.header.prev_state_root,
-        epoch_id: streamer_message.block.header.epoch_id,
-    };
+    let block: CacheBlock = streamer_message.block.into();
 
-    if finale_block_info.read().await.final_block_cache.epoch_id
-        != streamer_message.block.header.epoch_id
-    {
-        tracing::info!(
-            "New epoch started: {:?}",
-            streamer_message.block.header.epoch_id
-        );
+    if finale_block_info.read().await.final_block_cache.epoch_id != block.epoch_id {
+        tracing::info!("New epoch started: {:?}", block.epoch_id);
         finale_block_info.write().await.current_protocol_config =
             get_current_protocol_config(near_rpc_client).await?;
         finale_block_info.write().await.current_validators =

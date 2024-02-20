@@ -66,10 +66,8 @@ async fn main() -> anyhow::Result<()> {
         cache::LruMemoryCache::new(contract_code_cache_size),
     ));
 
-    tracing::info!("Get genesis config...");
-    let genesis_config = near_rpc_client
-        .call(near_jsonrpc_client::methods::EXPERIMENTAL_genesis_config::RpcGenesisConfigRequest)
-        .await?;
+    let genesis_info = config::GenesisInfo::get(&near_rpc_client).await;
+
     let lake_config = rpc_server_config
         .lake_config
         .lake_config(
@@ -100,7 +98,7 @@ async fn main() -> anyhow::Result<()> {
         db_manager,
         near_rpc_client.clone(),
         rpc_server_config.lake_config.aws_bucket_name.clone(),
-        genesis_config,
+        genesis_info,
         std::sync::Arc::clone(&blocks_cache),
         std::sync::Arc::clone(&finale_block_info),
         compiled_contract_code_cache,

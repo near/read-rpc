@@ -130,7 +130,7 @@ pub async fn genesis_config(
     data: Data<ServerContext>,
     Params(_params): Params<serde_json::Value>,
 ) -> Result<near_chain_configs::GenesisConfig, RPCError> {
-    Ok(data.genesis_config.clone())
+    Ok(data.genesis_info.genesis_config.clone())
 }
 
 pub async fn protocol_config(
@@ -146,9 +146,6 @@ pub async fn protocol_config(
     match params.block_reference {
         near_primitives::types::BlockReference::Finality(_) => {
             crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
-        }
-        near_primitives::types::BlockReference::SyncCheckpoint(_) => {
-            crate::metrics::SYNC_CHECKPOINT_REQUESTS_TOTAL.inc();
         }
         _ => {}
     }
