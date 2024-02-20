@@ -155,10 +155,20 @@ pub async fn update_final_block_height_regularly(
         futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>,
     >,
     finale_block_info: std::sync::Arc<futures_locks::RwLock<FinalBlockInfo>>,
-    lake_config: near_lake_framework::LakeConfig,
+    rpc_server_config: configuration::RpcServerConfig,
     near_rpc_client: JsonRpcClient,
 ) -> anyhow::Result<()> {
     tracing::info!("Task to get and store final block in the cache started");
+    let lake_config = rpc_server_config
+        .lake_config
+        .lake_config(
+            finale_block_info
+                .read()
+                .await
+                .final_block_cache
+                .block_height,
+        )
+        .await?;
     let (sender, stream) = near_lake_framework::streamer(lake_config);
     let mut handlers = tokio_stream::wrappers::ReceiverStream::new(stream)
         .map(|streamer_message| {
