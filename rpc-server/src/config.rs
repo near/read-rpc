@@ -1,6 +1,4 @@
 use crate::modules::blocks::{CacheBlock, FinalBlockInfo};
-use crate::utils::gigabytes_to_bytes;
-use crate::{cache, config, utils};
 use futures::executor::block_on;
 
 #[derive(Debug, Clone)]
@@ -38,13 +36,16 @@ pub struct ServerContext {
     pub s3_client: near_lake_framework::s3_fetchers::LakeS3Client,
     pub db_manager: std::sync::Arc<Box<dyn database::ReaderDbManager + Sync + Send + 'static>>,
     pub genesis_info: GenesisInfo,
-    pub near_rpc_client: utils::JsonRpcClient,
+    pub near_rpc_client: crate::utils::JsonRpcClient,
     pub s3_bucket_name: String,
-    pub blocks_cache: std::sync::Arc<futures_locks::RwLock<cache::LruMemoryCache<u64, CacheBlock>>>,
+    pub blocks_cache:
+        std::sync::Arc<futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>>,
     pub final_block_info: std::sync::Arc<futures_locks::RwLock<FinalBlockInfo>>,
     pub compiled_contract_code_cache: std::sync::Arc<CompiledCodeCache>,
     pub contract_code_cache: std::sync::Arc<
-        futures_locks::RwLock<cache::LruMemoryCache<near_primitives::hash::CryptoHash, Vec<u8>>>,
+        futures_locks::RwLock<
+            crate::cache::LruMemoryCache<near_primitives::hash::CryptoHash, Vec<u8>>,
+        >,
     >,
     pub max_gas_burnt: near_primitives::types::Gas,
     pub shadow_data_consistency_rate: f64,
@@ -53,36 +54,36 @@ pub struct ServerContext {
 impl ServerContext {
     pub async fn init(
         rpc_server_config: configuration::RpcServerConfig,
-        near_rpc_client: utils::JsonRpcClient,
+        near_rpc_client: crate::utils::JsonRpcClient,
     ) -> anyhow::Result<Self> {
         let limit_memory_cache_in_bytes =
             if let Some(limit_memory_cache) = rpc_server_config.general.limit_memory_cache {
-                Some(gigabytes_to_bytes(limit_memory_cache).await)
+                Some(crate::utils::gigabytes_to_bytes(limit_memory_cache).await)
             } else {
                 None
             };
         let reserved_memory_in_bytes =
-            gigabytes_to_bytes(rpc_server_config.general.reserved_memory).await;
+            crate::utils::gigabytes_to_bytes(rpc_server_config.general.reserved_memory).await;
         let block_cache_size_in_bytes =
-            gigabytes_to_bytes(rpc_server_config.general.block_cache_size).await;
+            crate::utils::gigabytes_to_bytes(rpc_server_config.general.block_cache_size).await;
 
-        let contract_code_cache_size = utils::calculate_contract_code_cache_sizes(
+        let contract_code_cache_size = crate::utils::calculate_contract_code_cache_sizes(
             reserved_memory_in_bytes,
             block_cache_size_in_bytes,
             limit_memory_cache_in_bytes,
         )
         .await;
         let blocks_cache = std::sync::Arc::new(futures_locks::RwLock::new(
-            cache::LruMemoryCache::new(block_cache_size_in_bytes),
+            crate::cache::LruMemoryCache::new(block_cache_size_in_bytes),
         ));
 
         let contract_code_cache = std::sync::Arc::new(futures_locks::RwLock::new(
-            cache::LruMemoryCache::new(contract_code_cache_size),
+            crate::cache::LruMemoryCache::new(contract_code_cache_size),
         ));
 
-        let compiled_contract_code_cache = std::sync::Arc::new(config::CompiledCodeCache {
+        let compiled_contract_code_cache = std::sync::Arc::new(CompiledCodeCache {
             local_cache: std::sync::Arc::new(futures_locks::RwLock::new(
-                cache::LruMemoryCache::new(contract_code_cache_size),
+                crate::cache::LruMemoryCache::new(contract_code_cache_size),
             )),
         });
 
@@ -122,7 +123,7 @@ impl ServerContext {
 pub struct CompiledCodeCache {
     pub local_cache: std::sync::Arc<
         futures_locks::RwLock<
-            cache::LruMemoryCache<
+            crate::cache::LruMemoryCache<
                 near_primitives::hash::CryptoHash,
                 near_vm_runner::logic::CompiledContract,
             >,
