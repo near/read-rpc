@@ -69,7 +69,6 @@ pub async fn validators(
     crate::metrics::VALIDATORS_REQUESTS_TOTAL.inc();
     // Latest epoch validators fetches from the Near RPC node
     if let near_primitives::types::EpochReference::Latest = &request.epoch_reference {
-        crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
         let validator_info = data.near_rpc_client.call(request).await?;
         return Ok(
             near_jsonrpc_primitives::types::validator::RpcValidatorResponse { validator_info },
@@ -142,13 +141,6 @@ pub async fn protocol_config(
         params
     );
     crate::metrics::PROTOCOL_CONFIG_REQUESTS_TOTAL.inc();
-
-    match params.block_reference {
-        near_primitives::types::BlockReference::Finality(_) => {
-            crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
-        }
-        _ => {}
-    }
 
     let config_view = protocol_config_call(&data, params.block_reference.clone()).await;
 
