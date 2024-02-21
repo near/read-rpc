@@ -269,10 +269,12 @@ async fn protocol_config_call(
             }
         })?;
 
-    let store = near_parameters::RuntimeConfigStore::for_chain_id(&data.genesis_config.chain_id);
+    let store = near_parameters::RuntimeConfigStore::for_chain_id(
+        &data.genesis_info.genesis_config.chain_id,
+    );
     let runtime_config = store.get_config(block.latest_protocol_version);
     let protocol_config = near_chain_configs::ProtocolConfig {
-        genesis_config: data.genesis_config.clone(),
+        genesis_config: data.genesis_info.genesis_config.clone(),
         runtime_config: near_parameters::RuntimeConfig {
             fees: runtime_config.fees.clone(),
             wasm_config: runtime_config.wasm_config.clone(),
