@@ -13,6 +13,21 @@ pub struct CacheBlock {
     pub epoch_id: near_primitives::hash::CryptoHash,
 }
 
+impl From<near_primitives::views::BlockView> for CacheBlock {
+    fn from(block: near_primitives::views::BlockView) -> Self {
+        Self {
+            block_hash: block.header.hash,
+            block_height: block.header.height,
+            block_timestamp: block.header.timestamp,
+            gas_price: block.header.gas_price,
+            latest_protocol_version: block.header.latest_protocol_version,
+            chunks_included: block.header.chunks_included,
+            state_root: block.header.prev_state_root,
+            epoch_id: block.header.epoch_id,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct FinalBlockInfo {
     pub final_block_cache: CacheBlock,

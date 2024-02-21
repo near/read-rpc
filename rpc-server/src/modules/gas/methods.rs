@@ -14,12 +14,9 @@ pub async fn gas_price(
     crate::metrics::GAS_PRICE_REQUESTS_TOTAL.inc();
     let block_reference = match params.block_id.clone() {
         Some(block_id) => near_primitives::types::BlockReference::BlockId(block_id),
-        None => {
-            crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
-            near_primitives::types::BlockReference::Finality(
-                near_primitives::types::Finality::Final,
-            )
-        }
+        None => near_primitives::types::BlockReference::Finality(
+            near_primitives::types::Finality::Final,
+        ),
     };
     let cache_block = gas_price_call(&data, block_reference).await;
 

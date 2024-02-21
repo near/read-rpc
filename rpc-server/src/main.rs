@@ -1,5 +1,4 @@
-use crate::modules::blocks::FinalBlockInfo;
-use crate::utils::{gigabytes_to_bytes, update_final_block_height_regularly};
+use crate::utils::update_final_block_height_regularly;
 use jsonrpc_v2::{Data, Server};
 
 #[macro_use]
@@ -31,96 +30,25 @@ async fn main() -> anyhow::Result<()> {
         rpc_server_config.general.referer_header_value.clone(),
     )?;
 
-    let limit_memory_cache_in_bytes =
-        if let Some(limit_memory_cache) = rpc_server_config.general.limit_memory_cache {
-            Some(gigabytes_to_bytes(limit_memory_cache).await)
-        } else {
-            None
-        };
-    let reserved_memory_in_bytes =
-        gigabytes_to_bytes(rpc_server_config.general.reserved_memory).await;
-    let block_cache_size_in_bytes =
-        gigabytes_to_bytes(rpc_server_config.general.block_cache_size).await;
+    let server_port = rpc_server_config.general.server_port;
 
-    let contract_code_cache_size = utils::calculate_contract_code_cache_sizes(
-        reserved_memory_in_bytes,
-        block_cache_size_in_bytes,
-        limit_memory_cache_in_bytes,
-    )
-    .await;
+    let server_context =
+        config::ServerContext::init(rpc_server_config.clone(), near_rpc_client.clone()).await?;
 
-    let blocks_cache = std::sync::Arc::new(futures_locks::RwLock::new(cache::LruMemoryCache::new(
-        block_cache_size_in_bytes,
-    )));
-
-    let finale_block_info = std::sync::Arc::new(futures_locks::RwLock::new(
-        FinalBlockInfo::new(&near_rpc_client, &blocks_cache).await,
-    ));
-
-    let compiled_contract_code_cache = std::sync::Arc::new(config::CompiledCodeCache {
-        local_cache: std::sync::Arc::new(futures_locks::RwLock::new(cache::LruMemoryCache::new(
-            contract_code_cache_size,
-        ))),
-    });
-    let contract_code_cache = std::sync::Arc::new(futures_locks::RwLock::new(
-        cache::LruMemoryCache::new(contract_code_cache_size),
-    ));
-
-    tracing::info!("Get genesis config...");
-    let genesis_config = near_rpc_client
-        .call(near_jsonrpc_client::methods::EXPERIMENTAL_genesis_config::RpcGenesisConfigRequest)
-        .await?;
-    let lake_config = rpc_server_config
-        .lake_config
-        .lake_config(
-            finale_block_info
-                .read()
-                .await
-                .final_block_cache
-                .block_height,
-        )
-        .await?;
-    let lake_s3_client = rpc_server_config.lake_config.lake_s3_client().await;
-
-    #[cfg(feature = "scylla_db")]
-    let db_manager =
-        database::prepare_db_manager::<database::scylladb::rpc_server::ScyllaDBManager>(
-            &rpc_server_config.database,
-        )
-        .await?;
-
-    #[cfg(all(feature = "postgres_db", not(feature = "scylla_db")))]
-    let db_manager = database::prepare_db_manager::<
-        database::postgres::rpc_server::PostgresDBManager,
-    >(&rpc_server_config.database)
-    .await?;
-
-    let state = config::ServerContext::new(
-        lake_s3_client,
-        db_manager,
-        near_rpc_client.clone(),
-        rpc_server_config.lake_config.aws_bucket_name.clone(),
-        genesis_config,
-        std::sync::Arc::clone(&blocks_cache),
-        std::sync::Arc::clone(&finale_block_info),
-        compiled_contract_code_cache,
-        contract_code_cache,
-        rpc_server_config.general.max_gas_burnt,
-        rpc_server_config.general.shadow_data_consistency_rate,
-    );
-
+    let blocks_cache = std::sync::Arc::clone(&server_context.blocks_cache);
+    let final_block_info = std::sync::Arc::clone(&server_context.final_block_info);
     tokio::spawn(async move {
         update_final_block_height_regularly(
             blocks_cache,
-            finale_block_info,
-            lake_config,
+            final_block_info,
+            rpc_server_config,
             near_rpc_client,
         )
         .await
     });
 
     let rpc = Server::new()
-        .with_data(Data::new(state))
+        .with_data(Data::new(server_context))
         .with_method("query", modules::queries::methods::query)
         .with_method(
             "view_state_paginated",
@@ -192,10 +120,7 @@ async fn main() -> anyhow::Result<()> {
             )
             .service(metrics::get_metrics)
     })
-    .bind(format!(
-        "0.0.0.0:{:0>5}",
-        rpc_server_config.general.server_port
-    ))?
+    .bind(format!("0.0.0.0:{:0>5}", server_port))?
     .run()
     .await?;
 
