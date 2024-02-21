@@ -111,7 +111,7 @@ impl ScyllaStorageManager for ScyllaDBManager {
             // ref: https://github.com/near/near-indexer-for-explorer/issues/84
             get_transaction_by_hash: Self::prepare_read_query(
                 &scylla_db_session,
-                "SELECT transaction_details FROM tx_indexer_cache.transactions_details WHERE transaction_hash = ? LIMIT 1",
+                "SELECT transaction_details FROM tx_indexer.transactions_details WHERE transaction_hash = ? LIMIT 1",
             ).await?,
             get_indexing_transaction_by_hash: Self::prepare_read_query(
                 &scylla_db_session,

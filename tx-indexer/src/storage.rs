@@ -1,5 +1,6 @@
-use crate::storage::base::TxCollectingStorage;
 use futures::StreamExt;
+
+pub const STORAGE: &str = "storage_tx";
 
 pub struct HashStorageWithDB {
     db_manager: std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
@@ -37,7 +38,6 @@ impl HashStorageWithDB {
     }
 
     /// Init storage with restore transactions with receipts after interruption
-    #[allow(unused)]
     pub(crate) async fn init_with_restore(
         db_manager: std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
         start_block_height: u64,
@@ -183,11 +183,11 @@ impl HashStorageWithDB {
         }
         Ok(())
     }
-}
 
-#[async_trait::async_trait]
-impl TxCollectingStorage for HashStorageWithDB {
-    async fn restore_transaction_by_receipt_id(&self, receipt_id: &str) -> anyhow::Result<()> {
+    pub(crate) async fn restore_transaction_by_receipt_id(
+        &self,
+        receipt_id: &str,
+    ) -> anyhow::Result<()> {
         if let Ok(transaction_details) = self
             .db_manager
             .get_transaction_by_receipt_id(receipt_id)
@@ -203,7 +203,7 @@ impl TxCollectingStorage for HashStorageWithDB {
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
-    async fn push_receipt_to_watching_list(
+    pub(crate) async fn push_receipt_to_watching_list(
         &self,
         receipt_id: String,
         transaction_key: readnode_primitives::TransactionKey,
@@ -276,7 +276,7 @@ impl TxCollectingStorage for HashStorageWithDB {
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
-    async fn set_tx(
+    pub(crate) async fn set_tx(
         &self,
         transaction_details: readnode_primitives::CollectingTransactionDetails,
     ) -> anyhow::Result<()> {
@@ -331,7 +331,7 @@ impl TxCollectingStorage for HashStorageWithDB {
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
-    async fn get_transaction_hash_by_receipt_id(
+    pub(crate) async fn get_transaction_hash_by_receipt_id(
         &self,
         receipt_id: &str,
     ) -> anyhow::Result<readnode_primitives::TransactionKey> {
@@ -348,7 +348,7 @@ impl TxCollectingStorage for HashStorageWithDB {
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
-    async fn transactions_to_save(
+    pub(crate) async fn transactions_to_save(
         &self,
     ) -> anyhow::Result<Vec<readnode_primitives::CollectingTransactionDetails>> {
         let mut transactions = vec![];
@@ -368,7 +368,7 @@ impl TxCollectingStorage for HashStorageWithDB {
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
-    async fn push_outcome_and_receipt(
+    pub(crate) async fn push_outcome_and_receipt(
         &self,
         transaction_key: &readnode_primitives::TransactionKey,
         indexer_execution_outcome_with_receipt: near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
