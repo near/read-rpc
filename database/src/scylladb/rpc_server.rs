@@ -22,6 +22,8 @@ pub struct ScyllaDBManager {
     get_account_access_keys: PreparedStatement,
     get_receipt: PreparedStatement,
     get_transaction_by_hash: PreparedStatement,
+    get_indexing_transaction_by_hash: PreparedStatement,
+    get_indexing_transaction_receipts: PreparedStatement,
     get_stored_at_block_height_and_shard_id_by_block_height: PreparedStatement,
     get_validators_by_epoch_id: PreparedStatement,
     get_validators_by_end_block_height: PreparedStatement,
@@ -109,9 +111,16 @@ impl ScyllaStorageManager for ScyllaDBManager {
             // ref: https://github.com/near/near-indexer-for-explorer/issues/84
             get_transaction_by_hash: Self::prepare_read_query(
                 &scylla_db_session,
-                "SELECT transaction_details FROM tx_indexer.transactions_details WHERE transaction_hash = ? LIMIT 1",
+                "SELECT transaction_details FROM tx_indexer_cache.transactions_details WHERE transaction_hash = ? LIMIT 1",
             ).await?,
-
+            get_indexing_transaction_by_hash: Self::prepare_read_query(
+                &scylla_db_session,
+                "SELECT transaction_details FROM tx_indexer_cache.transactions WHERE transaction_hash = ? LIMIT 1",
+            ).await?,
+            get_indexing_transaction_receipts: Self::prepare_read_query(
+                &scylla_db_session,
+                "SELECT receipt, outcome FROM tx_indexer_cache.receipts_outcomes WHERE block_height = ? AND transaction_hash = ?"
+            ).await?,
             get_stored_at_block_height_and_shard_id_by_block_height: Self::prepare_read_query(
                 &scylla_db_session,
                 "SELECT stored_at_block_height, shard_id FROM state_indexer.chunks WHERE block_height = ?",
@@ -419,6 +428,20 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         &self,
         transaction_hash: &str,
     ) -> anyhow::Result<readnode_primitives::TransactionDetails> {
+        if let Ok(transaction) = self.get_indexed_transaction_by_hash(transaction_hash).await {
+            Ok(transaction)
+        } else {
+            self.get_indexing_transaction_by_hash(transaction_hash)
+                .await
+        }
+    }
+
+    /// Returns the readnode_primitives::TransactionDetails
+    /// from tx_indexer.transactions_details at the given transaction hash
+    async fn get_indexed_transaction_by_hash(
+        &self,
+        transaction_hash: &str,
+    ) -> anyhow::Result<readnode_primitives::TransactionDetails> {
         let (data_value,) = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_transaction_by_hash,
@@ -431,6 +454,48 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         Ok(readnode_primitives::TransactionDetails::try_from_slice(
             &data_value,
         )?)
+    }
+
+    /// Returns the readnode_primitives::TransactionDetails
+    /// from tx_indexer_cache.transactions at the given transaction hash
+    async fn get_indexing_transaction_by_hash(
+        &self,
+        transaction_hash: &str,
+    ) -> anyhow::Result<readnode_primitives::TransactionDetails> {
+        let (data_value,) = Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.get_indexing_transaction_by_hash,
+            (transaction_hash.to_string(),),
+        )
+        .await?
+        .single_row()?
+        .into_typed::<(Vec<u8>,)>()?;
+        let mut transaction_details =
+            readnode_primitives::CollectingTransactionDetails::try_from_slice(&data_value)?;
+
+        let mut rows_stream = self
+            .scylla_session
+            .execute_iter(
+                self.get_indexing_transaction_receipts.clone(),
+                (
+                    num_bigint::BigInt::from(transaction_details.block_height),
+                    transaction_hash.to_string(),
+                ),
+            )
+            .await?
+            .into_typed::<(Vec<u8>, Vec<u8>)>();
+        while let Some(next_row_res) = rows_stream.next().await {
+            let (receipt, outcome) = next_row_res?;
+            let receipt = near_primitives::views::ReceiptView::try_from_slice(&receipt)?;
+            let execution_outcome =
+                near_primitives::views::ExecutionOutcomeWithIdView::try_from_slice(&outcome)?;
+            transaction_details.receipts.push(receipt);
+            transaction_details
+                .execution_outcomes
+                .push(execution_outcome);
+        }
+
+        Ok(transaction_details.into())
     }
 
     /// Returns the block height and shard id by the given block height

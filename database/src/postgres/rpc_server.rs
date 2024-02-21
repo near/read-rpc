@@ -276,6 +276,18 @@ impl crate::ReaderDbManager for PostgresDBManager {
         &self,
         transaction_hash: &str,
     ) -> anyhow::Result<readnode_primitives::TransactionDetails> {
+        if let Ok(transaction) = self.get_indexed_transaction_by_hash(transaction_hash).await {
+            Ok(transaction)
+        } else {
+            self.get_indexing_transaction_by_hash(transaction_hash)
+                .await
+        }
+    }
+
+    async fn get_indexed_transaction_by_hash(
+        &self,
+        transaction_hash: &str,
+    ) -> anyhow::Result<readnode_primitives::TransactionDetails> {
         let transaction_data = crate::models::TransactionDetail::get_transaction_by_hash(
             Self::get_connection(&self.pg_pool).await?,
             transaction_hash,
@@ -284,6 +296,42 @@ impl crate::ReaderDbManager for PostgresDBManager {
         Ok(readnode_primitives::TransactionDetails::try_from_slice(
             &transaction_data,
         )?)
+    }
+
+    async fn get_indexing_transaction_by_hash(
+        &self,
+        transaction_hash: &str,
+    ) -> anyhow::Result<readnode_primitives::TransactionDetails> {
+        let data_value = crate::models::TransactionCache::get_transaction_by_hash(
+            Self::get_connection(&self.pg_pool).await?,
+            transaction_hash,
+        )
+        .await?;
+        let mut transaction_details =
+            readnode_primitives::CollectingTransactionDetails::try_from_slice(&data_value)?;
+
+        let result = crate::models::ReceiptOutcome::get_receipt_outcome(
+            Self::get_connection(&self.pg_pool).await?,
+            transaction_details.block_height,
+            transaction_hash,
+        )
+        .await?;
+        for receipt_outcome in result {
+            let receipt =
+                near_primitives::views::ReceiptView::try_from_slice(&receipt_outcome.receipt)
+                    .expect("Failed to deserialize receipt");
+            let execution_outcome =
+                near_primitives::views::ExecutionOutcomeWithIdView::try_from_slice(
+                    &receipt_outcome.outcome,
+                )
+                .expect("Failed to deserialize execution outcome");
+            transaction_details.receipts.push(receipt);
+            transaction_details
+                .execution_outcomes
+                .push(execution_outcome)
+        }
+
+        Ok(transaction_details.into())
     }
 
     async fn get_block_by_height_and_shard_id(
