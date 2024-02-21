@@ -1,6 +1,8 @@
 use crate::modules::blocks::{CacheBlock, FinalBlockInfo};
 use futures::executor::block_on;
 
+// Struct to store genesis_config and genesis_block in the server context
+// Fetch once genesis info on start of the server and put it in the context
 #[derive(Debug, Clone)]
 pub struct GenesisInfo {
     pub genesis_config: near_chain_configs::GenesisConfig,
@@ -102,8 +104,6 @@ impl ServerContext {
             database::postgres::rpc_server::PostgresDBManager,
         >(&rpc_server_config.database)
         .await?;
-
-        // let genesis_info = GenesisInfo::get(&near_rpc_client).await;
 
         Ok(Self {
             s3_client: rpc_server_config.lake_config.lake_s3_client().await,

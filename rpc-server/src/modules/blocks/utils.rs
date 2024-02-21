@@ -102,6 +102,8 @@ pub async fn fetch_block_from_cache_or_get(
         }
         near_primitives::types::BlockReference::SyncCheckpoint(_) => {
             // Return genesis_block_cache for all SyncCheckpoint
+            // for archive node both Genesis and EarliestAvailable
+            // are returning the genesis block
             Some(data.genesis_info.genesis_block_cache)
         }
     };
