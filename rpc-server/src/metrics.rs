@@ -578,6 +578,14 @@ lazy_static! {
     // end RECEIPT
 }
 
+lazy_static! {
+    // ARCHIVAL PROXY CALL COUNTERS
+    pub(crate) static ref ARCHIVAL_PROXY_QUERY_VIEW_STATE_WITH_INCLUDE_PROOFS: IntCounter = try_create_int_counter(
+        "archive_proxy_query_view_state_with_include_proofs",
+        "Total number of the request to the archive nodes query_view_state with include_proofs"
+    ).unwrap();
+}
+
 /// Exposes prometheus metrics
 #[get("/metrics")]
 pub(crate) async fn get_metrics() -> impl Responder {
