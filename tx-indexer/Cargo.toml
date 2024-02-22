@@ -10,7 +10,6 @@ license.workspace = true
 [dependencies]
 actix-web = "4.2.1"
 anyhow = "1.0.70"
-async-trait = "0.1.66"
 clap = { version = "3.2.22", features = ["color", "derive", "env"] }
 futures = "0.3.5"
 futures-locks = "0.7.1"

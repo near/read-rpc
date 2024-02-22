@@ -132,19 +132,19 @@ async fn handle_streamer_message(
     blocks_cache: std::sync::Arc<
         futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>,
     >,
-    finale_block_info: std::sync::Arc<futures_locks::RwLock<FinalBlockInfo>>,
+    final_block_info: std::sync::Arc<futures_locks::RwLock<FinalBlockInfo>>,
     near_rpc_client: &JsonRpcClient,
 ) -> anyhow::Result<()> {
     let block: CacheBlock = streamer_message.block.into();
 
-    if finale_block_info.read().await.final_block_cache.epoch_id != block.epoch_id {
+    if final_block_info.read().await.final_block_cache.epoch_id != block.epoch_id {
         tracing::info!("New epoch started: {:?}", block.epoch_id);
-        finale_block_info.write().await.current_protocol_config =
+        final_block_info.write().await.current_protocol_config =
             get_current_protocol_config(near_rpc_client).await?;
-        finale_block_info.write().await.current_validators =
+        final_block_info.write().await.current_validators =
             get_current_validators(near_rpc_client).await?;
     }
-    finale_block_info.write().await.final_block_cache = block;
+    final_block_info.write().await.final_block_cache = block;
     blocks_cache.write().await.put(block.block_height, block);
     crate::metrics::FINAL_BLOCK_HEIGHT.set(i64::try_from(block.block_height)?);
     Ok(())
@@ -154,20 +154,14 @@ pub async fn update_final_block_height_regularly(
     blocks_cache: std::sync::Arc<
         futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>,
     >,
-    finale_block_info: std::sync::Arc<futures_locks::RwLock<FinalBlockInfo>>,
+    final_block_info: std::sync::Arc<futures_locks::RwLock<FinalBlockInfo>>,
     rpc_server_config: configuration::RpcServerConfig,
     near_rpc_client: JsonRpcClient,
 ) -> anyhow::Result<()> {
     tracing::info!("Task to get and store final block in the cache started");
     let lake_config = rpc_server_config
         .lake_config
-        .lake_config(
-            finale_block_info
-                .read()
-                .await
-                .final_block_cache
-                .block_height,
-        )
+        .lake_config(final_block_info.read().await.final_block_cache.block_height)
         .await?;
     let (sender, stream) = near_lake_framework::streamer(lake_config);
     let mut handlers = tokio_stream::wrappers::ReceiverStream::new(stream)
@@ -175,7 +169,7 @@ pub async fn update_final_block_height_regularly(
             handle_streamer_message(
                 streamer_message,
                 std::sync::Arc::clone(&blocks_cache),
-                std::sync::Arc::clone(&finale_block_info),
+                std::sync::Arc::clone(&final_block_info),
                 &near_rpc_client,
             )
         })

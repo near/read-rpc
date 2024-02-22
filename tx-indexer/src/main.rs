@@ -56,7 +56,7 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!(target: INDEXER, "Creating hash storage...");
     let tx_collecting_storage = std::sync::Arc::new(
-        storage::database::HashStorageWithDB::init_with_restore(
+        storage::HashStorageWithDB::init_with_restore(
             db_manager.clone(),
             start_block_height,
             indexer_config.general.cache_restore_blocks_range,
@@ -112,7 +112,7 @@ async fn main() -> anyhow::Result<()> {
 async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
-    tx_collecting_storage: &std::sync::Arc<impl storage::base::TxCollectingStorage>,
+    tx_collecting_storage: &std::sync::Arc<storage::HashStorageWithDB>,
     indexer_config: configuration::TxIndexerConfig,
     stats: std::sync::Arc<tokio::sync::RwLock<metrics::Stats>>,
 ) -> anyhow::Result<u64> {

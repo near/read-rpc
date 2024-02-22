@@ -46,11 +46,10 @@ impl CollectingTransactionDetails {
         TransactionKey::new(self.transaction.hash.clone().to_string(), self.block_height)
     }
 
-    pub fn to_final_transaction_result(&self) -> anyhow::Result<TransactionDetails> {
-        let mut outcomes = self.execution_outcomes.clone();
+    pub fn final_status(&self) -> Option<views::FinalExecutionStatus> {
         let mut looking_for_id = self.transaction.hash;
-        let num_outcomes = outcomes.len();
-        let finale_status = outcomes.iter().find_map(|outcome_with_id| {
+        let num_outcomes = self.execution_outcomes.len();
+        self.execution_outcomes.iter().find_map(|outcome_with_id| {
             if outcome_with_id.id == looking_for_id {
                 match &outcome_with_id.outcome.status {
                     views::ExecutionStatusView::Unknown if num_outcomes == 1 => {
@@ -73,8 +72,12 @@ impl CollectingTransactionDetails {
             } else {
                 None
             }
-        });
-        match finale_status {
+        })
+    }
+
+    pub fn to_final_transaction_result(&self) -> anyhow::Result<TransactionDetails> {
+        let mut outcomes = self.execution_outcomes.clone();
+        match self.final_status() {
             Some(status) => {
                 let receipts_outcome = outcomes.split_off(1);
                 let transaction_outcome = outcomes.pop().unwrap();
@@ -87,6 +90,29 @@ impl CollectingTransactionDetails {
                 })
             }
             None => anyhow::bail!("Results should resolve to a final outcome"),
+        }
+    }
+}
+
+impl From<CollectingTransactionDetails> for TransactionDetails {
+    fn from(tx: CollectingTransactionDetails) -> Self {
+        let mut outcomes = tx.execution_outcomes.clone();
+        let receipts_outcome = outcomes.split_off(1);
+        let transaction_outcome = outcomes.pop().unwrap();
+        // Execution status defined by nearcore/chain.rs:get_final_transaction_result
+        // FinalExecutionStatus::NotStarted - the tx is not converted to the receipt yet
+        // FinalExecutionStatus::Started - we have at least 1 receipt, but the first leaf receipt_id (using dfs) hasn't finished the execution
+        // FinalExecutionStatus::Failure - the result of the first leaf receipt_id
+        // FinalExecutionStatus::SuccessValue - the result of the first leaf receipt_id
+        let status = tx
+            .final_status()
+            .unwrap_or(views::FinalExecutionStatus::NotStarted);
+        Self {
+            receipts: tx.receipts,
+            receipts_outcome,
+            status,
+            transaction: tx.transaction,
+            transaction_outcome,
         }
     }
 }

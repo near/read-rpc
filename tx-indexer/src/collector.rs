@@ -1,4 +1,3 @@
-use crate::storage::base::TxCollectingStorage;
 use futures::{
     future::{join_all, try_join_all},
     StreamExt,
@@ -21,7 +20,7 @@ const PROBLEMATIC_BLOCKS: [near_indexer_primitives::CryptoHash; 2] = [
 pub(crate) async fn index_transactions(
     streamer_message: &near_indexer_primitives::StreamerMessage,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
-    tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
+    tx_collecting_storage: &std::sync::Arc<crate::storage::HashStorageWithDB>,
     indexer_config: &configuration::TxIndexerConfig,
 ) -> anyhow::Result<()> {
     extract_transactions_to_collect(
@@ -61,7 +60,7 @@ pub(crate) async fn index_transactions(
 async fn extract_transactions_to_collect(
     streamer_message: &near_indexer_primitives::StreamerMessage,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
-    tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
+    tx_collecting_storage: &std::sync::Arc<crate::storage::HashStorageWithDB>,
     indexer_config: &configuration::TxIndexerConfig,
 ) -> anyhow::Result<()> {
     let block_height = streamer_message.block.header.height;
@@ -95,7 +94,7 @@ async fn new_transaction_details_to_collecting_pool(
     block_height: u64,
     shard_id: u64,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
-    tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
+    tx_collecting_storage: &std::sync::Arc<crate::storage::HashStorageWithDB>,
     indexer_config: &configuration::TxIndexerConfig,
 ) -> anyhow::Result<()> {
     if !indexer_config.tx_should_be_indexed(transaction) {
@@ -147,7 +146,7 @@ async fn collect_receipts_and_outcomes(
     chain_id: &configuration::ChainId,
     streamer_message: &near_indexer_primitives::StreamerMessage,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
-    tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
+    tx_collecting_storage: &std::sync::Arc<crate::storage::HashStorageWithDB>,
 ) -> anyhow::Result<()> {
     let block_height = streamer_message.block.header.height;
     let block_hash = streamer_message.block.header.hash;
@@ -172,7 +171,7 @@ async fn collect_receipts_and_outcomes(
 async fn process_shard(
     chain_id: &configuration::ChainId,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
-    tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
+    tx_collecting_storage: &std::sync::Arc<crate::storage::HashStorageWithDB>,
     block_height: u64,
     block_hash: near_indexer_primitives::CryptoHash,
     shard: &near_indexer_primitives::IndexerShard,
@@ -202,7 +201,7 @@ async fn process_shard(
 async fn process_receipt_execution_outcome(
     chain_id: &configuration::ChainId,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
-    tx_collecting_storage: &std::sync::Arc<impl TxCollectingStorage>,
+    tx_collecting_storage: &std::sync::Arc<crate::storage::HashStorageWithDB>,
     block_height: u64,
     block_hash: near_indexer_primitives::CryptoHash,
     shard_id: u64,
