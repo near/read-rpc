@@ -46,7 +46,7 @@ impl CollectingTransactionDetails {
         TransactionKey::new(self.transaction.hash.clone().to_string(), self.block_height)
     }
 
-    pub fn finale_status(&self) -> Option<views::FinalExecutionStatus> {
+    pub fn final_status(&self) -> Option<views::FinalExecutionStatus> {
         let mut looking_for_id = self.transaction.hash;
         let num_outcomes = self.execution_outcomes.len();
         self.execution_outcomes.iter().find_map(|outcome_with_id| {
@@ -77,7 +77,7 @@ impl CollectingTransactionDetails {
 
     pub fn to_final_transaction_result(&self) -> anyhow::Result<TransactionDetails> {
         let mut outcomes = self.execution_outcomes.clone();
-        match self.finale_status() {
+        match self.final_status() {
             Some(status) => {
                 let receipts_outcome = outcomes.split_off(1);
                 let transaction_outcome = outcomes.pop().unwrap();
@@ -105,7 +105,7 @@ impl From<CollectingTransactionDetails> for TransactionDetails {
         // FinalExecutionStatus::Failure - the result of the first leaf receipt_id
         // FinalExecutionStatus::SuccessValue - the result of the first leaf receipt_id
         let status = tx
-            .finale_status()
+            .final_status()
             .unwrap_or(views::FinalExecutionStatus::NotStarted);
         Self {
             receipts: tx.receipts,

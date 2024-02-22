@@ -51,6 +51,20 @@ impl crate::BaseDbManager for ScyllaDBManager {
 
 #[async_trait::async_trait]
 impl ScyllaStorageManager for ScyllaDBManager {
+    async fn create_tables(scylla_db_session: &scylla::Session) -> anyhow::Result<()> {
+        // Creating index in the tx_indexer_cache.transactions
+        // for faster search by transaction_hash to avoid ALLOW FILTERING
+        scylla_db_session
+            .query(
+                "
+                CREATE INDEX IF NOT EXISTS transaction_hash_key ON tx_indexer_cache.transactions (transaction_hash);
+            ",
+                &[],
+            )
+            .await?;
+        Ok(())
+    }
+
     async fn prepare(
         scylla_db_session: std::sync::Arc<scylla::Session>,
     ) -> anyhow::Result<Box<Self>> {
