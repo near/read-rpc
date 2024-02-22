@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased](https://github.com/near/read-rpc/compare/v0.1.0...HEAD)
 
+### Added
+- Added support for `SyncCheckpoint` in the `block` method for better block handling and synchronization.
+
+### Changed
+- Enhanced the tx method to show in-progress transaction status, avoiding `UNKNOWN_TRANSACTION` responses and providing more accurate feedback.
+
+### Removed
+- Dropped the `SYNC_CHECKPOINT_REQUESTS_TOTAL` metric for redundancy.
+- Removed in-memory cache for `tx-indexer` to optimize resource usage and streamline the process.
+
 ## [0.1.0](https://github.com/near/read-rpc/releases/tag/v0.1.0)
 
 * nearcore v1.36.0
