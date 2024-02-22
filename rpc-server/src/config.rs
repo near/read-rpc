@@ -10,7 +10,11 @@ pub struct GenesisInfo {
 }
 
 impl GenesisInfo {
-    pub async fn get(near_rpc_client: &crate::utils::JsonRpcClient) -> Self {
+    pub async fn get(
+        near_rpc_client: &crate::utils::JsonRpcClient,
+        s3_client: &near_lake_framework::s3_fetchers::LakeS3Client,
+        s3_bucket_name: &str,
+    ) -> Self {
         tracing::info!("Get genesis config...");
         let genesis_config = near_rpc_client
             .call(
@@ -18,14 +22,15 @@ impl GenesisInfo {
             )
             .await
             .expect("Error to get genesis config");
-        let genesis_block = near_rpc_client
-            .archival_call(near_jsonrpc_client::methods::block::RpcBlockRequest {
-                block_reference: near_primitives::types::BlockReference::BlockId(
-                    near_primitives::types::BlockId::Height(genesis_config.genesis_height),
-                ),
-            })
-            .await
-            .expect("Error to get genesis block");
+
+        let genesis_block = near_lake_framework::s3_fetchers::fetch_block(
+            s3_client,
+            s3_bucket_name,
+            genesis_config.genesis_height,
+        )
+        .await
+        .expect("Error to get genesis block");
+
         Self {
             genesis_config,
             genesis_block_cache: genesis_block.into(),
@@ -93,6 +98,8 @@ impl ServerContext {
             FinalBlockInfo::new(&near_rpc_client, &blocks_cache).await,
         ));
 
+        let s3_client = rpc_server_config.lake_config.lake_s3_client().await;
+
         #[cfg(feature = "scylla_db")]
         let db_manager = database::prepare_db_manager::<
             database::scylladb::rpc_server::ScyllaDBManager,
@@ -105,10 +112,17 @@ impl ServerContext {
         >(&rpc_server_config.database)
         .await?;
 
+        let genesis_info = GenesisInfo::get(
+            &near_rpc_client,
+            &s3_client,
+            &rpc_server_config.lake_config.aws_bucket_name,
+        )
+        .await;
+
         Ok(Self {
-            s3_client: rpc_server_config.lake_config.lake_s3_client().await,
+            s3_client,
             db_manager: std::sync::Arc::new(Box::new(db_manager)),
-            genesis_info: GenesisInfo::get(&near_rpc_client).await,
+            genesis_info,
             near_rpc_client,
             s3_bucket_name: rpc_server_config.lake_config.aws_bucket_name.clone(),
             blocks_cache,

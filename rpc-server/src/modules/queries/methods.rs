@@ -65,10 +65,23 @@ async fn query_call(
             crate::metrics::QUERY_VIEW_STATE_REQUESTS_TOTAL.inc();
             if include_proof {
                 // TODO: We can calculate the proof for state only on regular or archival nodes.
-                // After indexing the epochs and validators,
-                // we will be able to separate proxies queries to regular and archival nodes.
-                // For now we will proxy all requests with `include_proof` to archival nodes.
-                return Ok(data.near_rpc_client.archival_call(params).await?);
+                let final_block_info = data.final_block_info.read().await;
+                // `expected_earliest_available_block` calculated by formula:
+                // `final_block_height` - `node_epoch_count` * `epoch_length`
+                // Now near store 5 epochs, it can be changed in the future
+                // epoch_length = 43200 blocks
+                let expected_earliest_available_block =
+                    final_block_info.final_block_cache.block_height
+                        - 5 * data.genesis_info.genesis_config.epoch_length;
+                return if block.block_height > expected_earliest_available_block {
+                    // Proxy to regular rpc if the block is available
+                    Ok(data.near_rpc_client.call(params).await?)
+                } else {
+                    // Increase the QUERY_VIEW_STATE_INCLUDE_PROOFS metric if we proxy to archival rpc
+                    crate::metrics::ARCHIVAL_PROXY_QUERY_VIEW_STATE_WITH_INCLUDE_PROOFS.inc();
+                    // Proxy to archival rpc if the block garbage collected
+                    Ok(data.near_rpc_client.archival_call(params).await?)
+                };
             } else {
                 view_state(&data, block, &account_id, prefix.as_ref()).await
             }
