@@ -305,7 +305,7 @@ impl crate::ReaderDbManager for PostgresDBManager {
         )
         .await?;
         let mut transaction_details =
-            readnode_primitives::CollectingTransactionDetails::try_from_slice(&data_value)?;
+            borsh::from_slice::<readnode_primitives::CollectingTransactionDetails>(&data_value)?;
 
         let result = crate::models::ReceiptOutcome::get_receipt_outcome(
             Self::get_connection(&self.pg_pool).await?,
@@ -315,13 +315,10 @@ impl crate::ReaderDbManager for PostgresDBManager {
         .await?;
         for receipt_outcome in result {
             let receipt =
-                near_primitives::views::ReceiptView::try_from_slice(&receipt_outcome.receipt)
-                    .expect("Failed to deserialize receipt");
-            let execution_outcome =
-                near_primitives::views::ExecutionOutcomeWithIdView::try_from_slice(
-                    &receipt_outcome.outcome,
-                )
-                .expect("Failed to deserialize execution outcome");
+                borsh::from_slice::<near_primitives::views::ReceiptView>(&receipt_outcome.receipt)?;
+            let execution_outcome = borsh::from_slice::<
+                near_primitives::views::ExecutionOutcomeWithIdView,
+            >(&receipt_outcome.outcome)?;
             transaction_details.receipts.push(receipt);
             transaction_details
                 .execution_outcomes

@@ -477,7 +477,7 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         .single_row()?
         .into_typed::<(Vec<u8>,)>()?;
         let mut transaction_details =
-            readnode_primitives::CollectingTransactionDetails::try_from_slice(&data_value)?;
+            borsh::from_slice::<readnode_primitives::CollectingTransactionDetails>(&data_value)?;
 
         let mut rows_stream = self
             .scylla_session
@@ -492,9 +492,9 @@ impl crate::ReaderDbManager for ScyllaDBManager {
             .into_typed::<(Vec<u8>, Vec<u8>)>();
         while let Some(next_row_res) = rows_stream.next().await {
             let (receipt, outcome) = next_row_res?;
-            let receipt = near_primitives::views::ReceiptView::try_from_slice(&receipt)?;
+            let receipt = borsh::from_slice::<near_primitives::views::ReceiptView>(&receipt)?;
             let execution_outcome =
-                near_primitives::views::ExecutionOutcomeWithIdView::try_from_slice(&outcome)?;
+                borsh::from_slice::<near_primitives::views::ExecutionOutcomeWithIdView>(&outcome)?;
             transaction_details.receipts.push(receipt);
             transaction_details
                 .execution_outcomes
