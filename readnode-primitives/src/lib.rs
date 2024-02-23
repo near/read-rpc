@@ -171,6 +171,10 @@ pub type StateValue = Vec<u8>;
 pub struct BlockHeightShardId(pub u64, pub u64);
 pub struct QueryData<T: BorshDeserialize> {
     pub data: T,
+    // block_height and block_hash we return here represents the moment
+    // when the data was last updated in the database
+    // We used to return it in the `QueryResponse` but it was replaced with
+    // the logic that corresponds the logic of the `nearcore` RPC API
     pub block_height: near_indexer_primitives::types::BlockHeight,
     pub block_hash: CryptoHash,
 }
