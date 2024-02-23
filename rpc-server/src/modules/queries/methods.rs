@@ -258,8 +258,8 @@ async fn view_account(
         kind: near_jsonrpc_primitives::types::query::QueryResponseKind::ViewAccount(
             near_primitives::views::AccountView::from(account.data),
         ),
-        block_height: account.block_height,
-        block_hash: account.block_hash,
+        block_height: block.block_height,
+        block_hash: block.block_hash,
     })
 }
 
@@ -308,8 +308,8 @@ async fn view_code(
                 ),
             ),
         ),
-        block_height: contract.block_height,
-        block_hash: contract.block_hash,
+        block_height: block.block_height,
+        block_hash: block.block_hash,
     })
 }
 
@@ -352,8 +352,8 @@ async fn function_call(
                 logs: call_results.logs,
             },
         ),
-        block_height: call_results.block_height,
-        block_hash: call_results.block_hash,
+        block_height: block.block_height,
+        block_hash: block.block_hash,
     })
 }
 
@@ -387,9 +387,6 @@ async fn view_state(
 
     Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc_primitives::types::query::QueryResponseKind::ViewState(contract_state),
-        // We cannot return the block height and hash for the state, since different state keys
-        // can be from different blocks.
-        // We return the block height and hash for the requested block instead.
         block_height: block.block_height,
         block_hash: block.block_hash,
     })
@@ -428,8 +425,8 @@ async fn view_access_key(
         kind: near_jsonrpc_primitives::types::query::QueryResponseKind::AccessKey(
             near_primitives::views::AccessKeyView::from(access_key.data),
         ),
-        block_height: access_key.block_height,
-        block_hash: access_key.block_hash,
+        block_height: block.block_height,
+        block_hash: block.block_hash,
     })
 }
 
