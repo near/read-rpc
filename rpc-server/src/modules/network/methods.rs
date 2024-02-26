@@ -60,6 +60,15 @@ pub async fn status(
     })
 }
 
+pub async fn health(
+    data: Data<ServerContext>,
+    Params(_params): Params<serde_json::Value>,
+) -> Result<crate::health::RPCHealthStatusResponse, RPCError> {
+    // TODO: Improve to return error after implementing optimistic block
+    // see nearcore/chain/client/src/client_actor.rs:627 to get details
+    Ok(crate::health::RPCHealthStatusResponse::new(&data).await)
+}
+
 pub async fn network_info(
     Params(_params): Params<serde_json::Value>,
 ) -> Result<near_jsonrpc_primitives::types::network_info::RpcNetworkInfoResponse, RPCError> {

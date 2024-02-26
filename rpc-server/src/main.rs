@@ -80,6 +80,7 @@ async fn main() -> anyhow::Result<()> {
         )
         .with_method("gas_price", modules::gas::methods::gas_price)
         .with_method("status", modules::network::methods::status)
+        .with_method("health", modules::network::methods::health)
         .with_method(
             "light_client_proof",
             modules::clients::methods::light_client_proof,
