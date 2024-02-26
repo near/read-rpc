@@ -1,5 +1,12 @@
 use crate::modules::blocks::{CacheBlock, FinalBlockInfo};
 use futures::executor::block_on;
+use std::string::ToString;
+
+// TODO: Improve versioning in future.
+// For now, it's hardcoded and should be updated manually at each release..
+static NEARD_VERSION: &str = "1.36.0";
+static NEARD_BUILD: &str = "1.36.0";
+static RUSTC_VERSION: &str = "1.73.0";
 
 // Struct to store genesis_config and genesis_block in the server context
 // Fetch once genesis info on start of the server and put it in the context
@@ -40,22 +47,39 @@ impl GenesisInfo {
 
 #[derive(Clone)]
 pub struct ServerContext {
+    /// Lake s3 client
     pub s3_client: near_lake_framework::s3_fetchers::LakeS3Client,
+    /// Database manager
     pub db_manager: std::sync::Arc<Box<dyn database::ReaderDbManager + Sync + Send + 'static>>,
+    /// Genesis info include genesis_config and genesis_block
     pub genesis_info: GenesisInfo,
+    /// Near rpc client
     pub near_rpc_client: crate::utils::JsonRpcClient,
+    /// AWS s3 lake bucket name
     pub s3_bucket_name: String,
+    /// Blocks cache
     pub blocks_cache:
         std::sync::Arc<futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>>,
+    /// Final block info include final_block_cache and current_validators_info
     pub final_block_info: std::sync::Arc<futures_locks::RwLock<FinalBlockInfo>>,
+    /// Cache to store compiled contract codes
     pub compiled_contract_code_cache: std::sync::Arc<CompiledCodeCache>,
+    /// Cache to store contract codes
     pub contract_code_cache: std::sync::Arc<
         futures_locks::RwLock<
             crate::cache::LruMemoryCache<near_primitives::hash::CryptoHash, Vec<u8>>,
         >,
     >,
+    /// Max gas burnt for contract function call
     pub max_gas_burnt: near_primitives::types::Gas,
+    /// How many requests we should check for data consistency
     pub shadow_data_consistency_rate: f64,
+    /// Port of the server.
+    pub server_port: u16,
+    /// Timestamp of starting server.
+    pub boot_time_seconds: i64,
+    /// Binary version.
+    pub version: near_primitives::version::Version,
 }
 
 impl ServerContext {
@@ -131,6 +155,13 @@ impl ServerContext {
             contract_code_cache,
             max_gas_burnt: rpc_server_config.general.max_gas_burnt,
             shadow_data_consistency_rate: rpc_server_config.general.shadow_data_consistency_rate,
+            server_port: rpc_server_config.general.server_port,
+            boot_time_seconds: near_primitives::static_clock::StaticClock::utc().timestamp(),
+            version: near_primitives::version::Version {
+                version: NEARD_VERSION.to_string(),
+                build: NEARD_BUILD.to_string(),
+                rustc_version: RUSTC_VERSION.to_string(),
+            },
         })
     }
 }
