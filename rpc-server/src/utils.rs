@@ -208,8 +208,8 @@ pub(crate) async fn calculate_contract_code_cache_sizes(
         if limit >= available_memory {
             panic!(
                 "Not enough memory to run the server. Available memory: {}, required memory: {}",
-                crate::modules::network::friendly_memory_size_format(available_memory),
-                crate::modules::network::friendly_memory_size_format(limit),
+                crate::status::friendly_memory_size_format(available_memory),
+                crate::status::friendly_memory_size_format(limit),
             );
         } else {
             limit

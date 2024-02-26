@@ -1,53 +1,17 @@
 use crate::config::ServerContext;
 use crate::errors::RPCError;
 use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
-use crate::modules::network::{
-    clone_protocol_config, friendly_memory_size_format, parse_validator_request, StatusResponse,
-};
+use crate::modules::network::{clone_protocol_config, parse_validator_request};
 use jsonrpc_v2::{Data, Params};
-use sysinfo::{System, SystemExt};
 
 pub async fn status(
     data: Data<ServerContext>,
     Params(_params): Params<serde_json::Value>,
-) -> Result<StatusResponse, RPCError> {
-    let sys = System::new_all();
-    let total_memory = sys.total_memory();
-    let used_memory = sys.used_memory();
-    let blocks_cache = data.blocks_cache.read().await;
-    let contract_code_cache = data.contract_code_cache.read().await;
-    let compiled_contract_code_cache = data.compiled_contract_code_cache.local_cache.read().await;
-    let status = StatusResponse {
-        total_memory: friendly_memory_size_format(total_memory as usize),
-        used_memory: friendly_memory_size_format(used_memory as usize),
-        available_memory: friendly_memory_size_format((total_memory - used_memory) as usize),
-
-        blocks_in_cache: blocks_cache.len(),
-        max_blocks_cache_size: friendly_memory_size_format(blocks_cache.max_size()),
-        current_blocks_cache_size: friendly_memory_size_format(blocks_cache.current_size()),
-
-        contracts_codes_in_cache: contract_code_cache.len(),
-        max_contracts_codes_cache_size: friendly_memory_size_format(contract_code_cache.max_size()),
-        current_contracts_codes_cache_size: friendly_memory_size_format(
-            contract_code_cache.current_size(),
-        ),
-
-        compiled_contracts_codes_in_cache: compiled_contract_code_cache.len(),
-        max_compiled_contracts_codes_cache_size: friendly_memory_size_format(
-            compiled_contract_code_cache.max_size(),
-        ),
-        current_compiled_contracts_codes_cache_size: friendly_memory_size_format(
-            compiled_contract_code_cache.current_size(),
-        ),
-
-        final_block_height: data
-            .final_block_info
-            .read()
-            .await
-            .final_block_cache
-            .block_height,
-    };
-    Ok(status)
+) -> Result<near_primitives::views::StatusResponse, RPCError> {
+    Ok(data
+        .near_rpc_client
+        .call(near_jsonrpc_client::methods::status::RpcStatusRequest)
+        .await?)
 }
 
 pub async fn network_info(
