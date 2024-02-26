@@ -3,7 +3,7 @@ use actix_web::Responder;
 use sysinfo::{System, SystemExt};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct StatusResponse {
+pub struct RPCHealthStatusResponse {
     total_memory: String,
     used_memory: String,
     available_memory: String,
@@ -39,15 +39,15 @@ pub fn friendly_memory_size_format(memory_size_bytes: usize) -> String {
 }
 
 /// Rpc server status
-#[actix_web::get("/status")]
-pub(crate) async fn get_status(data: actix_web::web::Data<ServerContext>) -> impl Responder {
+#[actix_web::get("/health")]
+pub(crate) async fn get_health_status(data: actix_web::web::Data<ServerContext>) -> impl Responder {
     let sys = System::new_all();
     let total_memory = sys.total_memory();
     let used_memory = sys.used_memory();
     let blocks_cache = data.blocks_cache.read().await;
     let contract_code_cache = data.contract_code_cache.read().await;
     let compiled_contract_code_cache = data.compiled_contract_code_cache.local_cache.read().await;
-    let status = StatusResponse {
+    let status = RPCHealthStatusResponse {
         total_memory: friendly_memory_size_format(total_memory as usize),
         used_memory: friendly_memory_size_format(used_memory as usize),
         available_memory: friendly_memory_size_format((total_memory - used_memory) as usize),

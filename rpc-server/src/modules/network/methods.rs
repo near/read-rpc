@@ -5,13 +5,13 @@ use crate::modules::network::{clone_protocol_config, parse_validator_request};
 use jsonrpc_v2::{Data, Params};
 
 pub async fn status(
-    data: Data<ServerContext>,
+    _data: Data<ServerContext>,
     Params(_params): Params<serde_json::Value>,
 ) -> Result<near_primitives::views::StatusResponse, RPCError> {
-    Ok(data
-        .near_rpc_client
-        .call(near_jsonrpc_client::methods::status::RpcStatusRequest)
-        .await?)
+    // TODO: Implement status. Issue: https://github.com/near/read-rpc/issues/181
+    Err(RPCError::unimplemented_error(
+        "Method is not implemented yet. Issue: https://github.com/near/read-rpc/issues/181",
+    ))
 }
 
 pub async fn network_info(

@@ -121,7 +121,7 @@ async fn main() -> anyhow::Result<()> {
                     .finish(rpc.into_web_service()),
             )
             .service(metrics::get_metrics)
-            .service(status::get_status)
+            .service(status::get_health_status)
     })
     .bind(format!("0.0.0.0:{:0>5}", server_port))?
     .run()
