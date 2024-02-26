@@ -7,9 +7,9 @@ extern crate lazy_static;
 mod cache;
 mod config;
 mod errors;
+mod health;
 mod metrics;
 mod modules;
-mod status;
 mod utils;
 
 // Categories for logging
@@ -121,7 +121,7 @@ async fn main() -> anyhow::Result<()> {
                     .finish(rpc.into_web_service()),
             )
             .service(metrics::get_metrics)
-            .service(status::get_health_status)
+            .service(health::get_health_status)
     })
     .bind(format!("0.0.0.0:{:0>5}", server_port))?
     .run()
