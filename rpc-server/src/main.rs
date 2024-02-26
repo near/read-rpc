@@ -7,6 +7,7 @@ extern crate lazy_static;
 mod cache;
 mod config;
 mod errors;
+mod health;
 mod metrics;
 mod modules;
 mod utils;
@@ -48,7 +49,7 @@ async fn main() -> anyhow::Result<()> {
     });
 
     let rpc = Server::new()
-        .with_data(Data::new(server_context))
+        .with_data(Data::new(server_context.clone()))
         .with_method("query", modules::queries::methods::query)
         .with_method(
             "view_state_paginated",
@@ -113,12 +114,14 @@ async fn main() -> anyhow::Result<()> {
         actix_web::App::new()
             .wrap(cors)
             .wrap(tracing_actix_web::TracingLogger::default())
+            .app_data(actix_web::web::Data::new(server_context.clone()))
             .service(
                 actix_web::web::service("/")
                     .guard(actix_web::guard::Post())
                     .finish(rpc.into_web_service()),
             )
             .service(metrics::get_metrics)
+            .service(health::get_health_status)
     })
     .bind(format!("0.0.0.0:{:0>5}", server_port))?
     .run()

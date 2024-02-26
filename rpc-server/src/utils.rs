@@ -208,8 +208,8 @@ pub(crate) async fn calculate_contract_code_cache_sizes(
         if limit >= available_memory {
             panic!(
                 "Not enough memory to run the server. Available memory: {}, required memory: {}",
-                crate::modules::network::friendly_memory_size_format(available_memory),
-                crate::modules::network::friendly_memory_size_format(limit),
+                friendly_memory_size_format(available_memory),
+                friendly_memory_size_format(limit),
             );
         } else {
             limit
@@ -224,6 +224,22 @@ pub(crate) async fn calculate_contract_code_cache_sizes(
 /// Convert gigabytes to bytes
 pub(crate) async fn gigabytes_to_bytes(gigabytes: f64) -> usize {
     (gigabytes * 1024.0 * 1024.0 * 1024.0) as usize
+}
+
+// Helper function to format memory size in a human-readable format
+pub fn friendly_memory_size_format(memory_size_bytes: usize) -> String {
+    if memory_size_bytes < 1024 {
+        format!("{:.2} B", memory_size_bytes)
+    } else if memory_size_bytes < 1024 * 1024 {
+        format!("{:.2} KB", memory_size_bytes as f64 / 1024.0)
+    } else if memory_size_bytes < 1024 * 1024 * 1024 {
+        format!("{:.2} MB", memory_size_bytes as f64 / 1024.0 / 1024.0)
+    } else {
+        format!(
+            "{:.2} GB",
+            memory_size_bytes as f64 / 1024.0 / 1024.0 / 1024.0
+        )
+    }
 }
 
 #[cfg(feature = "shadow_data_consistency")]
