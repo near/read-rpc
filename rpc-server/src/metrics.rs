@@ -30,6 +30,13 @@ lazy_static! {
     .unwrap();
 
     // REQUESTS TOTAL COUNTERS
+    // total requests counter
+    pub(crate) static ref TOTAL_REQUESTS_COUNTER: IntCounter = try_create_int_counter(
+        "total_request_counter",
+        "Total number requests"
+    )
+    .unwrap();
+
     // query requests counters
     pub(crate) static ref QUERY_VIEW_ACCOUNT_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
         "query_view_account_requests_counter",
