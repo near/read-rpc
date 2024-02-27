@@ -4,9 +4,9 @@ use std::string::ToString;
 
 // TODO: Improve versioning in future.
 // For now, it's hardcoded and should be updated manually at each release..
-static NEARD_VERSION: &str = "1.36.0";
-static NEARD_BUILD: &str = "1.36.0";
-static RUSTC_VERSION: &str = "1.73.0";
+static NEARD_VERSION: &str = "1.37.0";
+static NEARD_BUILD: &str = "1.37.0";
+static RUSTC_VERSION: &str = "1.75.0";
 
 // Struct to store genesis_config and genesis_block in the server context
 // Fetch once genesis info on start of the server and put it in the context

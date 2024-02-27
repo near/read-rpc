@@ -1,7 +1,7 @@
 use crate::config::ServerContext;
 use crate::utils::friendly_memory_size_format;
 use actix_web::Responder;
-use sysinfo::{System, SystemExt};
+use sysinfo::System;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct RPCHealthStatusResponse {

@@ -5,23 +5,13 @@ use near_primitives::utils::from_timestamp;
 use crate::config::ServerContext;
 use crate::errors::RPCError;
 use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
-use crate::modules::network::{clone_protocol_config, parse_validator_request};
+use crate::modules::network::parse_validator_request;
 
 pub async fn client_config(
     _data: Data<ServerContext>,
     Params(_params): Params<serde_json::Value>,
 ) -> Result<(), RPCError> {
     Err(RPCError::unimplemented_error("client_config"))
-}
-
-pub async fn health(
-    data: Data<ServerContext>,
-    Params(_params): Params<serde_json::Value>,
-) -> Result<near_jsonrpc_primitives::types::status::RpcHealthResponse, RPCError> {
-    Ok(data
-        .near_rpc_client
-        .call(near_jsonrpc_client::methods::health::RpcHealthRequest)
-        .await?)
 }
 
 pub async fn maintenance_windows(

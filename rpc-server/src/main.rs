@@ -51,7 +51,7 @@ async fn main() -> anyhow::Result<()> {
     });
 
     let rpc = Server::new()
-        .with_data(Data::new(server_context))
+        .with_data(Data::new(server_context.clone()))
         // custom requests methods
         .with_method(
             "view_state_paginated",
