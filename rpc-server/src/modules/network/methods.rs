@@ -1,17 +1,72 @@
+use jsonrpc_v2::{Data, Params};
+
+use near_primitives::utils::from_timestamp;
+
 use crate::config::ServerContext;
 use crate::errors::RPCError;
 use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
 use crate::modules::network::{clone_protocol_config, parse_validator_request};
-use jsonrpc_v2::{Data, Params};
 
 pub async fn status(
-    _data: Data<ServerContext>,
+    data: Data<ServerContext>,
     Params(_params): Params<serde_json::Value>,
 ) -> Result<near_primitives::views::StatusResponse, RPCError> {
-    // TODO: Implement status. Issue: https://github.com/near/read-rpc/issues/181
-    Err(RPCError::unimplemented_error(
-        "Method is not implemented yet. Issue: https://github.com/near/read-rpc/issues/181",
-    ))
+    let final_block_info = data.final_block_info.read().await;
+    let validators = final_block_info
+        .current_validators
+        .current_validators
+        .iter()
+        .map(|validator| near_primitives::views::ValidatorInfo {
+            account_id: validator.account_id.clone(),
+            is_slashed: validator.is_slashed,
+        })
+        .collect();
+
+    Ok(near_primitives::views::StatusResponse {
+        version: data.version.clone(),
+        chain_id: data.genesis_info.genesis_config.chain_id.clone(),
+        protocol_version: near_primitives::version::PROTOCOL_VERSION,
+        latest_protocol_version: final_block_info.final_block_cache.latest_protocol_version,
+        // Address for current read_node RPC server.
+        rpc_addr: Some(format!("0.0.0.0:{}", data.server_port)),
+        validators,
+        sync_info: near_primitives::views::StatusSyncInfo {
+            latest_block_hash: final_block_info.final_block_cache.block_hash,
+            latest_block_height: final_block_info.final_block_cache.block_height,
+            latest_state_root: final_block_info.final_block_cache.state_root,
+            latest_block_time: from_timestamp(final_block_info.final_block_cache.block_timestamp),
+            // Always false because read_node is not need to sync
+            syncing: false,
+            earliest_block_hash: Some(data.genesis_info.genesis_block_cache.block_hash),
+            earliest_block_height: Some(data.genesis_info.genesis_block_cache.block_height),
+            earliest_block_time: Some(from_timestamp(
+                data.genesis_info.genesis_block_cache.block_timestamp,
+            )),
+            epoch_id: Some(near_primitives::types::EpochId(
+                final_block_info.final_block_cache.epoch_id,
+            )),
+            epoch_start_height: Some(final_block_info.current_validators.epoch_start_height),
+        },
+        validator_account_id: None,
+        validator_public_key: None,
+        // Generate empty public key because read_node is not regular archiver node
+        node_public_key: near_crypto::PublicKey::empty(near_crypto::KeyType::ED25519),
+        node_key: None,
+        // return uptime current read_node
+        uptime_sec: near_primitives::static_clock::StaticClock::utc().timestamp()
+            - data.boot_time_seconds,
+        // Not using for status method
+        detailed_debug_status: None,
+    })
+}
+
+pub async fn health(
+    data: Data<ServerContext>,
+    Params(_params): Params<serde_json::Value>,
+) -> Result<crate::health::RPCHealthStatusResponse, RPCError> {
+    // TODO: Improve to return error after implementing optimistic block
+    // see nearcore/chain/client/src/client_actor.rs:627 to get details
+    Ok(crate::health::RPCHealthStatusResponse::new(&data).await)
 }
 
 pub async fn network_info(
