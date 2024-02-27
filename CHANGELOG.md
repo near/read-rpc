@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Added support for `SyncCheckpoint` in the `block` method for better block handling and synchronization.
 - Added `ARCHIVAL_PROXY_QUERY_VIEW_STATE_WITH_INCLUDE_PROOFS` metric to track the number of archival proxy requests for view state with include proofs.
+- Added `TOTAL_REQUESTS_COUNTER` metric to counting total rpc requests.
 - Added `GET /health` for the healthcheck of rpc-server.
 - Implemented the `status` method to accommodate `near_primitives::views::StatusResponse`.
 - Implemented the `health` method. Health includes the info about the syncing state of the node of `rpc-server`.
