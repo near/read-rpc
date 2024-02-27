@@ -1,5 +1,7 @@
-use crate::utils::update_final_block_height_regularly;
+use actix_web::dev::Service;
 use jsonrpc_v2::{Data, Server};
+
+use crate::utils::update_final_block_height_regularly;
 
 #[macro_use]
 extern crate lazy_static;
@@ -115,6 +117,13 @@ async fn main() -> anyhow::Result<()> {
         actix_web::App::new()
             .wrap(cors)
             .wrap(tracing_actix_web::TracingLogger::default())
+            // wrapper to count rpc total requests
+            .wrap_fn(|request, service| {
+                if request.path() == "/" {
+                    metrics::TOTAL_REQUESTS_COUNTER.inc();
+                };
+                service.call(request)
+            })
             .app_data(actix_web::web::Data::new(server_context.clone()))
             .service(
                 actix_web::web::service("/")
