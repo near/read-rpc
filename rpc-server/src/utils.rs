@@ -41,7 +41,7 @@ impl JsonRpcClient {
         Ok(self)
     }
 
-    /// Performs an RPC call to either the regular or archival endpoint.
+    /// Performs a RPC call to either the regular or archival endpoint.
     async fn rpc_call<M>(
         &self,
         params: M,
@@ -57,7 +57,7 @@ impl JsonRpcClient {
         }
     }
 
-    /// Performs an RPC call to the regular endpoint.
+    /// Performs a RPC call to the regular endpoint.
     pub async fn call<M>(
         &self,
         params: M,
@@ -66,10 +66,11 @@ impl JsonRpcClient {
         M: near_jsonrpc_client::methods::RpcMethod + std::fmt::Debug,
     {
         tracing::debug!("PROXY call. {:?}", params);
+        crate::metrics::PROXY_REQUESTS_TO_REGULAR_NODES_COUNTER.inc();
         self.rpc_call(params, false).await
     }
 
-    /// Performs an RPC call to the archival endpoint.
+    /// Performs a RPC call to the archival endpoint.
     pub async fn archival_call<M>(
         &self,
         params: M,
@@ -78,6 +79,20 @@ impl JsonRpcClient {
         M: near_jsonrpc_client::methods::RpcMethod + std::fmt::Debug,
     {
         tracing::debug!("ARCHIVAL PROXY call. {:?}", params);
+        crate::metrics::PROXY_REQUESTS_TO_ARCHIVAL_NODES_COUNTER.inc();
+        self.rpc_call(params, true).await
+    }
+
+    /// Performs a RPC call to the archival endpoint for shadow comparison results.
+    #[cfg(feature = "shadow_data_consistency")]
+    pub async fn shadow_comparison_call<M>(
+        &self,
+        params: M,
+    ) -> near_jsonrpc_client::MethodCallResult<M::Response, M::Error>
+    where
+        M: near_jsonrpc_client::methods::RpcMethod + std::fmt::Debug,
+    {
+        tracing::debug!("SHADOW DATA CONSISTENCY PROXY call. {:?}", params);
         self.rpc_call(params, true).await
     }
 }
@@ -345,7 +360,7 @@ where
         }
     };
 
-    let mut near_rpc_response = client.archival_call(&params).await;
+    let mut near_rpc_response = client.shadow_comparison_call(&params).await;
 
     for _ in 0..DEFAULT_RETRY_COUNT {
         if let Err(json_rpc_err) = &near_rpc_response {
@@ -362,7 +377,7 @@ where
                 }
             };
             if retry {
-                near_rpc_response = client.archival_call(&params).await;
+                near_rpc_response = client.shadow_comparison_call(&params).await;
             } else {
                 break;
             }

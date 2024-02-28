@@ -36,6 +36,16 @@ lazy_static! {
         "Total number requests"
     )
     .unwrap();
+    pub(crate) static ref PROXY_REQUESTS_TO_REGULAR_NODES_COUNTER: IntCounter = try_create_int_counter(
+        "proxy_request_to_regular_nodes_counter",
+        "Total number requests proxy to regular nodes"
+    )
+    .unwrap();
+    pub(crate) static ref PROXY_REQUESTS_TO_ARCHIVAL_NODES_COUNTER: IntCounter = try_create_int_counter(
+        "proxy_request_to_archival_nodes_counter",
+        "Total number requests proxy to archival nodes"
+    )
+    .unwrap();
 
     // query requests counters
     pub(crate) static ref QUERY_VIEW_ACCOUNT_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
