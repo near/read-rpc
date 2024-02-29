@@ -1,5 +1,5 @@
 [package]
-name = "state-indexer"
+name = "near-state-indexer"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -8,6 +8,7 @@ repository.workspace = true
 license.workspace = true
 
 [dependencies]
+actix = "0.13.3"
 actix-web = "4.2.1"
 anyhow = "1.0.70"
 borsh = "0.10.2"
@@ -30,10 +31,12 @@ configuration = { path = "../configuration" }
 database = { path = "../database" }
 epoch-indexer = { path = "../epoch-indexer" }
 
+near-indexer = "1.36.0"
+near-client = "1.36.0"
+near-o11y = "1.36.0"
 near-primitives = "1.36.0"
 near-indexer-primitives = "1.36.0"
 near-jsonrpc-client = "0.7.0"
-near-lake-framework = { path = '../../near-lake-framework-rs' }
 
 [features]
 default = ["scylla_db"]

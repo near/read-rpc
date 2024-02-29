@@ -41,7 +41,7 @@ near-crypto = "1.36.0"
 near-jsonrpc-client = "0.7.0"
 near-jsonrpc-primitives = "1.36.0"
 near-indexer-primitives = "1.36.0"
-near-lake-framework = "0.7.9"
+near-lake-framework = { path = '../../near-lake-framework-rs' }
 near-primitives = "1.36.0"
 near-vm-runner = "1.36.0"
 

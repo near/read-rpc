@@ -12,6 +12,7 @@ members = [
     "configuration",
     "database",
     "epoch-indexer",
+    "near-state-indexer",
     "perf-testing",
     "readnode-primitives",
     "rpc-server",
@@ -23,6 +24,9 @@ members = [
 near-chain-configs = { git = 'https://github.com/near/nearcore.git', branch = '1.36.0' }
 near-crypto = { git = 'https://github.com/near/nearcore.git', branch = '1.36.0' }
 near-jsonrpc-primitives = { git = 'https://github.com/near/nearcore.git', branch = '1.36.0' }
+near-indexer = { git = 'https://github.com/near/nearcore.git', branch = '1.36.0' }
+near-client = { git = 'https://github.com/near/nearcore.git', branch = '1.36.0' }
+near-o11y = { git = 'https://github.com/near/nearcore.git', branch = '1.36.0' }
 near-indexer-primitives = { git = 'https://github.com/near/nearcore.git', branch = '1.36.0' }
 near-primitives = { git = 'https://github.com/near/nearcore.git', branch = '1.36.0' }
 near-vm-runner = { git = 'https://github.com/near/nearcore.git', branch = '1.36.0' }
@@ -30,4 +34,5 @@ near-vm-runner = { git = 'https://github.com/near/nearcore.git', branch = '1.36.
 # TODO: We use forks to resolve nearcore dependency conflicts.
 # After updating the dependencies, we should use the published versions of the crates.
 near-jsonrpc-client = { git = 'https://github.com/kobayurii/near-jsonrpc-client-rs.git', branch = '0.7.0' }
-near-lake-framework = { git = 'https://github.com/kobayurii/near-lake-framework-rs.git', branch = '0.7.9' }
+#near-lake-framework = { git = 'https://github.com/kobayurii/near-lake-framework-rs.git', branch = '0.7.9' }
+near-lake-framework = { path = '../near-lake-framework-rs' }
