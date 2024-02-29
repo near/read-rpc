@@ -31,12 +31,18 @@ configuration = { path = "../configuration" }
 database = { path = "../database" }
 epoch-indexer = { path = "../epoch-indexer" }
 
-near-indexer = "1.36.0"
-near-client = "1.36.0"
-near-o11y = "1.36.0"
-near-primitives = "1.36.0"
-near-indexer-primitives = "1.36.0"
+near-indexer = { git = 'https://github.com/kobayurii/nearcore.git', branch = 'indexer' }
+#near-indexer = "1.36.0"
+#near-client = "1.36.0"
+near-client = { git = 'https://github.com/kobayurii/nearcore.git', branch = 'indexer' }
+near-o11y = { git = 'https://github.com/kobayurii/nearcore.git', branch = 'indexer' }
+#near-o11y = "1.36.0"
+near-primitives = { git = 'https://github.com/kobayurii/nearcore.git', branch = 'indexer' }
+#near-primitives = "1.36.0"
+#near-indexer-primitives = "1.36.0"
+near-indexer-primitives = { git = 'https://github.com/kobayurii/nearcore.git', branch = 'indexer' }
 near-jsonrpc-client = "0.7.0"
+#near-jsonrpc-client = { path = '../../near-lake-framework-rs' }
 
 [features]
 default = ["scylla_db"]

@@ -1,6 +1,6 @@
 use actix_web::{get, App, HttpServer, Responder};
-use prometheus::{Encoder, IntCounter, IntGauge, Opts};
 use near_o11y::WithSpanContextExt;
+use prometheus::{Encoder, IntCounter, IntGauge, Opts};
 
 type Result<T, E> = std::result::Result<T, E>;
 
@@ -139,4 +139,38 @@ pub(crate) async fn fetch_latest_block(
         )
         .await??;
     Ok(block.header.height)
+}
+
+pub(crate) async fn fetch_optimistic_block(
+    client: &actix::Addr<near_client::ViewClientActor>,
+) -> anyhow::Result<near_indexer_primitives::views::BlockView> {
+    Ok(client
+        .send(near_client::GetBlock::latest().with_span_context())
+        .await??)
+}
+
+const INTERVAL: std::time::Duration = std::time::Duration::from_millis(500);
+
+pub async fn optimistic_stream(view_client: actix::Addr<near_client::ViewClientActor>) {
+    tracing::info!(target: crate::INDEXER, "Starting Optimistic Streamer...");
+
+    loop {
+        tokio::time::sleep(INTERVAL).await;
+        if let Ok(block) = fetch_optimistic_block(&view_client).await {
+            let height = block.header.height;
+            let response = near_indexer::build_streamer_message(&view_client, block).await;
+            match response {
+                Ok(streamer_message) => {
+                    tracing::debug!(target: crate::INDEXER, "{:#?}", &streamer_message);
+                }
+                Err(err) => {
+                    tracing::debug!(
+                        target: crate::INDEXER,
+                        "Missing data, skipping block #{}...", height
+                    );
+                    tracing::debug!(target: crate::INDEXER, "{:#?}", err);
+                }
+            }
+        };
+    }
 }

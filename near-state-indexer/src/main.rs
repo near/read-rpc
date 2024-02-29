@@ -382,7 +382,7 @@ async fn main() -> anyhow::Result<()> {
     // We use it to automatically search the for root certificates to perform HTTPS calls
     // (sending telemetry and downloading genesis)
     openssl_probe::init_ssl_cert_env_vars();
-    configuration::init_tracing(INDEXER);
+    configuration::init_tracing(INDEXER).await?;
 
     let main_indexer_config =
         configuration::read_configuration::<configuration::StateIndexerConfig>().await?;
@@ -408,14 +408,22 @@ async fn main() -> anyhow::Result<()> {
             let indexer_config = args.clone().to_indexer_config(home_dir);
             let indexer = near_indexer::Indexer::new(indexer_config)
                 .expect("Failed to initialize the Indexer");
+            // Initiate metrics http server
+            tokio::spawn(
+                metrics::init_server(main_indexer_config.general.metrics_server_port)
+                    .expect("Failed to start metrics server"),
+            );
 
             // Regular indexer process starts here
             let stream = indexer.streamer();
-            let view_client = indexer.client_actors().0.clone();
+            let view_client = indexer.client_actors().0;
 
             let stats = std::sync::Arc::new(tokio::sync::RwLock::new(metrics::Stats::new()));
             tokio::spawn(metrics::state_logger(
                 std::sync::Arc::clone(&stats),
+                view_client.clone(),
+            ));
+            tokio::spawn(metrics::optimistic_stream(
                 view_client,
             ));
 
@@ -440,7 +448,7 @@ async fn main() -> anyhow::Result<()> {
         }
         configs::SubCommand::Init(config) => near_indexer::init_configs(
             &home_dir,
-            config.chain_id.as_ref().map(AsRef::as_ref),
+            Some(main_indexer_config.general.chain_id.to_string()),
             config.account_id.map(|account_id_string| {
                 near_indexer::near_primitives::types::AccountId::try_from(account_id_string)
                     .expect("Received accound_id is not valid")
@@ -451,6 +459,7 @@ async fn main() -> anyhow::Result<()> {
             config.genesis.as_ref().map(AsRef::as_ref),
             config.download_genesis,
             config.download_genesis_url.as_ref().map(AsRef::as_ref),
+            None, // download_records_url
             config.download_config,
             config.download_config_url.as_ref().map(AsRef::as_ref),
             config.boot_nodes.as_ref().map(AsRef::as_ref),
