@@ -1,5 +1,4 @@
 pub use clap::{Parser, Subcommand};
-use near_jsonrpc_client::{methods, JsonRpcClient};
 
 /// Watches for stream of blocks from the chain
 #[derive(Parser, Clone, Debug)]

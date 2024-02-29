@@ -1,6 +1,6 @@
 use actix_web::{get, App, HttpServer, Responder};
-use prometheus::{Encoder, IntCounter, IntGauge, Opts};
 use near_o11y::WithSpanContextExt;
+use prometheus::{Encoder, IntCounter, IntGauge, Opts};
 
 type Result<T, E> = std::result::Result<T, E>;
 

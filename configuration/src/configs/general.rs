@@ -84,6 +84,15 @@ impl FromStr for ChainId {
     }
 }
 
+impl ToString for ChainId {
+    fn to_string(&self) -> String {
+        match self {
+            ChainId::Mainnet => "mainnet".to_string(),
+            ChainId::Testnet => "testnet".to_string(),
+        }
+    }
+}
+
 #[derive(Deserialize, Debug, Clone)]
 pub struct CommonGeneralRpcServerConfig {
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
