@@ -23,9 +23,12 @@ configuration = { path = "../configuration" }
 database = { path = "../database" }
 readnode-primitives = { path = "../readnode-primitives" }
 
-near-jsonrpc-client = "0.7.0"
-near-chain-configs = "1.36.0"
-near-indexer-primitives = "1.36.0"
+#near-jsonrpc-client = "0.7.0"
+near-jsonrpc-client = { path = '../../near-jsonrpc-client-rs' }
+#near-chain-configs = "1.36.0"
+near-chain-configs = { git = 'https://github.com/kobayurii/nearcore.git', branch = 'indexer' }
+#near-indexer-primitives = "1.36.0"
+near-indexer-primitives = { git = 'https://github.com/kobayurii/nearcore.git', branch = 'indexer' }
 near-lake-framework = { path = '../../near-lake-framework-rs' }
 
 [features]
