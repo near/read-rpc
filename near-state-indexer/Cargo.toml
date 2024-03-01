@@ -41,7 +41,7 @@ near-primitives = { git = 'https://github.com/kobayurii/nearcore.git', branch = 
 #near-primitives = "1.36.0"
 #near-indexer-primitives = "1.36.0"
 near-indexer-primitives = { git = 'https://github.com/kobayurii/nearcore.git', branch = 'indexer' }
-near-jsonrpc-client = "0.7.0"
+near-jsonrpc-client = { path = '../../near-jsonrpc-client-rs' }
 #near-jsonrpc-client = { path = '../../near-lake-framework-rs' }
 
 [features]

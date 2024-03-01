@@ -156,19 +156,23 @@ pub async fn optimistic_stream(view_client: actix::Addr<near_client::ViewClientA
 
     loop {
         tokio::time::sleep(INTERVAL).await;
-        if let Ok(block) = fetch_optimistic_block(&view_client).await {
+        let optimistic_feature = fetch_optimistic_block(&view_client);
+        let finale_feature = fetch_latest_block(&view_client);
+        let (finel_block, optimistic_block) = tokio::join!(finale_feature, optimistic_feature);
+        if let Ok(block) = optimistic_block {
             let height = block.header.height;
             let response = near_indexer::build_streamer_message(&view_client, block).await;
             match response {
                 Ok(streamer_message) => {
                     tracing::debug!(target: crate::INDEXER, "{:#?}", &streamer_message);
+                    tracing::info!(target: crate::INDEXER, "Finale block {:#?}, Optimistic block {:#?}", finel_block.unwrap(), &streamer_message.block.header.height);
                 }
                 Err(err) => {
-                    tracing::debug!(
+                    tracing::error!(
                         target: crate::INDEXER,
                         "Missing data, skipping block #{}...", height
                     );
-                    tracing::debug!(target: crate::INDEXER, "{:#?}", err);
+                    tracing::error!(target: crate::INDEXER, "{:#?}", err);
                 }
             }
         };

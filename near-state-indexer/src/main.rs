@@ -377,34 +377,37 @@ async fn store_state_change(
     Ok(())
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+// #[tokio::main]
+fn main() {
     // We use it to automatically search the for root certificates to perform HTTPS calls
     // (sending telemetry and downloading genesis)
     openssl_probe::init_ssl_cert_env_vars();
-    configuration::init_tracing(INDEXER).await?;
-
-    let main_indexer_config =
-        configuration::read_configuration::<configuration::StateIndexerConfig>().await?;
     let opts: Opts = Opts::parse();
-
-    #[cfg(feature = "scylla_db")]
-    let db_manager = database::prepare_db_manager::<
-        database::scylladb::state_indexer::ScyllaDBManager,
-    >(&main_indexer_config.database)
-    .await?;
-
-    #[cfg(all(feature = "postgres_db", not(feature = "scylla_db")))]
-    let db_manager = database::prepare_db_manager::<
-        database::postgres::state_indexer::PostgresDBManager,
-    >(&indexer_config.database)
-    .await?;
-    let rpc_client =
-        near_jsonrpc_client::JsonRpcClient::connect(&main_indexer_config.general.near_rpc_url);
     let home_dir = opts.home.unwrap_or_else(near_indexer::get_default_home);
 
     match opts.subcmd {
         configs::SubCommand::Run(args) => {
+            let system = actix::System::new();
+            system.block_on(async move {
+                configuration::init_tracing(INDEXER).await.unwrap();
+
+                let main_indexer_config =
+                    configuration::read_configuration::<configuration::StateIndexerConfig>().await.unwrap();
+                
+
+                #[cfg(feature = "scylla_db")]
+                    let db_manager = database::prepare_db_manager::<
+                    database::scylladb::state_indexer::ScyllaDBManager,
+                >(&main_indexer_config.database)
+                    .await.unwrap();
+
+                #[cfg(all(feature = "postgres_db", not(feature = "scylla_db")))]
+                    let db_manager = database::prepare_db_manager::<
+                    database::postgres::state_indexer::PostgresDBManager,
+                >(&indexer_config.database)
+                    .await.unwrap();
+                let rpc_client =
+                    near_jsonrpc_client::JsonRpcClient::connect(&main_indexer_config.general.near_rpc_url);
             let indexer_config = args.clone().to_indexer_config(home_dir);
             let indexer = near_indexer::Indexer::new(indexer_config)
                 .expect("Failed to initialize the Indexer");
@@ -445,10 +448,13 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
             drop(handlers); // close the channel so the sender will stop
+            });
+            system.run().unwrap();
         }
         configs::SubCommand::Init(config) => near_indexer::init_configs(
             &home_dir,
-            Some(main_indexer_config.general.chain_id.to_string()),
+            // Some(main_indexer_config.general.chain_id.to_string()),
+            Some("localnet".to_string()),
             config.account_id.map(|account_id_string| {
                 near_indexer::near_primitives::types::AccountId::try_from(account_id_string)
                     .expect("Received accound_id is not valid")
@@ -467,5 +473,4 @@ async fn main() -> anyhow::Result<()> {
         )
         .expect("Failed to initialize the node config files"),
     };
-    Ok(())
 }

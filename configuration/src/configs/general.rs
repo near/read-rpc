@@ -70,6 +70,8 @@ pub enum ChainId {
     #[default]
     Mainnet,
     Testnet,
+    Localnet,
+    Betanet,
 }
 
 impl FromStr for ChainId {
@@ -79,6 +81,8 @@ impl FromStr for ChainId {
         match s {
             "mainnet" => Ok(ChainId::Mainnet),
             "testnet" => Ok(ChainId::Testnet),
+            "localnet" => Ok(ChainId::Localnet),
+            "betanet" => Ok(ChainId::Betanet),
             _ => Err(anyhow::anyhow!("Invalid chain id")),
         }
     }
@@ -89,6 +93,8 @@ impl ToString for ChainId {
         match self {
             ChainId::Mainnet => "mainnet".to_string(),
             ChainId::Testnet => "testnet".to_string(),
+            ChainId::Betanet => "betanet".to_string(),
+            ChainId::Localnet => "localnet".to_string(),
         }
     }
 }

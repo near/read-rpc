@@ -4821,7 +4821,7 @@ dependencies = [
  "near-client",
  "near-indexer",
  "near-indexer-primitives 1.36.0 (git+https://github.com/kobayurii/nearcore.git?branch=indexer)",
- "near-jsonrpc-client 0.7.0 (git+https://github.com/kobayurii/near-jsonrpc-client-rs.git?branch=0.7.0)",
+ "near-jsonrpc-client 0.7.0",
  "near-o11y",
  "near-primitives 1.36.0 (git+https://github.com/kobayurii/nearcore.git?branch=indexer)",
  "openssl-probe",
@@ -6500,7 +6500,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "borsh 0.10.3",
- "near-chain-configs 1.36.0 (git+https://github.com/near/nearcore.git?branch=1.36.0)",
+ "near-chain-configs 1.36.0 (git+https://github.com/kobayurii/nearcore.git?branch=indexer)",
  "near-indexer-primitives 1.36.0 (git+https://github.com/kobayurii/nearcore.git?branch=indexer)",
  "num-bigint 0.3.3",
  "num-traits",
