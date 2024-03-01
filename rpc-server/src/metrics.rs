@@ -601,6 +601,14 @@ lazy_static! {
         "archive_proxy_query_view_state_with_include_proofs",
         "Total number of the request to the archive nodes query_view_state with include_proofs"
     ).unwrap();
+    pub(crate) static ref ARCHIVAL_PROXY_LIGHT_CLIENT_PROOF: IntCounter = try_create_int_counter(
+        "archive_proxy_light_client_proof",
+        "Total number of the request to the archive nodes light_client_proof"
+    ).unwrap();
+    pub(crate) static ref ARCHIVAL_PROXY_NEXT_LIGHT_CLIENT_BLOCK: IntCounter = try_create_int_counter(
+        "archive_proxy_next_light_client_block",
+        "Total number of the request to the archive nodes next_light_client_block"
+    ).unwrap();
 }
 
 /// Exposes prometheus metrics
