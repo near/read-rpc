@@ -102,6 +102,10 @@ async fn main() -> anyhow::Result<()> {
             modules::network::methods::genesis_config,
         )
         .with_method(
+            "EXPERIMENTAL_light_client_proof",
+            modules::clients::methods::light_client_proof,
+        )
+        .with_method(
             "EXPERIMENTAL_protocol_config",
             modules::network::methods::protocol_config,
         )
