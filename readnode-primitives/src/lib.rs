@@ -1,7 +1,6 @@
 use std::convert::TryFrom;
 use std::str::FromStr;
 
-use borsh::{BorshDeserialize, BorshSerialize};
 use near_indexer_primitives::{views, CryptoHash, IndexerTransactionWithOutcome};
 use num_traits::ToPrimitive;
 use serde::{Deserialize, Serialize};
@@ -21,7 +20,7 @@ impl TransactionKey {
     }
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Debug, Clone)]
+#[derive(borsh::BorshSerialize, borsh::BorshDeserialize, Serialize, Deserialize, Debug, Clone)]
 pub struct CollectingTransactionDetails {
     pub transaction: views::SignedTransactionView,
     pub receipts: Vec<views::ReceiptView>,
@@ -117,7 +116,7 @@ impl From<CollectingTransactionDetails> for TransactionDetails {
     }
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Debug, Clone)]
+#[derive(borsh::BorshSerialize, borsh::BorshDeserialize, Serialize, Deserialize, Debug, Clone)]
 pub struct TransactionDetails {
     pub receipts: Vec<views::ReceiptView>,
     pub receipts_outcome: Vec<views::ExecutionOutcomeWithIdView>,
@@ -169,7 +168,7 @@ impl TransactionDetails {
 pub type StateKey = Vec<u8>;
 pub type StateValue = Vec<u8>;
 pub struct BlockHeightShardId(pub u64, pub u64);
-pub struct QueryData<T: BorshDeserialize> {
+pub struct QueryData<T: borsh::BorshDeserialize> {
     pub data: T,
     // block_height and block_hash we return here represents the moment
     // when the data was last updated in the database
@@ -199,21 +198,12 @@ pub struct EpochValidatorsInfo {
 }
 
 #[derive(Debug)]
-pub struct ProtocolConfig {
-    pub epoch_id: CryptoHash,
-    pub epoch_height: u64,
-    pub epoch_start_height: u64,
-    pub protocol_config: near_chain_configs::ProtocolConfigView,
-}
-
-#[derive(Debug)]
 pub struct IndexedEpochInfo {
     pub epoch_id: CryptoHash,
     pub epoch_height: u64,
     pub epoch_start_height: u64,
     pub epoch_end_height: Option<u64>,
     pub validators_info: views::EpochValidatorInfo,
-    pub protocol_config: near_chain_configs::ProtocolConfigView,
 }
 
 #[derive(Debug)]
@@ -253,7 +243,7 @@ impl<T>
         CryptoHash,
     )> for QueryData<T>
 where
-    T: BorshDeserialize,
+    T: borsh::BorshDeserialize,
 {
     type Error = anyhow::Error;
 

@@ -5,7 +5,28 @@ use near_primitives::utils::from_timestamp;
 use crate::config::ServerContext;
 use crate::errors::RPCError;
 use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
-use crate::modules::network::{clone_protocol_config, parse_validator_request};
+use crate::modules::network::parse_validator_request;
+
+pub async fn client_config(
+    _data: Data<ServerContext>,
+    Params(_params): Params<serde_json::Value>,
+) -> Result<(), RPCError> {
+    Err(RPCError::unimplemented_error("client_config"))
+}
+
+pub async fn maintenance_windows(
+    _data: Data<ServerContext>,
+    Params(_params): Params<serde_json::Value>,
+) -> Result<(), RPCError> {
+    Err(RPCError::unimplemented_error("maintenance_windows"))
+}
+
+pub async fn split_storage_info(
+    _data: Data<ServerContext>,
+    Params(_params): Params<serde_json::Value>,
+) -> Result<(), RPCError> {
+    Err(RPCError::unimplemented_error("split_storage_info"))
+}
 
 pub async fn status(
     data: Data<ServerContext>,
@@ -70,11 +91,13 @@ pub async fn health(
 }
 
 pub async fn network_info(
+    data: Data<ServerContext>,
     Params(_params): Params<serde_json::Value>,
 ) -> Result<near_jsonrpc_primitives::types::network_info::RpcNetworkInfoResponse, RPCError> {
-    Err(RPCError::unimplemented_error(
-        "Method is not implemented on this type of node. Please send a request to NEAR JSON RPC instead.",
-    ))
+    Ok(data
+        .near_rpc_client
+        .call(near_jsonrpc_client::methods::network_info::RpcNetworkInfoRequest)
+        .await?)
 }
 
 pub async fn validators(
@@ -235,25 +258,18 @@ async fn protocol_config_call(
                 error_message: err.to_string(),
             }
         })?;
-    let protocol_config = if data
-        .final_block_info
-        .read()
-        .await
-        .final_block_cache
-        .epoch_id
-        == block.epoch_id
-    {
-        let protocol_config = &data.final_block_info.read().await.current_protocol_config;
-        clone_protocol_config(protocol_config)
-    } else {
-        data.db_manager
-            .get_protocol_config_by_epoch_id(block.epoch_id)
-            .await
-            .map_err(|err| {
-                near_jsonrpc_primitives::types::config::RpcProtocolConfigError::InternalError {
-                    error_message: err.to_string(),
-                }
-            })?
+
+    let store = near_parameters::RuntimeConfigStore::for_chain_id(
+        &data.genesis_info.genesis_config.chain_id,
+    );
+    let runtime_config = store.get_config(block.latest_protocol_version);
+    let protocol_config = near_chain_configs::ProtocolConfig {
+        genesis_config: data.genesis_info.genesis_config.clone(),
+        runtime_config: near_parameters::RuntimeConfig {
+            fees: runtime_config.fees.clone(),
+            wasm_config: runtime_config.wasm_config.clone(),
+            account_creation_config: runtime_config.account_creation_config.clone(),
+        },
     };
-    Ok(protocol_config)
+    Ok(protocol_config.into())
 }

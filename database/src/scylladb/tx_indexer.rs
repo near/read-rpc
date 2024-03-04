@@ -1,5 +1,4 @@
 use crate::scylladb::ScyllaStorageManager;
-use borsh::{BorshDeserialize, BorshSerialize};
 use futures::StreamExt;
 use num_traits::ToPrimitive;
 use scylla::prepared_statement::PreparedStatement;
@@ -54,10 +53,9 @@ impl ScyllaDBManager {
             .into_typed::<(Vec<u8>,)>();
         while let Some(next_row_res) = rows_stream.next().await {
             let (transaction_details,) = next_row_res?;
-            let transaction_details =
-                readnode_primitives::CollectingTransactionDetails::try_from_slice(
-                    &transaction_details,
-                )?;
+            let transaction_details = borsh::from_slice::<
+                readnode_primitives::CollectingTransactionDetails,
+            >(&transaction_details)?;
             result.push(transaction_details);
         }
         Ok(result)
@@ -248,9 +246,6 @@ impl crate::TxIndexerDbManager for ScyllaDBManager {
         transaction: readnode_primitives::TransactionDetails,
         block_height: u64,
     ) -> anyhow::Result<()> {
-        let transaction_details = transaction
-            .try_to_vec()
-            .expect("Failed to borsh-serialize the Transaction");
         Self::execute_prepared_query(
             &self.scylla_session,
             &self.add_transaction,
@@ -258,7 +253,7 @@ impl crate::TxIndexerDbManager for ScyllaDBManager {
                 transaction.transaction.hash.to_string(),
                 num_bigint::BigInt::from(block_height),
                 transaction.transaction.signer_id.to_string(),
-                &transaction_details,
+                &borsh::to_vec(&transaction)?,
             ),
         )
         .await?;
@@ -302,7 +297,7 @@ impl crate::TxIndexerDbManager for ScyllaDBManager {
     ) -> anyhow::Result<()> {
         let transaction_hash = transaction_details.transaction.hash.clone().to_string();
         let block_height = transaction_details.block_height;
-        let transaction_details = transaction_details.try_to_vec().map_err(|err| {
+        let transaction_details = borsh::to_vec(&transaction_details).map_err(|err| {
             tracing::error!(target: "tx_indexer", "Failed to serialize transaction details: {:?}", err);
             err})?;
         Self::execute_prepared_query(
@@ -337,12 +332,8 @@ impl crate::TxIndexerDbManager for ScyllaDBManager {
                     .receipt
                     .receipt_id
                     .to_string(),
-                indexer_execution_outcome_with_receipt
-                    .receipt
-                    .try_to_vec()?,
-                indexer_execution_outcome_with_receipt
-                    .execution_outcome
-                    .try_to_vec()?,
+                borsh::to_vec(&indexer_execution_outcome_with_receipt.receipt)?,
+                borsh::to_vec(&indexer_execution_outcome_with_receipt.execution_outcome)?,
             ),
         )
         .await?;
@@ -433,11 +424,9 @@ impl crate::TxIndexerDbManager for ScyllaDBManager {
         .single_row()?
         .into_typed::<(Vec<u8>,)>()?;
 
-        Ok(
-            readnode_primitives::CollectingTransactionDetails::try_from_slice(
-                &transaction_details,
-            )?,
-        )
+        Ok(borsh::from_slice::<
+            readnode_primitives::CollectingTransactionDetails,
+        >(&transaction_details)?)
     }
 
     async fn get_receipts_in_cache(
@@ -458,9 +447,9 @@ impl crate::TxIndexerDbManager for ScyllaDBManager {
             .into_typed::<(Vec<u8>, Vec<u8>)>();
         while let Some(next_row_res) = rows_stream.next().await {
             let (receipt, outcome) = next_row_res?;
-            let receipt = near_primitives::views::ReceiptView::try_from_slice(&receipt)?;
+            let receipt = borsh::from_slice::<near_primitives::views::ReceiptView>(&receipt)?;
             let execution_outcome =
-                near_primitives::views::ExecutionOutcomeWithIdView::try_from_slice(&outcome)?;
+                borsh::from_slice::<near_primitives::views::ExecutionOutcomeWithIdView>(&outcome)?;
             result.push(
                 near_indexer_primitives::IndexerExecutionOutcomeWithReceipt {
                     receipt,

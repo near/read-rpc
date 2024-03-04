@@ -2,7 +2,6 @@ use crate::modules::blocks::{CacheBlock, FinalBlockInfo};
 #[cfg(feature = "shadow_data_consistency")]
 use assert_json_diff::{assert_json_matches_no_panic, CompareMode, Config, NumericMode};
 use futures::StreamExt;
-use sysinfo::{System, SystemExt};
 
 #[cfg(feature = "shadow_data_consistency")]
 const DEFAULT_RETRY_COUNT: u8 = 3;
@@ -121,18 +120,6 @@ pub async fn get_final_cache_block(near_rpc_client: &JsonRpcClient) -> Option<Ca
     }
 }
 
-pub async fn get_current_protocol_config(
-    near_rpc_client: &JsonRpcClient,
-) -> anyhow::Result<near_chain_configs::ProtocolConfigView> {
-    let params =
-        near_jsonrpc_client::methods::EXPERIMENTAL_protocol_config::RpcProtocolConfigRequest {
-            block_reference: near_primitives::types::BlockReference::Finality(
-                near_primitives::types::Finality::Final,
-            ),
-        };
-    Ok(near_rpc_client.call(params).await?)
-}
-
 pub async fn get_current_validators(
     near_rpc_client: &JsonRpcClient,
 ) -> anyhow::Result<near_primitives::views::EpochValidatorInfo> {
@@ -154,8 +141,6 @@ async fn handle_streamer_message(
 
     if final_block_info.read().await.final_block_cache.epoch_id != block.epoch_id {
         tracing::info!("New epoch started: {:?}", block.epoch_id);
-        final_block_info.write().await.current_protocol_config =
-            get_current_protocol_config(near_rpc_client).await?;
         final_block_info.write().await.current_validators =
             get_current_validators(near_rpc_client).await?;
     }
@@ -214,7 +199,7 @@ pub(crate) async fn calculate_contract_code_cache_sizes(
     block_cache_size: usize,
     limit_memory_cache: Option<usize>,
 ) -> usize {
-    let sys = System::new_all();
+    let sys = sysinfo::System::new_all();
     let total_memory = sys.total_memory() as usize; // Total memory in bytes
     let used_memory = sys.used_memory() as usize; // Used memory in bytes
     let available_memory = total_memory - used_memory - reserved_memory; // Available memory in bytes

@@ -9,10 +9,14 @@ type BoxedSerialize = Box<dyn erased_serde::Serialize + Send>;
 pub struct RPCError(pub(crate) near_jsonrpc_primitives::errors::RpcError);
 
 impl RPCError {
-    pub(crate) fn unimplemented_error(msg: &str) -> Self {
+    pub(crate) fn unimplemented_error(method_name: &str) -> Self {
         Self::from(near_jsonrpc_primitives::errors::RpcError::new(
             -32601,
-            String::from(msg),
+            format!(
+                "Method `{}` is not implemented on this type of node. \
+                Please send a request to NEAR JSON RPC instead.",
+                method_name
+            ),
             None,
         ))
     }
