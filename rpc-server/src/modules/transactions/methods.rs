@@ -9,6 +9,13 @@ use near_primitives::views::FinalExecutionOutcomeViewEnum::{
 };
 use serde_json::Value;
 
+pub async fn send_tx(
+    data: Data<ServerContext>,
+    Params(params): Params<near_jsonrpc_client::methods::send_tx::RpcSendTransactionRequest>,
+) -> Result<near_jsonrpc_primitives::types::transactions::RpcTransactionResponse, RPCError> {
+    Ok(data.near_rpc_client.call(params).await?)
+}
+
 /// Queries status of a transaction by hash and returns the final transaction result.
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn tx(
@@ -32,8 +39,10 @@ pub async fn tx(
             // Note there is a difference in the implementation of the `tx` method in the `near_jsonrpc_client`
             // The method is `near_jsonrpc_client::methods::tx::RpcTransactionStatusRequest` in the client
             // so we can't just pass `params` there, instead we need to craft a request manually
+            // tx_status_request,
             near_jsonrpc_client::methods::tx::RpcTransactionStatusRequest {
                 transaction_info: tx_status_request.transaction_info,
+                wait_until: tx_status_request.wait_until,
             },
             "TX",
         )
@@ -71,6 +80,7 @@ pub async fn tx_status(
             // so we can't just pass `params` there, instead we need to craft a request manually
             near_jsonrpc_client::methods::EXPERIMENTAL_tx_status::RpcTransactionStatusRequest {
                 transaction_info: tx_status_request.transaction_info,
+                wait_until: tx_status_request.wait_until,
             },
             "EXPERIMENTAL_TX_STATUS",
         )
@@ -84,11 +94,11 @@ pub async fn tx_status(
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
-pub async fn send_tx_async(
+pub async fn broadcast_tx_async(
     data: Data<ServerContext>,
     Params(params): Params<Value>,
 ) -> Result<near_primitives::hash::CryptoHash, RPCError> {
-    tracing::debug!("`send_tx_async` call. Params: {:?}", params);
+    tracing::debug!("`broadcast_tx_async` call. Params: {:?}", params);
     if cfg!(feature = "send_tx_methods") {
         let signed_transaction = match parse_signed_transaction(params).await {
             Ok(signed_transaction) => signed_transaction,
@@ -110,11 +120,11 @@ pub async fn send_tx_async(
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
-pub async fn send_tx_commit(
+pub async fn broadcast_tx_commit(
     data: Data<ServerContext>,
     Params(params): Params<Value>,
 ) -> Result<near_jsonrpc_primitives::types::transactions::RpcTransactionResponse, RPCError> {
-    tracing::debug!("`send_tx_commit` call. Params: {:?}", params);
+    tracing::debug!("`broadcast_tx_commit` call. Params: {:?}", params);
     if cfg!(feature = "send_tx_methods") {
         let signed_transaction = match parse_signed_transaction(params).await {
             Ok(signed_transaction) => signed_transaction,
@@ -127,7 +137,11 @@ pub async fn send_tx_commit(
         match data.near_rpc_client.call(proxy_params).await {
             Ok(resp) => Ok(
                 near_jsonrpc_primitives::types::transactions::RpcTransactionResponse {
-                    final_execution_outcome: FinalExecutionOutcome(resp),
+                    final_execution_outcome: Some(FinalExecutionOutcome(resp)),
+                    // With the fact that we don't support non-finalised data yet,
+                    // final_execution_status field can be always filled with FINAL.
+                    // This logic will be more complicated when we add support of optimistic blocks.
+                    final_execution_status: near_primitives::views::TxExecutionStatus::Final,
                 },
             ),
             Err(err) => Err(RPCError::from(err)),
@@ -153,13 +167,13 @@ async fn tx_status_common(
 > {
     tracing::debug!("`tx_status_common` call.");
     let tx_hash = match &transaction_info {
-        near_jsonrpc_primitives::types::transactions::TransactionInfo::Transaction(tx) => {
-            tx.get_hash()
-        }
+        near_jsonrpc_primitives::types::transactions::TransactionInfo::Transaction(
+            near_jsonrpc_primitives::types::transactions::SignedTransaction::SignedTransaction(tx),
+        ) => tx.get_hash(),
         near_jsonrpc_primitives::types::transactions::TransactionInfo::TransactionId {
-            hash,
+            tx_hash,
             ..
-        } => *hash,
+        } => *tx_hash,
     };
 
     let transaction_details = data
@@ -175,17 +189,25 @@ async fn tx_status_common(
     if fetch_receipt {
         Ok(
             near_jsonrpc_primitives::types::transactions::RpcTransactionResponse {
-                final_execution_outcome: FinalExecutionOutcomeWithReceipt(
+                final_execution_outcome: Some(FinalExecutionOutcomeWithReceipt(
                     transaction_details.to_final_execution_outcome_with_receipts(),
-                ),
+                )),
+                // With the fact that we don't support non-finalised data yet,
+                // final_execution_status field can be always filled with FINAL.
+                // This logic will be more complicated when we add support of optimistic blocks.
+                final_execution_status: near_primitives::views::TxExecutionStatus::Final,
             },
         )
     } else {
         Ok(
             near_jsonrpc_primitives::types::transactions::RpcTransactionResponse {
-                final_execution_outcome: FinalExecutionOutcome(
+                final_execution_outcome: Some(FinalExecutionOutcome(
                     transaction_details.to_final_execution_outcome(),
-                ),
+                )),
+                // With the fact that we don't support non-finalised data yet,
+                // final_execution_status field can be always filled with FINAL.
+                // This logic will be more complicated when we add support of optimistic blocks.
+                final_execution_status: near_primitives::views::TxExecutionStatus::Final,
             },
         )
     }

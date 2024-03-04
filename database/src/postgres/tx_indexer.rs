@@ -1,6 +1,5 @@
 use crate::postgres::PostgresStorageManager;
 use bigdecimal::ToPrimitive;
-use borsh::{BorshDeserialize, BorshSerialize};
 
 pub struct PostgresDBManager {
     pg_pool: crate::postgres::PgAsyncPool,
@@ -30,14 +29,11 @@ impl crate::TxIndexerDbManager for PostgresDBManager {
         transaction: readnode_primitives::TransactionDetails,
         block_height: u64,
     ) -> anyhow::Result<()> {
-        let transaction_details = transaction
-            .try_to_vec()
-            .expect("Failed to borsh-serialize the Transaction");
         crate::models::TransactionDetail {
             transaction_hash: transaction.transaction.hash.to_string(),
             block_height: bigdecimal::BigDecimal::from(block_height),
             account_id: transaction.transaction.signer_id.to_string(),
-            transaction_details,
+            transaction_details: borsh::to_vec(&transaction)?,
         }
         .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
         .await
@@ -75,7 +71,7 @@ impl crate::TxIndexerDbManager for PostgresDBManager {
     ) -> anyhow::Result<()> {
         let transaction_hash = transaction_details.transaction.hash.clone().to_string();
         let block_height = transaction_details.block_height;
-        let transaction_details = transaction_details.try_to_vec().map_err(|err| {
+        let transaction_details = borsh::to_vec(&transaction_details).map_err(|err| {
             tracing::error!(target: "tx_indexer", "Failed to serialize transaction details: {:?}", err);
             err})?;
         crate::models::TransactionCache {
@@ -100,12 +96,8 @@ impl crate::TxIndexerDbManager for PostgresDBManager {
                 .receipt
                 .receipt_id
                 .to_string(),
-            receipt: indexer_execution_outcome_with_receipt
-                .receipt
-                .try_to_vec()?,
-            outcome: indexer_execution_outcome_with_receipt
-                .execution_outcome
-                .try_to_vec()?,
+            receipt: borsh::to_vec(&indexer_execution_outcome_with_receipt.receipt)?,
+            outcome: borsh::to_vec(&indexer_execution_outcome_with_receipt.execution_outcome)?,
         }
         .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
         .await
@@ -131,11 +123,10 @@ impl crate::TxIndexerDbManager for PostgresDBManager {
         Ok(transactions
             .into_iter()
             .map(|tx| {
-                let transaction_details =
-                    readnode_primitives::CollectingTransactionDetails::try_from_slice(
-                        &tx.transaction_details,
-                    )
-                    .expect("Failed to deserialize transaction details");
+                let transaction_details = borsh::from_slice::<
+                    readnode_primitives::CollectingTransactionDetails,
+                >(&tx.transaction_details)
+                .expect("Failed to deserialize transaction details");
                 (transaction_details.transaction_key(), transaction_details)
             })
             .collect())
@@ -156,11 +147,9 @@ impl crate::TxIndexerDbManager for PostgresDBManager {
             &transaction_hash,
         )
         .await?;
-        Ok(
-            readnode_primitives::CollectingTransactionDetails::try_from_slice(
-                &transaction_details,
-            )?,
-        )
+        Ok(borsh::from_slice::<
+            readnode_primitives::CollectingTransactionDetails,
+        >(&transaction_details)?)
     }
 
     async fn get_receipts_in_cache(
@@ -176,14 +165,14 @@ impl crate::TxIndexerDbManager for PostgresDBManager {
         Ok(result
             .into_iter()
             .map(|receipt_outcome| {
-                let receipt =
-                    near_primitives::views::ReceiptView::try_from_slice(&receipt_outcome.receipt)
-                        .expect("Failed to deserialize receipt");
-                let execution_outcome =
-                    near_primitives::views::ExecutionOutcomeWithIdView::try_from_slice(
-                        &receipt_outcome.outcome,
-                    )
-                    .expect("Failed to deserialize execution outcome");
+                let receipt = borsh::from_slice::<near_primitives::views::ReceiptView>(
+                    &receipt_outcome.receipt,
+                )
+                .expect("Failed to deserialize receipt");
+                let execution_outcome = borsh::from_slice::<
+                    near_primitives::views::ExecutionOutcomeWithIdView,
+                >(&receipt_outcome.outcome)
+                .expect("Failed to deserialize execution outcome");
                 near_indexer_primitives::IndexerExecutionOutcomeWithReceipt {
                     receipt,
                     execution_outcome,

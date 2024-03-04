@@ -2,7 +2,6 @@ use std::str::FromStr;
 
 use crate::postgres::PostgresStorageManager;
 use bigdecimal::ToPrimitive;
-use borsh::{BorshDeserialize, BorshSerialize};
 
 pub struct PostgresDBManager {
     pg_pool: crate::postgres::PgAsyncPool,
@@ -67,7 +66,7 @@ impl crate::ReaderDbManager for PostgresDBManager {
     ) -> anyhow::Result<Vec<readnode_primitives::StateKey>> {
         let result = crate::models::AccountState::get_state_keys_all(
             Self::get_connection(&self.pg_pool).await?,
-            account_id,
+            account_id.as_str(),
         )
         .await?
         .into_iter()
@@ -83,7 +82,7 @@ impl crate::ReaderDbManager for PostgresDBManager {
         let hex_str_prefix = hex::encode(prefix);
         let result = crate::models::AccountState::get_state_keys_by_prefix(
             Self::get_connection(&self.pg_pool).await?,
-            account_id,
+            account_id.as_str(),
             hex_str_prefix,
         )
         .await?
@@ -99,7 +98,7 @@ impl crate::ReaderDbManager for PostgresDBManager {
     ) -> anyhow::Result<(Vec<readnode_primitives::StateKey>, crate::PageToken)> {
         let (state_keys, next_page_token) = crate::models::AccountState::get_state_keys_by_page(
             Self::get_connection(&self.pg_pool).await?,
-            account_id,
+            account_id.as_str(),
             page_token,
         )
         .await?;
@@ -126,7 +125,7 @@ impl crate::ReaderDbManager for PostgresDBManager {
         };
         let result = if let Ok(result) = crate::models::StateChangesData::get_state_key_value(
             connection,
-            account_id,
+            account_id.as_str(),
             block_height,
             hex::encode(key_data.clone()),
         )
@@ -146,7 +145,7 @@ impl crate::ReaderDbManager for PostgresDBManager {
     ) -> anyhow::Result<readnode_primitives::QueryData<near_primitives::account::Account>> {
         let account_data = crate::models::StateChangesAccount::get_account(
             Self::get_connection(&self.pg_pool).await?,
-            account_id,
+            account_id.as_str(),
             request_block_height,
         )
         .await?;
@@ -176,7 +175,7 @@ impl crate::ReaderDbManager for PostgresDBManager {
     ) -> anyhow::Result<readnode_primitives::QueryData<Vec<u8>>> {
         let contract_data = crate::models::StateChangesContract::get_contract(
             Self::get_connection(&self.pg_pool).await?,
-            account_id,
+            account_id.as_str(),
             request_block_height,
         )
         .await?;
@@ -205,10 +204,10 @@ impl crate::ReaderDbManager for PostgresDBManager {
         request_block_height: near_primitives::types::BlockHeight,
         public_key: near_crypto::PublicKey,
     ) -> anyhow::Result<readnode_primitives::QueryData<near_primitives::account::AccessKey>> {
-        let key_data = public_key.try_to_vec()?;
+        let key_data = borsh::to_vec(&public_key)?;
         let access_key_data = crate::models::StateChangesAccessKey::get_access_key(
             Self::get_connection(&self.pg_pool).await?,
-            account_id,
+            account_id.as_str(),
             request_block_height,
             hex::encode(key_data),
         )
@@ -241,7 +240,7 @@ impl crate::ReaderDbManager for PostgresDBManager {
     ) -> anyhow::Result<std::collections::HashMap<String, Vec<u8>>> {
         let active_access_keys = crate::models::StateChangesAccessKeys::get_active_access_keys(
             Self::get_connection(&self.pg_pool).await?,
-            &account_id,
+            account_id.as_str(),
             block_height,
         )
         .await?;
@@ -293,9 +292,7 @@ impl crate::ReaderDbManager for PostgresDBManager {
             transaction_hash,
         )
         .await?;
-        Ok(readnode_primitives::TransactionDetails::try_from_slice(
-            &transaction_data,
-        )?)
+        Ok(borsh::from_slice::<readnode_primitives::TransactionDetails>(&transaction_data)?)
     }
 
     async fn get_indexing_transaction_by_hash(
@@ -308,7 +305,7 @@ impl crate::ReaderDbManager for PostgresDBManager {
         )
         .await?;
         let mut transaction_details =
-            readnode_primitives::CollectingTransactionDetails::try_from_slice(&data_value)?;
+            borsh::from_slice::<readnode_primitives::CollectingTransactionDetails>(&data_value)?;
 
         let result = crate::models::ReceiptOutcome::get_receipt_outcome(
             Self::get_connection(&self.pg_pool).await?,
@@ -318,13 +315,10 @@ impl crate::ReaderDbManager for PostgresDBManager {
         .await?;
         for receipt_outcome in result {
             let receipt =
-                near_primitives::views::ReceiptView::try_from_slice(&receipt_outcome.receipt)
-                    .expect("Failed to deserialize receipt");
-            let execution_outcome =
-                near_primitives::views::ExecutionOutcomeWithIdView::try_from_slice(
-                    &receipt_outcome.outcome,
-                )
-                .expect("Failed to deserialize execution outcome");
+                borsh::from_slice::<near_primitives::views::ReceiptView>(&receipt_outcome.receipt)?;
+            let execution_outcome = borsh::from_slice::<
+                near_primitives::views::ExecutionOutcomeWithIdView,
+            >(&receipt_outcome.outcome)?;
             transaction_details.receipts.push(receipt);
             transaction_details
                 .execution_outcomes
@@ -413,20 +407,5 @@ impl crate::ReaderDbManager for PostgresDBManager {
             epoch_start_height,
             validators_info,
         })
-    }
-
-    async fn get_protocol_config_by_epoch_id(
-        &self,
-        epoch_id: near_indexer_primitives::CryptoHash,
-    ) -> anyhow::Result<near_chain_configs::ProtocolConfigView> {
-        let protocol_config = crate::models::ProtocolConfig::get_protocol_config(
-            Self::get_connection(&self.pg_pool).await?,
-            epoch_id,
-        )
-        .await?;
-        let (protocol_config,) = serde_json::from_value::<(near_chain_configs::ProtocolConfigView,)>(
-            protocol_config.protocol_config,
-        )?;
-        Ok(protocol_config)
     }
 }
