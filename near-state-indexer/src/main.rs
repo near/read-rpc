@@ -22,6 +22,7 @@ pub(crate) const INDEXER: &str = "near_state_indexer";
 async fn handle_streamer_message(
     streamer_message: near_indexer::StreamerMessage,
     db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
+    client: &actix::Addr<near_client::ViewClientActor>,
     indexer_config: configuration::NearStateIndexerConfig,
     stats: std::sync::Arc<tokio::sync::RwLock<metrics::Stats>>,
 ) -> anyhow::Result<()> {
@@ -45,6 +46,7 @@ async fn handle_streamer_message(
         current_epoch_id,
         next_epoch_id,
         db_manager,
+        client,
     );
     let handle_block_future = db_manager.save_block(
         block_height,
@@ -100,50 +102,52 @@ async fn handle_streamer_message(
         }
     } else {
         // handle first indexing epoch
-        // let epoch_info = epoch_indexer::get_epoch_info_by_id(current_epoch_id, rpc_client).await?;
+        let epoch_info = utils::fetch_epoch_validators_info(current_epoch_id, client).await?;
         stats_lock.current_epoch_id = Some(current_epoch_id);
-        // stats_lock.current_epoch_height = epoch_info.epoch_height;
+        stats_lock.current_epoch_height = epoch_info.epoch_height;
     }
     Ok(())
 }
 
 #[cfg_attr(
     feature = "tracing-instrumentation",
-    tracing::instrument(skip(_db_manager))
+    tracing::instrument(skip(db_manager))
 )]
 async fn handle_epoch(
-    _stats_current_epoch_id: Option<CryptoHash>,
-    _stats_current_epoch_height: u64,
-    _current_epoch_id: CryptoHash,
-    _next_epoch_id: CryptoHash,
-    _db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
+    stats_current_epoch_id: Option<CryptoHash>,
+    stats_current_epoch_height: u64,
+    current_epoch_id: CryptoHash,
+    next_epoch_id: CryptoHash,
+    db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
+    client: &actix::Addr<near_client::ViewClientActor>,
 ) -> anyhow::Result<()> {
-    Ok(())
-    // if let Some(stats_epoch_id) = stats_current_epoch_id {
-    //     if stats_epoch_id == current_epoch_id {
-    //         // If epoch didn't change, we don't need handle it
-    //         Ok(())
-    //     } else {
-    //         // If epoch changed, we need to save epoch info and update epoch_end_height
-    //         let epoch_info =
-    //             epoch_indexer::get_epoch_info_by_id(stats_epoch_id, rpc_client).await?;
-    //         epoch_indexer::save_epoch_info(
-    //             &epoch_info,
-    //             db_manager,
-    //             Some(stats_current_epoch_height),
-    //         )
-    //         .await?;
-    //         db_manager
-    //             .update_epoch_end_height(stats_epoch_id, next_epoch_id)
-    //             .await?;
-    //         // epoch_indexer::update_epoch_end_height(db_manager, Some(stats_epoch_id), next_epoch_id)
-    //         //     .await?;
-    //         Ok(())
-    //     }
-    // } else {
-    //     // If stats_current_epoch_id is None, we don't need handle it
-    //     Ok(())
-    // }
+    if let Some(stats_epoch_id) = stats_current_epoch_id {
+        if stats_epoch_id == current_epoch_id {
+            // If epoch didn't change, we don't need handle it
+            Ok(())
+        } else {
+            // If epoch changed, we need to save epoch info and update epoch_end_height
+            let validators_info =
+                utils::fetch_epoch_validators_info(stats_epoch_id, client).await?;
+
+            db_manager
+                .add_validators(
+                    stats_epoch_id,
+                    stats_current_epoch_height,
+                    validators_info.epoch_start_height,
+                    &validators_info,
+                )
+                .await?;
+
+            db_manager
+                .update_epoch_end_height(stats_epoch_id, next_epoch_id)
+                .await?;
+            Ok(())
+        }
+    } else {
+        // If stats_current_epoch_id is None, we don't need handle it
+        Ok(())
+    }
 }
 
 /// This function will iterate over all StateChangesWithCauseViews in order to collect
@@ -287,13 +291,14 @@ async fn run(home_dir: std::path::PathBuf) -> anyhow::Result<()> {
         std::sync::Arc::clone(&stats),
         view_client.clone(),
     ));
-    tokio::spawn(utils::optimistic_stream(view_client));
+    tokio::spawn(utils::optimistic_stream(view_client.clone()));
 
     let mut handlers = tokio_stream::wrappers::ReceiverStream::new(stream)
         .map(|streamer_message| {
             handle_streamer_message(
-                streamer_message.into(),
+                streamer_message,
                 &db_manager,
+                &view_client,
                 state_indexer_config.clone(),
                 std::sync::Arc::clone(&stats),
             )
@@ -306,6 +311,6 @@ async fn run(home_dir: std::path::PathBuf) -> anyhow::Result<()> {
         }
     }
     drop(handlers); // close the channel so the sender will stop
-    
+
     Ok(())
 }

@@ -142,40 +142,40 @@ impl near_vm_runner::logic::External for CodeStorage {
         Ok(self.validators.values().sum())
     }
 
-    fn create_receipt(
+    fn create_action_receipt(
         &mut self,
         _receipt_indices: Vec<near_vm_runner::logic::types::ReceiptIndex>,
         _receiver_id: near_primitives::types::AccountId,
     ) -> Result<near_vm_runner::logic::types::ReceiptIndex> {
         Err(near_vm_runner::logic::VMLogicError::HostError(
             near_vm_runner::logic::HostError::ProhibitedInView {
-                method_name: String::from("create_receipt"),
+                method_name: String::from("create_action_receipt"),
             },
         ))
     }
 
-    fn yield_create_action_receipt(
+    fn create_promise_yield_receipt(
         &mut self,
         _receiver_id: near_primitives::types::AccountId,
     ) -> Result<(
         near_vm_runner::logic::types::ReceiptIndex,
-        near_primitives::hash::CryptoHash,
+        near_indexer_primitives::CryptoHash,
     )> {
         Err(near_vm_runner::logic::VMLogicError::HostError(
             near_vm_runner::logic::HostError::ProhibitedInView {
-                method_name: String::from("yield_create_action_receipt"),
+                method_name: String::from("create_promise_yield_receipt"),
             },
         ))
     }
 
-    fn yield_submit_data_receipt(
+    fn submit_promise_resume_data(
         &mut self,
-        _data_id: near_primitives::hash::CryptoHash,
+        _data_id: near_indexer_primitives::CryptoHash,
         _data: Vec<u8>,
     ) -> Result<bool> {
         Err(near_vm_runner::logic::VMLogicError::HostError(
             near_vm_runner::logic::HostError::ProhibitedInView {
-                method_name: String::from("yield_submit_data_receipt"),
+                method_name: String::from("submit_promise_resume_data"),
             },
         ))
     }

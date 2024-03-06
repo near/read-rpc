@@ -1,7 +1,5 @@
-pub use clap::Parser;
-
 /// Watches for stream of blocks from the chain
-#[derive(Parser, Clone, Debug)]
+#[derive(clap::Parser, Debug)]
 pub(crate) struct Opts {
     /// Sets a custom config dir. Defaults to ~/.near/
     #[clap(short, long)]
@@ -10,7 +8,8 @@ pub(crate) struct Opts {
     pub subcmd: SubCommand,
 }
 
-#[derive(Parser, Clone, Debug)]
+#[derive(clap::Parser, Debug)]
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum SubCommand {
     /// Run NEAR Indexer Example. Start observe the network
     Run,
@@ -18,7 +17,7 @@ pub(crate) enum SubCommand {
     Init(InitConfigArgs),
 }
 
-#[derive(clap::Parser, Debug, Clone)]
+#[derive(clap::Parser, Debug)]
 pub(crate) struct InitConfigArgs {
     /// chain/network id (localnet, testnet, devnet, betanet)
     #[clap(short, long)]

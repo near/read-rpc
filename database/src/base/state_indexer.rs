@@ -1,6 +1,3 @@
-use near_indexer_primitives::CryptoHash;
-use near_primitives::views::StateChangeValueView;
-
 #[async_trait::async_trait]
 pub trait StateIndexerDbManager {
     async fn add_state_changes(
@@ -131,7 +128,7 @@ pub trait StateIndexerDbManager {
     async fn save_block(
         &self,
         block_height: u64,
-        block_hash: CryptoHash,
+        block_hash: near_indexer_primitives::CryptoHash,
         chunks: Vec<(
             crate::primitives::ChunkHash,
             crate::primitives::ShardId,
@@ -152,7 +149,7 @@ pub trait StateIndexerDbManager {
         block_hash: near_indexer_primitives::CryptoHash,
     ) -> anyhow::Result<()> {
         match state_change.value {
-            StateChangeValueView::DataUpdate {
+            near_primitives::views::StateChangeValueView::DataUpdate {
                 account_id,
                 key,
                 value,
@@ -166,11 +163,11 @@ pub trait StateIndexerDbManager {
                 )
                 .await?
             }
-            StateChangeValueView::DataDeletion { account_id, key } => {
+            near_primitives::views::StateChangeValueView::DataDeletion { account_id, key } => {
                 self.delete_state_changes(account_id, block_height, block_hash, key.as_ref())
                     .await?
             }
-            StateChangeValueView::AccessKeyUpdate {
+            near_primitives::views::StateChangeValueView::AccessKeyUpdate {
                 account_id,
                 public_key,
                 access_key,
@@ -198,7 +195,7 @@ pub trait StateIndexerDbManager {
                 #[cfg(not(feature = "account_access_keys"))]
                 add_access_key_future.await?;
             }
-            StateChangeValueView::AccessKeyDeletion {
+            near_primitives::views::StateChangeValueView::AccessKeyDeletion {
                 account_id,
                 public_key,
             } => {
@@ -218,15 +215,18 @@ pub trait StateIndexerDbManager {
                 #[cfg(not(feature = "account_access_keys"))]
                 delete_access_key_future.await?;
             }
-            StateChangeValueView::ContractCodeUpdate { account_id, code } => {
+            near_primitives::views::StateChangeValueView::ContractCodeUpdate {
+                account_id,
+                code,
+            } => {
                 self.add_contract_code(account_id, block_height, block_hash, code.as_ref())
                     .await?
             }
-            StateChangeValueView::ContractCodeDeletion { account_id } => {
+            near_primitives::views::StateChangeValueView::ContractCodeDeletion { account_id } => {
                 self.delete_contract_code(account_id, block_height, block_hash)
                     .await?
             }
-            StateChangeValueView::AccountUpdate {
+            near_primitives::views::StateChangeValueView::AccountUpdate {
                 account_id,
                 account,
             } => {
@@ -234,7 +234,7 @@ pub trait StateIndexerDbManager {
                 self.add_account(account_id, block_height, block_hash, value)
                     .await?
             }
-            StateChangeValueView::AccountDeletion { account_id } => {
+            near_primitives::views::StateChangeValueView::AccountDeletion { account_id } => {
                 self.delete_account(account_id, block_height, block_hash)
                     .await?
             }
