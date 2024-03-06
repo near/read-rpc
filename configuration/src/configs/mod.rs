@@ -14,6 +14,14 @@ lazy_static::lazy_static! {
     static ref RE_NAME_ENV: regex::Regex = regex::Regex::new(r"\$\{(?<env_name>\w+)}").unwrap();
 }
 
+fn required_value_or_panic<T>(config_name: &str, value: Option<T>) -> T {
+    if let Some(value) = value {
+        value
+    } else {
+        panic!("Config `{}` is required!", config_name)
+    }
+}
+
 fn get_env_var<T>(env_var_name: &str) -> anyhow::Result<T>
 where
     T: FromStr,
@@ -70,7 +78,7 @@ pub struct CommonConfig {
     pub general: general::CommonGeneralConfig,
     #[serde(default)]
     pub rightsizing: rightsizing::CommonRightsizingConfig,
-    pub lake_config: lake::LakeConfig,
+    pub lake_config: lake::CommonLakeConfig,
     pub database: database::CommonDatabaseConfig,
 }
 
@@ -89,7 +97,7 @@ impl Config for RpcServerConfig {
     fn from_common_config(common_config: CommonConfig) -> Self {
         Self {
             general: common_config.general.into(),
-            lake_config: common_config.lake_config,
+            lake_config: common_config.lake_config.into(),
             database: database::DatabaseRpcServerConfig::from(common_config.database).into(),
         }
     }
@@ -117,7 +125,7 @@ impl Config for TxIndexerConfig {
         Self {
             general: common_config.general.into(),
             rightsizing: common_config.rightsizing.into(),
-            lake_config: common_config.lake_config,
+            lake_config: common_config.lake_config.into(),
             database: database::DatabaseTxIndexerConfig::from(common_config.database).into(),
         }
     }
@@ -142,7 +150,30 @@ impl Config for StateIndexerConfig {
         Self {
             general: common_config.general.into(),
             rightsizing: common_config.rightsizing.into(),
-            lake_config: common_config.lake_config,
+            lake_config: common_config.lake_config.into(),
+            database: database::DatabaseStateIndexerConfig::from(common_config.database).into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct NearStateIndexerConfig {
+    pub general: general::GeneralNearStateIndexerConfig,
+    pub rightsizing: rightsizing::RightsizingConfig,
+    pub database: database::DatabaseConfig,
+}
+
+impl NearStateIndexerConfig {
+    pub fn state_should_be_indexed(&self, state_change_value: &StateChangeValueView) -> bool {
+        self.rightsizing.state_should_be_indexed(state_change_value)
+    }
+}
+
+impl Config for NearStateIndexerConfig {
+    fn from_common_config(common_config: CommonConfig) -> Self {
+        Self {
+            general: common_config.general.into(),
+            rightsizing: common_config.rightsizing.into(),
             database: database::DatabaseStateIndexerConfig::from(common_config.database).into(),
         }
     }
@@ -159,7 +190,7 @@ impl Config for EpochIndexerConfig {
     fn from_common_config(common_config: CommonConfig) -> Self {
         Self {
             general: common_config.general.into(),
-            lake_config: common_config.lake_config,
+            lake_config: common_config.lake_config.into(),
             database: database::DatabaseStateIndexerConfig::from(common_config.database).into(),
         }
     }

@@ -7,7 +7,8 @@ mod configs;
 pub use crate::configs::database::DatabaseConfig;
 pub use crate::configs::general::ChainId;
 pub use crate::configs::{
-    EpochIndexerConfig, RpcServerConfig, StateIndexerConfig, TxIndexerConfig,
+    EpochIndexerConfig, NearStateIndexerConfig, RpcServerConfig, StateIndexerConfig,
+    TxIndexerConfig,
 };
 
 pub async fn read_configuration<T>() -> anyhow::Result<T>

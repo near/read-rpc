@@ -154,6 +154,32 @@ impl near_vm_runner::logic::External for CodeStorage {
         ))
     }
 
+    fn yield_create_action_receipt(
+        &mut self,
+        _receiver_id: near_primitives::types::AccountId,
+    ) -> Result<(
+        near_vm_runner::logic::types::ReceiptIndex,
+        near_primitives::hash::CryptoHash,
+    )> {
+        Err(near_vm_runner::logic::VMLogicError::HostError(
+            near_vm_runner::logic::HostError::ProhibitedInView {
+                method_name: String::from("yield_create_action_receipt"),
+            },
+        ))
+    }
+
+    fn yield_submit_data_receipt(
+        &mut self,
+        _data_id: near_primitives::hash::CryptoHash,
+        _data: Vec<u8>,
+    ) -> Result<bool> {
+        Err(near_vm_runner::logic::VMLogicError::HostError(
+            near_vm_runner::logic::HostError::ProhibitedInView {
+                method_name: String::from("yield_submit_data_receipt"),
+            },
+        ))
+    }
+
     fn append_action_create_account(
         &mut self,
         _receipt_index: near_vm_runner::logic::types::ReceiptIndex,

@@ -32,20 +32,19 @@ tracing-actix-web = "0.7.9"
 sysinfo = "0.30.5"
 
 
-configuration = { path = "../configuration" }
-database = { path = "../database" }
-readnode-primitives = { path = "../readnode-primitives" }
+configuration.workspace = true
+database.workspace = true
+readnode-primitives.workspace = true
 
-near-chain-configs = "0.20.0"
-near-crypto = "0.20.0"
-#near-jsonrpc-client = "0.8.0" Supports of nearcore 1.37 will be released in the next version
-near-jsonrpc-client = {git = "https://github.com/near/near-jsonrpc-client-rs.git", branch = "telezhnaya/wait_until"}
-near-jsonrpc-primitives = "0.20.0"
-near-indexer-primitives = "0.20.0"
-near-lake-framework = "0.7.7"
-near-primitives = "0.20.0"
-near-parameters = "0.20.0"
-near-vm-runner = "0.20.0"
+near-chain-configs.workspace = true
+near-crypto.workspace = true
+near-jsonrpc-client.workspace = true
+near-jsonrpc-primitives.workspace = true
+near-indexer-primitives.workspace = true
+near-lake-framework.workspace = true
+near-primitives.workspace = true
+near-parameters.workspace = true
+near-vm-runner.workspace = true
 
 [features]
 default = ["send_tx_methods", "scylla_db"]
