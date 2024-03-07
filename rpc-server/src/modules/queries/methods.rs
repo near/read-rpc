@@ -71,7 +71,7 @@ async fn query_call(
                 // Now near store 5 epochs, it can be changed in the future
                 // epoch_length = 43200 blocks
                 let expected_earliest_available_block =
-                    final_block_info.final_block_cache.block_height
+                    final_block_info.final_block.block_cache.block_height
                         - 5 * data.genesis_info.genesis_config.epoch_length;
                 return if block.block_height > expected_earliest_available_block {
                     // Proxy to regular rpc if the block is available

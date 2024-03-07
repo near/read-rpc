@@ -249,7 +249,8 @@ pub async fn fetch_block(
                 .final_block_info
                 .read()
                 .await
-                .final_block_cache
+                .final_block
+                .block_cache
                 .block_height),
             _ => Err(
                 near_jsonrpc_primitives::types::blocks::RpcBlockError::InternalError {

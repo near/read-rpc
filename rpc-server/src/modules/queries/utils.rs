@@ -263,22 +263,28 @@ pub async fn run_contract(
         }
     };
 
-    let (epoch_height, epoch_validators) =
-        if final_block_info.read().await.final_block_cache.epoch_id == block.epoch_id {
-            let validators = final_block_info.read().await.current_validators.clone();
-            (validators.epoch_height, validators.current_validators)
-        } else {
-            let validators = db_manager
-                .get_validators_by_epoch_id(block.epoch_id)
-                .await
-                .map_err(|_| FunctionCallError::InternalError {
-                    error_message: "Failed to get epoch info".to_string(),
-                })?;
-            (
-                validators.epoch_height,
-                validators.validators_info.current_validators,
-            )
-        };
+    let (epoch_height, epoch_validators) = if final_block_info
+        .read()
+        .await
+        .final_block
+        .block_cache
+        .epoch_id
+        == block.epoch_id
+    {
+        let validators = final_block_info.read().await.current_validators.clone();
+        (validators.epoch_height, validators.current_validators)
+    } else {
+        let validators = db_manager
+            .get_validators_by_epoch_id(block.epoch_id)
+            .await
+            .map_err(|_| FunctionCallError::InternalError {
+                error_message: "Failed to get epoch info".to_string(),
+            })?;
+        (
+            validators.epoch_height,
+            validators.validators_info.current_validators,
+        )
+    };
 
     let public_key = near_crypto::PublicKey::empty(near_crypto::KeyType::ED25519);
     let random_seed = near_primitives::utils::create_random_seed(

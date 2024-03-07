@@ -40,7 +40,7 @@ impl GenesisInfo {
 
         Self {
             genesis_config,
-            genesis_block_cache: genesis_block.into(),
+            genesis_block_cache: CacheBlock::from(&genesis_block),
         }
     }
 }

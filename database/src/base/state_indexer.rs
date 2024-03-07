@@ -144,18 +144,18 @@ pub trait StateIndexerDbManager {
 
     async fn save_state_change(
         &self,
-        state_change: near_primitives::views::StateChangeWithCauseView,
+        state_change: &near_primitives::views::StateChangeWithCauseView,
         block_height: u64,
         block_hash: near_indexer_primitives::CryptoHash,
     ) -> anyhow::Result<()> {
-        match state_change.value {
+        match &state_change.value {
             near_primitives::views::StateChangeValueView::DataUpdate {
                 account_id,
                 key,
                 value,
             } => {
                 self.add_state_changes(
-                    account_id,
+                    account_id.clone(),
                     block_height,
                     block_hash,
                     key.as_ref(),
@@ -164,8 +164,13 @@ pub trait StateIndexerDbManager {
                 .await?
             }
             near_primitives::views::StateChangeValueView::DataDeletion { account_id, key } => {
-                self.delete_state_changes(account_id, block_height, block_hash, key.as_ref())
-                    .await?
+                self.delete_state_changes(
+                    account_id.clone(),
+                    block_height,
+                    block_hash,
+                    key.as_ref(),
+                )
+                .await?
             }
             near_primitives::views::StateChangeValueView::AccessKeyUpdate {
                 account_id,
@@ -185,7 +190,7 @@ pub trait StateIndexerDbManager {
                 #[cfg(feature = "account_access_keys")]
                 {
                     let add_account_access_keys_future = self.add_account_access_keys(
-                        account_id,
+                        account_id.clone(),
                         block_height,
                         &data_key,
                         Some(&data_value),
@@ -205,8 +210,12 @@ pub trait StateIndexerDbManager {
 
                 #[cfg(feature = "account_access_keys")]
                 {
-                    let delete_account_access_keys_future =
-                        self.add_account_access_keys(account_id, block_height, &data_key, None);
+                    let delete_account_access_keys_future = self.add_account_access_keys(
+                        account_id.clone(),
+                        block_height,
+                        &data_key,
+                        None,
+                    );
                     futures::try_join!(
                         delete_access_key_future,
                         delete_account_access_keys_future
@@ -219,11 +228,11 @@ pub trait StateIndexerDbManager {
                 account_id,
                 code,
             } => {
-                self.add_contract_code(account_id, block_height, block_hash, code.as_ref())
+                self.add_contract_code(account_id.clone(), block_height, block_hash, code.as_ref())
                     .await?
             }
             near_primitives::views::StateChangeValueView::ContractCodeDeletion { account_id } => {
-                self.delete_contract_code(account_id, block_height, block_hash)
+                self.delete_contract_code(account_id.clone(), block_height, block_hash)
                     .await?
             }
             near_primitives::views::StateChangeValueView::AccountUpdate {
@@ -231,11 +240,11 @@ pub trait StateIndexerDbManager {
                 account,
             } => {
                 let value = borsh::to_vec(&near_primitives::account::Account::from(account))?;
-                self.add_account(account_id, block_height, block_hash, value)
+                self.add_account(account_id.clone(), block_height, block_hash, value)
                     .await?
             }
             near_primitives::views::StateChangeValueView::AccountDeletion { account_id } => {
-                self.delete_account(account_id, block_height, block_hash)
+                self.delete_account(account_id.clone(), block_height, block_hash)
                     .await?
             }
         }

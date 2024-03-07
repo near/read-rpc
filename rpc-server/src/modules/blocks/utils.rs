@@ -98,7 +98,7 @@ pub async fn fetch_block_from_cache_or_get(
         }
         near_primitives::types::BlockReference::Finality(_) => {
             // Returns the final_block_height for all the finalities.
-            Some(data.final_block_info.read().await.final_block_cache)
+            Some(data.final_block_info.read().await.final_block.block_cache)
         }
         near_primitives::types::BlockReference::SyncCheckpoint(_) => {
             // Return genesis_block_cache for all SyncCheckpoint
@@ -111,7 +111,7 @@ pub async fn fetch_block_from_cache_or_get(
         Some(block) => Ok(block),
         None => {
             let block_from_s3 = fetch_block(data, block_reference).await?;
-            let block: CacheBlock = block_from_s3.block_view.into();
+            let block = CacheBlock::from(&block_from_s3.block_view);
 
             data.blocks_cache
                 .write()

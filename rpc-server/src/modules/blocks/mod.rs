@@ -13,8 +13,8 @@ pub struct CacheBlock {
     pub epoch_id: near_primitives::hash::CryptoHash,
 }
 
-impl From<near_primitives::views::BlockView> for CacheBlock {
-    fn from(block: near_primitives::views::BlockView) -> Self {
+impl From<&near_primitives::views::BlockView> for CacheBlock {
+    fn from(block: &near_primitives::views::BlockView) -> Self {
         Self {
             block_hash: block.header.hash,
             block_height: block.header.height,
@@ -29,8 +29,36 @@ impl From<near_primitives::views::BlockView> for CacheBlock {
 }
 
 #[derive(Debug)]
+pub struct BlockInfo {
+    pub block_cache: CacheBlock,
+    pub stream_message: near_indexer_primitives::StreamerMessage,
+}
+
+impl BlockInfo {
+    pub fn new_from_block_view(block_view: near_primitives::views::BlockView) -> Self {
+        Self {
+            block_cache: CacheBlock::from(&block_view),
+            stream_message: near_indexer_primitives::StreamerMessage {
+                block: block_view,
+                shards: vec![],
+            },
+        }
+    }
+
+    pub fn new_from_streamer_message(
+        stream_message: near_indexer_primitives::StreamerMessage,
+    ) -> Self {
+        Self {
+            block_cache: CacheBlock::from(&stream_message.block),
+            stream_message,
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct FinalBlockInfo {
-    pub final_block_cache: CacheBlock,
+    pub final_block: BlockInfo,
+    pub optimistic_block: BlockInfo,
     pub current_validators: near_primitives::views::EpochValidatorInfo,
 }
 
@@ -41,21 +69,28 @@ impl FinalBlockInfo {
             futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>,
         >,
     ) -> Self {
-        let final_block = crate::utils::get_final_cache_block(near_rpc_client)
-            .await
-            .expect("Error to get final block");
-
-        let validators = crate::utils::get_current_validators(near_rpc_client)
-            .await
-            .expect("Error to get protocol_config");
+        let final_block_future = crate::utils::get_final_block(near_rpc_client, false);
+        let optimistic_block_future = crate::utils::get_final_block(near_rpc_client, true);
+        let validators_future = crate::utils::get_current_validators(near_rpc_client);
+        let (final_block, optimistic_block, validators) = tokio::try_join!(
+            final_block_future,
+            optimistic_block_future,
+            validators_future,
+        )
+        .map_err(|err| {
+            tracing::error!("Error to fetch final block info: {:?}", err);
+            err
+        })
+        .expect("Error to get final block info");
 
         blocks_cache
             .write()
             .await
-            .put(final_block.block_height, final_block);
+            .put(final_block.header.height, CacheBlock::from(&final_block));
 
         Self {
-            final_block_cache: final_block,
+            final_block: BlockInfo::new_from_block_view(final_block),
+            optimistic_block: BlockInfo::new_from_block_view(optimistic_block),
             current_validators: validators,
         }
     }

@@ -1,4 +1,4 @@
-use crate::modules::blocks::{CacheBlock, FinalBlockInfo};
+use crate::modules::blocks::{BlockInfo, CacheBlock, FinalBlockInfo};
 #[cfg(feature = "shadow_data_consistency")]
 use assert_json_diff::{assert_json_matches_no_panic, CompareMode, Config, NumericMode};
 use futures::StreamExt;
@@ -96,28 +96,26 @@ impl JsonRpcClient {
     }
 }
 
-pub async fn get_final_cache_block(near_rpc_client: &JsonRpcClient) -> Option<CacheBlock> {
+pub async fn get_final_block(
+    near_rpc_client: &JsonRpcClient,
+    optimistic: bool,
+) -> anyhow::Result<near_primitives::views::BlockView> {
     let block_request_method = near_jsonrpc_client::methods::block::RpcBlockRequest {
-        block_reference: near_primitives::types::BlockReference::Finality(
-            near_primitives::types::Finality::Final,
-        ),
+        block_reference: near_primitives::types::BlockReference::Finality(if optimistic {
+            near_primitives::types::Finality::None
+        } else {
+            near_primitives::types::Finality::Final
+        }),
     };
-    match near_rpc_client.call(block_request_method).await {
-        Ok(block_view) => {
-            // Updating the metric to expose the block height considered as final by the server
-            // this metric can be used to calculate the lag between the server and the network
-            // Prometheus Gauge Metric type do not support u64
-            // https://github.com/tikv/rust-prometheus/issues/470
-            crate::metrics::FINAL_BLOCK_HEIGHT
-                .set(i64::try_from(block_view.header.height).unwrap());
-
-            Some(block_view.into())
-        }
-        Err(err) => {
-            tracing::warn!("Error to get final block: {:?}", err);
-            None
-        }
+    let block_view = near_rpc_client.call(block_request_method).await?;
+    if !optimistic {
+        // Updating the metric to expose the block height considered as final by the server
+        // this metric can be used to calculate the lag between the server and the network
+        // Prometheus Gauge Metric type do not support u64
+        // https://github.com/tikv/rust-prometheus/issues/470
+        crate::metrics::FINAL_BLOCK_HEIGHT.set(i64::try_from(block_view.header.height)?);
     }
+    Ok(block_view)
 }
 
 pub async fn get_current_validators(
@@ -137,20 +135,32 @@ async fn handle_streamer_message(
     final_block_info: std::sync::Arc<futures_locks::RwLock<FinalBlockInfo>>,
     near_rpc_client: &JsonRpcClient,
 ) -> anyhow::Result<()> {
-    let block: CacheBlock = streamer_message.block.into();
+    let block = BlockInfo::new_from_streamer_message(streamer_message);
 
-    if final_block_info.read().await.final_block_cache.epoch_id != block.epoch_id {
-        tracing::info!("New epoch started: {:?}", block.epoch_id);
+    if final_block_info
+        .read()
+        .await
+        .final_block
+        .block_cache
+        .epoch_id
+        != block.block_cache.epoch_id
+    {
+        tracing::info!("New epoch started: {:?}", block.block_cache.epoch_id);
         final_block_info.write().await.current_validators =
             get_current_validators(near_rpc_client).await?;
     }
-    final_block_info.write().await.final_block_cache = block;
-    blocks_cache.write().await.put(block.block_height, block);
-    crate::metrics::FINAL_BLOCK_HEIGHT.set(i64::try_from(block.block_height)?);
+    let block_cache = block.block_cache.clone();
+    final_block_info.write().await.final_block = block;
+    blocks_cache
+        .write()
+        .await
+        .put(block_cache.block_height, block_cache);
+    crate::metrics::FINAL_BLOCK_HEIGHT.set(i64::try_from(block_cache.block_height)?);
     Ok(())
 }
 
-pub async fn update_final_block_height_regularly(
+#[cfg(not(feature = "near_state_indexer"))]
+pub async fn update_final_block_regularly(
     blocks_cache: std::sync::Arc<
         futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>,
     >,
@@ -161,7 +171,14 @@ pub async fn update_final_block_height_regularly(
     tracing::info!("Task to get and store final block in the cache started");
     let lake_config = rpc_server_config
         .lake_config
-        .lake_config(final_block_info.read().await.final_block_cache.block_height)
+        .lake_config(
+            final_block_info
+                .read()
+                .await
+                .final_block
+                .block_cache
+                .block_height,
+        )
         .await?;
     let (sender, stream) = near_lake_framework::streamer(lake_config);
     let mut handlers = tokio_stream::wrappers::ReceiverStream::new(stream)
@@ -188,6 +205,79 @@ pub async fn update_final_block_height_regularly(
         Ok(Err(e)) => Err(e),
         Err(e) => Err(anyhow::Error::from(e)), // JoinError
     }
+}
+
+// Task to get and store final block in the cache
+// Subscribe to the redis channel and update the finale block in the cache
+#[cfg(feature = "near_state_indexer")]
+pub async fn update_final_block_regularly(
+    blocks_cache: std::sync::Arc<
+        futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>,
+    >,
+    final_block_info: std::sync::Arc<futures_locks::RwLock<FinalBlockInfo>>,
+    redis_client: redis::Client,
+    near_rpc_client: JsonRpcClient,
+) -> anyhow::Result<()> {
+    tracing::info!("Task to get and store final block in the cache started");
+    let mut subscriber = redis_client.get_async_connection().await?.into_pubsub();
+    subscriber.subscribe("final_block").await?;
+    let mut streamer = subscriber.on_message();
+    while let Some(message) = streamer.next().await {
+        match message.get_payload::<String>() {
+            Ok(payload) => match serde_json::from_str(&payload) {
+                Ok(streamer_message) => {
+                    if let Err(err) = handle_streamer_message(
+                        streamer_message,
+                        std::sync::Arc::clone(&blocks_cache),
+                        std::sync::Arc::clone(&final_block_info),
+                        &near_rpc_client,
+                    ).await {
+                        tracing::error!("Error to handle_streamer_message: {:?}", err);
+                    }
+                }
+                Err(err) => {
+                    tracing::error!("Error parse payload: {:?}", err);
+                }
+            },
+            Err(err) => {
+                tracing::error!("Error reading message: {:?}", err);
+            }
+        }
+    }
+    Ok(())
+}
+
+// Task to get and store optimistic block in the cache
+// Subscribe to the redis channel and update the optimistic block in the cache
+pub async fn update_optimistic_block_regularly(
+    final_block_info: std::sync::Arc<futures_locks::RwLock<FinalBlockInfo>>,
+    redis_client: redis::Client,
+) -> anyhow::Result<()> {
+    tracing::info!("Task to get and store optimistic block in the cache started");
+    let mut subscriber = redis_client.get_async_connection().await?.into_pubsub();
+    subscriber.subscribe("optimistic_block").await?;
+    let mut streamer = subscriber.on_message();
+    while let Some(message) = streamer.next().await {
+        match message.get_payload::<String>() {
+            Ok(payload) => match serde_json::from_str(&payload) {
+                Ok(streamer_message) => {
+                    let optimistic_block = BlockInfo::new_from_streamer_message(streamer_message);
+                    tracing::debug!(
+                        "Received optimistic block: {:?}",
+                        optimistic_block.block_cache
+                    );
+                    final_block_info.write().await.optimistic_block = optimistic_block;
+                }
+                Err(err) => {
+                    tracing::error!("Error parse payload: {:?}", err);
+                }
+            },
+            Err(err) => {
+                tracing::error!("Error reading message: {:?}", err);
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Calculate the cache size based on the available memory.

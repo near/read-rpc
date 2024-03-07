@@ -5,6 +5,7 @@
 chain_id = "${CHAIN_ID}"
 near_rpc_url = "${NEAR_RPC_URL}"
 near_archival_rpc_url = "${ARCHIVAL_NEAR_RPC_URL}"
+redis_url = "${REDIS_URL}"
 
 [general.rpc_server]
 referer_header_value = "${REFERER_HEADER_VALUE}"

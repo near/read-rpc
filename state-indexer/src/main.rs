@@ -54,7 +54,7 @@ async fn handle_streamer_message(
             .collect(),
     );
     let handle_state_change_future =
-        handle_state_changes(streamer_message, db_manager, block_height, block_hash, &indexer_config);
+        handle_state_changes(&streamer_message, db_manager, block_height, block_hash, &indexer_config);
 
     let update_meta_future = db_manager.update_meta(&indexer_config.general.indexer_id, block_height);
 
@@ -125,19 +125,19 @@ async fn handle_epoch(
     tracing::instrument(skip(streamer_message, db_manager))
 )]
 async fn handle_state_changes(
-    streamer_message: near_indexer_primitives::StreamerMessage,
+    streamer_message: &near_indexer_primitives::StreamerMessage,
     db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
     block_height: u64,
     block_hash: CryptoHash,
     indexer_config: &configuration::StateIndexerConfig,
 ) -> anyhow::Result<Vec<()>> {
     let mut state_changes_to_store =
-        std::collections::HashMap::<String, near_indexer_primitives::views::StateChangeWithCauseView>::new();
+        std::collections::HashMap::<String, &near_indexer_primitives::views::StateChangeWithCauseView>::new();
 
     let initial_state_changes = streamer_message
         .shards
-        .into_iter()
-        .flat_map(|shard| shard.state_changes.into_iter());
+        .iter()
+        .flat_map(|shard| shard.state_changes.iter());
 
     // Collecting a unique list of StateChangeWithCauseView for account_id + change kind + suffix
     // by overwriting the records in the HashMap

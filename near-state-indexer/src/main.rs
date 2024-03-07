@@ -17,11 +17,12 @@ pub(crate) const INDEXER: &str = "near_state_indexer";
 
 #[cfg_attr(
     feature = "tracing-instrumentation",
-    tracing::instrument(skip(streamer_message, db_manager))
+    tracing::instrument(skip(streamer_message, db_manager, redis_client))
 )]
 async fn handle_streamer_message(
     streamer_message: near_indexer::StreamerMessage,
     db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
+    redis_client: redis::aio::ConnectionManager,
     client: &actix::Addr<near_client::ViewClientActor>,
     indexer_config: configuration::NearStateIndexerConfig,
     stats: std::sync::Arc<tokio::sync::RwLock<metrics::Stats>>,
@@ -65,17 +66,21 @@ async fn handle_streamer_message(
             .collect(),
     );
     let handle_state_change_future = handle_state_changes(
-        streamer_message,
+        &streamer_message,
         db_manager,
         block_height,
         block_hash,
         &indexer_config,
     );
 
+    let published_streamer_message_feature =
+        utils::publish_streamer_message("final_block", &streamer_message, redis_client);
+
     futures::try_join!(
         handle_epoch_future,
         handle_block_future,
         handle_state_change_future,
+        published_streamer_message_feature,
     )?;
 
     metrics::BLOCK_PROCESSED_TOTAL.inc();
@@ -158,19 +163,19 @@ async fn handle_epoch(
     tracing::instrument(skip(streamer_message, db_manager))
 )]
 async fn handle_state_changes(
-    streamer_message: near_indexer::StreamerMessage,
+    streamer_message: &near_indexer::StreamerMessage,
     db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
     block_height: u64,
     block_hash: CryptoHash,
     indexer_config: &configuration::NearStateIndexerConfig,
 ) -> anyhow::Result<Vec<()>> {
     let mut state_changes_to_store =
-        std::collections::HashMap::<String, StateChangeWithCauseView>::new();
+        std::collections::HashMap::<String, &StateChangeWithCauseView>::new();
 
     let initial_state_changes = streamer_message
         .shards
-        .into_iter()
-        .flat_map(|shard| shard.state_changes.into_iter());
+        .iter()
+        .flat_map(|shard| shard.state_changes.iter());
 
     // Collecting a unique list of StateChangeWithCauseView for account_id + change kind + suffix
     // by overwriting the records in the HashMap
@@ -264,6 +269,10 @@ async fn run(home_dir: std::path::PathBuf) -> anyhow::Result<()> {
     >(&state_indexer_config.database)
     .await?;
 
+    let redis_client = redis::Client::open(state_indexer_config.general.redis_url.clone())?
+        .get_connection_manager()
+        .await?;
+
     // Initiate metrics http server
     tokio::spawn(
         metrics::init_server(state_indexer_config.general.metrics_server_port)
@@ -287,13 +296,17 @@ async fn run(home_dir: std::path::PathBuf) -> anyhow::Result<()> {
         std::sync::Arc::clone(&stats),
         view_client.clone(),
     ));
-    tokio::spawn(utils::optimistic_stream(view_client.clone()));
+    tokio::spawn(utils::optimistic_stream(
+        view_client.clone(),
+        redis_client.clone(),
+    ));
 
     let mut handlers = tokio_stream::wrappers::ReceiverStream::new(stream)
         .map(|streamer_message| {
             handle_streamer_message(
                 streamer_message,
                 &db_manager,
+                redis_client.clone(),
                 &view_client,
                 state_indexer_config.clone(),
                 std::sync::Arc::clone(&stats),

@@ -46,16 +46,19 @@ pub async fn status(
         version: data.version.clone(),
         chain_id: data.genesis_info.genesis_config.chain_id.clone(),
         protocol_version: near_primitives::version::PROTOCOL_VERSION,
-        latest_protocol_version: final_block_info.final_block_cache.latest_protocol_version,
+        latest_protocol_version: final_block_info
+            .final_block
+            .block_cache
+            .latest_protocol_version,
         // Address for current read_node RPC server.
         rpc_addr: Some(format!("0.0.0.0:{}", data.server_port)),
         validators,
         sync_info: near_primitives::views::StatusSyncInfo {
-            latest_block_hash: final_block_info.final_block_cache.block_hash,
-            latest_block_height: final_block_info.final_block_cache.block_height,
-            latest_state_root: final_block_info.final_block_cache.state_root,
+            latest_block_hash: final_block_info.final_block.block_cache.block_hash,
+            latest_block_height: final_block_info.final_block.block_cache.block_height,
+            latest_state_root: final_block_info.final_block.block_cache.state_root,
             latest_block_time: time::OffsetDateTime::from_unix_timestamp_nanos(
-                final_block_info.final_block_cache.block_timestamp as i128,
+                final_block_info.final_block.block_cache.block_timestamp as i128,
             )
             .expect("Failed to parse timestamp"),
             // Always false because read_node is not need to sync
@@ -69,7 +72,7 @@ pub async fn status(
                 .expect("Failed to parse timestamp"),
             ),
             epoch_id: Some(near_primitives::types::EpochId(
-                final_block_info.final_block_cache.epoch_id,
+                final_block_info.final_block.block_cache.epoch_id,
             )),
             epoch_start_height: Some(final_block_info.current_validators.epoch_start_height),
         },
@@ -127,7 +130,8 @@ pub async fn validators(
             .final_block_info
             .read()
             .await
-            .final_block_cache
+            .final_block
+            .block_cache
             .epoch_id
             == epoch_id.0
         {

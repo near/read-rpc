@@ -11,6 +11,7 @@ pub struct GeneralRpcServerConfig {
     pub chain_id: ChainId,
     pub near_rpc_url: String,
     pub near_archival_rpc_url: Option<String>,
+    pub redis_url: String,
     pub referer_header_value: String,
     pub server_port: u16,
     pub max_gas_burnt: u64,
@@ -43,6 +44,7 @@ pub struct GeneralStateIndexerConfig {
 #[derive(Debug, Clone)]
 pub struct GeneralNearStateIndexerConfig {
     pub chain_id: ChainId,
+    pub redis_url: String,
     pub metrics_server_port: u16,
     pub concurrency: usize,
 }
@@ -63,6 +65,8 @@ pub struct CommonGeneralConfig {
     pub near_rpc_url: Option<String>,
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub near_archival_rpc_url: Option<String>,
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    pub redis_url: Option<String>,
     #[serde(default)]
     pub rpc_server: CommonGeneralRpcServerConfig,
     #[serde(default)]
@@ -278,6 +282,7 @@ impl From<CommonGeneralConfig> for GeneralRpcServerConfig {
             chain_id: common_config.chain_id,
             near_rpc_url: required_value_or_panic("near_rpc_url", common_config.near_rpc_url),
             near_archival_rpc_url: common_config.near_archival_rpc_url,
+            redis_url: common_config.redis_url.unwrap_or("redis://127.0.0.1/".to_string()),
             referer_header_value: common_config
                 .rpc_server
                 .referer_header_value
@@ -355,6 +360,7 @@ impl From<CommonGeneralConfig> for GeneralNearStateIndexerConfig {
     fn from(common_config: CommonGeneralConfig) -> Self {
         Self {
             chain_id: common_config.chain_id,
+            redis_url: common_config.redis_url.unwrap_or("redis://127.0.0.1/".to_string()),
             metrics_server_port: common_config
                 .near_state_indexer
                 .metrics_server_port
