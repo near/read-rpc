@@ -16,6 +16,10 @@ The JSON RPC server implementation that repeats all the APIs current real NEAR J
 
 The indexer built on top of Lake Framework that watches the network and stores the `StateChanges` into the Storage (ScyllaDB) using the designed data schemas.
 
+### [near-state-indexer](near-state-indexer/README.md)
+
+The indexer built on [NEAR Indexer Framework](https://github.com/nearprotocol/nearcore/tree/master/chain/indexer)
+
 ### [tx-indexer](tx-indexer/README.md)
 
 The indexer built on top of Lake Framework that watches the network and stores the `Transactions` along with all the related entities (`Receipts`, `ExecutionOutcomes`) into the Storage (ScyllaDB) using the specifically defined `TransactionDetails` structure in a dumped way (using the simplest key-value schema)
