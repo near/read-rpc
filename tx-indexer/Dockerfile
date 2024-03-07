@@ -1,11 +1,11 @@
-FROM rust:1.75 AS builder
+FROM rust:1.76 AS builder
 ARG features="default"
 WORKDIR /tmp/
 
 COPY Cargo.lock ./
 COPY Cargo.toml ./
 COPY config.toml ./
-RUN sed '/perf-testing/d; /rpc-server/d; /state-indexer/d; /epoch-indexer/d' Cargo.toml > Cargo.toml.new && mv Cargo.toml.new Cargo.toml
+RUN sed '/perf-testing/d; /rpc-server/d; /state-indexer/d; /epoch-indexer/d; /near-state-indexer/d' Cargo.toml > Cargo.toml.new && mv Cargo.toml.new Cargo.toml
 COPY tx-indexer/Cargo.toml tx-indexer/Cargo.toml
 COPY configuration configuration
 COPY database database

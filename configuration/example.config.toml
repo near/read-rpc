@@ -88,6 +88,17 @@ near_rpc_url = "https://beta.rpc.mainnet.near.org"
 ## Default value is 1
 #concurrency = 1
 
+### Near state indexer general configuration
+[general.near_state_indexer]
+
+## Port for metrics server
+## By default it 8082
+#metrics_server_port = 8082
+
+## Concurrency for state-indexer
+## Default value is 1
+#concurrency = 1
+
 ## Epoch indexer general configuration
 [general.epoch_indexer]
 

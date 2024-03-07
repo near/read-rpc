@@ -71,7 +71,7 @@ async fn test(rpc_url: &http::Uri, name: &str, queries_count: usize) -> Vec<Test
     let epoch_len = 43200;
 
     let final_block_dt =
-        NaiveDateTime::from_timestamp_micros(final_block.header.timestamp as i64 / 1000)
+        DateTime::from_timestamp_micros(final_block.header.timestamp as i64 / 1000)
             .unwrap_or_else(|| panic!("Unable to parse final block timestamp from {}", name));
 
     println!(

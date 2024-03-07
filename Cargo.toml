@@ -12,9 +12,31 @@ members = [
     "configuration",
     "database",
     "epoch-indexer",
+    "near-state-indexer",
     "perf-testing",
     "readnode-primitives",
     "rpc-server",
     "state-indexer",
     "tx-indexer",
 ]
+
+[workspace.dependencies]
+
+configuration = { path = "configuration" }
+database = { path = "database" }
+readnode-primitives = { path = "readnode-primitives" }
+epoch-indexer = { path = "epoch-indexer" }
+
+near-indexer = { git = 'https://github.com/near/nearcore.git', rev = '6216a118cc3833d916723b9724b9d747c3c4c563' }
+near-client = { git = 'https://github.com/near/nearcore.git', rev = '6216a118cc3833d916723b9724b9d747c3c4c563' }
+near-o11y = { git = 'https://github.com/near/nearcore.git', rev = '6216a118cc3833d916723b9724b9d747c3c4c563' }
+near-indexer-primitives = { git = 'https://github.com/near/nearcore.git', rev = '6216a118cc3833d916723b9724b9d747c3c4c563' }
+near-primitives = { git = 'https://github.com/near/nearcore.git', rev = '6216a118cc3833d916723b9724b9d747c3c4c563' }
+near-chain-configs = { git = 'https://github.com/near/nearcore.git', rev = '6216a118cc3833d916723b9724b9d747c3c4c563' }
+near-crypto = { git = 'https://github.com/near/nearcore.git', rev = '6216a118cc3833d916723b9724b9d747c3c4c563' }
+near-jsonrpc-primitives = { git = 'https://github.com/near/nearcore.git', rev = '6216a118cc3833d916723b9724b9d747c3c4c563' }
+near-parameters = { git = 'https://github.com/near/nearcore.git', rev = '6216a118cc3833d916723b9724b9d747c3c4c563' }
+near-vm-runner = { git = 'https://github.com/near/nearcore.git', rev = '6216a118cc3833d916723b9724b9d747c3c4c563' }
+
+near-lake-framework = { git = 'https://github.com/kobayurii/near-lake-framework-rs.git', branch = '0.7.8' }
+near-jsonrpc-client = { git = 'https://github.com/kobayurii/near-jsonrpc-client-rs.git', branch = '0.8.1'}

@@ -1,6 +1,5 @@
+use actix_web::cookie::time;
 use jsonrpc_v2::{Data, Params};
-
-use near_primitives::utils::from_timestamp;
 
 use crate::config::ServerContext;
 use crate::errors::RPCError;
@@ -55,14 +54,20 @@ pub async fn status(
             latest_block_hash: final_block_info.final_block_cache.block_hash,
             latest_block_height: final_block_info.final_block_cache.block_height,
             latest_state_root: final_block_info.final_block_cache.state_root,
-            latest_block_time: from_timestamp(final_block_info.final_block_cache.block_timestamp),
+            latest_block_time: time::OffsetDateTime::from_unix_timestamp_nanos(
+                final_block_info.final_block_cache.block_timestamp as i128,
+            )
+            .expect("Failed to parse timestamp"),
             // Always false because read_node is not need to sync
             syncing: false,
             earliest_block_hash: Some(data.genesis_info.genesis_block_cache.block_hash),
             earliest_block_height: Some(data.genesis_info.genesis_block_cache.block_height),
-            earliest_block_time: Some(from_timestamp(
-                data.genesis_info.genesis_block_cache.block_timestamp,
-            )),
+            earliest_block_time: Some(
+                time::OffsetDateTime::from_unix_timestamp_nanos(
+                    data.genesis_info.genesis_block_cache.block_timestamp as i128,
+                )
+                .expect("Failed to parse timestamp"),
+            ),
             epoch_id: Some(near_primitives::types::EpochId(
                 final_block_info.final_block_cache.epoch_id,
             )),
@@ -74,8 +79,7 @@ pub async fn status(
         node_public_key: near_crypto::PublicKey::empty(near_crypto::KeyType::ED25519),
         node_key: None,
         // return uptime current read_node
-        uptime_sec: near_primitives::static_clock::StaticClock::utc().timestamp()
-            - data.boot_time_seconds,
+        uptime_sec: chrono::Utc::now().timestamp() - data.boot_time_seconds,
         // Not using for status method
         detailed_debug_status: None,
     })

@@ -156,7 +156,7 @@ impl ServerContext {
             max_gas_burnt: rpc_server_config.general.max_gas_burnt,
             shadow_data_consistency_rate: rpc_server_config.general.shadow_data_consistency_rate,
             server_port: rpc_server_config.general.server_port,
-            boot_time_seconds: near_primitives::static_clock::StaticClock::utc().timestamp(),
+            boot_time_seconds: chrono::Utc::now().timestamp(),
             version: near_primitives::version::Version {
                 version: NEARD_VERSION.to_string(),
                 build: NEARD_BUILD.to_string(),
