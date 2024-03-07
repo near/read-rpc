@@ -43,7 +43,6 @@ pub struct GeneralStateIndexerConfig {
 #[derive(Debug, Clone)]
 pub struct GeneralNearStateIndexerConfig {
     pub chain_id: ChainId,
-    pub indexer_id: String,
     pub metrics_server_port: u16,
     pub concurrency: usize,
 }
@@ -71,7 +70,7 @@ pub struct CommonGeneralConfig {
     #[serde(default)]
     pub state_indexer: CommonGeneralStateIndexerConfig,
     #[serde(default)]
-    pub near_state_indexer: CommonGeneralStateIndexerConfig,
+    pub near_state_indexer: CommonGeneralNearStateIndexerConfig,
     #[serde(default)]
     pub epoch_indexer: CommonGeneralEpochIndexerConfig,
 }
@@ -229,18 +228,12 @@ impl Default for CommonGeneralStateIndexerConfig {
 #[derive(Deserialize, Debug, Clone)]
 pub struct CommonGeneralNearStateIndexerConfig {
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
-    pub indexer_id: Option<String>,
-    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub metrics_server_port: Option<u16>,
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub concurrency: Option<usize>,
 }
 
 impl CommonGeneralNearStateIndexerConfig {
-    pub fn default_indexer_id() -> String {
-        "near-state-indexer".to_string()
-    }
-
     pub fn default_metrics_server_port() -> u16 {
         8082
     }
@@ -253,7 +246,6 @@ impl CommonGeneralNearStateIndexerConfig {
 impl Default for CommonGeneralNearStateIndexerConfig {
     fn default() -> Self {
         Self {
-            indexer_id: Some(Self::default_indexer_id()),
             metrics_server_port: Some(Self::default_metrics_server_port()),
             concurrency: Some(Self::default_concurrency()),
         }
@@ -363,18 +355,14 @@ impl From<CommonGeneralConfig> for GeneralNearStateIndexerConfig {
     fn from(common_config: CommonGeneralConfig) -> Self {
         Self {
             chain_id: common_config.chain_id,
-            indexer_id: common_config
-                .near_state_indexer
-                .indexer_id
-                .unwrap_or_else(CommonGeneralStateIndexerConfig::default_indexer_id),
             metrics_server_port: common_config
                 .near_state_indexer
                 .metrics_server_port
-                .unwrap_or_else(CommonGeneralStateIndexerConfig::default_metrics_server_port),
+                .unwrap_or_else(CommonGeneralNearStateIndexerConfig::default_metrics_server_port),
             concurrency: common_config
                 .near_state_indexer
                 .concurrency
-                .unwrap_or_else(CommonGeneralStateIndexerConfig::default_concurrency),
+                .unwrap_or_else(CommonGeneralNearStateIndexerConfig::default_concurrency),
         }
     }
 }

@@ -72,14 +72,10 @@ async fn handle_streamer_message(
         &indexer_config,
     );
 
-    let update_meta_future =
-        db_manager.update_meta(&indexer_config.general.indexer_id, block_height);
-
     futures::try_join!(
         handle_epoch_future,
         handle_block_future,
         handle_state_change_future,
-        update_meta_future
     )?;
 
     metrics::BLOCK_PROCESSED_TOTAL.inc();

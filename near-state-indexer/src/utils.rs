@@ -44,10 +44,7 @@ pub(crate) async fn fetch_optimistic_block(
         .await??)
 }
 
-pub async fn optimistic_stream(
-    view_client: actix::Addr<near_client::ViewClientActor>,
-    
-) {
+pub async fn optimistic_stream(view_client: actix::Addr<near_client::ViewClientActor>) {
     tracing::info!(target: crate::INDEXER, "Starting Optimistic Streamer...");
     let mut optimistic_block_height: Option<u64> = None;
     loop {
@@ -64,7 +61,7 @@ pub async fn optimistic_stream(
             let response = near_indexer::build_streamer_message(&view_client, block).await;
             match response {
                 Ok(streamer_message) => {
-                    tracing::debug!(target: crate::INDEXER, "{:#?}", &streamer_message);
+                    // TODO: implement handling of streamer message for optimistic block
                     tracing::info!(target: crate::INDEXER, "Optimistic block {:#?}", &streamer_message.block.header.height);
                 }
                 Err(err) => {

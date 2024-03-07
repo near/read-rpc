@@ -25,6 +25,10 @@ indexer_id = "${STATE_INDEXER_ID}"
 metrics_server_port = "${STATE_SERVER_PORT}"
 concurrency = "${CONCURRENCY}"
 
+[general.near_state_indexer]
+metrics_server_port = "${NEAR_STATE_SERVER_PORT}"
+concurrency = "${NEAR_STATE_CONCURRENCY}"
+
 [general.epoch_indexer]
 indexer_id = "${EPOCH_INDEXER_ID}"
 
