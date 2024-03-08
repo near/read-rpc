@@ -149,7 +149,7 @@ async fn handle_streamer_message(
         final_block_info.write().await.current_validators =
             get_current_validators(near_rpc_client).await?;
     }
-    let block_cache = block.block_cache.clone();
+    let block_cache = block.block_cache;
     final_block_info.write().await.final_block = block;
     blocks_cache
         .write()
@@ -231,7 +231,9 @@ pub async fn update_final_block_regularly(
                         std::sync::Arc::clone(&blocks_cache),
                         std::sync::Arc::clone(&final_block_info),
                         &near_rpc_client,
-                    ).await {
+                    )
+                    .await
+                    {
                         tracing::error!("Error to handle_streamer_message: {:?}", err);
                     }
                 }

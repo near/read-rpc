@@ -9,14 +9,14 @@ use jsonrpc_v2::{Data, Params};
 
 /// `query` rpc method implementation
 /// calls proxy_rpc_call to get `query` from near-rpc if request parameters not supported by read-rpc
-/// as example: BlockReference for Finality::None is not supported by read-rpc
+/// as example: BlockReference for Finality::None is not supported by read-rpc when near_state_indexer is not running
 /// another way to get `query` from read-rpc using `query_call`
-#[allow(unused_mut)]
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn query(
     data: Data<ServerContext>,
-    Params(mut params): Params<near_jsonrpc_primitives::types::query::RpcQueryRequest>,
+    Params(params): Params<near_jsonrpc_primitives::types::query::RpcQueryRequest>,
 ) -> Result<near_jsonrpc_primitives::types::query::RpcQueryResponse, RPCError> {
+    #[cfg(not(feature = "near_state_indexer"))]
     if let near_primitives::types::BlockReference::Finality(finality) = &params.block_reference {
         if finality != &near_primitives::types::Finality::Final {
             // Increase the OPTIMISTIC_REQUESTS_TOTAL metric if the request has
@@ -241,22 +241,37 @@ async fn view_account(
         account_id,
         block.block_height
     );
-
-    let account = data
-        .db_manager
-        .get_account(account_id, block.block_height)
+    let changes = data
+        .final_block_info
+        .read()
         .await
-        .map_err(
-            |_err| near_jsonrpc_primitives::types::query::RpcQueryError::UnknownAccount {
+        .optimistic_block
+        .changes_in_block();
+    let account = if let Some(value) = changes.get(&format!("{}_account", account_id.as_str())) {
+        value.to_account().await.map_err(|_err| {
+            near_jsonrpc_primitives::types::query::RpcQueryError::UnknownAccount {
                 requested_account_id: account_id.clone(),
                 block_height: block.block_height,
                 block_hash: block.block_hash,
-            },
-        )?;
+            }
+        })?
+    } else {
+        data.db_manager
+            .get_account(account_id, block.block_height)
+            .await
+            .map_err(
+                |_err| near_jsonrpc_primitives::types::query::RpcQueryError::UnknownAccount {
+                    requested_account_id: account_id.clone(),
+                    block_height: block.block_height,
+                    block_hash: block.block_hash,
+                },
+            )?
+            .data
+    };
 
     Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc_primitives::types::query::QueryResponseKind::ViewAccount(
-            near_primitives::views::AccountView::from(account.data),
+            near_primitives::views::AccountView::from(account),
         ),
         block_height: block.block_height,
         block_hash: block.block_hash,
@@ -277,33 +292,60 @@ async fn view_code(
         account_id,
         block.block_height
     );
-    let contract = data
-        .db_manager
-        .get_account(account_id, block.block_height)
+    let changes = data
+        .final_block_info
+        .read()
         .await
-        .map_err(
-            |_err| near_jsonrpc_primitives::types::query::RpcQueryError::UnknownAccount {
+        .optimistic_block
+        .changes_in_block();
+    let contract = if let Some(value) = changes.get(&format!("{}_account", account_id.as_str())) {
+        value.to_account().await.map_err(|_err| {
+            near_jsonrpc_primitives::types::query::RpcQueryError::UnknownAccount {
                 requested_account_id: account_id.clone(),
                 block_height: block.block_height,
                 block_hash: block.block_hash,
-            },
-        )?;
-    let contract_code = data
-        .db_manager
-        .get_contract_code(account_id, block.block_height)
-        .await
-        .map_err(
-            |_err| near_jsonrpc_primitives::types::query::RpcQueryError::NoContractCode {
-                contract_account_id: account_id.clone(),
-                block_height: block.block_height,
-                block_hash: block.block_hash,
-            },
-        )?;
+            }
+        })?
+    } else {
+        data.db_manager
+            .get_account(account_id, block.block_height)
+            .await
+            .map_err(
+                |_err| near_jsonrpc_primitives::types::query::RpcQueryError::UnknownAccount {
+                    requested_account_id: account_id.clone(),
+                    block_height: block.block_height,
+                    block_hash: block.block_hash,
+                },
+            )?
+            .data
+    };
+    let contract_code =
+        if let Some(value) = changes.get(&format!("{}_contract", account_id.as_str())) {
+            value.to_contract_code().await.map_err(|_err| {
+                near_jsonrpc_primitives::types::query::RpcQueryError::NoContractCode {
+                    contract_account_id: account_id.clone(),
+                    block_height: block.block_height,
+                    block_hash: block.block_hash,
+                }
+            })?
+        } else {
+            data.db_manager
+                .get_contract_code(account_id, block.block_height)
+                .await
+                .map_err(|_err| {
+                    near_jsonrpc_primitives::types::query::RpcQueryError::NoContractCode {
+                        contract_account_id: account_id.clone(),
+                        block_height: block.block_height,
+                        block_hash: block.block_hash,
+                    }
+                })?
+                .data
+        };
     Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc_primitives::types::query::QueryResponseKind::ViewCode(
             near_primitives::views::ContractCodeView {
-                code: contract_code.data,
-                hash: contract.data.code_hash(),
+                code: contract_code,
+                hash: contract.code_hash(),
             },
         ),
         block_height: block.block_height,
@@ -406,22 +448,50 @@ async fn view_access_key(
         block.block_height,
         public_key.to_string(),
     );
-
-    let access_key = data
-        .db_manager
-        .get_access_key(account_id, block.block_height, public_key.clone())
+    let changes = data
+        .final_block_info
+        .read()
         .await
-        .map_err(
-            |_err| near_jsonrpc_primitives::types::query::RpcQueryError::UnknownAccessKey {
+        .optimistic_block
+        .changes_in_block();
+
+    let data_key = borsh::to_vec(&public_key).map_err(|_err| {
+        near_jsonrpc_primitives::types::query::RpcQueryError::UnknownAccessKey {
+            public_key: public_key.clone(),
+            block_height: block.block_height,
+            block_hash: block.block_hash,
+        }
+    })?;
+
+    let access_key = if let Some(value) = changes.get(&format!(
+        "{}_access_key_{}",
+        account_id.as_str(),
+        hex::encode(data_key)
+    )) {
+        value.to_access_key().await.map_err(|_err| {
+            near_jsonrpc_primitives::types::query::RpcQueryError::UnknownAccessKey {
                 public_key,
                 block_height: block.block_height,
                 block_hash: block.block_hash,
-            },
-        )?;
+            }
+        })?
+    } else {
+        data.db_manager
+            .get_access_key(account_id, block.block_height, public_key.clone())
+            .await
+            .map_err(|_err| {
+                near_jsonrpc_primitives::types::query::RpcQueryError::UnknownAccessKey {
+                    public_key,
+                    block_height: block.block_height,
+                    block_hash: block.block_hash,
+                }
+            })?
+            .data
+    };
 
     Ok(near_jsonrpc_primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc_primitives::types::query::QueryResponseKind::AccessKey(
-            near_primitives::views::AccessKeyView::from(access_key.data),
+            near_primitives::views::AccessKeyView::from(access_key),
         ),
         block_height: block.block_height,
         block_hash: block.block_hash,

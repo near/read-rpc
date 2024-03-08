@@ -48,9 +48,9 @@ async fn main() -> anyhow::Result<()> {
             rpc_server_config,
             near_rpc_client,
         )
-            .await
+        .await
     });
-    
+
     #[cfg(feature = "near_state_indexer")]
     {
         let redis_client_clone = redis_client.clone();
@@ -68,8 +68,6 @@ async fn main() -> anyhow::Result<()> {
             utils::update_optimistic_block_regularly(final_block_info, redis_client.clone()).await
         });
     }
-    
-
 
     let rpc = Server::new()
         .with_data(Data::new(server_context.clone()))

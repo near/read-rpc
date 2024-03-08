@@ -96,9 +96,29 @@ pub async fn fetch_block_from_cache_or_get(
             };
             data.blocks_cache.write().await.get(&block_height).cloned()
         }
-        near_primitives::types::BlockReference::Finality(_) => {
-            // Returns the final_block_height for all the finalities.
-            Some(data.final_block_info.read().await.final_block.block_cache)
+        near_primitives::types::BlockReference::Finality(finality) => {
+            match finality {
+                near_primitives::types::Finality::None => {
+                    if cfg!(feature = "near_state_indexer") {
+                        // Returns the optimistic_block for None.
+                        Some(
+                            data.final_block_info
+                                .read()
+                                .await
+                                .optimistic_block
+                                .block_cache,
+                        )
+                    } else {
+                        // Returns the final_block for None.
+                        Some(data.final_block_info.read().await.final_block.block_cache)
+                    }
+                }
+                near_primitives::types::Finality::DoomSlug
+                | near_primitives::types::Finality::Final => {
+                    // Returns the final_block for DoomSlug and Final.
+                    Some(data.final_block_info.read().await.final_block.block_cache)
+                }
+            }
         }
         near_primitives::types::BlockReference::SyncCheckpoint(_) => {
             // Return genesis_block_cache for all SyncCheckpoint

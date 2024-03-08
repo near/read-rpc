@@ -282,7 +282,9 @@ impl From<CommonGeneralConfig> for GeneralRpcServerConfig {
             chain_id: common_config.chain_id,
             near_rpc_url: required_value_or_panic("near_rpc_url", common_config.near_rpc_url),
             near_archival_rpc_url: common_config.near_archival_rpc_url,
-            redis_url: common_config.redis_url.unwrap_or("redis://127.0.0.1/".to_string()),
+            redis_url: common_config
+                .redis_url
+                .unwrap_or("redis://127.0.0.1/".to_string()),
             referer_header_value: common_config
                 .rpc_server
                 .referer_header_value
@@ -360,7 +362,9 @@ impl From<CommonGeneralConfig> for GeneralNearStateIndexerConfig {
     fn from(common_config: CommonGeneralConfig) -> Self {
         Self {
             chain_id: common_config.chain_id,
-            redis_url: common_config.redis_url.unwrap_or("redis://127.0.0.1/".to_string()),
+            redis_url: common_config
+                .redis_url
+                .unwrap_or("redis://127.0.0.1/".to_string()),
             metrics_server_port: common_config
                 .near_state_indexer
                 .metrics_server_port
