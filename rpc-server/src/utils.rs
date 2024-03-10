@@ -230,7 +230,9 @@ pub(crate) async fn calculate_contract_code_cache_sizes(
             limit
         }
     } else {
-        available_memory
+        // half of available memory for caching `compiled_contracts` and `contract_code`.
+        // If you need more memory you can set the limit_memory_cache in the configuration file.
+        available_memory / 2
     };
 
     (mem_cache_size - block_cache_size) / 2 // divide on 2 because we have 2 caches: compiled_contracts and contract_code
