@@ -1,14 +1,9 @@
 use crate::config::ServerContext;
 use crate::utils::friendly_memory_size_format;
 use actix_web::Responder;
-use sysinfo::{System, SystemExt};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct RPCHealthStatusResponse {
-    total_memory: String,
-    used_memory: String,
-    available_memory: String,
-
     blocks_in_cache: usize,
     max_blocks_cache_size: String,
     current_blocks_cache_size: String,
@@ -26,9 +21,6 @@ pub struct RPCHealthStatusResponse {
 
 impl RPCHealthStatusResponse {
     pub async fn new(server_context: &ServerContext) -> Self {
-        let sys = System::new_all();
-        let total_memory = sys.total_memory();
-        let used_memory = sys.used_memory();
         let blocks_cache = server_context.blocks_cache.read().await;
         let contract_code_cache = server_context.contract_code_cache.read().await;
         let compiled_contract_code_cache = server_context
@@ -37,10 +29,6 @@ impl RPCHealthStatusResponse {
             .read()
             .await;
         Self {
-            total_memory: friendly_memory_size_format(total_memory as usize),
-            used_memory: friendly_memory_size_format(used_memory as usize),
-            available_memory: friendly_memory_size_format((total_memory - used_memory) as usize),
-
             blocks_in_cache: blocks_cache.len(),
             max_blocks_cache_size: friendly_memory_size_format(blocks_cache.max_size()),
             current_blocks_cache_size: friendly_memory_size_format(blocks_cache.current_size()),
@@ -73,6 +61,6 @@ impl RPCHealthStatusResponse {
 
 /// Rpc server status
 #[actix_web::get("/health")]
-pub(crate) async fn get_health_status(data: actix_web::web::Data<ServerContext>) -> impl Responder {
-    actix_web::web::Json(RPCHealthStatusResponse::new(&data).await)
+pub(crate) async fn get_health_status() -> impl Responder {
+    actix_web::web::Json(serde_json::json!({"status": "ok"}))
 }
