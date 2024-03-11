@@ -1,4 +1,4 @@
-use near_primitives::views::{StateChangeCauseView, StateChangeValueView};
+use near_primitives::views::StateChangeValueView;
 
 pub mod methods;
 pub mod utils;
@@ -36,48 +36,8 @@ pub struct BlockInfo {
     pub stream_message: near_indexer_primitives::StreamerMessage,
 }
 
-pub struct BlockStateChangeValue {
-    pub value: Option<Vec<u8>>,
-}
-
-impl BlockStateChangeValue {
-    pub async fn to_account(&self) -> anyhow::Result<near_primitives::account::Account> {
-        let account = borsh::from_slice::<near_primitives::account::Account>(
-            self.value
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Account deleted"))?,
-        )?;
-        Ok(account)
-    }
-
-    pub async fn to_access_key(&self) -> anyhow::Result<near_primitives::account::AccessKey> {
-        let access_key = borsh::from_slice::<near_primitives::account::AccessKey>(
-            self.value
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Access key deleted"))?,
-        )?;
-        Ok(access_key)
-    }
-
-    pub async fn to_contract_code(&self) -> anyhow::Result<Vec<u8>> {
-        Ok(self
-            .value
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Contract code deleted"))?
-            .clone())
-    }
-    // TODO: handle added and deleted keys
-    // pub async fn to_data(&self) -> anyhow::Result<Vec<u8>> {
-    //     Ok(self
-    //         .value
-    //         .as_ref()
-    //         .ok_or_else(|| anyhow::anyhow!("Data deleted"))?
-    //         .clone())
-    // }
-}
-
 impl BlockInfo {
-    pub fn new_from_block_view(block_view: near_primitives::views::BlockView) -> Self {
+    pub async fn new_from_block_view(block_view: near_primitives::views::BlockView) -> Self {
         Self {
             block_cache: CacheBlock::from(&block_view),
             stream_message: near_indexer_primitives::StreamerMessage {
@@ -87,7 +47,7 @@ impl BlockInfo {
         }
     }
 
-    pub fn new_from_streamer_message(
+    pub async fn new_from_streamer_message(
         stream_message: near_indexer_primitives::StreamerMessage,
     ) -> Self {
         Self {
@@ -96,222 +56,202 @@ impl BlockInfo {
         }
     }
 
-    pub fn block_view(&self) -> near_primitives::views::BlockView {
-        near_primitives::views::BlockView {
-            author: self.stream_message.block.author.clone(),
-            header: self.stream_message.block.header.clone(),
-            chunks: self.stream_message.block.chunks.clone(),
-        }
+    pub async fn block_view(&self) -> near_primitives::views::BlockView {
+        self.stream_message.block.clone()
     }
 
-    pub fn shards(&self) -> Vec<near_indexer_primitives::IndexerShard> {
-        self.stream_message
-            .shards
-            .iter()
-            .map(|shard| {
-                let state_changes = shard
-                    .state_changes
-                    .iter()
-                    .map(|state_changes| {
-                        let cause = match &state_changes.cause {
-                            StateChangeCauseView::NotWritableToDisk => {
-                                StateChangeCauseView::NotWritableToDisk
-                            }
-                            StateChangeCauseView::InitialState => {
-                                StateChangeCauseView::InitialState
-                            }
-                            StateChangeCauseView::TransactionProcessing { tx_hash } => {
-                                StateChangeCauseView::TransactionProcessing { tx_hash: *tx_hash }
-                            }
-                            StateChangeCauseView::ActionReceiptProcessingStarted {
-                                receipt_hash,
-                            } => StateChangeCauseView::ActionReceiptProcessingStarted {
-                                receipt_hash: *receipt_hash,
-                            },
-                            StateChangeCauseView::ActionReceiptGasReward { receipt_hash } => {
-                                StateChangeCauseView::ActionReceiptGasReward {
-                                    receipt_hash: *receipt_hash,
-                                }
-                            }
-                            StateChangeCauseView::ReceiptProcessing { receipt_hash } => {
-                                StateChangeCauseView::ReceiptProcessing {
-                                    receipt_hash: *receipt_hash,
-                                }
-                            }
-                            StateChangeCauseView::PostponedReceipt { receipt_hash } => {
-                                StateChangeCauseView::PostponedReceipt {
-                                    receipt_hash: *receipt_hash,
-                                }
-                            }
-                            StateChangeCauseView::UpdatedDelayedReceipts => {
-                                StateChangeCauseView::UpdatedDelayedReceipts
-                            }
-                            StateChangeCauseView::ValidatorAccountsUpdate => {
-                                StateChangeCauseView::ValidatorAccountsUpdate
-                            }
-                            StateChangeCauseView::Migration => StateChangeCauseView::Migration,
-                            StateChangeCauseView::Resharding => StateChangeCauseView::Resharding,
-                        };
-                        let value = match &state_changes.value {
-                            StateChangeValueView::AccountUpdate {
-                                account_id,
-                                account,
-                            } => StateChangeValueView::AccountUpdate {
-                                account_id: account_id.clone(),
-                                account: account.clone(),
-                            },
-                            StateChangeValueView::AccountDeletion { account_id } => {
-                                StateChangeValueView::AccountDeletion {
-                                    account_id: account_id.clone(),
-                                }
-                            }
-                            StateChangeValueView::AccessKeyUpdate {
-                                account_id,
-                                access_key,
-                                public_key,
-                            } => StateChangeValueView::AccessKeyUpdate {
-                                account_id: account_id.clone(),
-                                access_key: access_key.clone(),
-                                public_key: public_key.clone(),
-                            },
-                            StateChangeValueView::AccessKeyDeletion {
-                                account_id,
-                                public_key,
-                            } => StateChangeValueView::AccessKeyDeletion {
-                                account_id: account_id.clone(),
-                                public_key: public_key.clone(),
-                            },
-                            StateChangeValueView::DataUpdate {
-                                account_id,
-                                key,
-                                value,
-                            } => StateChangeValueView::DataUpdate {
-                                account_id: account_id.clone(),
-                                key: key.clone(),
-                                value: value.clone(),
-                            },
-                            StateChangeValueView::DataDeletion { account_id, key } => {
-                                StateChangeValueView::DataDeletion {
-                                    account_id: account_id.clone(),
-                                    key: key.clone(),
-                                }
-                            }
-                            StateChangeValueView::ContractCodeUpdate { account_id, code } => {
-                                StateChangeValueView::ContractCodeUpdate {
-                                    account_id: account_id.clone(),
-                                    code: code.clone(),
-                                }
-                            }
-                            StateChangeValueView::ContractCodeDeletion { account_id } => {
-                                StateChangeValueView::ContractCodeDeletion {
-                                    account_id: account_id.clone(),
-                                }
-                            }
-                        };
-                        near_primitives::views::StateChangeWithCauseView { cause, value }
-                    })
-                    .collect();
-                near_indexer_primitives::IndexerShard {
-                    shard_id: shard.shard_id,
-                    chunk: shard.chunk.as_ref().map(|chunk| {
-                        near_indexer_primitives::IndexerChunkView {
-                            author: chunk.author.clone(),
-                            header: chunk.header.clone(),
-                            transactions: chunk.transactions.clone(),
-                            receipts: chunk.receipts.clone(),
-                        }
-                    }),
-                    receipt_execution_outcomes: shard.receipt_execution_outcomes.clone(),
-                    state_changes,
-                }
-            })
-            .collect()
+    pub async fn shards(&self) -> Vec<near_indexer_primitives::IndexerShard> {
+        self.stream_message.shards.clone()
     }
 
-    pub fn changes_in_block(&self) -> std::collections::HashMap<String, BlockStateChangeValue> {
-        let mut block_state_changes =
-            std::collections::HashMap::<String, BlockStateChangeValue>::new();
-
+    pub async fn account_changes_in_block(
+        &self,
+        target_account_id: &near_primitives::types::AccountId,
+    ) -> anyhow::Result<Option<near_primitives::views::AccountView>> {
+        let mut result = None;
+        let mut is_account_updated = false;
         let initial_state_changes = self
-            .stream_message
-            .shards
-            .iter()
-            .flat_map(|shard| shard.state_changes.iter());
+            .shards()
+            .await
+            .into_iter()
+            .flat_map(|shard| shard.state_changes.into_iter())
+            .filter(|state_change| {
+                matches!(
+                    state_change.value,
+                    StateChangeValueView::AccountUpdate { .. }
+                        | StateChangeValueView::AccountDeletion { .. }
+                )
+            });
 
         for state_change in initial_state_changes {
-            let (key, value) = match &state_change.value {
-                StateChangeValueView::DataUpdate {
+            match state_change.value {
+                StateChangeValueView::AccountUpdate {
                     account_id,
-                    key,
-                    value,
+                    account,
                 } => {
-                    let key: &[u8] = key.as_ref();
-                    (
-                        format!("{}_data_{}", account_id.as_str(), hex::encode(key)),
-                        Some(value.to_vec()),
-                    )
+                    if &account_id == target_account_id {
+                        result = Some(account);
+                        is_account_updated = true;
+                    }
                 }
-                StateChangeValueView::DataDeletion { account_id, key } => {
-                    let key: &[u8] = key.as_ref();
-                    (
-                        format!("{}_data_{}", account_id.as_str(), hex::encode(key)),
-                        None,
-                    )
+                StateChangeValueView::AccountDeletion { account_id } => {
+                    if &account_id == target_account_id {
+                        result = None;
+                        is_account_updated = true;
+                    }
                 }
+                _ => anyhow::bail!("Invalid state change value"),
+            };
+        }
+        if !is_account_updated {
+            anyhow::bail!("Account not updated in this block");
+        }
+        Ok(result)
+    }
+
+    pub async fn code_changes_in_block(
+        &self,
+        target_account_id: &near_primitives::types::AccountId,
+    ) -> anyhow::Result<Option<Vec<u8>>> {
+        let mut result = None;
+        let mut is_code_updated = false;
+        let initial_state_changes = self
+            .shards()
+            .await
+            .into_iter()
+            .flat_map(|shard| shard.state_changes.into_iter())
+            .filter(|state_change| {
+                matches!(
+                    state_change.value,
+                    StateChangeValueView::ContractCodeUpdate { .. }
+                        | StateChangeValueView::ContractCodeDeletion { .. }
+                )
+            });
+
+        for state_change in initial_state_changes {
+            match state_change.value {
+                StateChangeValueView::ContractCodeUpdate { account_id, code } => {
+                    if &account_id == target_account_id {
+                        result = Some(code);
+                        is_code_updated = true;
+                    }
+                }
+                StateChangeValueView::ContractCodeDeletion { account_id } => {
+                    if &account_id == target_account_id {
+                        result = None;
+                        is_code_updated = true;
+                    }
+                }
+                _ => anyhow::bail!("Invalid state change value"),
+            };
+        }
+        if !is_code_updated {
+            anyhow::bail!("Contract code not updated in this block");
+        }
+        Ok(result)
+    }
+
+    pub async fn access_key_changes_in_block(
+        &self,
+        target_account_id: &near_primitives::types::AccountId,
+        target_public_key: &near_crypto::PublicKey,
+    ) -> anyhow::Result<Option<near_primitives::views::AccessKeyView>> {
+        let mut result = None;
+        let mut is_access_key_updated = false;
+        let initial_state_changes = self
+            .shards()
+            .await
+            .into_iter()
+            .flat_map(|shard| shard.state_changes.into_iter())
+            .filter(|state_change| {
+                matches!(
+                    state_change.value,
+                    StateChangeValueView::AccessKeyUpdate { .. }
+                        | StateChangeValueView::AccessKeyDeletion { .. }
+                )
+            });
+
+        for state_change in initial_state_changes {
+            match state_change.value {
                 StateChangeValueView::AccessKeyUpdate {
                     account_id,
                     public_key,
                     access_key,
                 } => {
-                    let data_key =
-                        borsh::to_vec(&public_key).expect("Error to serialize public key");
-                    (
-                        format!(
-                            "{}_access_key_{}",
-                            account_id.as_str(),
-                            hex::encode(data_key)
-                        ),
-                        Some(borsh::to_vec(access_key).expect("Error to serialize access key")),
-                    )
+                    if &account_id == target_account_id && &public_key == target_public_key {
+                        result = Some(access_key);
+                        is_access_key_updated = true;
+                    }
                 }
                 StateChangeValueView::AccessKeyDeletion {
                     account_id,
                     public_key,
                 } => {
-                    let data_key =
-                        borsh::to_vec(&public_key).expect("Error to serialize public key");
-                    (
-                        format!(
-                            "{}_access_key_{}",
-                            account_id.as_str(),
-                            hex::encode(data_key)
-                        ),
-                        None,
-                    )
+                    if &account_id == target_account_id && &public_key == target_public_key {
+                        result = None;
+                        is_access_key_updated = true;
+                    }
                 }
-                // ContractCode and Account changes is not separate-able by any key, we can omit the suffix
-                StateChangeValueView::ContractCodeUpdate { account_id, code } => (
-                    format!("{}_contract", account_id.as_str()),
-                    Some(code.clone()),
-                ),
-                StateChangeValueView::ContractCodeDeletion { account_id } => {
-                    (format!("{}_contract", account_id.as_str()), None)
-                }
-                StateChangeValueView::AccountUpdate {
-                    account_id,
-                    account,
-                } => (
-                    format!("{}_account", account_id.as_str()),
-                    Some(
-                        borsh::to_vec(&near_primitives::account::Account::from(account))
-                            .expect("Error to serialize account"),
-                    ),
-                ),
-                StateChangeValueView::AccountDeletion { account_id } => {
-                    (format!("{}_account", account_id.as_str()), None)
-                }
+                _ => anyhow::bail!("Invalid state change value"),
             };
-            block_state_changes.insert(key, BlockStateChangeValue { value });
+        }
+        if !is_access_key_updated {
+            anyhow::bail!("Access key not updated in this block");
+        }
+        Ok(result)
+    }
+
+    pub async fn state_changes_in_block(
+        &self,
+        target_account_id: &near_primitives::types::AccountId,
+        prefix: &[u8],
+    ) -> std::collections::HashMap<
+        readnode_primitives::StateKey,
+        Option<readnode_primitives::StateValue>,
+    > {
+        let mut block_state_changes = std::collections::HashMap::<
+            readnode_primitives::StateKey,
+            Option<readnode_primitives::StateValue>,
+        >::new();
+        let hex_str_prefix = hex::encode(prefix);
+
+        let initial_state_changes = self
+            .shards()
+            .await
+            .into_iter()
+            .flat_map(|shard| shard.state_changes.into_iter())
+            .filter(|state_change| {
+                matches!(
+                    state_change.value,
+                    StateChangeValueView::DataUpdate { .. }
+                        | StateChangeValueView::DataDeletion { .. }
+                )
+            });
+
+        for state_change in initial_state_changes {
+            match state_change.value {
+                StateChangeValueView::DataUpdate {
+                    account_id,
+                    key,
+                    value,
+                } => {
+                    if &account_id == target_account_id {
+                        let key: &[u8] = key.as_ref();
+                        if hex::encode(key).starts_with(&hex_str_prefix) {
+                            block_state_changes.insert(key.to_vec(), Some(value.to_vec()));
+                        }
+                    }
+                }
+                StateChangeValueView::DataDeletion { account_id, key } => {
+                    if &account_id == target_account_id {
+                        let key: &[u8] = key.as_ref();
+                        if hex::encode(key).starts_with(&hex_str_prefix) {
+                            block_state_changes.insert(key.to_vec(), None);
+                        }
+                    }
+                }
+                _ => {}
+            }
         }
         block_state_changes
     }
@@ -351,8 +291,8 @@ impl FinalBlockInfo {
             .put(final_block.header.height, CacheBlock::from(&final_block));
 
         Self {
-            final_block: BlockInfo::new_from_block_view(final_block),
-            optimistic_block: BlockInfo::new_from_block_view(optimistic_block),
+            final_block: BlockInfo::new_from_block_view(final_block).await,
+            optimistic_block: BlockInfo::new_from_block_view(optimistic_block).await,
             current_validators: validators,
         }
     }

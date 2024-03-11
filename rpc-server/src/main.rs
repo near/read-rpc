@@ -30,7 +30,6 @@ async fn main() -> anyhow::Result<()> {
         "Referer".to_string(),
         rpc_server_config.general.referer_header_value.clone(),
     )?;
-    let redis_client = redis::Client::open(rpc_server_config.general.redis_url.clone())?;
 
     let server_port = rpc_server_config.general.server_port;
 
@@ -40,7 +39,7 @@ async fn main() -> anyhow::Result<()> {
     let blocks_cache = std::sync::Arc::clone(&server_context.blocks_cache);
     let final_block_info = std::sync::Arc::clone(&server_context.final_block_info);
 
-    #[cfg(not(feature = "near_state_indexer"))]
+    #[cfg(feature = "near_state_indexer_disabled")]
     tokio::spawn(async move {
         utils::update_final_block_regularly(
             blocks_cache,
@@ -51,21 +50,21 @@ async fn main() -> anyhow::Result<()> {
         .await
     });
 
-    #[cfg(feature = "near_state_indexer")]
+    #[cfg(not(feature = "near_state_indexer_disabled"))]
     {
-        let redis_client_clone = redis_client.clone();
+        let redis_client = redis::Client::open(rpc_server_config.general.redis_url.clone())?;
         tokio::spawn(async move {
             utils::update_final_block_regularly(
                 blocks_cache,
                 final_block_info,
-                redis_client_clone,
+                redis_client.clone(),
                 near_rpc_client,
             )
             .await
         });
         let final_block_info = std::sync::Arc::clone(&server_context.final_block_info);
         tokio::spawn(async move {
-            utils::update_optimistic_block_regularly(final_block_info, redis_client.clone()).await
+            utils::update_optimistic_block_regularly(final_block_info, redis_client).await
         });
     }
 

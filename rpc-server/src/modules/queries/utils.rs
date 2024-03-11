@@ -107,6 +107,10 @@ pub async fn fetch_state_from_db(
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
     prefix: &[u8],
+    optimistic_data: HashMap<
+        readnode_primitives::StateKey,
+        Option<readnode_primitives::StateValue>,
+    >,
 ) -> anyhow::Result<near_primitives::views::ViewStateResult> {
     tracing::debug!(
         "`fetch_state_from_db` call. AccountID {}, block {}, prefix {:?}",
@@ -115,16 +119,36 @@ pub async fn fetch_state_from_db(
         prefix,
     );
     let state_from_db = get_state_keys_from_db(db_manager, account_id, block_height, prefix).await;
-    if state_from_db.is_empty() {
+    if state_from_db.is_empty() && optimistic_data.is_empty() {
         anyhow::bail!("Data not found in db")
     } else {
-        let values = state_from_db
+        let mut optimistic_data = optimistic_data.clone();
+        let mut values: Vec<near_primitives::views::StateItem> = state_from_db
             .into_iter()
-            .map(|(key, value)| near_primitives::views::StateItem {
-                key: key.into(),
-                value: value.into(),
+            .filter_map(|(key, value)| {
+                let value = if let Some(value) = optimistic_data.remove(&key) {
+                    value.clone()
+                } else {
+                    Some(value)
+                };
+                value.map(|value| near_primitives::views::StateItem {
+                    key: key.into(),
+                    value: value.into(),
+                })
             })
             .collect();
+        let optimistic_items: Vec<near_primitives::views::StateItem> = optimistic_data
+            .iter()
+            .filter_map(|(key, value)| {
+                value
+                    .clone()
+                    .map(|value| near_primitives::views::StateItem {
+                        key: key.clone().into(),
+                        value: value.clone().into(),
+                    })
+            })
+            .collect();
+        values.extend(optimistic_items);
         Ok(near_primitives::views::ViewStateResult {
             values,
             proof: vec![], // TODO: this is hardcoded empty value since we don't support proofs yet
@@ -232,6 +256,10 @@ pub async fn run_contract(
     final_block_info: &std::sync::Arc<futures_locks::RwLock<FinalBlockInfo>>,
     block: crate::modules::blocks::CacheBlock,
     max_gas_burnt: near_primitives::types::Gas,
+    optimistic_data: HashMap<
+        readnode_primitives::StateKey,
+        Option<readnode_primitives::StateValue>,
+    >,
 ) -> Result<RunContractResponse, FunctionCallError> {
     let contract = db_manager
         .get_account(&account_id, block.block_height)
@@ -319,6 +347,7 @@ pub async fn run_contract(
             .iter()
             .map(|validator| (validator.account_id.clone(), validator.stake))
             .collect(),
+        optimistic_data,
     );
 
     let result = run_code_in_vm_runner(

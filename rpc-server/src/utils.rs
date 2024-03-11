@@ -135,7 +135,7 @@ async fn handle_streamer_message(
     final_block_info: std::sync::Arc<futures_locks::RwLock<FinalBlockInfo>>,
     near_rpc_client: &JsonRpcClient,
 ) -> anyhow::Result<()> {
-    let block = BlockInfo::new_from_streamer_message(streamer_message);
+    let block = BlockInfo::new_from_streamer_message(streamer_message).await;
 
     if final_block_info
         .read()
@@ -159,7 +159,7 @@ async fn handle_streamer_message(
     Ok(())
 }
 
-#[cfg(not(feature = "near_state_indexer"))]
+#[cfg(feature = "near_state_indexer_disabled")]
 pub async fn update_final_block_regularly(
     blocks_cache: std::sync::Arc<
         futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>,
@@ -209,7 +209,7 @@ pub async fn update_final_block_regularly(
 
 // Task to get and store final block in the cache
 // Subscribe to the redis channel and update the finale block in the cache
-#[cfg(feature = "near_state_indexer")]
+#[cfg(not(feature = "near_state_indexer_disabled"))]
 pub async fn update_final_block_regularly(
     blocks_cache: std::sync::Arc<
         futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>,
@@ -249,6 +249,7 @@ pub async fn update_final_block_regularly(
     Ok(())
 }
 
+#[cfg(not(feature = "near_state_indexer_disabled"))]
 // Task to get and store optimistic block in the cache
 // Subscribe to the redis channel and update the optimistic block in the cache
 pub async fn update_optimistic_block_regularly(
@@ -263,7 +264,8 @@ pub async fn update_optimistic_block_regularly(
         match message.get_payload::<String>() {
             Ok(payload) => match serde_json::from_str(&payload) {
                 Ok(streamer_message) => {
-                    let optimistic_block = BlockInfo::new_from_streamer_message(streamer_message);
+                    let optimistic_block =
+                        BlockInfo::new_from_streamer_message(streamer_message).await;
                     tracing::debug!(
                         "Received optimistic block: {:?}",
                         optimistic_block.block_cache

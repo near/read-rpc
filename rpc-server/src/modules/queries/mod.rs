@@ -14,6 +14,8 @@ pub struct CodeStorage {
     block_height: near_primitives::types::BlockHeight,
     validators: HashMap<near_primitives::types::AccountId, near_primitives::types::Balance>,
     data_count: u64,
+    optimistic_data:
+        HashMap<readnode_primitives::StateKey, Option<readnode_primitives::StateValue>>,
 }
 
 pub struct StorageValuePtr {
@@ -36,6 +38,10 @@ impl CodeStorage {
         account_id: near_primitives::types::AccountId,
         block_height: near_primitives::types::BlockHeight,
         validators: HashMap<near_primitives::types::AccountId, near_primitives::types::Balance>,
+        optimistic_data: HashMap<
+            readnode_primitives::StateKey,
+            Option<readnode_primitives::StateValue>,
+        >,
     ) -> Self {
         Self {
             db_manager,
@@ -43,6 +49,7 @@ impl CodeStorage {
             block_height,
             validators,
             data_count: Default::default(), // TODO: Using for generate_data_id
+            optimistic_data,
         }
     }
 }
@@ -66,15 +73,25 @@ impl near_vm_runner::logic::External for CodeStorage {
         key: &[u8],
         _mode: near_vm_runner::logic::StorageGetMode,
     ) -> Result<Option<Box<dyn near_vm_runner::logic::ValuePtr>>> {
-        let get_db_data =
-            self.db_manager
-                .get_state_key_value(&self.account_id, self.block_height, key.to_vec());
-        let (_, data) = block_on(get_db_data);
-        Ok(if !data.is_empty() {
-            Some(Box::new(StorageValuePtr { value: data }) as Box<_>)
+        if let Some(value) = self.optimistic_data.get(key) {
+            Ok(value.as_ref().map(|data| {
+                Box::new(StorageValuePtr {
+                    value: data.clone(),
+                }) as Box<_>
+            }))
         } else {
-            None
-        })
+            let get_db_data = self.db_manager.get_state_key_value(
+                &self.account_id,
+                self.block_height,
+                key.to_vec(),
+            );
+            let (_, data) = block_on(get_db_data);
+            Ok(if !data.is_empty() {
+                Some(Box::new(StorageValuePtr { value: data }) as Box<_>)
+            } else {
+                None
+            })
+        }
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
@@ -104,11 +121,17 @@ impl near_vm_runner::logic::External for CodeStorage {
         key: &[u8],
         _mode: near_vm_runner::logic::StorageGetMode,
     ) -> Result<bool> {
-        let get_db_state_keys =
-            self.db_manager
-                .get_state_key_value(&self.account_id, self.block_height, key.to_vec());
-        let (_, data) = block_on(get_db_state_keys);
-        Ok(!data.is_empty())
+        if let Some(value) = self.optimistic_data.get(key) {
+            Ok(value.is_some())
+        } else {
+            let get_db_state_keys = self.db_manager.get_state_key_value(
+                &self.account_id,
+                self.block_height,
+                key.to_vec(),
+            );
+            let (_, data) = block_on(get_db_state_keys);
+            Ok(!data.is_empty())
+        }
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]

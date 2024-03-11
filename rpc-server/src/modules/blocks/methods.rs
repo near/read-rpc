@@ -17,7 +17,7 @@ pub async fn block(
     data: Data<ServerContext>,
     Params(mut params): Params<near_jsonrpc_primitives::types::blocks::RpcBlockRequest>,
 ) -> Result<near_jsonrpc_primitives::types::blocks::RpcBlockResponse, RPCError> {
-    #[cfg(not(feature = "near_state_indexer"))]
+    #[cfg(feature = "near_state_indexer_disabled")]
     if let near_primitives::types::BlockReference::Finality(finality) = &params.block_reference {
         if finality != &near_primitives::types::Finality::Final {
             // Increase the OPTIMISTIC_REQUESTS_TOTAL metric if the request has
@@ -69,7 +69,7 @@ pub async fn changes_in_block_by_type(
         near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockByTypeRequest,
     >,
 ) -> Result<near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockResponse, RPCError> {
-    #[cfg(not(feature = "near_state_indexer"))]
+    #[cfg(feature = "near_state_indexer_disabled")]
     if let near_primitives::types::BlockReference::Finality(finality) = &params.block_reference {
         if finality != &near_primitives::types::Finality::Final {
             // Increase the OPTIMISTIC_REQUESTS_TOTAL metric if the request has
@@ -95,7 +95,7 @@ pub async fn changes_in_block(
     >,
 ) -> Result<near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockByTypeResponse, RPCError>
 {
-    #[cfg(not(feature = "near_state_indexer"))]
+    #[cfg(feature = "near_state_indexer_disabled")]
     if let near_primitives::types::BlockReference::Finality(finality) = &params.block_reference {
         if finality != &near_primitives::types::Finality::Final {
             // Increase the OPTIMISTIC_REQUESTS_TOTAL metric if the request has
@@ -257,25 +257,32 @@ pub async fn fetch_block(
             return match finality {
                 near_primitives::types::Finality::Final
                 | near_primitives::types::Finality::DoomSlug => {
-                    let block_view = data.final_block_info.read().await.final_block.block_view();
+                    let block_view = data
+                        .final_block_info
+                        .read()
+                        .await
+                        .final_block
+                        .block_view()
+                        .await;
                     Ok(near_jsonrpc_primitives::types::blocks::RpcBlockResponse { block_view })
                 }
                 near_primitives::types::Finality::None => {
-                    if cfg!(feature = "near_state_indexer") {
-                        let block_view = data
-                            .final_block_info
-                            .read()
-                            .await
-                            .optimistic_block
-                            .block_view();
-                        Ok(near_jsonrpc_primitives::types::blocks::RpcBlockResponse { block_view })
-                    } else {
+                    if cfg!(feature = "near_state_indexer_disabled") {
                         Err(
                             near_jsonrpc_primitives::types::blocks::RpcBlockError::UnknownBlock {
                                 error_message: "Finality::None is not supported by read-rpc"
                                     .to_string(),
                             },
                         )
+                    } else {
+                        let block_view = data
+                            .final_block_info
+                            .read()
+                            .await
+                            .optimistic_block
+                            .block_view()
+                            .await;
+                        Ok(near_jsonrpc_primitives::types::blocks::RpcBlockResponse { block_view })
                     }
                 }
             }
@@ -487,16 +494,32 @@ async fn fetch_shards(
     if let near_primitives::types::BlockReference::Finality(finality) = block_reference {
         match finality {
             near_primitives::types::Finality::None => {
-                if cfg!(feature = "near_state_indexer") {
-                    Ok(data.final_block_info.read().await.optimistic_block.shards())
+                if cfg!(feature = "near_state_indexer_disabled") {
+                    Ok(data
+                        .final_block_info
+                        .read()
+                        .await
+                        .final_block
+                        .shards()
+                        .await)
                 } else {
-                    Ok(data.final_block_info.read().await.final_block.shards())
+                    Ok(data
+                        .final_block_info
+                        .read()
+                        .await
+                        .optimistic_block
+                        .shards()
+                        .await)
                 }
             }
             near_primitives::types::Finality::DoomSlug
-            | near_primitives::types::Finality::Final => {
-                Ok(data.final_block_info.read().await.final_block.shards())
-            }
+            | near_primitives::types::Finality::Final => Ok(data
+                .final_block_info
+                .read()
+                .await
+                .final_block
+                .shards()
+                .await),
         }
     } else {
         let fetch_shards_futures = (0..block.chunks_included)
