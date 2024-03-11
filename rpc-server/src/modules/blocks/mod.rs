@@ -37,16 +37,19 @@ pub struct BlockInfo {
 }
 
 impl BlockInfo {
+    // Create new BlockInfo from BlockView. this method is useful only for start rpc-server.
     pub async fn new_from_block_view(block_view: near_primitives::views::BlockView) -> Self {
         Self {
             block_cache: CacheBlock::from(&block_view),
             stream_message: near_indexer_primitives::StreamerMessage {
                 block: block_view,
-                shards: vec![],
+                shards: vec![], // We left shards empty because block_view doesn't contain shards.
             },
         }
     }
 
+    // Create new BlockInfo from StreamerMessage.
+    // This is using to update final and optimistic blocks regularly.
     pub async fn new_from_streamer_message(
         stream_message: near_indexer_primitives::StreamerMessage,
     ) -> Self {
@@ -64,6 +67,10 @@ impl BlockInfo {
         self.stream_message.shards.clone()
     }
 
+    // This method using for optimistic blocks info.
+    // We fetch the account changes in the block by specific AccountId.
+    // For optimistic block s we don't have information about account changes in the database,
+    // so we need to fetch it from the optimistic block streamer_message and merge it with data from database.
     pub async fn account_changes_in_block(
         &self,
         target_account_id: &near_primitives::types::AccountId,
@@ -109,6 +116,10 @@ impl BlockInfo {
         Ok(result)
     }
 
+    // This method using for optimistic blocks info.
+    // We fetch the contract code changes in the block by specific AccountId.
+    // For optimistic block we don't have information about code changes in the database,
+    // so we need to fetch it from the optimistic block streamer_message and merge it with data from database.
     pub async fn code_changes_in_block(
         &self,
         target_account_id: &near_primitives::types::AccountId,
@@ -151,6 +162,10 @@ impl BlockInfo {
         Ok(result)
     }
 
+    // This method using for optimistic blocks info.
+    // We fetch the access_key changes in the block by specific AccountId and PublicKey.
+    // For optimistic block we don't have information about AccessKey changes in the database,
+    // so we need to fetch it from the optimistic block streamer_message and merge it with data from database.
     pub async fn access_key_changes_in_block(
         &self,
         target_account_id: &near_primitives::types::AccountId,
@@ -201,6 +216,11 @@ impl BlockInfo {
         Ok(result)
     }
 
+    // This method using for optimistic blocks info.
+    // We fetch the state changes in the block by specific AccountId and key_prefix.
+    // if prefix is empty, we fetch all state changes by specific AccountId.
+    // For optimistic block we don't have information about state changes in the database,
+    // so we need to fetch it from the optimistic block streamer_message and merge it with data from database.
     pub async fn state_changes_in_block(
         &self,
         target_account_id: &near_primitives::types::AccountId,
@@ -258,13 +278,13 @@ impl BlockInfo {
 }
 
 #[derive(Debug)]
-pub struct FinalBlockInfo {
+pub struct FinalityBlocksInfo {
     pub final_block: BlockInfo,
     pub optimistic_block: BlockInfo,
     pub current_validators: near_primitives::views::EpochValidatorInfo,
 }
 
-impl FinalBlockInfo {
+impl FinalityBlocksInfo {
     pub async fn new(
         near_rpc_client: &crate::utils::JsonRpcClient,
         blocks_cache: &std::sync::Arc<

@@ -37,13 +37,13 @@ async fn main() -> anyhow::Result<()> {
         config::ServerContext::init(rpc_server_config.clone(), near_rpc_client.clone()).await?;
 
     let blocks_cache = std::sync::Arc::clone(&server_context.blocks_cache);
-    let final_block_info = std::sync::Arc::clone(&server_context.final_block_info);
+    let finality_blocks_info = std::sync::Arc::clone(&server_context.finality_blocks_info);
 
     #[cfg(feature = "near_state_indexer_disabled")]
     tokio::spawn(async move {
         utils::update_final_block_regularly(
             blocks_cache,
-            final_block_info,
+            finality_blocks_info,
             rpc_server_config,
             near_rpc_client,
         )
@@ -57,15 +57,15 @@ async fn main() -> anyhow::Result<()> {
         tokio::spawn(async move {
             utils::update_final_block_regularly(
                 blocks_cache,
-                final_block_info,
+                finality_blocks_info,
                 redis_client_clone,
                 near_rpc_client,
             )
             .await
         });
-        let final_block_info = std::sync::Arc::clone(&server_context.final_block_info);
+        let finality_blocks_info = std::sync::Arc::clone(&server_context.finality_blocks_info);
         tokio::spawn(async move {
-            utils::update_optimistic_block_regularly(final_block_info, redis_client).await
+            utils::update_optimistic_block_regularly(finality_blocks_info, redis_client).await
         });
     }
 

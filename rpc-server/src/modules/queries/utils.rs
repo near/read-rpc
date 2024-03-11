@@ -5,7 +5,7 @@ use futures::StreamExt;
 
 use crate::config::CompiledCodeCache;
 use crate::errors::FunctionCallError;
-use crate::modules::blocks::FinalBlockInfo;
+use crate::modules::blocks::FinalityBlocksInfo;
 use crate::modules::queries::CodeStorage;
 
 pub struct RunContractResponse {
@@ -96,64 +96,6 @@ pub async fn fetch_list_access_keys_from_db(
         )
         .collect();
     Ok(account_keys_view)
-}
-
-#[cfg_attr(
-    feature = "tracing-instrumentation",
-    tracing::instrument(skip(db_manager))
-)]
-pub async fn fetch_state_from_db(
-    db_manager: &std::sync::Arc<Box<dyn database::ReaderDbManager + Sync + Send + 'static>>,
-    account_id: &near_primitives::types::AccountId,
-    block_height: near_primitives::types::BlockHeight,
-    prefix: &[u8],
-    optimistic_data: HashMap<
-        readnode_primitives::StateKey,
-        Option<readnode_primitives::StateValue>,
-    >,
-) -> anyhow::Result<near_primitives::views::ViewStateResult> {
-    tracing::debug!(
-        "`fetch_state_from_db` call. AccountID {}, block {}, prefix {:?}",
-        account_id,
-        block_height,
-        prefix,
-    );
-    let state_from_db = get_state_keys_from_db(db_manager, account_id, block_height, prefix).await;
-    if state_from_db.is_empty() && optimistic_data.is_empty() {
-        anyhow::bail!("Data not found in db")
-    } else {
-        let mut optimistic_data = optimistic_data.clone();
-        let mut values: Vec<near_primitives::views::StateItem> = state_from_db
-            .into_iter()
-            .filter_map(|(key, value)| {
-                let value = if let Some(value) = optimistic_data.remove(&key) {
-                    value.clone()
-                } else {
-                    Some(value)
-                };
-                value.map(|value| near_primitives::views::StateItem {
-                    key: key.into(),
-                    value: value.into(),
-                })
-            })
-            .collect();
-        let optimistic_items: Vec<near_primitives::views::StateItem> = optimistic_data
-            .iter()
-            .filter_map(|(key, value)| {
-                value
-                    .clone()
-                    .map(|value| near_primitives::views::StateItem {
-                        key: key.clone().into(),
-                        value: value.clone().into(),
-                    })
-            })
-            .collect();
-        values.extend(optimistic_items);
-        Ok(near_primitives::views::ViewStateResult {
-            values,
-            proof: vec![], // TODO: this is hardcoded empty value since we don't support proofs yet
-        })
-    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -253,7 +195,7 @@ pub async fn run_contract(
             crate::cache::LruMemoryCache<near_primitives::hash::CryptoHash, Vec<u8>>,
         >,
     >,
-    final_block_info: &std::sync::Arc<futures_locks::RwLock<FinalBlockInfo>>,
+    finality_blocks_info: &std::sync::Arc<futures_locks::RwLock<FinalityBlocksInfo>>,
     block: crate::modules::blocks::CacheBlock,
     max_gas_burnt: near_primitives::types::Gas,
     optimistic_data: HashMap<
@@ -291,7 +233,7 @@ pub async fn run_contract(
         }
     };
 
-    let (epoch_height, epoch_validators) = if final_block_info
+    let (epoch_height, epoch_validators) = if finality_blocks_info
         .read()
         .await
         .final_block
@@ -299,7 +241,7 @@ pub async fn run_contract(
         .epoch_id
         == block.epoch_id
     {
-        let validators = final_block_info.read().await.current_validators.clone();
+        let validators = finality_blocks_info.read().await.current_validators.clone();
         (validators.epoch_height, validators.current_validators)
     } else {
         let validators = db_manager

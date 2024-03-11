@@ -1,4 +1,4 @@
-use crate::modules::blocks::{CacheBlock, FinalBlockInfo};
+use crate::modules::blocks::{CacheBlock, FinalityBlocksInfo};
 use futures::executor::block_on;
 use std::string::ToString;
 
@@ -61,7 +61,7 @@ pub struct ServerContext {
     pub blocks_cache:
         std::sync::Arc<futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>>,
     /// Final block info include final_block_cache and current_validators_info
-    pub final_block_info: std::sync::Arc<futures_locks::RwLock<FinalBlockInfo>>,
+    pub finality_blocks_info: std::sync::Arc<futures_locks::RwLock<FinalityBlocksInfo>>,
     /// Cache to store compiled contract codes
     pub compiled_contract_code_cache: std::sync::Arc<CompiledCodeCache>,
     /// Cache to store contract codes
@@ -118,8 +118,8 @@ impl ServerContext {
             )),
         });
 
-        let final_block_info = std::sync::Arc::new(futures_locks::RwLock::new(
-            FinalBlockInfo::new(&near_rpc_client, &blocks_cache).await,
+        let finality_blocks_info = std::sync::Arc::new(futures_locks::RwLock::new(
+            FinalityBlocksInfo::new(&near_rpc_client, &blocks_cache).await,
         ));
 
         let s3_client = rpc_server_config.lake_config.lake_s3_client().await;
@@ -150,7 +150,7 @@ impl ServerContext {
             near_rpc_client,
             s3_bucket_name: rpc_server_config.lake_config.aws_bucket_name.clone(),
             blocks_cache,
-            final_block_info,
+            finality_blocks_info,
             compiled_contract_code_cache,
             contract_code_cache,
             max_gas_burnt: rpc_server_config.general.max_gas_burnt,

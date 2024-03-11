@@ -1,4 +1,4 @@
-use crate::modules::blocks::{BlockInfo, CacheBlock, FinalBlockInfo};
+use crate::modules::blocks::{BlockInfo, CacheBlock, FinalityBlocksInfo};
 #[cfg(feature = "shadow_data_consistency")]
 use assert_json_diff::{assert_json_matches_no_panic, CompareMode, Config, NumericMode};
 use futures::StreamExt;
@@ -132,12 +132,12 @@ async fn handle_streamer_message(
     blocks_cache: std::sync::Arc<
         futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>,
     >,
-    final_block_info: std::sync::Arc<futures_locks::RwLock<FinalBlockInfo>>,
+    finality_blocks_info: std::sync::Arc<futures_locks::RwLock<FinalityBlocksInfo>>,
     near_rpc_client: &JsonRpcClient,
 ) -> anyhow::Result<()> {
     let block = BlockInfo::new_from_streamer_message(streamer_message).await;
 
-    if final_block_info
+    if finality_blocks_info
         .read()
         .await
         .final_block
@@ -146,11 +146,11 @@ async fn handle_streamer_message(
         != block.block_cache.epoch_id
     {
         tracing::info!("New epoch started: {:?}", block.block_cache.epoch_id);
-        final_block_info.write().await.current_validators =
+        finality_blocks_info.write().await.current_validators =
             get_current_validators(near_rpc_client).await?;
     }
     let block_cache = block.block_cache;
-    final_block_info.write().await.final_block = block;
+    finality_blocks_info.write().await.final_block = block;
     blocks_cache
         .write()
         .await
@@ -164,7 +164,7 @@ pub async fn update_final_block_regularly(
     blocks_cache: std::sync::Arc<
         futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>,
     >,
-    final_block_info: std::sync::Arc<futures_locks::RwLock<FinalBlockInfo>>,
+    finality_blocks_info: std::sync::Arc<futures_locks::RwLock<FinalityBlocksInfo>>,
     rpc_server_config: configuration::RpcServerConfig,
     near_rpc_client: JsonRpcClient,
 ) -> anyhow::Result<()> {
@@ -172,7 +172,7 @@ pub async fn update_final_block_regularly(
     let lake_config = rpc_server_config
         .lake_config
         .lake_config(
-            final_block_info
+            finality_blocks_info
                 .read()
                 .await
                 .final_block
@@ -186,7 +186,7 @@ pub async fn update_final_block_regularly(
             handle_streamer_message(
                 streamer_message,
                 std::sync::Arc::clone(&blocks_cache),
-                std::sync::Arc::clone(&final_block_info),
+                std::sync::Arc::clone(&finality_blocks_info),
                 &near_rpc_client,
             )
         })
@@ -214,7 +214,7 @@ pub async fn update_final_block_regularly(
     blocks_cache: std::sync::Arc<
         futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>,
     >,
-    final_block_info: std::sync::Arc<futures_locks::RwLock<FinalBlockInfo>>,
+    finality_blocks_info: std::sync::Arc<futures_locks::RwLock<FinalityBlocksInfo>>,
     redis_client: redis::Client,
     near_rpc_client: JsonRpcClient,
 ) -> anyhow::Result<()> {
@@ -229,7 +229,7 @@ pub async fn update_final_block_regularly(
                     if let Err(err) = handle_streamer_message(
                         streamer_message,
                         std::sync::Arc::clone(&blocks_cache),
-                        std::sync::Arc::clone(&final_block_info),
+                        std::sync::Arc::clone(&finality_blocks_info),
                         &near_rpc_client,
                     )
                     .await
@@ -253,7 +253,7 @@ pub async fn update_final_block_regularly(
 // Task to get and store optimistic block in the cache
 // Subscribe to the redis channel and update the optimistic block in the cache
 pub async fn update_optimistic_block_regularly(
-    final_block_info: std::sync::Arc<futures_locks::RwLock<FinalBlockInfo>>,
+    finality_blocks_info: std::sync::Arc<futures_locks::RwLock<FinalityBlocksInfo>>,
     redis_client: redis::Client,
 ) -> anyhow::Result<()> {
     tracing::info!("Task to get and store optimistic block in the cache started");
@@ -270,7 +270,7 @@ pub async fn update_optimistic_block_regularly(
                         "Received optimistic block: {:?}",
                         optimistic_block.block_cache
                     );
-                    final_block_info.write().await.optimistic_block = optimistic_block;
+                    finality_blocks_info.write().await.optimistic_block = optimistic_block;
                 }
                 Err(err) => {
                     tracing::error!("Error parse payload: {:?}", err);

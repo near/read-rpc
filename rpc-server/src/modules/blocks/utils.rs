@@ -101,11 +101,17 @@ pub async fn fetch_block_from_cache_or_get(
                 near_primitives::types::Finality::None => {
                     if cfg!(feature = "near_state_indexer_disabled") {
                         // Returns the final_block for None.
-                        Some(data.final_block_info.read().await.final_block.block_cache)
+                        Some(
+                            data.finality_blocks_info
+                                .read()
+                                .await
+                                .final_block
+                                .block_cache,
+                        )
                     } else {
                         // Returns the optimistic_block for None.
                         Some(
-                            data.final_block_info
+                            data.finality_blocks_info
                                 .read()
                                 .await
                                 .optimistic_block
@@ -116,7 +122,13 @@ pub async fn fetch_block_from_cache_or_get(
                 near_primitives::types::Finality::DoomSlug
                 | near_primitives::types::Finality::Final => {
                     // Returns the final_block for DoomSlug and Final.
-                    Some(data.final_block_info.read().await.final_block.block_cache)
+                    Some(
+                        data.finality_blocks_info
+                            .read()
+                            .await
+                            .final_block
+                            .block_cache,
+                    )
                 }
             }
         }

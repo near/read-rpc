@@ -258,7 +258,7 @@ pub async fn fetch_block(
                 near_primitives::types::Finality::Final
                 | near_primitives::types::Finality::DoomSlug => {
                     let block_view = data
-                        .final_block_info
+                        .finality_blocks_info
                         .read()
                         .await
                         .final_block
@@ -276,7 +276,7 @@ pub async fn fetch_block(
                         )
                     } else {
                         let block_view = data
-                            .final_block_info
+                            .finality_blocks_info
                             .read()
                             .await
                             .optimistic_block
@@ -496,7 +496,7 @@ async fn fetch_shards(
             near_primitives::types::Finality::None => {
                 if cfg!(feature = "near_state_indexer_disabled") {
                     Ok(data
-                        .final_block_info
+                        .finality_blocks_info
                         .read()
                         .await
                         .final_block
@@ -504,7 +504,7 @@ async fn fetch_shards(
                         .await)
                 } else {
                     Ok(data
-                        .final_block_info
+                        .finality_blocks_info
                         .read()
                         .await
                         .optimistic_block
@@ -514,7 +514,7 @@ async fn fetch_shards(
             }
             near_primitives::types::Finality::DoomSlug
             | near_primitives::types::Finality::Final => Ok(data
-                .final_block_info
+                .finality_blocks_info
                 .read()
                 .await
                 .final_block
