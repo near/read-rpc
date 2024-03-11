@@ -53,11 +53,12 @@ async fn main() -> anyhow::Result<()> {
     #[cfg(not(feature = "near_state_indexer_disabled"))]
     {
         let redis_client = redis::Client::open(rpc_server_config.general.redis_url.clone())?;
+        let redis_client_clone = redis_client.clone();
         tokio::spawn(async move {
             utils::update_final_block_regularly(
                 blocks_cache,
                 final_block_info,
-                redis_client.clone(),
+                redis_client_clone,
                 near_rpc_client,
             )
             .await

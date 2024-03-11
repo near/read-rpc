@@ -52,7 +52,7 @@ near-vm-runner.workspace = true
 [features]
 default = ["send_tx_methods", "scylla_db"]
 send_tx_methods = []
-near_state_indexer_disabled = []
+near_state_indexer_disabled = []  # Use this feature if you don't run near-state-indexer
 tracing-instrumentation = ["configuration/tracing-instrumentation"]
 postgres_db = ["database/postgres_db"]
 scylla_db = ["database/scylla_db"]
