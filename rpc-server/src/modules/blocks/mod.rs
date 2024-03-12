@@ -278,13 +278,13 @@ impl BlockInfo {
 }
 
 #[derive(Debug)]
-pub struct FinalityBlocksInfo {
+pub struct BlocksInfoByFinality {
     pub final_block: BlockInfo,
     pub optimistic_block: BlockInfo,
     pub current_validators: near_primitives::views::EpochValidatorInfo,
 }
 
-impl FinalityBlocksInfo {
+impl BlocksInfoByFinality {
     pub async fn new(
         near_rpc_client: &crate::utils::JsonRpcClient,
         blocks_cache: &std::sync::Arc<

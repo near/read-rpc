@@ -5,7 +5,7 @@ use futures::StreamExt;
 
 use crate::config::CompiledCodeCache;
 use crate::errors::FunctionCallError;
-use crate::modules::blocks::FinalityBlocksInfo;
+use crate::modules::blocks::BlocksInfoByFinality;
 use crate::modules::queries::CodeStorage;
 
 pub struct RunContractResponse {
@@ -195,7 +195,7 @@ pub async fn run_contract(
             crate::cache::LruMemoryCache<near_primitives::hash::CryptoHash, Vec<u8>>,
         >,
     >,
-    finality_blocks_info: &std::sync::Arc<futures_locks::RwLock<FinalityBlocksInfo>>,
+    blocks_info_by_finality: &std::sync::Arc<futures_locks::RwLock<BlocksInfoByFinality>>,
     block: crate::modules::blocks::CacheBlock,
     max_gas_burnt: near_primitives::types::Gas,
     optimistic_data: HashMap<
@@ -233,7 +233,7 @@ pub async fn run_contract(
         }
     };
 
-    let (epoch_height, epoch_validators) = if finality_blocks_info
+    let (epoch_height, epoch_validators) = if blocks_info_by_finality
         .read()
         .await
         .final_block
@@ -241,7 +241,11 @@ pub async fn run_contract(
         .epoch_id
         == block.epoch_id
     {
-        let validators = finality_blocks_info.read().await.current_validators.clone();
+        let validators = blocks_info_by_finality
+            .read()
+            .await
+            .current_validators
+            .clone();
         (validators.epoch_height, validators.current_validators)
     } else {
         let validators = db_manager

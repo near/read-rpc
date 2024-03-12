@@ -70,13 +70,13 @@ async fn query_call(
             crate::metrics::QUERY_VIEW_STATE_REQUESTS_TOTAL.inc();
             if include_proof {
                 // TODO: We can calculate the proof for state only on regular or archival nodes.
-                let finality_blocks_info = data.finality_blocks_info.read().await;
+                let blocks_info_by_finality = data.blocks_info_by_finality.read().await;
                 // `expected_earliest_available_block` calculated by formula:
                 // `final_block_height` - `node_epoch_count` * `epoch_length`
                 // Now near store 5 epochs, it can be changed in the future
                 // epoch_length = 43200 blocks
                 let expected_earliest_available_block =
-                    finality_blocks_info.final_block.block_cache.block_height
+                    blocks_info_by_finality.final_block.block_cache.block_height
                         - 5 * data.genesis_info.genesis_config.epoch_length;
                 return if block.block_height > expected_earliest_available_block {
                     // Proxy to regular rpc if the block is available
@@ -276,7 +276,7 @@ async fn optimistic_view_account(
 ) -> Result<near_primitives::views::AccountView, near_jsonrpc_primitives::types::query::RpcQueryError>
 {
     if let Ok(result) = data
-        .finality_blocks_info
+        .blocks_info_by_finality
         .read()
         .await
         .optimistic_block
@@ -368,7 +368,7 @@ async fn optimistic_view_code(
     account_id: &near_primitives::types::AccountId,
 ) -> Result<Vec<u8>, near_jsonrpc_primitives::types::query::RpcQueryError> {
     let contract_code = if let Ok(result) = data
-        .finality_blocks_info
+        .blocks_info_by_finality
         .read()
         .await
         .optimistic_block
@@ -461,7 +461,7 @@ async fn optimistic_function_call(
     args: near_primitives::types::FunctionArgs,
 ) -> Result<RunContractResponse, crate::errors::FunctionCallError> {
     let optimistic_data = data
-        .finality_blocks_info
+        .blocks_info_by_finality
         .read()
         .await
         .optimistic_block
@@ -474,7 +474,7 @@ async fn optimistic_function_call(
         data.db_manager.clone(),
         &data.compiled_contract_code_cache,
         &data.contract_code_cache,
-        &data.finality_blocks_info,
+        &data.blocks_info_by_finality,
         block,
         data.max_gas_burnt,
         optimistic_data, // run contract with optimistic data
@@ -497,7 +497,7 @@ async fn database_function_call(
         data.db_manager.clone(),
         &data.compiled_contract_code_cache,
         &data.contract_code_cache,
-        &data.finality_blocks_info,
+        &data.blocks_info_by_finality,
         block,
         data.max_gas_burnt,
         Default::default(), // run contract with empty optimistic data
@@ -553,7 +553,7 @@ async fn optimistic_view_state(
     near_jsonrpc_primitives::types::query::RpcQueryError,
 > {
     let mut optimistic_data = data
-        .finality_blocks_info
+        .blocks_info_by_finality
         .read()
         .await
         .optimistic_block
@@ -673,7 +673,7 @@ async fn optimistic_view_access_key(
     near_jsonrpc_primitives::types::query::RpcQueryError,
 > {
     if let Ok(result) = data
-        .finality_blocks_info
+        .blocks_info_by_finality
         .read()
         .await
         .optimistic_block
