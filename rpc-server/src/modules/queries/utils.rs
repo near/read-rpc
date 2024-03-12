@@ -5,7 +5,7 @@ use futures::StreamExt;
 
 use crate::config::CompiledCodeCache;
 use crate::errors::FunctionCallError;
-use crate::modules::blocks::FinalBlockInfo;
+use crate::modules::blocks::BlocksInfoByFinality;
 use crate::modules::queries::CodeStorage;
 
 pub struct RunContractResponse {
@@ -96,40 +96,6 @@ pub async fn fetch_list_access_keys_from_db(
         )
         .collect();
     Ok(account_keys_view)
-}
-
-#[cfg_attr(
-    feature = "tracing-instrumentation",
-    tracing::instrument(skip(db_manager))
-)]
-pub async fn fetch_state_from_db(
-    db_manager: &std::sync::Arc<Box<dyn database::ReaderDbManager + Sync + Send + 'static>>,
-    account_id: &near_primitives::types::AccountId,
-    block_height: near_primitives::types::BlockHeight,
-    prefix: &[u8],
-) -> anyhow::Result<near_primitives::views::ViewStateResult> {
-    tracing::debug!(
-        "`fetch_state_from_db` call. AccountID {}, block {}, prefix {:?}",
-        account_id,
-        block_height,
-        prefix,
-    );
-    let state_from_db = get_state_keys_from_db(db_manager, account_id, block_height, prefix).await;
-    if state_from_db.is_empty() {
-        anyhow::bail!("Data not found in db")
-    } else {
-        let values = state_from_db
-            .into_iter()
-            .map(|(key, value)| near_primitives::views::StateItem {
-                key: key.into(),
-                value: value.into(),
-            })
-            .collect();
-        Ok(near_primitives::views::ViewStateResult {
-            values,
-            proof: vec![], // TODO: this is hardcoded empty value since we don't support proofs yet
-        })
-    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -229,9 +195,13 @@ pub async fn run_contract(
             crate::cache::LruMemoryCache<near_primitives::hash::CryptoHash, Vec<u8>>,
         >,
     >,
-    final_block_info: &std::sync::Arc<futures_locks::RwLock<FinalBlockInfo>>,
+    blocks_info_by_finality: &std::sync::Arc<futures_locks::RwLock<BlocksInfoByFinality>>,
     block: crate::modules::blocks::CacheBlock,
     max_gas_burnt: near_primitives::types::Gas,
+    optimistic_data: HashMap<
+        readnode_primitives::StateKey,
+        Option<readnode_primitives::StateValue>,
+    >,
 ) -> Result<RunContractResponse, FunctionCallError> {
     let contract = db_manager
         .get_account(&account_id, block.block_height)
@@ -263,22 +233,32 @@ pub async fn run_contract(
         }
     };
 
-    let (epoch_height, epoch_validators) =
-        if final_block_info.read().await.final_block_cache.epoch_id == block.epoch_id {
-            let validators = final_block_info.read().await.current_validators.clone();
-            (validators.epoch_height, validators.current_validators)
-        } else {
-            let validators = db_manager
-                .get_validators_by_epoch_id(block.epoch_id)
-                .await
-                .map_err(|_| FunctionCallError::InternalError {
-                    error_message: "Failed to get epoch info".to_string(),
-                })?;
-            (
-                validators.epoch_height,
-                validators.validators_info.current_validators,
-            )
-        };
+    let (epoch_height, epoch_validators) = if blocks_info_by_finality
+        .read()
+        .await
+        .final_block
+        .block_cache
+        .epoch_id
+        == block.epoch_id
+    {
+        let validators = blocks_info_by_finality
+            .read()
+            .await
+            .current_validators
+            .clone();
+        (validators.epoch_height, validators.current_validators)
+    } else {
+        let validators = db_manager
+            .get_validators_by_epoch_id(block.epoch_id)
+            .await
+            .map_err(|_| FunctionCallError::InternalError {
+                error_message: "Failed to get epoch info".to_string(),
+            })?;
+        (
+            validators.epoch_height,
+            validators.validators_info.current_validators,
+        )
+    };
 
     let public_key = near_crypto::PublicKey::empty(near_crypto::KeyType::ED25519);
     let random_seed = near_primitives::utils::create_random_seed(
@@ -313,6 +293,7 @@ pub async fn run_contract(
             .iter()
             .map(|validator| (validator.account_id.clone(), validator.stake))
             .collect(),
+        optimistic_data,
     );
 
     let result = run_code_in_vm_runner(

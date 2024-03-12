@@ -44,7 +44,24 @@ pub(crate) async fn fetch_optimistic_block(
         .await??)
 }
 
-pub async fn optimistic_stream(view_client: actix::Addr<near_client::ViewClientActor>) {
+pub(crate) async fn publish_streamer_message(
+    topic: &str,
+    streamer_message: &near_indexer::StreamerMessage,
+    redis_client: redis::aio::ConnectionManager,
+) -> anyhow::Result<()> {
+    let json_streamer_message = serde_json::to_string(streamer_message)?;
+    redis::cmd("publish")
+        .arg(topic)
+        .arg(json_streamer_message)
+        .query_async::<redis::aio::ConnectionManager, u64>(&mut redis_client.clone())
+        .await?;
+    Ok(())
+}
+
+pub async fn optimistic_stream(
+    view_client: actix::Addr<near_client::ViewClientActor>,
+    redis_client: redis::aio::ConnectionManager,
+) {
     tracing::info!(target: crate::INDEXER, "Starting Optimistic Streamer...");
     let mut optimistic_block_height: Option<u64> = None;
     loop {
@@ -57,12 +74,25 @@ pub async fn optimistic_stream(view_client: actix::Addr<near_client::ViewClientA
                 } else {
                     optimistic_block_height = Some(height);
                 }
+            } else {
+                optimistic_block_height = Some(height);
             };
             let response = near_indexer::build_streamer_message(&view_client, block).await;
             match response {
                 Ok(streamer_message) => {
-                    // TODO: implement handling of streamer message for optimistic block
-                    tracing::info!(target: crate::INDEXER, "Optimistic block {:#?}", &streamer_message.block.header.height);
+                    tracing::info!(target: crate::INDEXER, "Optimistic block {:?}", &optimistic_block_height);
+                    if let Err(err) = publish_streamer_message(
+                        "optimistic_block",
+                        &streamer_message,
+                        redis_client.clone(),
+                    )
+                    .await
+                    {
+                        tracing::error!(
+                            target: crate::INDEXER,
+                            "Failed to publish optimistic block streamer message: {:#?}", err
+                        );
+                    };
                 }
                 Err(err) => {
                     tracing::error!(

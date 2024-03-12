@@ -1,8 +1,6 @@
 use actix_web::dev::Service;
 use jsonrpc_v2::{Data, Server};
 
-use crate::utils::update_final_block_height_regularly;
-
 #[macro_use]
 extern crate lazy_static;
 
@@ -39,16 +37,38 @@ async fn main() -> anyhow::Result<()> {
         config::ServerContext::init(rpc_server_config.clone(), near_rpc_client.clone()).await?;
 
     let blocks_cache = std::sync::Arc::clone(&server_context.blocks_cache);
-    let final_block_info = std::sync::Arc::clone(&server_context.final_block_info);
+    let blocks_info_by_finality = std::sync::Arc::clone(&server_context.blocks_info_by_finality);
+
+    #[cfg(feature = "near_state_indexer_disabled")]
     tokio::spawn(async move {
-        update_final_block_height_regularly(
+        utils::update_final_block_regularly(
             blocks_cache,
-            final_block_info,
+            blocks_info_by_finality,
             rpc_server_config,
             near_rpc_client,
         )
         .await
     });
+
+    #[cfg(not(feature = "near_state_indexer_disabled"))]
+    {
+        let redis_client = redis::Client::open(rpc_server_config.general.redis_url.clone())?;
+        let redis_client_clone = redis_client.clone();
+        tokio::spawn(async move {
+            utils::update_final_block_regularly(
+                blocks_cache,
+                blocks_info_by_finality,
+                redis_client_clone,
+                near_rpc_client,
+            )
+            .await
+        });
+        let blocks_info_by_finality =
+            std::sync::Arc::clone(&server_context.blocks_info_by_finality);
+        tokio::spawn(async move {
+            utils::update_optimistic_block_regularly(blocks_info_by_finality, redis_client).await
+        });
+    }
 
     let rpc = Server::new()
         .with_data(Data::new(server_context.clone()))

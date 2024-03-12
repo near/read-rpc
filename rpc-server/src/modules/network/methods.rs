@@ -31,8 +31,8 @@ pub async fn status(
     data: Data<ServerContext>,
     Params(_params): Params<serde_json::Value>,
 ) -> Result<near_primitives::views::StatusResponse, RPCError> {
-    let final_block_info = data.final_block_info.read().await;
-    let validators = final_block_info
+    let blocks_info_by_finality = data.blocks_info_by_finality.read().await;
+    let validators = blocks_info_by_finality
         .current_validators
         .current_validators
         .iter()
@@ -46,16 +46,22 @@ pub async fn status(
         version: data.version.clone(),
         chain_id: data.genesis_info.genesis_config.chain_id.clone(),
         protocol_version: near_primitives::version::PROTOCOL_VERSION,
-        latest_protocol_version: final_block_info.final_block_cache.latest_protocol_version,
+        latest_protocol_version: blocks_info_by_finality
+            .final_block
+            .block_cache
+            .latest_protocol_version,
         // Address for current read_node RPC server.
         rpc_addr: Some(format!("0.0.0.0:{}", data.server_port)),
         validators,
         sync_info: near_primitives::views::StatusSyncInfo {
-            latest_block_hash: final_block_info.final_block_cache.block_hash,
-            latest_block_height: final_block_info.final_block_cache.block_height,
-            latest_state_root: final_block_info.final_block_cache.state_root,
+            latest_block_hash: blocks_info_by_finality.final_block.block_cache.block_hash,
+            latest_block_height: blocks_info_by_finality.final_block.block_cache.block_height,
+            latest_state_root: blocks_info_by_finality.final_block.block_cache.state_root,
             latest_block_time: time::OffsetDateTime::from_unix_timestamp_nanos(
-                final_block_info.final_block_cache.block_timestamp as i128,
+                blocks_info_by_finality
+                    .final_block
+                    .block_cache
+                    .block_timestamp as i128,
             )
             .expect("Failed to parse timestamp"),
             // Always false because read_node is not need to sync
@@ -69,9 +75,13 @@ pub async fn status(
                 .expect("Failed to parse timestamp"),
             ),
             epoch_id: Some(near_primitives::types::EpochId(
-                final_block_info.final_block_cache.epoch_id,
+                blocks_info_by_finality.final_block.block_cache.epoch_id,
             )),
-            epoch_start_height: Some(final_block_info.current_validators.epoch_start_height),
+            epoch_start_height: Some(
+                blocks_info_by_finality
+                    .current_validators
+                    .epoch_start_height,
+            ),
         },
         validator_account_id: None,
         validator_public_key: None,
@@ -124,10 +134,11 @@ pub async fn validators(
     // Current epoch validators fetches from the Near RPC node
     if let near_primitives::types::EpochReference::EpochId(epoch_id) = &request.epoch_reference {
         if data
-            .final_block_info
+            .blocks_info_by_finality
             .read()
             .await
-            .final_block_cache
+            .final_block
+            .block_cache
             .epoch_id
             == epoch_id.0
         {
@@ -273,6 +284,7 @@ async fn protocol_config_call(
             fees: runtime_config.fees.clone(),
             wasm_config: runtime_config.wasm_config.clone(),
             account_creation_config: runtime_config.account_creation_config.clone(),
+            storage_proof_size_soft_limit: runtime_config.storage_proof_size_soft_limit,
         },
     };
     Ok(protocol_config.into())
