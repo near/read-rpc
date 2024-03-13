@@ -7,6 +7,10 @@ rust-version.workspace = true
 repository.workspace = true
 license.workspace = true
 
+[build-dependencies]
+anyhow = "1.0.51"
+rustc_version = "0.4"
+
 [dependencies]
 actix = "0.13.3"
 actix-web = "4.2.1"
@@ -16,9 +20,8 @@ clap = "4.4.18"
 futures = "0.3.5"
 hex = "0.4.3"
 humantime = "2.1.0"
-lazy_static = "1.4.0"
 openssl-probe = "0.1.5"
-prometheus = "0.13.1"
+once_cell = "1.19.0"
 redis = { version = "0.24.0", features = ["tokio-comp", "connection-manager"] }
 serde_json = "1.0.64"
 tokio = { version = "1.36.0", features = [

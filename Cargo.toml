@@ -27,6 +27,7 @@ database = { path = "database" }
 readnode-primitives = { path = "readnode-primitives" }
 epoch-indexer = { path = "epoch-indexer" }
 
+# Please, update the supported nearcore version in .cargo/config.toml file
 near-indexer = { git = 'https://github.com/near/nearcore.git', rev = '4429cc8682eb3c00901af5d96233fef04768bf5a' }
 near-client = { git = 'https://github.com/near/nearcore.git', rev = '4429cc8682eb3c00901af5d96233fef04768bf5a' }
 near-o11y = { git = 'https://github.com/near/nearcore.git', rev = '4429cc8682eb3c00901af5d96233fef04768bf5a' }

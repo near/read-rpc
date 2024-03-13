@@ -7,6 +7,10 @@ rust-version.workspace = true
 repository.workspace = true
 license.workspace = true
 
+[build-dependencies]
+anyhow = "1.0.51"
+rustc_version = "0.4"
+
 [dependencies]
 actix-web = "4.5.1"
 actix-cors = "0.7.0"

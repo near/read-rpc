@@ -45,7 +45,6 @@ pub struct GeneralStateIndexerConfig {
 pub struct GeneralNearStateIndexerConfig {
     pub chain_id: ChainId,
     pub redis_url: String,
-    pub metrics_server_port: u16,
     pub concurrency: usize,
 }
 
@@ -232,16 +231,10 @@ impl Default for CommonGeneralStateIndexerConfig {
 #[derive(Deserialize, Debug, Clone)]
 pub struct CommonGeneralNearStateIndexerConfig {
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
-    pub metrics_server_port: Option<u16>,
-    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub concurrency: Option<usize>,
 }
 
 impl CommonGeneralNearStateIndexerConfig {
-    pub fn default_metrics_server_port() -> u16 {
-        8082
-    }
-
     pub fn default_concurrency() -> usize {
         1
     }
@@ -250,7 +243,6 @@ impl CommonGeneralNearStateIndexerConfig {
 impl Default for CommonGeneralNearStateIndexerConfig {
     fn default() -> Self {
         Self {
-            metrics_server_port: Some(Self::default_metrics_server_port()),
             concurrency: Some(Self::default_concurrency()),
         }
     }
@@ -365,10 +357,6 @@ impl From<CommonGeneralConfig> for GeneralNearStateIndexerConfig {
             redis_url: common_config
                 .redis_url
                 .unwrap_or("redis://127.0.0.1/".to_string()),
-            metrics_server_port: common_config
-                .near_state_indexer
-                .metrics_server_port
-                .unwrap_or_else(CommonGeneralNearStateIndexerConfig::default_metrics_server_port),
             concurrency: common_config
                 .near_state_indexer
                 .concurrency
