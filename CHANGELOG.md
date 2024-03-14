@@ -5,9 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased](https://github.com/near/read-rpc/compare/v0.1.0...HEAD)
+## [Unreleased](https://github.com/near/read-rpc/compare/0.2.0-rc.1...HEAD)
+
+## [0.2.0-rc.1](https://github.com/near/read-rpc/releases/tag/0.2.0-rc.1)
+
 ### Supported Nearcore Version
-- nearcore v1.37.1
+- nearcore v.38.0-rc.2
 - rust v1.76.0
 
 ### Added
