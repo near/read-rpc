@@ -4,11 +4,9 @@ use futures::executor::block_on;
 
 use crate::modules::blocks::{BlocksInfoByFinality, CacheBlock};
 
-// TODO: Improve versioning in future.
-// For now, it's hardcoded and should be updated manually at each release..
-static NEARD_VERSION: &str = "1.37.1";
-static NEARD_BUILD: &str = "1.37.1";
-static RUSTC_VERSION: &str = "1.76.0";
+static NEARD_VERSION: &str = env!("CARGO_PKG_VERSION");
+static NEARD_BUILD: &str = env!("BUILD_VERSION");
+static RUSTC_VERSION: &str = env!("RUSTC_VERSION");
 
 // Struct to store genesis_config and genesis_block in the server context
 // Fetch once genesis info on start of the server and put it in the context

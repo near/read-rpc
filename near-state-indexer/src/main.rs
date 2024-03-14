@@ -9,9 +9,6 @@ mod configs;
 mod metrics;
 mod utils;
 
-#[macro_use]
-extern crate lazy_static;
-
 // Categories for logging
 pub(crate) const INDEXER: &str = "near_state_indexer";
 
@@ -83,14 +80,10 @@ async fn handle_streamer_message(
         published_streamer_message_feature,
     )?;
 
-    metrics::BLOCK_PROCESSED_TOTAL.inc();
-    // Prometheus Gauge Metric type do not support u64
-    // https://github.com/tikv/rust-prometheus/issues/470
-    metrics::LATEST_BLOCK_HEIGHT.set(i64::try_from(block_height)?);
-
     let mut stats_lock = stats.write().await;
     stats_lock.block_heights_processing.remove(&block_height);
     stats_lock.blocks_processed_count += 1;
+    metrics::BLOCKS_DONE.inc();
     stats_lock.last_processed_block_height = block_height;
     if let Some(stats_epoch_id) = stats_lock.current_epoch_id {
         if current_epoch_id != stats_epoch_id {
@@ -245,7 +238,19 @@ async fn main() -> anyhow::Result<()> {
     let home_dir = opts.home.unwrap_or_else(near_indexer::get_default_home);
 
     match opts.subcmd {
-        configs::SubCommand::Run => run(home_dir).await?,
+        configs::SubCommand::Run => {
+            // This will set the near_lake_build_info metric
+            // e.g. near_lake_build_info{build="1.37.1",release="0.1.29",rustc_version="1.76.0"}
+            metrics::NODE_BUILD_INFO.reset();
+            metrics::NODE_BUILD_INFO
+                .with_label_values(&[
+                    env!("CARGO_PKG_VERSION"),
+                    env!("BUILD_VERSION"),
+                    env!("RUSTC_VERSION"),
+                ])
+                .inc();
+            run(home_dir).await?
+        }
         configs::SubCommand::Init(init_config) => {
             near_indexer::indexer_init_configs(&home_dir, init_config.into())?
         }
@@ -272,12 +277,6 @@ async fn run(home_dir: std::path::PathBuf) -> anyhow::Result<()> {
     let redis_client = redis::Client::open(state_indexer_config.general.redis_url.clone())?
         .get_connection_manager()
         .await?;
-
-    // Initiate metrics http server
-    tokio::spawn(
-        metrics::init_server(state_indexer_config.general.metrics_server_port)
-            .expect("Failed to start metrics server"),
-    );
 
     let indexer_config = near_indexer::IndexerConfig {
         home_dir,

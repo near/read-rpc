@@ -27,16 +27,17 @@ database = { path = "database" }
 readnode-primitives = { path = "readnode-primitives" }
 epoch-indexer = { path = "epoch-indexer" }
 
-near-indexer = { git = 'https://github.com/near/nearcore.git', rev = '4429cc8682eb3c00901af5d96233fef04768bf5a' }
-near-client = { git = 'https://github.com/near/nearcore.git', rev = '4429cc8682eb3c00901af5d96233fef04768bf5a' }
-near-o11y = { git = 'https://github.com/near/nearcore.git', rev = '4429cc8682eb3c00901af5d96233fef04768bf5a' }
-near-indexer-primitives = { git = 'https://github.com/near/nearcore.git', rev = '4429cc8682eb3c00901af5d96233fef04768bf5a' }
-near-primitives = { git = 'https://github.com/near/nearcore.git', rev = '4429cc8682eb3c00901af5d96233fef04768bf5a' }
-near-chain-configs = { git = 'https://github.com/near/nearcore.git', rev = '4429cc8682eb3c00901af5d96233fef04768bf5a' }
-near-crypto = { git = 'https://github.com/near/nearcore.git', rev = '4429cc8682eb3c00901af5d96233fef04768bf5a' }
-near-jsonrpc-primitives = { git = 'https://github.com/near/nearcore.git', rev = '4429cc8682eb3c00901af5d96233fef04768bf5a' }
-near-parameters = { git = 'https://github.com/near/nearcore.git', rev = '4429cc8682eb3c00901af5d96233fef04768bf5a' }
-near-vm-runner = { git = 'https://github.com/near/nearcore.git', rev = '4429cc8682eb3c00901af5d96233fef04768bf5a' }
+# Please, update the supported nearcore version in .cargo/config.toml file
+near-indexer = { git = 'https://github.com/near/nearcore.git', rev = '836dbb7971a8d183e02f95d81d8a9ae18e731b37' }
+near-client = { git = 'https://github.com/near/nearcore.git', rev = '836dbb7971a8d183e02f95d81d8a9ae18e731b37' }
+near-o11y = { git = 'https://github.com/near/nearcore.git', rev = '836dbb7971a8d183e02f95d81d8a9ae18e731b37' }
+near-indexer-primitives = { git = 'https://github.com/near/nearcore.git', rev = '836dbb7971a8d183e02f95d81d8a9ae18e731b37' }
+near-primitives = { git = 'https://github.com/near/nearcore.git', rev = '836dbb7971a8d183e02f95d81d8a9ae18e731b37' }
+near-chain-configs = { git = 'https://github.com/near/nearcore.git', rev = '836dbb7971a8d183e02f95d81d8a9ae18e731b37' }
+near-crypto = { git = 'https://github.com/near/nearcore.git', rev = '836dbb7971a8d183e02f95d81d8a9ae18e731b37' }
+near-jsonrpc-primitives = { git = 'https://github.com/near/nearcore.git', rev = '836dbb7971a8d183e02f95d81d8a9ae18e731b37' }
+near-parameters = { git = 'https://github.com/near/nearcore.git', rev = '836dbb7971a8d183e02f95d81d8a9ae18e731b37' }
+near-vm-runner = { git = 'https://github.com/near/nearcore.git', rev = '836dbb7971a8d183e02f95d81d8a9ae18e731b37' }
 
-near-lake-framework = { git = 'https://github.com/kobayurii/near-lake-framework-rs.git', branch = '0.7.10' }
-near-jsonrpc-client = { git = 'https://github.com/kobayurii/near-jsonrpc-client-rs.git', branch = '0.8.3'}
+near-lake-framework = { git = 'https://github.com/kobayurii/near-lake-framework-rs.git', branch = '0.7.8' }
+near-jsonrpc-client = { git = 'https://github.com/kobayurii/near-jsonrpc-client-rs.git', branch = '0.8.2'}
