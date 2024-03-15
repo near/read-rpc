@@ -1,7 +1,6 @@
 use std::convert::TryFrom;
 use std::str::FromStr;
 
-use borsh::{BorshDeserialize, BorshSerialize};
 use futures::StreamExt;
 use num_traits::ToPrimitive;
 use scylla::{prepared_statement::PreparedStatement, IntoTypedRows};
@@ -27,7 +26,6 @@ pub struct ScyllaDBManager {
     get_stored_at_block_height_and_shard_id_by_block_height: PreparedStatement,
     get_validators_by_epoch_id: PreparedStatement,
     get_validators_by_end_block_height: PreparedStatement,
-    get_protocol_config_by_epoch_id: PreparedStatement,
 }
 
 #[async_trait::async_trait]
@@ -146,10 +144,6 @@ impl ScyllaStorageManager for ScyllaDBManager {
             get_validators_by_end_block_height: Self::prepare_read_query(
                 &scylla_db_session,
                 "SELECT epoch_id, epoch_height, validators_info FROM state_indexer.validators WHERE epoch_end_height = ?",
-            ).await?,
-            get_protocol_config_by_epoch_id: Self::prepare_read_query(
-                &scylla_db_session,
-                "SELECT protocol_config FROM state_indexer.protocol_configs WHERE epoch_id = ?",
             ).await?,
         }))
     }
@@ -377,7 +371,7 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         request_block_height: near_primitives::types::BlockHeight,
         public_key: near_crypto::PublicKey,
     ) -> anyhow::Result<readnode_primitives::QueryData<near_primitives::account::AccessKey>> {
-        let key_data = public_key.try_to_vec()?;
+        let key_data = borsh::to_vec(&public_key)?;
         let (block_height, block_hash, data_blob) = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_access_key,
@@ -465,9 +459,7 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         .single_row()?
         .into_typed::<(Vec<u8>,)>()?;
 
-        Ok(readnode_primitives::TransactionDetails::try_from_slice(
-            &data_value,
-        )?)
+        Ok(borsh::from_slice::<readnode_primitives::TransactionDetails>(&data_value)?)
     }
 
     /// Returns the readnode_primitives::TransactionDetails
@@ -485,7 +477,7 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         .single_row()?
         .into_typed::<(Vec<u8>,)>()?;
         let mut transaction_details =
-            readnode_primitives::CollectingTransactionDetails::try_from_slice(&data_value)?;
+            borsh::from_slice::<readnode_primitives::CollectingTransactionDetails>(&data_value)?;
 
         let mut rows_stream = self
             .scylla_session
@@ -500,9 +492,9 @@ impl crate::ReaderDbManager for ScyllaDBManager {
             .into_typed::<(Vec<u8>, Vec<u8>)>();
         while let Some(next_row_res) = rows_stream.next().await {
             let (receipt, outcome) = next_row_res?;
-            let receipt = near_primitives::views::ReceiptView::try_from_slice(&receipt)?;
+            let receipt = borsh::from_slice::<near_primitives::views::ReceiptView>(&receipt)?;
             let execution_outcome =
-                near_primitives::views::ExecutionOutcomeWithIdView::try_from_slice(&outcome)?;
+                borsh::from_slice::<near_primitives::views::ExecutionOutcomeWithIdView>(&outcome)?;
             transaction_details.receipts.push(receipt);
             transaction_details
                 .execution_outcomes
@@ -595,24 +587,5 @@ impl crate::ReaderDbManager for ScyllaDBManager {
             epoch_start_height: validators_info.epoch_start_height,
             validators_info,
         })
-    }
-
-    async fn get_protocol_config_by_epoch_id(
-        &self,
-        epoch_id: near_primitives::hash::CryptoHash,
-    ) -> anyhow::Result<near_chain_configs::ProtocolConfigView> {
-        let (protocol_config,) = Self::execute_prepared_query(
-            &self.scylla_session,
-            &self.get_protocol_config_by_epoch_id,
-            (epoch_id.to_string(),),
-        )
-        .await?
-        .single_row()?
-        .into_typed::<(String,)>()?;
-
-        let protocol_config: near_chain_configs::ProtocolConfigView =
-            serde_json::from_str(&protocol_config)?;
-
-        Ok(protocol_config)
     }
 }

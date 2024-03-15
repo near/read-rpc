@@ -26,6 +26,7 @@ The configuration settings are stored in a TOML file. The settings include:
 - RPC server settings like the server port and max gas burnt for contract function call.
 - Transaction indexer settings like the indexer ID and port for the metrics server.
 - State indexer settings like the indexer ID and port for the metrics server.
+- Near State indexer settings like the port for the metrics server.
 - Epoch indexer settings like the indexer ID.
 - Rightsizing settings like the accounts and state changes to track.
 - Lake framework settings like the AWS access key ID and secret access key.

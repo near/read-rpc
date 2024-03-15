@@ -1,18 +1,38 @@
+use actix_web::cookie::time;
 use jsonrpc_v2::{Data, Params};
-
-use near_primitives::utils::from_timestamp;
 
 use crate::config::ServerContext;
 use crate::errors::RPCError;
 use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
-use crate::modules::network::{clone_protocol_config, parse_validator_request};
+use crate::modules::network::parse_validator_request;
+
+pub async fn client_config(
+    _data: Data<ServerContext>,
+    Params(_params): Params<serde_json::Value>,
+) -> Result<(), RPCError> {
+    Err(RPCError::unimplemented_error("client_config"))
+}
+
+pub async fn maintenance_windows(
+    _data: Data<ServerContext>,
+    Params(_params): Params<serde_json::Value>,
+) -> Result<(), RPCError> {
+    Err(RPCError::unimplemented_error("maintenance_windows"))
+}
+
+pub async fn split_storage_info(
+    _data: Data<ServerContext>,
+    Params(_params): Params<serde_json::Value>,
+) -> Result<(), RPCError> {
+    Err(RPCError::unimplemented_error("split_storage_info"))
+}
 
 pub async fn status(
     data: Data<ServerContext>,
     Params(_params): Params<serde_json::Value>,
 ) -> Result<near_primitives::views::StatusResponse, RPCError> {
-    let final_block_info = data.final_block_info.read().await;
-    let validators = final_block_info
+    let blocks_info_by_finality = data.blocks_info_by_finality.read().await;
+    let validators = blocks_info_by_finality
         .current_validators
         .current_validators
         .iter()
@@ -26,26 +46,42 @@ pub async fn status(
         version: data.version.clone(),
         chain_id: data.genesis_info.genesis_config.chain_id.clone(),
         protocol_version: near_primitives::version::PROTOCOL_VERSION,
-        latest_protocol_version: final_block_info.final_block_cache.latest_protocol_version,
+        latest_protocol_version: blocks_info_by_finality
+            .final_block
+            .block_cache
+            .latest_protocol_version,
         // Address for current read_node RPC server.
         rpc_addr: Some(format!("0.0.0.0:{}", data.server_port)),
         validators,
         sync_info: near_primitives::views::StatusSyncInfo {
-            latest_block_hash: final_block_info.final_block_cache.block_hash,
-            latest_block_height: final_block_info.final_block_cache.block_height,
-            latest_state_root: final_block_info.final_block_cache.state_root,
-            latest_block_time: from_timestamp(final_block_info.final_block_cache.block_timestamp),
+            latest_block_hash: blocks_info_by_finality.final_block.block_cache.block_hash,
+            latest_block_height: blocks_info_by_finality.final_block.block_cache.block_height,
+            latest_state_root: blocks_info_by_finality.final_block.block_cache.state_root,
+            latest_block_time: time::OffsetDateTime::from_unix_timestamp_nanos(
+                blocks_info_by_finality
+                    .final_block
+                    .block_cache
+                    .block_timestamp as i128,
+            )
+            .expect("Failed to parse timestamp"),
             // Always false because read_node is not need to sync
             syncing: false,
             earliest_block_hash: Some(data.genesis_info.genesis_block_cache.block_hash),
             earliest_block_height: Some(data.genesis_info.genesis_block_cache.block_height),
-            earliest_block_time: Some(from_timestamp(
-                data.genesis_info.genesis_block_cache.block_timestamp,
-            )),
+            earliest_block_time: Some(
+                time::OffsetDateTime::from_unix_timestamp_nanos(
+                    data.genesis_info.genesis_block_cache.block_timestamp as i128,
+                )
+                .expect("Failed to parse timestamp"),
+            ),
             epoch_id: Some(near_primitives::types::EpochId(
-                final_block_info.final_block_cache.epoch_id,
+                blocks_info_by_finality.final_block.block_cache.epoch_id,
             )),
-            epoch_start_height: Some(final_block_info.current_validators.epoch_start_height),
+            epoch_start_height: Some(
+                blocks_info_by_finality
+                    .current_validators
+                    .epoch_start_height,
+            ),
         },
         validator_account_id: None,
         validator_public_key: None,
@@ -53,8 +89,7 @@ pub async fn status(
         node_public_key: near_crypto::PublicKey::empty(near_crypto::KeyType::ED25519),
         node_key: None,
         // return uptime current read_node
-        uptime_sec: near_primitives::static_clock::StaticClock::utc().timestamp()
-            - data.boot_time_seconds,
+        uptime_sec: chrono::Utc::now().timestamp() - data.boot_time_seconds,
         // Not using for status method
         detailed_debug_status: None,
     })
@@ -70,11 +105,13 @@ pub async fn health(
 }
 
 pub async fn network_info(
+    data: Data<ServerContext>,
     Params(_params): Params<serde_json::Value>,
 ) -> Result<near_jsonrpc_primitives::types::network_info::RpcNetworkInfoResponse, RPCError> {
-    Err(RPCError::unimplemented_error(
-        "Method is not implemented on this type of node. Please send a request to NEAR JSON RPC instead.",
-    ))
+    Ok(data
+        .near_rpc_client
+        .call(near_jsonrpc_client::methods::network_info::RpcNetworkInfoRequest)
+        .await?)
 }
 
 pub async fn validators(
@@ -97,10 +134,11 @@ pub async fn validators(
     // Current epoch validators fetches from the Near RPC node
     if let near_primitives::types::EpochReference::EpochId(epoch_id) = &request.epoch_reference {
         if data
-            .final_block_info
+            .blocks_info_by_finality
             .read()
             .await
-            .final_block_cache
+            .final_block
+            .block_cache
             .epoch_id
             == epoch_id.0
         {
@@ -235,25 +273,19 @@ async fn protocol_config_call(
                 error_message: err.to_string(),
             }
         })?;
-    let protocol_config = if data
-        .final_block_info
-        .read()
-        .await
-        .final_block_cache
-        .epoch_id
-        == block.epoch_id
-    {
-        let protocol_config = &data.final_block_info.read().await.current_protocol_config;
-        clone_protocol_config(protocol_config)
-    } else {
-        data.db_manager
-            .get_protocol_config_by_epoch_id(block.epoch_id)
-            .await
-            .map_err(|err| {
-                near_jsonrpc_primitives::types::config::RpcProtocolConfigError::InternalError {
-                    error_message: err.to_string(),
-                }
-            })?
+
+    let store = near_parameters::RuntimeConfigStore::for_chain_id(
+        &data.genesis_info.genesis_config.chain_id,
+    );
+    let runtime_config = store.get_config(block.latest_protocol_version);
+    let protocol_config = near_chain_configs::ProtocolConfig {
+        genesis_config: data.genesis_info.genesis_config.clone(),
+        runtime_config: near_parameters::RuntimeConfig {
+            fees: runtime_config.fees.clone(),
+            wasm_config: runtime_config.wasm_config.clone(),
+            account_creation_config: runtime_config.account_creation_config.clone(),
+            storage_proof_size_soft_limit: runtime_config.storage_proof_size_soft_limit,
+        },
     };
-    Ok(protocol_config)
+    Ok(protocol_config.into())
 }

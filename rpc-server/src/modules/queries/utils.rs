@@ -1,17 +1,11 @@
 use std::collections::HashMap;
 use std::ops::Deref;
 
-#[cfg(feature = "account_access_keys")]
-use borsh::BorshDeserialize;
-use borsh::BorshSerialize;
 use futures::StreamExt;
-use near_crypto::{KeyType, PublicKey};
-use near_primitives::utils::create_random_seed;
-use tokio::task;
 
 use crate::config::CompiledCodeCache;
 use crate::errors::FunctionCallError;
-use crate::modules::blocks::FinalBlockInfo;
+use crate::modules::blocks::BlocksInfoByFinality;
 use crate::modules::queries::CodeStorage;
 
 pub struct RunContractResponse {
@@ -91,51 +85,17 @@ pub async fn fetch_list_access_keys_from_db(
         .into_iter()
         .map(
             |(public_key_hex, access_key)| near_primitives::views::AccessKeyInfoView {
-                public_key: near_crypto::PublicKey::try_from_slice(
+                public_key: borsh::from_slice::<near_crypto::PublicKey>(
                     &hex::decode(public_key_hex).unwrap(),
                 )
                 .unwrap(),
                 access_key: near_primitives::views::AccessKeyView::from(
-                    near_primitives::account::AccessKey::try_from_slice(&access_key).unwrap(),
+                    borsh::from_slice::<near_primitives::account::AccessKey>(&access_key).unwrap(),
                 ),
             },
         )
         .collect();
     Ok(account_keys_view)
-}
-
-#[cfg_attr(
-    feature = "tracing-instrumentation",
-    tracing::instrument(skip(db_manager))
-)]
-pub async fn fetch_state_from_db(
-    db_manager: &std::sync::Arc<Box<dyn database::ReaderDbManager + Sync + Send + 'static>>,
-    account_id: &near_primitives::types::AccountId,
-    block_height: near_primitives::types::BlockHeight,
-    prefix: &[u8],
-) -> anyhow::Result<near_primitives::views::ViewStateResult> {
-    tracing::debug!(
-        "`fetch_state_from_db` call. AccountID {}, block {}, prefix {:?}",
-        account_id,
-        block_height,
-        prefix,
-    );
-    let state_from_db = get_state_keys_from_db(db_manager, account_id, block_height, prefix).await;
-    if state_from_db.is_empty() {
-        anyhow::bail!("Data not found in db")
-    } else {
-        let values = state_from_db
-            .into_iter()
-            .map(|(key, value)| near_primitives::views::StateItem {
-                key: key.into(),
-                value: value.into(),
-            })
-            .collect();
-        Ok(near_primitives::views::ViewStateResult {
-            values,
-            proof: vec![], // TODO: this is hardcoded empty value since we don't support proofs yet
-        })
-    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -144,26 +104,32 @@ pub async fn fetch_state_from_db(
     tracing::instrument(skip(context, code_storage, contract_code, compiled_contract_code_cache))
 )]
 async fn run_code_in_vm_runner(
-    contract_code: near_primitives::contract::ContractCode,
+    contract_code: near_vm_runner::ContractCode,
     method_name: &str,
     context: near_vm_runner::logic::VMContext,
     mut code_storage: CodeStorage,
-    latest_protocol_version: near_primitives::types::ProtocolVersion,
+    protocol_version: near_primitives::types::ProtocolVersion,
     compiled_contract_code_cache: &std::sync::Arc<CompiledCodeCache>,
 ) -> Result<near_vm_runner::logic::VMOutcome, near_primitives::errors::RuntimeError> {
     let contract_method_name = String::from(method_name);
     let code_cache = std::sync::Arc::clone(compiled_contract_code_cache);
 
-    let results = task::spawn_blocking(move || {
+    let store = near_parameters::RuntimeConfigStore::free();
+    let config = store.get_config(protocol_version).wasm_config.clone();
+    let mut vm_config = near_parameters::vm::Config {
+        vm_kind: config.vm_kind.replace_with_wasmtime_if_unsupported(),
+        ..config
+    };
+    vm_config.make_free();
+    let results = tokio::task::spawn_blocking(move || {
         near_vm_runner::run(
             &contract_code,
             &contract_method_name,
             &mut code_storage,
             context,
-            &near_vm_runner::logic::VMConfig::free(),
-            &near_primitives::runtime::fees::RuntimeFeesConfig::free(),
+            &vm_config,
+            &near_parameters::RuntimeFeesConfig::free(),
             &[],
-            latest_protocol_version,
             Some(code_cache.deref()),
         )
     })
@@ -229,9 +195,13 @@ pub async fn run_contract(
             crate::cache::LruMemoryCache<near_primitives::hash::CryptoHash, Vec<u8>>,
         >,
     >,
-    final_block_info: &std::sync::Arc<futures_locks::RwLock<FinalBlockInfo>>,
+    blocks_info_by_finality: &std::sync::Arc<futures_locks::RwLock<BlocksInfoByFinality>>,
     block: crate::modules::blocks::CacheBlock,
     max_gas_burnt: near_primitives::types::Gas,
+    optimistic_data: HashMap<
+        readnode_primitives::StateKey,
+        Option<readnode_primitives::StateValue>,
+    >,
 ) -> Result<RunContractResponse, FunctionCallError> {
     let contract = db_manager
         .get_account(&account_id, block.block_height)
@@ -247,9 +217,7 @@ pub async fn run_contract(
         .cloned();
 
     let contract_code = match code {
-        Some(code) => {
-            near_primitives::contract::ContractCode::new(code, Some(contract.data.code_hash()))
-        }
+        Some(code) => near_vm_runner::ContractCode::new(code, Some(contract.data.code_hash())),
         None => {
             let code = db_manager
                 .get_contract_code(&account_id, block.block_height)
@@ -261,38 +229,48 @@ pub async fn run_contract(
                 .write()
                 .await
                 .put(contract.data.code_hash(), code.data.clone());
-            near_primitives::contract::ContractCode::new(code.data, Some(contract.data.code_hash()))
+            near_vm_runner::ContractCode::new(code.data, Some(contract.data.code_hash()))
         }
     };
 
-    let (epoch_height, epoch_validators) =
-        if final_block_info.read().await.final_block_cache.epoch_id == block.epoch_id {
-            let validators = final_block_info.read().await.current_validators.clone();
-            (validators.epoch_height, validators.current_validators)
-        } else {
-            let validators = db_manager
-                .get_validators_by_epoch_id(block.epoch_id)
-                .await
-                .map_err(|_| FunctionCallError::InternalError {
-                    error_message: "Failed to get epoch info".to_string(),
-                })?;
-            (
-                validators.epoch_height,
-                validators.validators_info.current_validators,
-            )
-        };
+    let (epoch_height, epoch_validators) = if blocks_info_by_finality
+        .read()
+        .await
+        .final_block
+        .block_cache
+        .epoch_id
+        == block.epoch_id
+    {
+        let validators = blocks_info_by_finality
+            .read()
+            .await
+            .current_validators
+            .clone();
+        (validators.epoch_height, validators.current_validators)
+    } else {
+        let validators = db_manager
+            .get_validators_by_epoch_id(block.epoch_id)
+            .await
+            .map_err(|_| FunctionCallError::InternalError {
+                error_message: "Failed to get epoch info".to_string(),
+            })?;
+        (
+            validators.epoch_height,
+            validators.validators_info.current_validators,
+        )
+    };
 
-    let public_key = PublicKey::empty(KeyType::ED25519);
-    let random_seed = create_random_seed(
+    let public_key = near_crypto::PublicKey::empty(near_crypto::KeyType::ED25519);
+    let random_seed = near_primitives::utils::create_random_seed(
         block.latest_protocol_version,
         near_primitives::hash::CryptoHash::default(),
         block.state_root,
     );
     let context = near_vm_runner::logic::VMContext {
-        current_account_id: account_id.parse().unwrap(),
-        signer_account_id: account_id.parse().unwrap(),
-        signer_account_pk: public_key.try_to_vec().expect("Failed to serialize"),
-        predecessor_account_id: account_id.parse().unwrap(),
+        current_account_id: account_id.clone(),
+        signer_account_id: account_id.clone(),
+        signer_account_pk: borsh::to_vec(&public_key).expect("Failed to serialize"),
+        predecessor_account_id: account_id.clone(),
         input: args.into(),
         block_height: block.block_height,
         block_timestamp: block.block_timestamp,
@@ -303,18 +281,19 @@ pub async fn run_contract(
         attached_deposit: 0,
         prepaid_gas: max_gas_burnt,
         random_seed,
-        view_config: Some(near_vm_runner::logic::ViewConfig { max_gas_burnt }),
+        view_config: Some(near_primitives::config::ViewConfig { max_gas_burnt }),
         output_data_receivers: vec![],
     };
 
     let code_storage = CodeStorage::init(
         db_manager.clone(),
-        account_id.clone(),
+        account_id,
         block.block_height,
         epoch_validators
             .iter()
             .map(|validator| (validator.account_id.clone(), validator.stake))
             .collect(),
+        optimistic_data,
     );
 
     let result = run_code_in_vm_runner(

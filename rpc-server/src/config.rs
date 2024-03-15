@@ -1,12 +1,12 @@
-use crate::modules::blocks::{CacheBlock, FinalBlockInfo};
-use futures::executor::block_on;
 use std::string::ToString;
 
-// TODO: Improve versioning in future.
-// For now, it's hardcoded and should be updated manually at each release..
-static NEARD_VERSION: &str = "1.36.0";
-static NEARD_BUILD: &str = "1.36.0";
-static RUSTC_VERSION: &str = "1.73.0";
+use futures::executor::block_on;
+
+use crate::modules::blocks::{BlocksInfoByFinality, CacheBlock};
+
+static NEARD_VERSION: &str = env!("CARGO_PKG_VERSION");
+static NEARD_BUILD: &str = env!("BUILD_VERSION");
+static RUSTC_VERSION: &str = env!("RUSTC_VERSION");
 
 // Struct to store genesis_config and genesis_block in the server context
 // Fetch once genesis info on start of the server and put it in the context
@@ -40,7 +40,7 @@ impl GenesisInfo {
 
         Self {
             genesis_config,
-            genesis_block_cache: genesis_block.into(),
+            genesis_block_cache: CacheBlock::from(&genesis_block),
         }
     }
 }
@@ -61,7 +61,7 @@ pub struct ServerContext {
     pub blocks_cache:
         std::sync::Arc<futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>>,
     /// Final block info include final_block_cache and current_validators_info
-    pub final_block_info: std::sync::Arc<futures_locks::RwLock<FinalBlockInfo>>,
+    pub blocks_info_by_finality: std::sync::Arc<futures_locks::RwLock<BlocksInfoByFinality>>,
     /// Cache to store compiled contract codes
     pub compiled_contract_code_cache: std::sync::Arc<CompiledCodeCache>,
     /// Cache to store contract codes
@@ -118,8 +118,8 @@ impl ServerContext {
             )),
         });
 
-        let final_block_info = std::sync::Arc::new(futures_locks::RwLock::new(
-            FinalBlockInfo::new(&near_rpc_client, &blocks_cache).await,
+        let blocks_info_by_finality = std::sync::Arc::new(futures_locks::RwLock::new(
+            BlocksInfoByFinality::new(&near_rpc_client, &blocks_cache).await,
         ));
 
         let s3_client = rpc_server_config.lake_config.lake_s3_client().await;
@@ -150,13 +150,13 @@ impl ServerContext {
             near_rpc_client,
             s3_bucket_name: rpc_server_config.lake_config.aws_bucket_name.clone(),
             blocks_cache,
-            final_block_info,
+            blocks_info_by_finality,
             compiled_contract_code_cache,
             contract_code_cache,
             max_gas_burnt: rpc_server_config.general.max_gas_burnt,
             shadow_data_consistency_rate: rpc_server_config.general.shadow_data_consistency_rate,
             server_port: rpc_server_config.general.server_port,
-            boot_time_seconds: near_primitives::static_clock::StaticClock::utc().timestamp(),
+            boot_time_seconds: chrono::Utc::now().timestamp(),
             version: near_primitives::version::Version {
                 version: NEARD_VERSION.to_string(),
                 build: NEARD_BUILD.to_string(),

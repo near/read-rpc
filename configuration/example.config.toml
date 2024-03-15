@@ -15,6 +15,11 @@ near_rpc_url = "https://beta.rpc.mainnet.near.org"
 ## default value is None
 #near_archival_rpc_url = "https://beta.rpc.mainnet.near.org"
 
+## redis url using for pub/sub optimistic_block and finale_block
+## from near_state_indexer to rpc_server
+## Default value is redis://127.0.0.1/
+#redis_url = "redis://127.0.0.1/"
+
 ### Rpc server general configuration
 [general.rpc_server]
 
@@ -83,6 +88,17 @@ near_rpc_url = "https://beta.rpc.mainnet.near.org"
 ## Port for metrics server
 ## By default it 8080 for tx-indexer and 8081 for state-indexer
 #metrics_server_port = 8081
+
+## Concurrency for state-indexer
+## Default value is 1
+#concurrency = 1
+
+### Near state indexer general configuration
+[general.near_state_indexer]
+
+## Port for metrics server
+## By default it 8082
+#metrics_server_port = 8082
 
 ## Concurrency for state-indexer
 ## Default value is 1

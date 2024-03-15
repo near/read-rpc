@@ -5,6 +5,7 @@
 chain_id = "${CHAIN_ID}"
 near_rpc_url = "${NEAR_RPC_URL}"
 near_archival_rpc_url = "${ARCHIVAL_NEAR_RPC_URL}"
+redis_url = "${REDIS_URL}"
 
 [general.rpc_server]
 referer_header_value = "${REFERER_HEADER_VALUE}"
@@ -24,6 +25,10 @@ cache_restore_blocks_range = "${CACHE_RESTORE_BLOCKS_RANGE}"
 indexer_id = "${STATE_INDEXER_ID}"
 metrics_server_port = "${STATE_SERVER_PORT}"
 concurrency = "${CONCURRENCY}"
+
+[general.near_state_indexer]
+metrics_server_port = "${NEAR_STATE_SERVER_PORT}"
+concurrency = "${NEAR_STATE_CONCURRENCY}"
 
 [general.epoch_indexer]
 indexer_id = "${EPOCH_INDEXER_ID}"

@@ -1,17 +1,13 @@
 use near_lake_framework::near_indexer_primitives::near_primitives;
 use serde_derive::Deserialize;
 
-use crate::configs::deserialize_data_or_env;
+use crate::configs::{deserialize_optional_data_or_env, required_value_or_panic};
 
-#[derive(Deserialize, Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct LakeConfig {
-    #[serde(deserialize_with = "deserialize_data_or_env")]
     pub aws_access_key_id: String,
-    #[serde(deserialize_with = "deserialize_data_or_env")]
     pub aws_secret_access_key: String,
-    #[serde(deserialize_with = "deserialize_data_or_env")]
     pub aws_default_region: String,
-    #[serde(deserialize_with = "deserialize_data_or_env")]
     pub aws_bucket_name: String,
 }
 
@@ -51,5 +47,40 @@ impl LakeConfig {
         near_lake_framework::s3_fetchers::LakeS3Client::new(aws_sdk_s3::Client::from_conf(
             s3_config,
         ))
+    }
+}
+
+#[derive(Deserialize, Debug, Clone, Default)]
+pub struct CommonLakeConfig {
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    pub aws_access_key_id: Option<String>,
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    pub aws_secret_access_key: Option<String>,
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    pub aws_default_region: Option<String>,
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    pub aws_bucket_name: Option<String>,
+}
+
+impl From<CommonLakeConfig> for LakeConfig {
+    fn from(common_config: CommonLakeConfig) -> Self {
+        Self {
+            aws_access_key_id: required_value_or_panic(
+                "aws_access_key_id",
+                common_config.aws_access_key_id,
+            ),
+            aws_secret_access_key: required_value_or_panic(
+                "aws_secret_access_key",
+                common_config.aws_secret_access_key,
+            ),
+            aws_default_region: required_value_or_panic(
+                "aws_default_region",
+                common_config.aws_default_region,
+            ),
+            aws_bucket_name: required_value_or_panic(
+                "aws_bucket_name",
+                common_config.aws_bucket_name,
+            ),
+        }
     }
 }

@@ -5,14 +5,6 @@ use near_lake_framework::near_indexer_primitives::types::{BlockReference, Finali
 /// NEAR Indexer for Explorer
 /// Watches for stream of blocks from the chain
 #[derive(Parser, Debug)]
-#[clap(
-    version,
-    author,
-    about,
-    setting(clap::AppSettings::DisableHelpSubcommand),
-    setting(clap::AppSettings::PropagateVersion),
-    setting(clap::AppSettings::NextLineHelp)
-)]
 pub(crate) struct Opts {
     #[clap(subcommand)]
     pub start_options: StartOptions,
