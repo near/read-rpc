@@ -252,7 +252,15 @@ async fn main() -> anyhow::Result<()> {
             run(home_dir).await?
         }
         configs::SubCommand::Init(init_config) => {
-            near_indexer::indexer_init_configs(&home_dir, init_config.into())?
+            // To avoid error like: `Cannot start a runtime from within a runtime.`,
+            // you need to run the code that creates the second Tokio runtime on a completely independent thread.
+            // The easiest way to do this is to use `std::thread::spawn`.
+            // For improved performance, better  to use a thread pool instead of creating a new thread each time.
+            // Tokio itself provides such a thread pool via spawn_blocking
+            let _ = tokio::task::spawn_blocking(move || {
+                near_indexer::indexer_init_configs(&home_dir, init_config.into())
+            })
+            .await?;
         }
     };
     Ok(())
