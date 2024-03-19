@@ -135,9 +135,11 @@ async fn run_code_in_vm_runner(
     .await;
     match results {
         Ok(result) => result,
-        Err(err) => Err(near_vm_runner::logic::errors::VMRunnerError::WasmUnknownError {
-            debug_message: format!("Failed to run contract: {:?}", err),
-        }),
+        Err(err) => Err(
+            near_vm_runner::logic::errors::VMRunnerError::WasmUnknownError {
+                debug_message: format!("Failed to run contract: {:?}", err),
+            },
+        ),
     }
 }
 
