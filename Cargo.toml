@@ -1,5 +1,5 @@
 [workspace.package]
-version = "0.2.3"
+version = "0.2.4"
 authors = ["Near Inc <hello@nearprotocol.com>"]
 edition = "2021"
 rust-version = "1.76.0"
@@ -37,7 +37,9 @@ near-chain-configs = { git = 'https://github.com/near/nearcore.git', rev = '5114
 near-crypto = { git = 'https://github.com/near/nearcore.git', rev = '511414a5091c3bef5c447a5644ba903dc050b715' }
 near-jsonrpc-primitives = { git = 'https://github.com/near/nearcore.git', rev = '511414a5091c3bef5c447a5644ba903dc050b715' }
 near-parameters = { git = 'https://github.com/near/nearcore.git', rev = '511414a5091c3bef5c447a5644ba903dc050b715' }
-near-vm-runner = { git = 'https://github.com/near/nearcore.git', rev = '511414a5091c3bef5c447a5644ba903dc050b715' }
+near-vm-runner = { git = 'https://github.com/near/nearcore.git', rev = '511414a5091c3bef5c447a5644ba903dc050b715', features = [
+    "wasmer0_vm", "wasmer2_vm", "near_vm", "wasmtime_vm"
+] }
 
 near-lake-framework = { git = 'https://github.com/kobayurii/near-lake-framework-rs.git', branch = '0.7.9' }
 near-jsonrpc-client = { git = 'https://github.com/kobayurii/near-jsonrpc-client-rs.git', branch = '0.8.3'}
