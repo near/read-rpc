@@ -110,17 +110,16 @@ async fn run_code_in_vm_runner(
     mut code_storage: CodeStorage,
     protocol_version: near_primitives::types::ProtocolVersion,
     compiled_contract_code_cache: &std::sync::Arc<CompiledCodeCache>,
-) -> Result<near_vm_runner::logic::VMOutcome, near_primitives::errors::RuntimeError> {
+) -> Result<near_vm_runner::logic::VMOutcome, near_vm_runner::logic::errors::VMRunnerError> {
     let contract_method_name = String::from(method_name);
     let code_cache = std::sync::Arc::clone(compiled_contract_code_cache);
 
     let store = near_parameters::RuntimeConfigStore::free();
     let config = store.get_config(protocol_version).wasm_config.clone();
-    let mut vm_config = near_parameters::vm::Config {
+    let vm_config = near_parameters::vm::Config {
         vm_kind: config.vm_kind.replace_with_wasmtime_if_unsupported(),
         ..config
     };
-    vm_config.make_free();
     let results = tokio::task::spawn_blocking(move || {
         near_vm_runner::run(
             &contract_code,
@@ -135,47 +134,12 @@ async fn run_code_in_vm_runner(
     })
     .await;
     match results {
-        Ok(result) => {
-            // There are many specific errors that the runtime can encounter.
-            // Some can be translated to the more general `RuntimeError`, which allows to pass
-            // the error up to the caller. For all other cases, panicking here is better
-            // than leaking the exact details further up.
-            // Note that this does not include errors caused by user code / input, those are
-            // stored in outcome.aborted.
-            result.map_err(|e| match e {
-                near_vm_runner::logic::errors::VMRunnerError::ExternalError(any_err) => {
-                    let err = any_err
-                        .downcast()
-                        .expect("Downcasting AnyError should not fail");
-                    near_primitives::errors::RuntimeError::ValidatorError(err)
-                }
-                near_vm_runner::logic::errors::VMRunnerError::InconsistentStateError(
-                    err @ near_vm_runner::logic::errors::InconsistentStateError::IntegerOverflow,
-                ) => {
-                    near_primitives::errors::StorageError::StorageInconsistentState(err.to_string())
-                        .into()
-                }
-                near_vm_runner::logic::errors::VMRunnerError::CacheError(err) => {
-                    near_primitives::errors::StorageError::StorageInconsistentState(err.to_string())
-                        .into()
-                }
-                near_vm_runner::logic::errors::VMRunnerError::LoadingError(msg) => {
-                    panic!("Contract runtime failed to load a contract: {msg}")
-                }
-                near_vm_runner::logic::errors::VMRunnerError::Nondeterministic(msg) => {
-                    panic!(
-                        "Contract runner returned non-deterministic error '{}', aborting",
-                        msg
-                    )
-                }
-                near_vm_runner::logic::errors::VMRunnerError::WasmUnknownError {
-                    debug_message,
-                } => {
-                    panic!("Wasmer returned unknown message: {}", debug_message)
-                }
-            })
-        }
-        Err(_) => Err(near_primitives::errors::RuntimeError::UnexpectedIntegerOverflow),
+        Ok(result) => result,
+        Err(err) => Err(
+            near_vm_runner::logic::errors::VMRunnerError::WasmUnknownError {
+                debug_message: format!("Failed to run contract: {:?}", err),
+            },
+        ),
     }
 }
 
