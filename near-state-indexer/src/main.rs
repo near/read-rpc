@@ -267,25 +267,28 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run(home_dir: std::path::PathBuf) -> anyhow::Result<()> {
+    tracing::info!(target: INDEXER, "Read configuration ...");
     let state_indexer_config =
         configuration::read_configuration::<configuration::NearStateIndexerConfig>().await?;
 
+    tracing::info!(target: INDEXER, "Connecting to db...");
     #[cfg(feature = "scylla_db")]
     let db_manager = database::prepare_db_manager::<
         database::scylladb::state_indexer::ScyllaDBManager,
     >(&state_indexer_config.database)
     .await?;
-
     #[cfg(all(feature = "postgres_db", not(feature = "scylla_db")))]
     let db_manager = database::prepare_db_manager::<
         database::postgres::state_indexer::PostgresDBManager,
     >(&state_indexer_config.database)
     .await?;
 
+    tracing::info!(target: INDEXER, "Connecting to redis...");
     let redis_client = redis::Client::open(state_indexer_config.general.redis_url.clone())?
         .get_connection_manager()
         .await?;
 
+    tracing::info!(target: INDEXER, "Setup near_indexer...");
     let indexer_config = near_indexer::IndexerConfig {
         home_dir,
         sync_mode: near_indexer::SyncModeEnum::LatestSynced,
@@ -295,6 +298,7 @@ async fn run(home_dir: std::path::PathBuf) -> anyhow::Result<()> {
     let indexer = near_indexer::Indexer::new(indexer_config)?;
 
     // Regular indexer process starts here
+    tracing::info!(target: INDEXER, "Instantiating the stream...");
     let stream = indexer.streamer();
     let (view_client, _) = indexer.client_actors();
 
@@ -308,6 +312,7 @@ async fn run(home_dir: std::path::PathBuf) -> anyhow::Result<()> {
         redis_client.clone(),
     ));
 
+    tracing::info!(target: INDEXER, "Starting near_state_indexer...");
     let mut handlers = tokio_stream::wrappers::ReceiverStream::new(stream)
         .map(|streamer_message| {
             handle_streamer_message(

@@ -99,7 +99,9 @@ pub async fn fetch_block_from_cache_or_get(
         near_primitives::types::BlockReference::Finality(finality) => {
             match finality {
                 near_primitives::types::Finality::None => {
-                    if cfg!(feature = "near_state_indexer_disabled") {
+                    if !crate::metrics::IS_OPTIMISTIC_UPDATING
+                        .load(std::sync::atomic::Ordering::Relaxed)
+                    {
                         // Returns the final_block for None.
                         Some(
                             data.blocks_info_by_finality

@@ -25,7 +25,7 @@ pub async fn init_tracing(service_name: &str) -> anyhow::Result<()> {
     let path_root = find_configs_root().await?;
     load_env(path_root.clone()).await?;
 
-    let mut env_filter = tracing_subscriber::EnvFilter::new(format!("{}=info", service_name));
+    let mut env_filter = tracing_subscriber::EnvFilter::new(format!("{}=info,info", service_name));
 
     if let Ok(rust_log) = std::env::var("RUST_LOG") {
         if !rust_log.is_empty() {
