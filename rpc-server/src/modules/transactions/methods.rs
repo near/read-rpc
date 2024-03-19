@@ -1,13 +1,9 @@
 use crate::config::ServerContext;
 use crate::errors::RPCError;
-use crate::modules::transactions::{
-    parse_signed_transaction, parse_transaction_status_common_request,
-};
 use jsonrpc_v2::{Data, Params};
 use near_primitives::views::FinalExecutionOutcomeViewEnum::{
     FinalExecutionOutcome, FinalExecutionOutcomeWithReceipt,
 };
-use serde_json::Value;
 
 pub async fn send_tx(
     data: Data<ServerContext>,
@@ -20,14 +16,14 @@ pub async fn send_tx(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn tx(
     data: Data<ServerContext>,
-    Params(params): Params<Value>,
+    Params(params): Params<
+        near_jsonrpc_primitives::types::transactions::RpcTransactionStatusRequest,
+    >,
 ) -> Result<near_jsonrpc_primitives::types::transactions::RpcTransactionResponse, RPCError> {
     tracing::debug!("`tx` call. Params: {:?}", params);
     crate::metrics::TX_REQUESTS_TOTAL.inc();
 
-    let tx_status_request = parse_transaction_status_common_request(params.clone()).await?;
-
-    let result = tx_status_common(&data, &tx_status_request.transaction_info, false).await;
+    let result = tx_status_common(&data, &params.transaction_info, false).await;
 
     #[cfg(feature = "shadow_data_consistency")]
     {
@@ -41,8 +37,8 @@ pub async fn tx(
             // so we can't just pass `params` there, instead we need to craft a request manually
             // tx_status_request,
             near_jsonrpc_client::methods::tx::RpcTransactionStatusRequest {
-                transaction_info: tx_status_request.transaction_info,
-                wait_until: tx_status_request.wait_until,
+                transaction_info: params.transaction_info,
+                wait_until: params.wait_until,
             },
             "TX",
         )
@@ -59,14 +55,14 @@ pub async fn tx(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn tx_status(
     data: Data<ServerContext>,
-    Params(params): Params<Value>,
+    Params(params): Params<
+        near_jsonrpc_primitives::types::transactions::RpcTransactionStatusRequest,
+    >,
 ) -> Result<near_jsonrpc_primitives::types::transactions::RpcTransactionResponse, RPCError> {
     tracing::debug!("`tx_status` call. Params: {:?}", params);
     crate::metrics::TX_STATUS_REQUESTS_TOTAL.inc();
 
-    let tx_status_request = parse_transaction_status_common_request(params.clone()).await?;
-
-    let result = tx_status_common(&data, &tx_status_request.transaction_info, true).await;
+    let result = tx_status_common(&data, &params.transaction_info, true).await;
 
     #[cfg(feature = "shadow_data_consistency")]
     {
@@ -79,8 +75,8 @@ pub async fn tx_status(
             // The method is `near_jsonrpc_client::methods::EXPERIMENTAL_tx_status` in the client
             // so we can't just pass `params` there, instead we need to craft a request manually
             near_jsonrpc_client::methods::EXPERIMENTAL_tx_status::RpcTransactionStatusRequest {
-                transaction_info: tx_status_request.transaction_info,
-                wait_until: tx_status_request.wait_until,
+                transaction_info: params.transaction_info,
+                wait_until: params.wait_until,
             },
             "EXPERIMENTAL_TX_STATUS",
         )
@@ -96,22 +92,21 @@ pub async fn tx_status(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn broadcast_tx_async(
     data: Data<ServerContext>,
-    Params(params): Params<Value>,
+    Params(params): Params<near_jsonrpc_primitives::types::transactions::RpcSendTransactionRequest>,
 ) -> Result<near_primitives::hash::CryptoHash, RPCError> {
     tracing::debug!("`broadcast_tx_async` call. Params: {:?}", params);
     if cfg!(feature = "send_tx_methods") {
-        let signed_transaction = match parse_signed_transaction(params).await {
-            Ok(signed_transaction) => signed_transaction,
-            Err(err) => return Err(RPCError::parse_error(&err.to_string())),
-        };
         let proxy_params =
             near_jsonrpc_client::methods::broadcast_tx_async::RpcBroadcastTxAsyncRequest {
-                signed_transaction,
+                signed_transaction: params.signed_transaction,
             };
-        match data.near_rpc_client.call(proxy_params).await {
-            Ok(resp) => Ok(resp),
-            Err(err) => Err(RPCError::internal_error(&err.to_string())),
-        }
+        Ok(data
+            .near_rpc_client
+            .call(proxy_params)
+            .await
+            .map_err(|err| {
+                RPCError::internal_error(&format!("Failed to broadcast_tx_async: {}", err))
+            })?)
     } else {
         Err(RPCError::internal_error(
             "This method is not available because the `send_tx_methods` feature flag is disabled",
@@ -122,30 +117,11 @@ pub async fn broadcast_tx_async(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn broadcast_tx_commit(
     data: Data<ServerContext>,
-    Params(params): Params<Value>,
+    Params(params): Params<near_jsonrpc_primitives::types::transactions::RpcSendTransactionRequest>,
 ) -> Result<near_jsonrpc_primitives::types::transactions::RpcTransactionResponse, RPCError> {
     tracing::debug!("`broadcast_tx_commit` call. Params: {:?}", params);
     if cfg!(feature = "send_tx_methods") {
-        let signed_transaction = match parse_signed_transaction(params).await {
-            Ok(signed_transaction) => signed_transaction,
-            Err(err) => return Err(RPCError::parse_error(&err.to_string())),
-        };
-        let proxy_params =
-            near_jsonrpc_client::methods::broadcast_tx_commit::RpcBroadcastTxCommitRequest {
-                signed_transaction,
-            };
-        match data.near_rpc_client.call(proxy_params).await {
-            Ok(resp) => Ok(
-                near_jsonrpc_primitives::types::transactions::RpcTransactionResponse {
-                    final_execution_outcome: Some(FinalExecutionOutcome(resp)),
-                    // With the fact that we don't support non-finalised data yet,
-                    // final_execution_status field can be always filled with FINAL.
-                    // This logic will be more complicated when we add support of optimistic blocks.
-                    final_execution_status: near_primitives::views::TxExecutionStatus::Final,
-                },
-            ),
-            Err(err) => Err(RPCError::from(err)),
-        }
+        Ok(data.near_rpc_client.call(params).await?)
     } else {
         Err(RPCError::internal_error(
             "This method is not available because the `send_tx_methods` feature flag is disabled",
