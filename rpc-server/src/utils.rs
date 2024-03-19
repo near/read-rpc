@@ -159,16 +159,16 @@ async fn handle_streamer_message(
     Ok(())
 }
 
-#[cfg(feature = "near_state_indexer_disabled")]
-pub async fn update_final_block_regularly(
+pub async fn update_final_block_regularly_from_lake(
     blocks_cache: std::sync::Arc<
         futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>,
     >,
     blocks_info_by_finality: std::sync::Arc<futures_locks::RwLock<BlocksInfoByFinality>>,
     rpc_server_config: configuration::RpcServerConfig,
     near_rpc_client: JsonRpcClient,
+    current_optimistic_block_height: i64,
 ) -> anyhow::Result<()> {
-    tracing::info!("Task to get and store final block in the cache started");
+    tracing::info!("Task to get final block from lake and store in the cache started");
     let lake_config = rpc_server_config
         .lake_config
         .lake_config(
@@ -195,6 +195,12 @@ pub async fn update_final_block_regularly(
     while let Some(_handle_message) = handlers.next().await {
         if let Err(err) = _handle_message {
             tracing::warn!("{:?}", err);
+        };
+        let new_optimistic_block_height = crate::metrics::OPTIMISTIC_BLOCK_HEIGHT.get();
+        if new_optimistic_block_height != current_optimistic_block_height {
+            tracing::info!("Task to get final block from lake and store in the cache stop");
+            drop(handlers); // close the channel so the sender will stop
+            return Ok(());
         }
     }
     drop(handlers); // close the channel so the sender will stop
@@ -207,10 +213,46 @@ pub async fn update_final_block_regularly(
     }
 }
 
+pub async fn check_updating_optimistic_block_regularly(
+    blocks_cache: std::sync::Arc<
+        futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>,
+    >,
+    blocks_info_by_finality: std::sync::Arc<futures_locks::RwLock<BlocksInfoByFinality>>,
+    rpc_server_config: configuration::RpcServerConfig,
+    near_rpc_client: JsonRpcClient,
+) -> anyhow::Result<()> {
+    tracing::info!("Task to check updating optimistic block in the cache started");
+
+    let mut current_optimistic_block_height = crate::metrics::OPTIMISTIC_BLOCK_HEIGHT.get();
+    loop {
+        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+        let new_optimistic_block_height = crate::metrics::OPTIMISTIC_BLOCK_HEIGHT.get();
+        if new_optimistic_block_height != current_optimistic_block_height {
+            current_optimistic_block_height = new_optimistic_block_height;
+        } else {
+            tracing::warn!(
+                "Optimistic block in is not updated. Start to update final block from the Lake"
+            );
+            crate::metrics::IS_OPTIMISTIC_UPDATING
+                .store(false, std::sync::atomic::Ordering::Relaxed);
+            update_final_block_regularly_from_lake(
+                std::sync::Arc::clone(&blocks_cache),
+                std::sync::Arc::clone(&blocks_info_by_finality),
+                rpc_server_config.clone(),
+                near_rpc_client.clone(),
+                current_optimistic_block_height,
+            )
+            .await?;
+            tracing::info!("Optimistic block updating is resumed.");
+            crate::metrics::IS_OPTIMISTIC_UPDATING
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+}
+
 // Task to get and store final block in the cache
-// Subscribe to the redis channel and update the finale block in the cache
-#[cfg(not(feature = "near_state_indexer_disabled"))]
-pub async fn update_final_block_regularly(
+// Subscribe to the redis channel and update the final block in the cache
+pub async fn update_final_block_regularly_from_redis(
     blocks_cache: std::sync::Arc<
         futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>,
     >,
@@ -249,7 +291,6 @@ pub async fn update_final_block_regularly(
     Ok(())
 }
 
-#[cfg(not(feature = "near_state_indexer_disabled"))]
 // Task to get and store optimistic block in the cache
 // Subscribe to the redis channel and update the optimistic block in the cache
 pub async fn update_optimistic_block_regularly(
@@ -270,6 +311,8 @@ pub async fn update_optimistic_block_regularly(
                         "Received optimistic block: {:?}",
                         optimistic_block.block_cache
                     );
+                    crate::metrics::OPTIMISTIC_BLOCK_HEIGHT
+                        .set(i64::try_from(optimistic_block.block_cache.block_height)?);
                     blocks_info_by_finality.write().await.optimistic_block = optimistic_block;
                 }
                 Err(err) => {

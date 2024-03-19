@@ -15,7 +15,7 @@ near_rpc_url = "https://beta.rpc.mainnet.near.org"
 ## default value is None
 #near_archival_rpc_url = "https://beta.rpc.mainnet.near.org"
 
-## redis url using for pub/sub optimistic_block and finale_block
+## redis url using for pub/sub optimistic_block and final_block
 ## from near_state_indexer to rpc_server
 ## Default value is redis://127.0.0.1/
 #redis_url = "redis://127.0.0.1/"

@@ -17,16 +17,18 @@ pub async fn block(
     data: Data<ServerContext>,
     Params(mut params): Params<near_jsonrpc_primitives::types::blocks::RpcBlockRequest>,
 ) -> Result<near_jsonrpc_primitives::types::blocks::RpcBlockResponse, RPCError> {
-    #[cfg(feature = "near_state_indexer_disabled")]
-    if let near_primitives::types::BlockReference::Finality(finality) = &params.block_reference {
-        if finality != &near_primitives::types::Finality::Final {
-            // Increase the OPTIMISTIC_REQUESTS_TOTAL metric if the request has
-            // optimistic finality or doom_slug finality
-            // and proxy to near-rpc
-            crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
-            let block_view = data.near_rpc_client.call(params).await?;
-            return Ok(near_jsonrpc_primitives::types::blocks::RpcBlockResponse { block_view });
-        }
+    if !crate::metrics::IS_OPTIMISTIC_UPDATING.load(std::sync::atomic::Ordering::Relaxed) {
+        if let near_primitives::types::BlockReference::Finality(finality) = &params.block_reference
+        {
+            if finality != &near_primitives::types::Finality::Final {
+                // Increase the OPTIMISTIC_REQUESTS_TOTAL metric if the request has
+                // optimistic finality or doom_slug finality
+                // and proxy to near-rpc
+                crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
+                let block_view = data.near_rpc_client.call(params).await?;
+                return Ok(near_jsonrpc_primitives::types::blocks::RpcBlockResponse { block_view });
+            }
+        };
     };
     block_call(data, Params(params)).await
 }
@@ -69,14 +71,16 @@ pub async fn changes_in_block_by_type(
         near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockByTypeRequest,
     >,
 ) -> Result<near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockResponse, RPCError> {
-    #[cfg(feature = "near_state_indexer_disabled")]
-    if let near_primitives::types::BlockReference::Finality(finality) = &params.block_reference {
-        if finality != &near_primitives::types::Finality::Final {
-            // Increase the OPTIMISTIC_REQUESTS_TOTAL metric if the request has
-            // optimistic finality or doom_slug finality
-            // and proxy to near-rpc
-            crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
-            return Ok(data.near_rpc_client.call(params).await?);
+    if !crate::metrics::IS_OPTIMISTIC_UPDATING.load(std::sync::atomic::Ordering::Relaxed) {
+        if let near_primitives::types::BlockReference::Finality(finality) = &params.block_reference
+        {
+            if finality != &near_primitives::types::Finality::Final {
+                // Increase the OPTIMISTIC_REQUESTS_TOTAL metric if the request has
+                // optimistic finality or doom_slug finality
+                // and proxy to near-rpc
+                crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
+                return Ok(data.near_rpc_client.call(params).await?);
+            }
         }
     };
     changes_in_block_by_type_call(data, Params(params)).await
@@ -95,14 +99,16 @@ pub async fn changes_in_block(
     >,
 ) -> Result<near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockByTypeResponse, RPCError>
 {
-    #[cfg(feature = "near_state_indexer_disabled")]
-    if let near_primitives::types::BlockReference::Finality(finality) = &params.block_reference {
-        if finality != &near_primitives::types::Finality::Final {
-            // Increase the OPTIMISTIC_REQUESTS_TOTAL metric if the request has
-            // optimistic finality or doom_slug finality
-            // and proxy to near-rpc
-            crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
-            return Ok(data.near_rpc_client.call(params).await?);
+    if !crate::metrics::IS_OPTIMISTIC_UPDATING.load(std::sync::atomic::Ordering::Relaxed) {
+        if let near_primitives::types::BlockReference::Finality(finality) = &params.block_reference
+        {
+            if finality != &near_primitives::types::Finality::Final {
+                // Increase the OPTIMISTIC_REQUESTS_TOTAL metric if the request has
+                // optimistic finality or doom_slug finality
+                // and proxy to near-rpc
+                crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
+                return Ok(data.near_rpc_client.call(params).await?);
+            }
         }
     };
     changes_in_block_call(data, Params(params)).await
@@ -267,7 +273,9 @@ pub async fn fetch_block(
                     Ok(near_jsonrpc_primitives::types::blocks::RpcBlockResponse { block_view })
                 }
                 near_primitives::types::Finality::None => {
-                    if cfg!(feature = "near_state_indexer_disabled") {
+                    if !crate::metrics::IS_OPTIMISTIC_UPDATING
+                        .load(std::sync::atomic::Ordering::Relaxed)
+                    {
                         Err(
                             near_jsonrpc_primitives::types::blocks::RpcBlockError::UnknownBlock {
                                 error_message: "Finality::None is not supported by read-rpc"
@@ -494,7 +502,9 @@ async fn fetch_shards(
     if let near_primitives::types::BlockReference::Finality(finality) = block_reference {
         match finality {
             near_primitives::types::Finality::None => {
-                if cfg!(feature = "near_state_indexer_disabled") {
+                if !crate::metrics::IS_OPTIMISTIC_UPDATING
+                    .load(std::sync::atomic::Ordering::Relaxed)
+                {
                     Err(anyhow::anyhow!(
                         "Failed to fetch shards! Finality::None is not supported by rpc_server",
                     ))

@@ -80,7 +80,7 @@ pub async fn optimistic_stream(
             let response = near_indexer::build_streamer_message(&view_client, block).await;
             match response {
                 Ok(streamer_message) => {
-                    tracing::info!(target: crate::INDEXER, "Optimistic block {:?}", &optimistic_block_height);
+                    tracing::debug!(target: crate::INDEXER, "Optimistic block {:?}", &optimistic_block_height);
                     if let Err(err) = publish_streamer_message(
                         "optimistic_block",
                         &streamer_message,

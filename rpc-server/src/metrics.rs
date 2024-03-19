@@ -28,6 +28,13 @@ lazy_static! {
         "The final block height from the perspective of the READ RPC server"
     )
     .unwrap();
+    pub(crate) static ref OPTIMISTIC_BLOCK_HEIGHT: IntGauge = try_create_int_gauge(
+        "optimistic_block_height",
+        "The optimistic block height from the perspective of the READ RPC server"
+    )
+    .unwrap();
+
+    pub(crate) static ref IS_OPTIMISTIC_UPDATING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
 
     // REQUESTS TOTAL COUNTERS
     // total requests counter

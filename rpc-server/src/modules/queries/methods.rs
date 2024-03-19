@@ -18,7 +18,9 @@ pub async fn query(
 ) -> Result<near_jsonrpc_primitives::types::query::RpcQueryResponse, RPCError> {
     if let near_primitives::types::BlockReference::Finality(finality) = &params.block_reference {
         if finality == &near_primitives::types::Finality::None {
-            return if cfg!(feature = "near_state_indexer_disabled") {
+            return if !crate::metrics::IS_OPTIMISTIC_UPDATING
+                .load(std::sync::atomic::Ordering::Relaxed)
+            {
                 // Increase the OPTIMISTIC_REQUESTS_TOTAL metric if the request has
                 // optimistic finality
                 // and proxy to near-rpc
