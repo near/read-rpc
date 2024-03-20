@@ -4,6 +4,7 @@ use crate::modules::blocks::utils::{
     fetch_block_from_cache_or_get, fetch_chunk_from_s3, is_matching_change,
 };
 use jsonrpc_v2::{Data, Params};
+use near_jsonrpc::RpcRequest;
 use near_primitives::trie_key::TrieKey;
 use near_primitives::views::StateChangeValueView;
 
@@ -11,36 +12,40 @@ use near_primitives::views::StateChangeValueView;
 /// calls proxy_rpc_call to get `block` from near-rpc if request parameters not supported by read-rpc
 /// as example: block_id by Finality::None is not supported by read-rpc
 /// another way to get `block` from read-rpc using `block_call`
-#[allow(unused_mut)]
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn block(
     data: Data<ServerContext>,
-    Params(mut params): Params<near_jsonrpc_primitives::types::blocks::RpcBlockRequest>,
-) -> Result<near_jsonrpc_primitives::types::blocks::RpcBlockResponse, RPCError> {
+    Params(params): Params<serde_json::Value>,
+) -> Result<near_jsonrpc::primitives::types::blocks::RpcBlockResponse, RPCError> {
+    let block_request = near_jsonrpc::primitives::types::blocks::RpcBlockRequest::parse(params)?;
     if !crate::metrics::IS_OPTIMISTIC_UPDATING.load(std::sync::atomic::Ordering::Relaxed) {
-        if let near_primitives::types::BlockReference::Finality(finality) = &params.block_reference
+        if let near_primitives::types::BlockReference::Finality(finality) =
+            &block_request.block_reference
         {
             if finality != &near_primitives::types::Finality::Final {
                 // Increase the OPTIMISTIC_REQUESTS_TOTAL metric if the request has
                 // optimistic finality or doom_slug finality
                 // and proxy to near-rpc
                 crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
-                let block_view = data.near_rpc_client.call(params).await?;
-                return Ok(near_jsonrpc_primitives::types::blocks::RpcBlockResponse { block_view });
+                let block_view = data.near_rpc_client.call(block_request).await?;
+                return Ok(near_jsonrpc::primitives::types::blocks::RpcBlockResponse {
+                    block_view,
+                });
             }
         };
     };
-    block_call(data, Params(params)).await
+    block_call(data, block_request).await
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn chunk(
     data: Data<ServerContext>,
-    Params(params): Params<near_jsonrpc_primitives::types::chunks::RpcChunkRequest>,
-) -> Result<near_jsonrpc_primitives::types::chunks::RpcChunkResponse, RPCError> {
+    Params(params): Params<serde_json::Value>,
+) -> Result<near_jsonrpc::primitives::types::chunks::RpcChunkResponse, RPCError> {
     tracing::debug!("`chunk` called with parameters: {:?}", params);
+    let chunk_request = near_jsonrpc::primitives::types::chunks::RpcChunkRequest::parse(params)?;
     crate::metrics::CHUNK_REQUESTS_TOTAL.inc();
-    let result = fetch_chunk(&data, params.chunk_reference.clone()).await;
+    let result = fetch_chunk(&data, chunk_request.chunk_reference.clone()).await;
     #[cfg(feature = "shadow_data_consistency")]
     {
         if let Some(err_code) = crate::utils::shadow_compare_results_handler(
@@ -48,7 +53,7 @@ pub async fn chunk(
             data.shadow_data_consistency_rate,
             &result,
             data.near_rpc_client.clone(),
-            params,
+            chunk_request,
             "CHUNK",
         )
         .await
@@ -56,62 +61,64 @@ pub async fn chunk(
             crate::utils::capture_shadow_consistency_error!(err_code, "CHUNK")
         };
     }
-    Ok(result.map_err(near_jsonrpc_primitives::errors::RpcError::from)?)
+    Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)
 }
 
 /// `EXPERIMENTAL_changes` rpc method implementation
 /// calls proxy_rpc_call to get `EXPERIMENTAL_changes` from near-rpc if request parameters not supported by read-rpc
 /// as example: BlockReference for Finality::None is not supported by read-rpc
 /// another way to get `EXPERIMENTAL_changes` from read-rpc using `changes_in_block_by_type_call`
-#[allow(unused_mut)]
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn changes_in_block_by_type(
     data: Data<ServerContext>,
-    Params(mut params): Params<
-        near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockByTypeRequest,
-    >,
-) -> Result<near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockResponse, RPCError> {
+    Params(params): Params<serde_json::Value>,
+) -> Result<near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockResponse, RPCError> {
+    let block_request =
+        near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockByTypeRequest::parse(
+            params,
+        )?;
     if !crate::metrics::IS_OPTIMISTIC_UPDATING.load(std::sync::atomic::Ordering::Relaxed) {
-        if let near_primitives::types::BlockReference::Finality(finality) = &params.block_reference
+        if let near_primitives::types::BlockReference::Finality(finality) =
+            &block_request.block_reference
         {
             if finality != &near_primitives::types::Finality::Final {
                 // Increase the OPTIMISTIC_REQUESTS_TOTAL metric if the request has
                 // optimistic finality or doom_slug finality
                 // and proxy to near-rpc
                 crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
-                return Ok(data.near_rpc_client.call(params).await?);
+                return Ok(data.near_rpc_client.call(block_request).await?);
             }
         }
     };
-    changes_in_block_by_type_call(data, Params(params)).await
+    changes_in_block_by_type_call(data, block_request).await
 }
 
 /// `EXPERIMENTAL_changes_in_block` rpc method implementation
 /// calls proxy_rpc_call to get `EXPERIMENTAL_changes_in_block` from near-rpc if request parameters not supported by read-rpc
 /// as example: BlockReference for Finality::None is not supported by read-rpc
 /// another way to get `EXPERIMENTAL_changes_in_block` from read-rpc using `changes_in_block_call`
-#[allow(unused_mut)]
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn changes_in_block(
     data: Data<ServerContext>,
-    Params(mut params): Params<
-        near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockRequest,
-    >,
-) -> Result<near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockByTypeResponse, RPCError>
+    Params(params): Params<serde_json::Value>,
+) -> Result<near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockByTypeResponse, RPCError>
 {
+    let block_request =
+        near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockRequest::parse(params)?;
     if !crate::metrics::IS_OPTIMISTIC_UPDATING.load(std::sync::atomic::Ordering::Relaxed) {
-        if let near_primitives::types::BlockReference::Finality(finality) = &params.block_reference
+        if let near_primitives::types::BlockReference::Finality(finality) =
+            &block_request.block_reference
         {
             if finality != &near_primitives::types::Finality::Final {
                 // Increase the OPTIMISTIC_REQUESTS_TOTAL metric if the request has
                 // optimistic finality or doom_slug finality
                 // and proxy to near-rpc
                 crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
-                return Ok(data.near_rpc_client.call(params).await?);
+                return Ok(data.near_rpc_client.call(block_request).await?);
             }
         }
     };
-    changes_in_block_call(data, Params(params)).await
+    changes_in_block_call(data, block_request).await
 }
 
 /// fetch block from read-rpc
@@ -119,17 +126,19 @@ pub async fn changes_in_block(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 async fn block_call(
     data: Data<ServerContext>,
-    Params(mut params): Params<near_jsonrpc_primitives::types::blocks::RpcBlockRequest>,
-) -> Result<near_jsonrpc_primitives::types::blocks::RpcBlockResponse, RPCError> {
-    tracing::debug!("`block` called with parameters: {:?}", params);
+    mut block_request: near_jsonrpc::primitives::types::blocks::RpcBlockRequest,
+) -> Result<near_jsonrpc::primitives::types::blocks::RpcBlockResponse, RPCError> {
+    tracing::debug!("`block` called with parameters: {:?}", block_request);
     crate::metrics::BLOCK_REQUESTS_TOTAL.inc();
-    let result = fetch_block(&data, params.block_reference.clone()).await;
+    let result = fetch_block(&data, block_request.block_reference.clone()).await;
 
     #[cfg(feature = "shadow_data_consistency")]
     {
         if let Ok(res) = &result {
-            if let near_primitives::types::BlockReference::Finality(_) = params.block_reference {
-                params.block_reference = near_primitives::types::BlockReference::from(
+            if let near_primitives::types::BlockReference::Finality(_) =
+                block_request.block_reference
+            {
+                block_request.block_reference = near_primitives::types::BlockReference::from(
                     near_primitives::types::BlockId::Height(res.block_view.header.height),
                 )
             }
@@ -140,7 +149,7 @@ async fn block_call(
             data.shadow_data_consistency_rate,
             &result,
             data.near_rpc_client.clone(),
-            params,
+            block_request,
             "BLOCK",
         )
         .await
@@ -149,7 +158,7 @@ async fn block_call(
         };
     };
 
-    Ok(result.map_err(near_jsonrpc_primitives::errors::RpcError::from)?)
+    Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)
 }
 
 /// fetch changes_in_block from read-rpc
@@ -157,15 +166,13 @@ async fn block_call(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 async fn changes_in_block_call(
     data: Data<ServerContext>,
-    Params(mut params): Params<
-        near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockRequest,
-    >,
-) -> Result<near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockByTypeResponse, RPCError>
+    mut params: near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockRequest,
+) -> Result<near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockByTypeResponse, RPCError>
 {
     crate::metrics::CHNGES_IN_BLOCK_REQUESTS_TOTAL.inc();
     let cache_block = fetch_block_from_cache_or_get(&data, params.block_reference.clone())
         .await
-        .map_err(near_jsonrpc_primitives::errors::RpcError::from)?;
+        .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
     let result = fetch_changes_in_block(&data, cache_block, &params.block_reference).await;
     #[cfg(feature = "shadow_data_consistency")]
     {
@@ -188,7 +195,7 @@ async fn changes_in_block_call(
         };
     }
 
-    Ok(result.map_err(near_jsonrpc_primitives::errors::RpcError::from)?)
+    Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)
 }
 
 /// fetch changes_in_block_by_type from read-rpc
@@ -196,14 +203,12 @@ async fn changes_in_block_call(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 async fn changes_in_block_by_type_call(
     data: Data<ServerContext>,
-    Params(mut params): Params<
-        near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockByTypeRequest,
-    >,
-) -> Result<near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockResponse, RPCError> {
+    mut params: near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockByTypeRequest,
+) -> Result<near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockResponse, RPCError> {
     crate::metrics::CHNGES_IN_BLOCK_BY_TYPE_REQUESTS_TOTAL.inc();
     let cache_block = fetch_block_from_cache_or_get(&data, params.block_reference.clone())
         .await
-        .map_err(near_jsonrpc_primitives::errors::RpcError::from)?;
+        .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
     let result = fetch_changes_in_block_by_type(
         &data,
         cache_block,
@@ -233,7 +238,7 @@ async fn changes_in_block_by_type_call(
         };
     }
 
-    Ok(result.map_err(near_jsonrpc_primitives::errors::RpcError::from)?)
+    Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
@@ -241,8 +246,8 @@ pub async fn fetch_block(
     data: &Data<ServerContext>,
     block_reference: near_primitives::types::BlockReference,
 ) -> Result<
-    near_jsonrpc_primitives::types::blocks::RpcBlockResponse,
-    near_jsonrpc_primitives::types::blocks::RpcBlockError,
+    near_jsonrpc::primitives::types::blocks::RpcBlockResponse,
+    near_jsonrpc::primitives::types::blocks::RpcBlockError,
 > {
     tracing::debug!("`fetch_block` call");
     let block_height = match block_reference {
@@ -252,7 +257,7 @@ pub async fn fetch_block(
                 match data.db_manager.get_block_by_hash(block_hash).await {
                     Ok(block_height) => Ok(block_height),
                     Err(err) => Err(
-                        near_jsonrpc_primitives::types::blocks::RpcBlockError::UnknownBlock {
+                        near_jsonrpc::primitives::types::blocks::RpcBlockError::UnknownBlock {
                             error_message: err.to_string(),
                         },
                     ),
@@ -270,14 +275,14 @@ pub async fn fetch_block(
                         .final_block
                         .block_view()
                         .await;
-                    Ok(near_jsonrpc_primitives::types::blocks::RpcBlockResponse { block_view })
+                    Ok(near_jsonrpc::primitives::types::blocks::RpcBlockResponse { block_view })
                 }
                 near_primitives::types::Finality::None => {
                     if !crate::metrics::IS_OPTIMISTIC_UPDATING
                         .load(std::sync::atomic::Ordering::Relaxed)
                     {
                         Err(
-                            near_jsonrpc_primitives::types::blocks::RpcBlockError::UnknownBlock {
+                            near_jsonrpc::primitives::types::blocks::RpcBlockError::UnknownBlock {
                                 error_message: "Finality::None is not supported by read-rpc"
                                     .to_string(),
                             },
@@ -290,7 +295,11 @@ pub async fn fetch_block(
                             .optimistic_block
                             .block_view()
                             .await;
-                        Ok(near_jsonrpc_primitives::types::blocks::RpcBlockResponse { block_view })
+                        Ok(
+                            near_jsonrpc::primitives::types::blocks::RpcBlockResponse {
+                                block_view,
+                            },
+                        )
                     }
                 }
             }
@@ -308,23 +317,23 @@ pub async fn fetch_block(
     )
     .await
     .map_err(
-        |err| near_jsonrpc_primitives::types::blocks::RpcBlockError::UnknownBlock {
+        |err| near_jsonrpc::primitives::types::blocks::RpcBlockError::UnknownBlock {
             error_message: err.to_string(),
         },
     )?;
-    Ok(near_jsonrpc_primitives::types::blocks::RpcBlockResponse { block_view })
+    Ok(near_jsonrpc::primitives::types::blocks::RpcBlockResponse { block_view })
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn fetch_chunk(
     data: &Data<ServerContext>,
-    chunk_reference: near_jsonrpc_primitives::types::chunks::ChunkReference,
+    chunk_reference: near_jsonrpc::primitives::types::chunks::ChunkReference,
 ) -> Result<
-    near_jsonrpc_primitives::types::chunks::RpcChunkResponse,
-    near_jsonrpc_primitives::types::chunks::RpcChunkError,
+    near_jsonrpc::primitives::types::chunks::RpcChunkResponse,
+    near_jsonrpc::primitives::types::chunks::RpcChunkError,
 > {
     let (block_height, shard_id) = match chunk_reference {
-        near_jsonrpc_primitives::types::chunks::ChunkReference::BlockShardId {
+        near_jsonrpc::primitives::types::chunks::ChunkReference::BlockShardId {
             block_id,
             shard_id,
         } => match block_id {
@@ -333,7 +342,7 @@ pub async fn fetch_chunk(
                 .get_block_by_height_and_shard_id(block_height, shard_id)
                 .await
                 .map_err(|_err| {
-                    near_jsonrpc_primitives::types::chunks::RpcChunkError::InvalidShardId {
+                    near_jsonrpc::primitives::types::chunks::RpcChunkError::InvalidShardId {
                         shard_id,
                     }
                 })
@@ -344,19 +353,19 @@ pub async fn fetch_chunk(
                     .get_block_by_hash(block_hash)
                     .await
                     .map_err(|err| {
-                        near_jsonrpc_primitives::types::chunks::RpcChunkError::UnknownBlock {
+                        near_jsonrpc::primitives::types::chunks::RpcChunkError::UnknownBlock {
                             error_message: err.to_string(),
                         }
                     })?;
                 (block_height, shard_id)
             }
         },
-        near_jsonrpc_primitives::types::chunks::ChunkReference::ChunkHash { chunk_id } => data
+        near_jsonrpc::primitives::types::chunks::ChunkReference::ChunkHash { chunk_id } => data
             .db_manager
             .get_block_by_chunk_hash(chunk_id)
             .await
             .map_err(
-                |_err| near_jsonrpc_primitives::types::chunks::RpcChunkError::UnknownChunk {
+                |_err| near_jsonrpc::primitives::types::chunks::RpcChunkError::UnknownChunk {
                     chunk_hash: chunk_id.into(),
                 },
             )
@@ -370,7 +379,7 @@ pub async fn fetch_chunk(
     )
     .await?;
 
-    Ok(near_jsonrpc_primitives::types::chunks::RpcChunkResponse { chunk_view })
+    Ok(near_jsonrpc::primitives::types::chunks::RpcChunkResponse { chunk_view })
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
@@ -379,13 +388,13 @@ async fn fetch_changes_in_block(
     cache_block: crate::modules::blocks::CacheBlock,
     block_reference: &near_primitives::types::BlockReference,
 ) -> Result<
-    near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockByTypeResponse,
-    near_jsonrpc_primitives::types::changes::RpcStateChangesError,
+    near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockByTypeResponse,
+    near_jsonrpc::primitives::types::changes::RpcStateChangesError,
 > {
     let shards = fetch_shards(data, cache_block, block_reference)
         .await
         .map_err(|err| {
-            near_jsonrpc_primitives::types::changes::RpcStateChangesError::UnknownBlock {
+            near_jsonrpc::primitives::types::changes::RpcStateChangesError::UnknownBlock {
                 error_message: err.to_string(),
             }
         })?;
@@ -456,7 +465,7 @@ async fn fetch_changes_in_block(
         .collect();
 
     Ok(
-        near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockByTypeResponse {
+        near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockByTypeResponse {
             block_hash: cache_block.block_hash,
             changes,
         },
@@ -470,13 +479,13 @@ async fn fetch_changes_in_block_by_type(
     state_changes_request: &near_primitives::views::StateChangesRequestView,
     block_reference: &near_primitives::types::BlockReference,
 ) -> Result<
-    near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockResponse,
-    near_jsonrpc_primitives::types::changes::RpcStateChangesError,
+    near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockResponse,
+    near_jsonrpc::primitives::types::changes::RpcStateChangesError,
 > {
     let shards = fetch_shards(data, cache_block, block_reference)
         .await
         .map_err(|err| {
-            near_jsonrpc_primitives::types::changes::RpcStateChangesError::UnknownBlock {
+            near_jsonrpc::primitives::types::changes::RpcStateChangesError::UnknownBlock {
                 error_message: err.to_string(),
             }
         })?;
@@ -486,7 +495,7 @@ async fn fetch_changes_in_block_by_type(
         .filter(|change| is_matching_change(change, state_changes_request))
         .collect();
     Ok(
-        near_jsonrpc_primitives::types::changes::RpcStateChangesInBlockResponse {
+        near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockResponse {
             block_hash: cache_block.block_hash,
             changes,
         },

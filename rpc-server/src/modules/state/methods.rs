@@ -11,7 +11,7 @@ pub async fn view_state_paginated(
     let block_reference = near_primitives::types::BlockReference::BlockId(params.block_id.clone());
     let block = fetch_block_from_cache_or_get(&data, block_reference)
         .await
-        .map_err(near_jsonrpc_primitives::errors::RpcError::from)?;
+        .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
 
     let state_values = get_state_keys_from_db_paginated(
         &data.db_manager,

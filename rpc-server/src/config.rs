@@ -165,6 +165,8 @@ impl ServerContext {
         })
     }
 }
+
+#[derive(Clone)]
 pub struct CompiledCodeCache {
     pub local_cache: std::sync::Arc<
         futures_locks::RwLock<

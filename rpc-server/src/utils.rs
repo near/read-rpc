@@ -718,7 +718,7 @@ fn generate_array_key(value: &serde_json::Value) -> String {
         serde_json::Value::Number(num) => num.to_string(),
         serde_json::Value::String(s) => s.clone(),
         serde_json::Value::Array(arr) => arr.iter().fold(String::new(), |str_key, arr_val| {
-            str_key + &generate_array_key(arr_val)
+            format!("{}{}", str_key, &generate_array_key(arr_val))
         }),
         serde_json::Value::Object(obj) => obj.iter().fold(String::new(), |str_key, (key, val)| {
             format!("{}/{}:{}", str_key, key, val)
