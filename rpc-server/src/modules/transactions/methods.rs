@@ -130,7 +130,17 @@ pub async fn broadcast_tx_commit(
             near_jsonrpc::primitives::types::transactions::RpcSendTransactionRequest::parse(
                 params,
             )?;
-        Ok(data.near_rpc_client.call(tx_commit_request).await?)
+        let proxy_params =
+            near_jsonrpc_client::methods::broadcast_tx_commit::RpcBroadcastTxCommitRequest {
+                signed_transaction: tx_commit_request.signed_transaction,
+            };
+        let result = data.near_rpc_client.call(proxy_params).await?;
+        Ok(
+            near_jsonrpc::primitives::types::transactions::RpcTransactionResponse {
+                final_execution_outcome: Some(FinalExecutionOutcome(result)),
+                final_execution_status: near_primitives::views::TxExecutionStatus::Final,
+            },
+        )
     } else {
         Err(RPCError::internal_error(
             "This method is not available because the `send_tx_methods` feature flag is disabled",
