@@ -11,6 +11,8 @@ COPY rpc-server/Cargo.toml rpc-server/Cargo.toml
 COPY configuration configuration
 COPY database database
 COPY readnode-primitives readnode-primitives
+RUN apt update && apt install -yy llvm \
+    clang
 RUN mkdir rpc-server/src && echo 'fn main() {}' > rpc-server/src/main.rs cargo build --release && rm -r rpc-server/src
 
 # copy your source tree
