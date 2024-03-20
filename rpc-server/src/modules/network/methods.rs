@@ -1,6 +1,6 @@
-use actix_web::cookie::time;
 use jsonrpc_v2::{Data, Params};
 use near_jsonrpc::RpcRequest;
+use near_primitives::utils::from_timestamp;
 
 use crate::config::ServerContext;
 use crate::errors::RPCError;
@@ -57,23 +57,19 @@ pub async fn status(
             latest_block_hash: blocks_info_by_finality.final_block.block_cache.block_hash,
             latest_block_height: blocks_info_by_finality.final_block.block_cache.block_height,
             latest_state_root: blocks_info_by_finality.final_block.block_cache.state_root,
-            latest_block_time: time::OffsetDateTime::from_unix_timestamp_nanos(
+            latest_block_time: from_timestamp(
                 blocks_info_by_finality
                     .final_block
                     .block_cache
-                    .block_timestamp as i128,
-            )
-            .expect("Failed to parse timestamp"),
+                    .block_timestamp,
+            ),
             // Always false because read_node is not need to sync
             syncing: false,
             earliest_block_hash: Some(data.genesis_info.genesis_block_cache.block_hash),
             earliest_block_height: Some(data.genesis_info.genesis_block_cache.block_height),
-            earliest_block_time: Some(
-                time::OffsetDateTime::from_unix_timestamp_nanos(
-                    data.genesis_info.genesis_block_cache.block_timestamp as i128,
-                )
-                .expect("Failed to parse timestamp"),
-            ),
+            earliest_block_time: Some(from_timestamp(
+                data.genesis_info.genesis_block_cache.block_timestamp,
+            )),
             epoch_id: Some(near_primitives::types::EpochId(
                 blocks_info_by_finality.final_block.block_cache.epoch_id,
             )),
@@ -287,7 +283,6 @@ async fn protocol_config_call(
             fees: runtime_config.fees.clone(),
             wasm_config: runtime_config.wasm_config.clone(),
             account_creation_config: runtime_config.account_creation_config.clone(),
-            storage_proof_size_soft_limit: runtime_config.storage_proof_size_soft_limit,
         },
     };
     Ok(protocol_config.into())
