@@ -12,7 +12,7 @@ pub async fn fetch_chunk_from_s3(
     s3_bucket_name: &str,
     block_height: near_primitives::types::BlockHeight,
     shard_id: near_primitives::types::ShardId,
-) -> Result<near_primitives::views::ChunkView, near_jsonrpc_primitives::types::chunks::RpcChunkError>
+) -> Result<near_primitives::views::ChunkView, near_jsonrpc::primitives::types::chunks::RpcChunkError>
 {
     tracing::debug!(
         "`fetch_chunk_from_s3` call: block_height {}, shard_id {}",
@@ -62,13 +62,13 @@ pub async fn fetch_chunk_from_s3(
                 })
             }
             None => Err(
-                near_jsonrpc_primitives::types::chunks::RpcChunkError::InternalError {
+                near_jsonrpc::primitives::types::chunks::RpcChunkError::InternalError {
                     error_message: "Unavailable chunk".to_string(),
                 },
             ),
         },
         Err(err) => Err(
-            near_jsonrpc_primitives::types::chunks::RpcChunkError::InternalError {
+            near_jsonrpc::primitives::types::chunks::RpcChunkError::InternalError {
                 error_message: err.to_string(),
             },
         ),
@@ -79,7 +79,7 @@ pub async fn fetch_chunk_from_s3(
 pub async fn fetch_block_from_cache_or_get(
     data: &jsonrpc_v2::Data<ServerContext>,
     block_reference: near_primitives::types::BlockReference,
-) -> Result<CacheBlock, near_jsonrpc_primitives::types::blocks::RpcBlockError> {
+) -> Result<CacheBlock, near_jsonrpc::primitives::types::blocks::RpcBlockError> {
     let block = match block_reference.clone() {
         near_primitives::types::BlockReference::BlockId(block_id) => {
             let block_height = match block_id {
@@ -89,7 +89,7 @@ pub async fn fetch_block_from_cache_or_get(
                     .get_block_by_hash(hash)
                     .await
                     .map_err(|err| {
-                        near_jsonrpc_primitives::types::blocks::RpcBlockError::UnknownBlock {
+                        near_jsonrpc::primitives::types::blocks::RpcBlockError::UnknownBlock {
                             error_message: err.to_string(),
                         }
                     })?,

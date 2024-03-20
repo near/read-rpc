@@ -165,22 +165,28 @@ impl ServerContext {
         })
     }
 }
+
+#[derive(Clone)]
 pub struct CompiledCodeCache {
     pub local_cache: std::sync::Arc<
         futures_locks::RwLock<
             crate::cache::LruMemoryCache<
                 near_primitives::hash::CryptoHash,
-                near_vm_runner::logic::CompiledContract,
+                near_vm_runner::CompiledContract,
             >,
         >,
     >,
 }
 
-impl near_vm_runner::logic::CompiledContractCache for CompiledCodeCache {
+impl near_vm_runner::ContractRuntimeCache for CompiledCodeCache {
+    fn handle(&self) -> Box<dyn near_vm_runner::ContractRuntimeCache> {
+        Box::new(self.clone())
+    }
+
     fn put(
         &self,
         key: &near_primitives::hash::CryptoHash,
-        value: near_vm_runner::logic::CompiledContract,
+        value: near_vm_runner::CompiledContract,
     ) -> std::io::Result<()> {
         block_on(self.local_cache.write()).put(*key, value);
         Ok(())
@@ -189,7 +195,7 @@ impl near_vm_runner::logic::CompiledContractCache for CompiledCodeCache {
     fn get(
         &self,
         key: &near_primitives::hash::CryptoHash,
-    ) -> std::io::Result<Option<near_vm_runner::logic::CompiledContract>> {
+    ) -> std::io::Result<Option<near_vm_runner::CompiledContract>> {
         Ok(block_on(self.local_cache.write()).get(key).cloned())
     }
 
