@@ -18,24 +18,25 @@ pub async fn query(
     Params(params): Params<serde_json::Value>,
 ) -> Result<near_jsonrpc::primitives::types::query::RpcQueryResponse, RPCError> {
     let query_request = near_jsonrpc::primitives::types::query::RpcQueryRequest::parse(params)?;
-    if let near_primitives::types::BlockReference::Finality(finality) =
-        &query_request.block_reference
+
+    if let near_primitives::types::BlockReference::Finality(
+        near_primitives::types::Finality::None,
+    ) = &query_request.block_reference
     {
-        if finality == &near_primitives::types::Finality::None {
-            return if !crate::metrics::IS_OPTIMISTIC_UPDATING
-                .load(std::sync::atomic::Ordering::Relaxed)
-            {
-                // Increase the OPTIMISTIC_REQUESTS_TOTAL metric if the request has
-                // optimistic finality
-                // and proxy to near-rpc
-                crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
-                Ok(data.near_rpc_client.call(query_request).await?)
-            } else {
-                // query_call with optimistic block
-                query_call(data, query_request, true).await
-            };
-        }
+        // Increase the OPTIMISTIC_REQUESTS_TOTAL metric
+        // if the request has optimistic finality
+        crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
+        return if crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
+            // Increase the PROXY_OPTIMISTIC_REQUESTS_TOTAL metric
+            // if optimistic not updating and proxy to near-rpc
+            crate::metrics::PROXY_OPTIMISTIC_REQUESTS_TOTAL.inc();
+            Ok(data.near_rpc_client.call(query_request).await?)
+        } else {
+            // query_call with optimistic block
+            query_call(data, query_request, true).await
+        };
     };
+
     query_call(data, query_request, false).await
 }
 
