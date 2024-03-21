@@ -227,14 +227,13 @@ pub async fn check_updating_optimistic_block_regularly(
     loop {
         tokio::time::sleep(std::time::Duration::from_secs(3)).await;
         let new_optimistic_block_height = crate::metrics::OPTIMISTIC_BLOCK_HEIGHT.get();
-        if new_optimistic_block_height != current_optimistic_block_height {
+        if new_optimistic_block_height > current_optimistic_block_height {
             current_optimistic_block_height = new_optimistic_block_height;
         } else {
             tracing::warn!(
                 "Optimistic block in is not updated. Start to update final block from the Lake"
             );
-            crate::metrics::IS_OPTIMISTIC_UPDATING
-                .store(false, std::sync::atomic::Ordering::Relaxed);
+            crate::metrics::OPTIMISTIC_UPDATING.set_not_working();
             update_final_block_regularly_from_lake(
                 std::sync::Arc::clone(&blocks_cache),
                 std::sync::Arc::clone(&blocks_info_by_finality),
@@ -244,8 +243,7 @@ pub async fn check_updating_optimistic_block_regularly(
             )
             .await?;
             tracing::info!("Optimistic block updating is resumed.");
-            crate::metrics::IS_OPTIMISTIC_UPDATING
-                .store(true, std::sync::atomic::Ordering::Relaxed);
+            crate::metrics::OPTIMISTIC_UPDATING.set_working();
         }
     }
 }

@@ -17,6 +17,48 @@ fn try_create_int_gauge(name: &str, help: &str) -> Result<IntGauge, prometheus::
     Ok(gauge)
 }
 
+// Struct to store the optimistic updating state
+// This is used to track if the optimistic updating is working or not
+// By default, it is set as working
+pub struct OptimisticUpdating {
+    is_not_working: std::sync::atomic::AtomicBool,
+}
+
+impl OptimisticUpdating {
+    pub fn new() -> Self {
+        Self {
+            is_not_working: std::sync::atomic::AtomicBool::new(false),
+        }
+    }
+
+    // Helper function to update AtomicBool value
+    fn set(&self, val: bool) {
+        self.is_not_working
+            .store(val, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    // Helper function to get AtomicBool value
+    fn get(&self) -> bool {
+        self.is_not_working
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    // return true if optimistic updating is not working
+    pub fn is_not_working(&self) -> bool {
+        self.get()
+    }
+
+    // Set optimistic updating as not working
+    pub fn set_not_working(&self) {
+        self.set(true);
+    }
+
+    // Set optimistic updating as working
+    pub fn set_working(&self) {
+        self.set(false);
+    }
+}
+
 lazy_static! {
     pub(crate) static ref OPTIMISTIC_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
         "total_optimistic_requests",
@@ -34,13 +76,18 @@ lazy_static! {
     )
     .unwrap();
 
-    pub(crate) static ref IS_OPTIMISTIC_UPDATING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+    pub(crate) static ref OPTIMISTIC_UPDATING: OptimisticUpdating = OptimisticUpdating::new();
 
     // REQUESTS TOTAL COUNTERS
     // total requests counter
     pub(crate) static ref TOTAL_REQUESTS_COUNTER: IntCounter = try_create_int_counter(
         "total_request_counter",
         "Total number requests"
+    )
+    .unwrap();
+    pub(crate) static ref PROXY_OPTIMISTIC_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+        "proxy_optimistic_requests",
+        "Total number of the request where finality was set to optimistic and proxy to regular nodes"
     )
     .unwrap();
     pub(crate) static ref PROXY_REQUESTS_TO_REGULAR_NODES_COUNTER: IntCounter = try_create_int_counter(
