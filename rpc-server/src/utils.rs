@@ -403,6 +403,7 @@ where
             Ok(res) => (serde_json::to_value(res), true),
             Err(err) => (serde_json::to_value(err), false),
         };
+        let read_rpc_response_meta_data = format!("{:?}", &read_rpc_response_json);
         let comparison_result = shadow_compare_results(
             read_rpc_response_json,
             near_rpc_client,
@@ -434,7 +435,13 @@ where
                     );
                     Some(reason.code())
                 } else {
-                    tracing::warn!(target: "shadow_data_consistency", "Shadow data check: ERROR\n{}:4: {}\n{:?}", method_metric_name, meta_data, err);
+                    tracing::warn!(
+                        target: "shadow_data_consistency",
+                        "Shadow data check: ERROR\n{}:4: {}\n{:?}",
+                        method_metric_name,
+                        meta_data,
+                        format!("NearRPC: {}, ReadRPC: {:?}", err, read_rpc_response_meta_data),
+                    );
                     Some(4)
                 }
             }
