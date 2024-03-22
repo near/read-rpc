@@ -1,5 +1,7 @@
 use near_o11y::WithSpanContextExt;
 
+const INTERVAL: std::time::Duration = std::time::Duration::from_millis(500);
+
 pub(crate) async fn fetch_epoch_validators_info(
     epoch_id: near_indexer::near_primitives::hash::CryptoHash,
     client: &actix::Addr<near_client::ViewClientActor>,
@@ -15,8 +17,6 @@ pub(crate) async fn fetch_epoch_validators_info(
         )
         .await??)
 }
-
-const INTERVAL: std::time::Duration = std::time::Duration::from_millis(500);
 
 /// Fetches the status to retrieve `latest_block_height` to determine if we need to fetch
 /// entire block or we already fetched this block.
@@ -44,6 +44,21 @@ pub(crate) async fn fetch_optimistic_block(
         .await??)
 }
 
+pub(crate) async fn fetch_status(
+    client: &actix::Addr<near_client::ClientActor>,
+) -> anyhow::Result<near_indexer::near_primitives::views::StatusResponse> {
+    tracing::debug!(target: crate::INDEXER, "Fetching status");
+    Ok(client
+        .send(
+            near_client::Status {
+                is_health_check: false,
+                detailed: false,
+            }
+            .with_span_context(),
+        )
+        .await??)
+}
+
 pub(crate) async fn publish_streamer_message(
     topic: &str,
     streamer_message: &near_indexer::StreamerMessage,
@@ -60,12 +75,22 @@ pub(crate) async fn publish_streamer_message(
 
 pub async fn optimistic_stream(
     view_client: actix::Addr<near_client::ViewClientActor>,
+    client: actix::Addr<near_client::ClientActor>,
     redis_client: redis::aio::ConnectionManager,
 ) {
     tracing::info!(target: crate::INDEXER, "Starting Optimistic Streamer...");
+
     let mut optimistic_block_height: Option<u64> = None;
     loop {
         tokio::time::sleep(INTERVAL).await;
+
+        // wait for node to be fully synced
+        if let Ok(status) = fetch_status(&client).await {
+            if status.sync_info.syncing {
+                continue;
+            }
+        }
+
         if let Ok(block) = fetch_optimistic_block(&view_client).await {
             let height = block.header.height;
             if let Some(block_height) = optimistic_block_height {

@@ -292,7 +292,7 @@ async fn run(home_dir: std::path::PathBuf) -> anyhow::Result<()> {
     let indexer_config = near_indexer::IndexerConfig {
         home_dir,
         sync_mode: near_indexer::SyncModeEnum::LatestSynced,
-        await_for_node_synced: near_indexer::AwaitForNodeSyncedEnum::StreamWhileSyncing,
+        await_for_node_synced: near_indexer::AwaitForNodeSyncedEnum::WaitForFullSync,
         validate_genesis: true,
     };
     let indexer = near_indexer::Indexer::new(indexer_config)?;
@@ -300,7 +300,7 @@ async fn run(home_dir: std::path::PathBuf) -> anyhow::Result<()> {
     // Regular indexer process starts here
     tracing::info!(target: INDEXER, "Instantiating the stream...");
     let stream = indexer.streamer();
-    let (view_client, _) = indexer.client_actors();
+    let (view_client, client) = indexer.client_actors();
 
     let stats = std::sync::Arc::new(tokio::sync::RwLock::new(metrics::Stats::new()));
     tokio::spawn(metrics::state_logger(
@@ -309,6 +309,7 @@ async fn run(home_dir: std::path::PathBuf) -> anyhow::Result<()> {
     ));
     tokio::spawn(utils::optimistic_stream(
         view_client.clone(),
+        client.clone(),
         redis_client.clone(),
     ));
 
