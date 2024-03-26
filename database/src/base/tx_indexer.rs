@@ -9,8 +9,8 @@ pub trait TxIndexerDbManager {
     ) -> anyhow::Result<()>;
 
     // This function is used to validate that the transaction is saved correctly.
-    // For some unknown reason, tx-indexer saves invalid data for transactions. 
-    // We want to avoid these problems and get more information. 
+    // For some unknown reason, tx-indexer saves invalid data for transactions.
+    // We want to avoid these problems and get more information.
     // That's why we added this method.
     async fn validate_saved_transaction_deserializable(
         &self,
