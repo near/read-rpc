@@ -458,8 +458,13 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         .await?
         .single_row()?
         .into_typed::<(Vec<u8>,)>()?;
-
-        Ok(borsh::from_slice::<readnode_primitives::TransactionDetails>(&data_value)?)
+        match borsh::from_slice::<readnode_primitives::TransactionDetails>(&data_value) {
+            Ok(tx) => Ok(tx),
+            Err(e) => {
+                tracing::warn!("Failed tx_details borsh deserialize: TX_HASH - {}, ERROR: {:?}", transaction_hash, e);
+                anyhow::bail!("Failed to parse transaction details")
+            }
+        }
     }
 
     /// Returns the readnode_primitives::TransactionDetails
