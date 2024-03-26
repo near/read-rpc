@@ -26,17 +26,28 @@ impl PostgresStorageManager for PostgresDBManager {}
 impl crate::TxIndexerDbManager for PostgresDBManager {
     async fn add_transaction(
         &self,
-        transaction: readnode_primitives::TransactionDetails,
+        transaction_hash: &str,
+        tx_bytes: Vec<u8>,
         block_height: u64,
+        signer_id: &str,
     ) -> anyhow::Result<()> {
         crate::models::TransactionDetail {
-            transaction_hash: transaction.transaction.hash.to_string(),
+            transaction_hash: transaction_hash.to_string(),
             block_height: bigdecimal::BigDecimal::from(block_height),
-            account_id: transaction.transaction.signer_id.to_string(),
-            transaction_details: borsh::to_vec(&transaction)?,
+            account_id: signer_id.to_string(),
+            transaction_details: tx_bytes,
         }
         .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
         .await
+    }
+
+    // return always true, because we don't have tx_save_validation for Postgres database
+    async fn validate_saved_transaction_deserializable(
+        &self,
+        _transaction_hash: &str,
+        _tx_bytes: &[u8],
+    ) -> anyhow::Result<bool> {
+        Ok(true)
     }
 
     async fn add_receipt(

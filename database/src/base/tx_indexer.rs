@@ -2,9 +2,21 @@
 pub trait TxIndexerDbManager {
     async fn add_transaction(
         &self,
-        transaction: readnode_primitives::TransactionDetails,
+        transaction_hash: &str,
+        tx_bytes: Vec<u8>,
         block_height: u64,
+        signer_id: &str,
     ) -> anyhow::Result<()>;
+
+    // This function is used to validate that the transaction is saved correctly.
+    // For some unknown reason, tx-indexer saves invalid data for transactions.
+    // We want to avoid these problems and get more information.
+    // That's why we added this method.
+    async fn validate_saved_transaction_deserializable(
+        &self,
+        transaction_hash: &str,
+        tx_bytes: &[u8],
+    ) -> anyhow::Result<bool>;
 
     async fn add_receipt(
         &self,

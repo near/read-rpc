@@ -9,6 +9,7 @@ pub struct ScyllaDBManager {
     add_receipt: PreparedStatement,
     update_meta: PreparedStatement,
     last_processed_block_height: PreparedStatement,
+    get_transaction_by_hash: PreparedStatement,
 
     cache_get_all_transactions: PreparedStatement,
     cache_get_transaction: PreparedStatement,
@@ -192,6 +193,10 @@ impl ScyllaStorageManager for ScyllaDBManager {
                 "SELECT last_processed_block_height FROM tx_indexer.meta WHERE indexer_id = ?",
             )
                 .await?,
+            get_transaction_by_hash: Self::prepare_read_query(
+                &scylla_db_session,
+                "SELECT transaction_details FROM tx_indexer.transactions_details WHERE transaction_hash = ? LIMIT 1",
+            ).await?,
             cache_get_all_transactions: Self::prepare_read_query(
                 &scylla_db_session,
                 "SELECT transaction_details FROM tx_indexer_cache.transactions WHERE token(block_height) >= ? AND token(block_height) <= ?"
@@ -243,21 +248,56 @@ impl ScyllaStorageManager for ScyllaDBManager {
 impl crate::TxIndexerDbManager for ScyllaDBManager {
     async fn add_transaction(
         &self,
-        transaction: readnode_primitives::TransactionDetails,
+        transaction_hash: &str,
+        tx_bytes: Vec<u8>,
         block_height: u64,
+        signer_id: &str,
     ) -> anyhow::Result<()> {
         Self::execute_prepared_query(
             &self.scylla_session,
             &self.add_transaction,
             (
-                transaction.transaction.hash.to_string(),
+                transaction_hash.to_string(),
                 num_bigint::BigInt::from(block_height),
-                transaction.transaction.signer_id.to_string(),
-                &borsh::to_vec(&transaction)?,
+                signer_id.to_string(),
+                &tx_bytes,
             ),
         )
         .await?;
+
         Ok(())
+    }
+
+    // This function is used to validate that the transaction is saved correctly.
+    // For some unknown reason, tx-indexer saves invalid data for transactions.
+    // We want to avoid these problems and get more information.
+    // That's why we added this method.
+    async fn validate_saved_transaction_deserializable(
+        &self,
+        transaction_hash: &str,
+        tx_bytes: &[u8],
+    ) -> anyhow::Result<bool> {
+        let (data_value,) = Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.get_transaction_by_hash,
+            (transaction_hash.to_string(),),
+        )
+        .await?
+        .single_row()?
+        .into_typed::<(Vec<u8>,)>()?;
+
+        match borsh::from_slice::<readnode_primitives::TransactionDetails>(&data_value) {
+            Ok(_) => Ok(true),
+            Err(err) => {
+                tracing::warn!(
+                    "Failed tx_details borsh deserialize: TX_HASH - {}, ERROR: {:?}, DATA_EQUAL: {}",
+                    transaction_hash,
+                    err,
+                    tx_bytes.eq(&data_value)
+                );
+                anyhow::bail!("Failed to parse transaction details")
+            }
+        }
     }
 
     async fn add_receipt(
