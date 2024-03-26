@@ -2,6 +2,7 @@ use futures::{
     future::{join_all, try_join_all},
     StreamExt,
 };
+use near_indexer_primitives::near_primitives::borsh;
 use near_indexer_primitives::IndexerTransactionWithOutcome;
 
 /// Blocks #47317863 and #47317864 with restored receipts.
