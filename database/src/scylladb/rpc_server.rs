@@ -461,7 +461,11 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         match borsh::from_slice::<readnode_primitives::TransactionDetails>(&data_value) {
             Ok(tx) => Ok(tx),
             Err(e) => {
-                tracing::warn!("Failed tx_details borsh deserialize: TX_HASH - {}, ERROR: {:?}", transaction_hash, e);
+                tracing::warn!(
+                    "Failed tx_details borsh deserialize: TX_HASH - {}, ERROR: {:?}",
+                    transaction_hash,
+                    e
+                );
                 anyhow::bail!("Failed to parse transaction details")
             }
         }
