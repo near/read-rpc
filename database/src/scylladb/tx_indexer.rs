@@ -9,6 +9,7 @@ pub struct ScyllaDBManager {
     add_receipt: PreparedStatement,
     update_meta: PreparedStatement,
     last_processed_block_height: PreparedStatement,
+    get_transaction_by_hash: PreparedStatement,
 
     cache_get_all_transactions: PreparedStatement,
     cache_get_transaction: PreparedStatement,
@@ -192,6 +193,10 @@ impl ScyllaStorageManager for ScyllaDBManager {
                 "SELECT last_processed_block_height FROM tx_indexer.meta WHERE indexer_id = ?",
             )
                 .await?,
+            get_transaction_by_hash: Self::prepare_read_query(
+                &scylla_db_session,
+                "SELECT transaction_details FROM tx_indexer.transactions_details WHERE transaction_hash = ? LIMIT 1",
+            ).await?,
             cache_get_all_transactions: Self::prepare_read_query(
                 &scylla_db_session,
                 "SELECT transaction_details FROM tx_indexer_cache.transactions WHERE token(block_height) >= ? AND token(block_height) <= ?"
@@ -246,6 +251,7 @@ impl crate::TxIndexerDbManager for ScyllaDBManager {
         transaction: readnode_primitives::TransactionDetails,
         block_height: u64,
     ) -> anyhow::Result<()> {
+        let tx_bytes = borsh::to_vec(&transaction)?;
         Self::execute_prepared_query(
             &self.scylla_session,
             &self.add_transaction,
@@ -253,11 +259,52 @@ impl crate::TxIndexerDbManager for ScyllaDBManager {
                 transaction.transaction.hash.to_string(),
                 num_bigint::BigInt::from(block_height),
                 transaction.transaction.signer_id.to_string(),
-                &borsh::to_vec(&transaction)?,
+                &tx_bytes,
             ),
         )
         .await?;
+
+        if let Err(err) = self
+            .check_transaction_save_correctly(&transaction.transaction.hash.to_string(), tx_bytes)
+            .await
+        {
+            tracing::warn!(
+                "Failed to get saved transaction: TX_HASH - {}, ERROR {:?}",
+                transaction.transaction.hash.to_string(),
+                err
+            );
+            self.add_transaction(transaction, block_height).await?;
+        }
         Ok(())
+    }
+
+    async fn check_transaction_save_correctly(
+        &self,
+        transaction_hash: &str,
+        tx_bytes: Vec<u8>,
+    ) -> anyhow::Result<bool> {
+        let (data_value,) = Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.get_transaction_by_hash,
+            (transaction_hash.to_string(),),
+        )
+        .await?
+        .single_row()?
+        .into_typed::<(Vec<u8>,)>()?;
+
+        match borsh::from_slice::<readnode_primitives::TransactionDetails>(&data_value) {
+            Ok(_) => Ok(true),
+            Err(err) => {
+                tracing::warn!(
+                    "Failed tx_details borsh deserialize: TX_HASH - {}, ERROR: {:?}, TX_DATA: {:?}, DATA_FROM_DB: {:?}",
+                    transaction_hash,
+                    err,
+                    tx_bytes,
+                    data_value,
+                );
+                anyhow::bail!("Failed to parse transaction details")
+            }
+        }
     }
 
     async fn add_receipt(

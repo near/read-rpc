@@ -39,6 +39,15 @@ impl crate::TxIndexerDbManager for PostgresDBManager {
         .await
     }
 
+    async fn check_transaction_save_correctly(
+        &self,
+        _transaction_hash: &str,
+        _tx_bytes: Vec<u8>,
+    ) -> anyhow::Result<bool> {
+        // return always true, because we don't have any checks for Postgres database
+        Ok(true)
+    }
+
     async fn add_receipt(
         &self,
         receipt_id: &str,

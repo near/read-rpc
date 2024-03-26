@@ -6,6 +6,12 @@ pub trait TxIndexerDbManager {
         block_height: u64,
     ) -> anyhow::Result<()>;
 
+    async fn check_transaction_save_correctly(
+        &self,
+        transaction_hash: &str,
+        tx_bytes: Vec<u8>,
+    ) -> anyhow::Result<bool>;
+
     async fn add_receipt(
         &self,
         receipt_id: &str,
