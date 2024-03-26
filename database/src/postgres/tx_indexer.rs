@@ -41,12 +41,12 @@ impl crate::TxIndexerDbManager for PostgresDBManager {
         .await
     }
 
+    // return always true, because we don't have tx_save_validation for Postgres database
     async fn validate_saved_transaction_deserializable(
         &self,
         _transaction_hash: &str,
         _tx_bytes: &[u8],
     ) -> anyhow::Result<bool> {
-        // return always true, because we don't have tx_save_validation for Postgres database
         Ok(true)
     }
 
