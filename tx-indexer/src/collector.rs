@@ -318,6 +318,11 @@ async fn save_transaction_details(
                     err
                 );
                 if attempts >= 3 {
+                    tracing::error!(
+                        target: crate::INDEXER,
+                        "Failed to validate transaction {} after 3 attempts",
+                        transaction_hash
+                    );
                     return false;
                 } else {
                     attempts += 1;
