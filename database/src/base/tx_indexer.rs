@@ -2,14 +2,16 @@
 pub trait TxIndexerDbManager {
     async fn add_transaction(
         &self,
-        transaction: readnode_primitives::TransactionDetails,
-        block_height: u64,
-    ) -> anyhow::Result<()>;
-
-    async fn check_transaction_save_correctly(
-        &self,
         transaction_hash: &str,
         tx_bytes: Vec<u8>,
+        block_height: u64,
+        signer_id: &str,
+    ) -> anyhow::Result<()>;
+
+    async fn validate_saved_transaction_deserializable(
+        &self,
+        transaction_hash: &str,
+        tx_bytes: &[u8],
     ) -> anyhow::Result<bool>;
 
     async fn add_receipt(

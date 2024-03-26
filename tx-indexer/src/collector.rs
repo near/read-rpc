@@ -2,6 +2,7 @@ use futures::{
     future::{join_all, try_join_all},
     StreamExt,
 };
+use near_indexer_primitives::near_primitives::borsh;
 use near_indexer_primitives::IndexerTransactionWithOutcome;
 
 /// Blocks #47317863 and #47317864 with restored receipts.
@@ -292,11 +293,57 @@ async fn save_transaction_details(
         }
     };
     let transaction_hash = transaction_details.transaction.hash.to_string();
+    let signer_id = transaction_details.transaction.signer_id.to_string();
+    let tx_bytes = &borsh::to_vec(&transaction_details).expect("Failed to serialize transaction");
+
     match db_manager
-        .add_transaction(transaction_details, tx_details.block_height)
+        .add_transaction(
+            &transaction_hash,
+            tx_bytes.clone(),
+            tx_details.block_height,
+            &signer_id,
+        )
         .await
     {
         Ok(_) => {
+            let mut attempts = 0;
+            let mut tx_bytes = tx_bytes.clone();
+            while let Err(err) = db_manager
+                .validate_saved_transaction_deserializable(&transaction_hash, &tx_bytes)
+                .await
+            {
+                tracing::warn!(
+                    target: crate::INDEXER,
+                    "Failed to validate transaction {} \n{:#?}",
+                    transaction_hash,
+                    err
+                );
+                if attempts >= 3 {
+                    return false;
+                } else {
+                    attempts += 1;
+                };
+                tx_bytes =
+                    borsh::to_vec(&transaction_details).expect("Failed to serialize transaction");
+                if let Err(err) = db_manager
+                    .add_transaction(
+                        &transaction_hash,
+                        tx_bytes.clone(),
+                        tx_details.block_height,
+                        &signer_id,
+                    )
+                    .await
+                {
+                    tracing::error!(
+                        target: crate::INDEXER,
+                        "Failed to save transaction {} \n{:#?}",
+                        transaction_hash,
+                        err
+                    );
+                    return false;
+                };
+            }
+
             db_manager
                 .cache_delete_transaction(&transaction_hash, tx_details.block_height)
                 .await

@@ -248,40 +248,30 @@ impl ScyllaStorageManager for ScyllaDBManager {
 impl crate::TxIndexerDbManager for ScyllaDBManager {
     async fn add_transaction(
         &self,
-        transaction: readnode_primitives::TransactionDetails,
+        transaction_hash: &str,
+        tx_bytes: Vec<u8>,
         block_height: u64,
+        signer_id: &str,
     ) -> anyhow::Result<()> {
-        let tx_bytes = borsh::to_vec(&transaction)?;
         Self::execute_prepared_query(
             &self.scylla_session,
             &self.add_transaction,
             (
-                transaction.transaction.hash.to_string(),
+                transaction_hash.to_string(),
                 num_bigint::BigInt::from(block_height),
-                transaction.transaction.signer_id.to_string(),
+                signer_id.to_string(),
                 &tx_bytes,
             ),
         )
         .await?;
 
-        if let Err(err) = self
-            .check_transaction_save_correctly(&transaction.transaction.hash.to_string(), tx_bytes)
-            .await
-        {
-            tracing::warn!(
-                "Failed to get saved transaction: TX_HASH - {}, ERROR {:?}",
-                transaction.transaction.hash.to_string(),
-                err
-            );
-            self.add_transaction(transaction, block_height).await?;
-        }
         Ok(())
     }
 
-    async fn check_transaction_save_correctly(
+    async fn validate_saved_transaction_deserializable(
         &self,
         transaction_hash: &str,
-        tx_bytes: Vec<u8>,
+        tx_bytes: &[u8],
     ) -> anyhow::Result<bool> {
         let (data_value,) = Self::execute_prepared_query(
             &self.scylla_session,
@@ -296,11 +286,10 @@ impl crate::TxIndexerDbManager for ScyllaDBManager {
             Ok(_) => Ok(true),
             Err(err) => {
                 tracing::warn!(
-                    "Failed tx_details borsh deserialize: TX_HASH - {}, ERROR: {:?}, TX_DATA: {:?}, DATA_FROM_DB: {:?}",
+                    "Failed tx_details borsh deserialize: TX_HASH - {}, ERROR: {:?}, DATA_EQUAL: {}",
                     transaction_hash,
                     err,
-                    tx_bytes,
-                    data_value,
+                    tx_bytes.eq(&data_value)
                 );
                 anyhow::bail!("Failed to parse transaction details")
             }
