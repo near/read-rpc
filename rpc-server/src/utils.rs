@@ -217,7 +217,7 @@ pub async fn check_updating_optimistic_block_regularly(
 
     let mut current_optimistic_block_height = crate::metrics::OPTIMISTIC_BLOCK_HEIGHT.get();
     loop {
-        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
         let new_optimistic_block_height = crate::metrics::OPTIMISTIC_BLOCK_HEIGHT.get();
         if new_optimistic_block_height > current_optimistic_block_height {
             current_optimistic_block_height = new_optimistic_block_height;
@@ -297,10 +297,6 @@ pub async fn update_optimistic_block_regularly(
                 Ok(streamer_message) => {
                     let optimistic_block =
                         BlockInfo::new_from_streamer_message(streamer_message).await;
-                    tracing::debug!(
-                        "Received optimistic block: {:?}",
-                        optimistic_block.block_cache
-                    );
                     crate::metrics::OPTIMISTIC_BLOCK_HEIGHT
                         .set(i64::try_from(optimistic_block.block_cache.block_height)?);
                     blocks_info_by_finality

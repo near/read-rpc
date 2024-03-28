@@ -327,12 +327,20 @@ impl BlocksInfoByFinality {
     }
 
     pub async fn update_final_block(&self, block_info: BlockInfo) {
+        tracing::debug!(
+            "Update final block info: {:?}",
+            block_info.block_cache.block_height
+        );
         let mut finale_block_lock = self.final_block.write().await;
         finale_block_lock.block_cache = block_info.block_cache;
         finale_block_lock.stream_message = block_info.stream_message;
     }
 
     pub async fn update_optimistic_block(&self, block_info: BlockInfo) {
+        tracing::debug!(
+            "Update optimistic block info: {:?}",
+            block_info.block_cache.block_height
+        );
         let mut optimistic_block_lock = self.optimistic_block.write().await;
         optimistic_block_lock.block_cache = block_info.block_cache;
         optimistic_block_lock.stream_message = block_info.stream_message;
@@ -347,9 +355,10 @@ impl BlocksInfoByFinality {
         Ok(())
     }
     pub async fn final_block_info(&self) -> BlockInfo {
+        let final_block_info_lock = self.final_block.read().await;
         BlockInfo {
-            block_cache: self.final_cache_block().await,
-            stream_message: self.final_stream_message().await,
+            block_cache: final_block_info_lock.block_cache,
+            stream_message: final_block_info_lock.stream_message.clone(),
         }
     }
 
@@ -357,23 +366,16 @@ impl BlocksInfoByFinality {
         self.final_block.read().await.block_cache
     }
 
-    pub async fn final_stream_message(&self) -> near_indexer_primitives::StreamerMessage {
-        self.optimistic_block.read().await.stream_message.clone()
-    }
-
     pub async fn optimistic_block_info(&self) -> BlockInfo {
+        let optimistic_block_info_lock = self.optimistic_block.read().await;
         BlockInfo {
-            block_cache: self.optimistic_cache_block().await,
-            stream_message: self.optimistic_stream_message().await,
+            block_cache: optimistic_block_info_lock.block_cache,
+            stream_message: optimistic_block_info_lock.stream_message.clone(),
         }
     }
 
     pub async fn optimistic_cache_block(&self) -> CacheBlock {
         self.optimistic_block.read().await.block_cache
-    }
-
-    pub async fn optimistic_stream_message(&self) -> near_indexer_primitives::StreamerMessage {
-        self.optimistic_block.read().await.stream_message.clone()
     }
 
     pub async fn validators(&self) -> near_primitives::views::EpochValidatorInfo {
