@@ -277,9 +277,8 @@ pub async fn fetch_block(
                 | near_primitives::types::Finality::DoomSlug => {
                     let block_view = data
                         .blocks_info_by_finality
-                        .read()
+                        .final_block_info()
                         .await
-                        .final_block
                         .block_view()
                         .await;
                     Ok(near_jsonrpc::primitives::types::blocks::RpcBlockResponse { block_view })
@@ -295,9 +294,8 @@ pub async fn fetch_block(
                     } else {
                         let block_view = data
                             .blocks_info_by_finality
-                            .read()
+                            .optimistic_block_info()
                             .await
-                            .optimistic_block
                             .block_view()
                             .await;
                         Ok(
@@ -523,9 +521,8 @@ async fn fetch_shards(
                 } else {
                     Ok(data
                         .blocks_info_by_finality
-                        .read()
+                        .optimistic_block_info()
                         .await
-                        .optimistic_block
                         .shards()
                         .await)
                 }
@@ -533,9 +530,8 @@ async fn fetch_shards(
             near_primitives::types::Finality::DoomSlug
             | near_primitives::types::Finality::Final => Ok(data
                 .blocks_info_by_finality
-                .read()
+                .final_block_info()
                 .await
-                .final_block
                 .shards()
                 .await),
         }

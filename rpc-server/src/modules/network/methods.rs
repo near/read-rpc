@@ -31,9 +31,9 @@ pub async fn status(
     data: Data<ServerContext>,
     Params(_params): Params<serde_json::Value>,
 ) -> Result<near_primitives::views::StatusResponse, RPCError> {
-    let blocks_info_by_finality = data.blocks_info_by_finality.read().await;
-    let validators = blocks_info_by_finality
-        .current_validators
+    let final_block = data.blocks_info_by_finality.final_cache_block().await;
+    let validators = data.blocks_info_by_finality.validators().await;
+    let current_validators = validators
         .current_validators
         .iter()
         .map(|validator| near_primitives::views::ValidatorInfo {
@@ -46,23 +46,15 @@ pub async fn status(
         version: data.version.clone(),
         chain_id: data.genesis_info.genesis_config.chain_id.clone(),
         protocol_version: near_primitives::version::PROTOCOL_VERSION,
-        latest_protocol_version: blocks_info_by_finality
-            .final_block
-            .block_cache
-            .latest_protocol_version,
+        latest_protocol_version: final_block.latest_protocol_version,
         // Address for current read_node RPC server.
         rpc_addr: Some(format!("0.0.0.0:{}", data.server_port)),
-        validators,
+        validators: current_validators,
         sync_info: near_primitives::views::StatusSyncInfo {
-            latest_block_hash: blocks_info_by_finality.final_block.block_cache.block_hash,
-            latest_block_height: blocks_info_by_finality.final_block.block_cache.block_height,
-            latest_state_root: blocks_info_by_finality.final_block.block_cache.state_root,
-            latest_block_time: from_timestamp(
-                blocks_info_by_finality
-                    .final_block
-                    .block_cache
-                    .block_timestamp,
-            ),
+            latest_block_hash: final_block.block_hash,
+            latest_block_height: final_block.block_height,
+            latest_state_root: final_block.state_root,
+            latest_block_time: from_timestamp(final_block.block_timestamp),
             // Always false because read_node is not need to sync
             syncing: false,
             earliest_block_hash: Some(data.genesis_info.genesis_block_cache.block_hash),
@@ -70,14 +62,8 @@ pub async fn status(
             earliest_block_time: Some(from_timestamp(
                 data.genesis_info.genesis_block_cache.block_timestamp,
             )),
-            epoch_id: Some(near_primitives::types::EpochId(
-                blocks_info_by_finality.final_block.block_cache.epoch_id,
-            )),
-            epoch_start_height: Some(
-                blocks_info_by_finality
-                    .current_validators
-                    .epoch_start_height,
-            ),
+            epoch_id: Some(near_primitives::types::EpochId(final_block.epoch_id)),
+            epoch_start_height: Some(validators.epoch_start_height),
         },
         validator_account_id: None,
         validator_public_key: None,
@@ -129,10 +115,8 @@ pub async fn validators(
     if let near_primitives::types::EpochReference::EpochId(epoch_id) = &request.epoch_reference {
         if data
             .blocks_info_by_finality
-            .read()
+            .final_cache_block()
             .await
-            .final_block
-            .block_cache
             .epoch_id
             == epoch_id.0
         {
