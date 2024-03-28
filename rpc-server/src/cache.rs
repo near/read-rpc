@@ -54,8 +54,8 @@ impl<K: std::hash::Hash + Eq, V> LruMemoryCache<K, V> {
     }
 
     /// Returns a reference to the value of the key in the cache or None if it is not present in the cache.
-    pub fn get(&mut self, key: &K) -> Option<&V> {
-        self.inner.get(key)
+    pub fn get(&self, key: &K) -> Option<&V> {
+        self.inner.peek(key)
     }
 
     /// Returns a bool indicating whether the given key is in the cache.

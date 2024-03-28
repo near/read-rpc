@@ -61,7 +61,7 @@ pub struct ServerContext {
     pub blocks_cache:
         std::sync::Arc<futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>>,
     /// Final block info include final_block_cache and current_validators_info
-    pub blocks_info_by_finality: std::sync::Arc<futures_locks::RwLock<BlocksInfoByFinality>>,
+    pub blocks_info_by_finality: std::sync::Arc<BlocksInfoByFinality>,
     /// Cache to store compiled contract codes
     pub compiled_contract_code_cache: std::sync::Arc<CompiledCodeCache>,
     /// Cache to store contract codes
@@ -118,9 +118,8 @@ impl ServerContext {
             )),
         });
 
-        let blocks_info_by_finality = std::sync::Arc::new(futures_locks::RwLock::new(
-            BlocksInfoByFinality::new(&near_rpc_client, &blocks_cache).await,
-        ));
+        let blocks_info_by_finality =
+            std::sync::Arc::new(BlocksInfoByFinality::new(&near_rpc_client, &blocks_cache).await);
 
         let s3_client = rpc_server_config.lake_config.lake_s3_client().await;
 
@@ -192,10 +191,10 @@ impl near_vm_runner::logic::CompiledContractCache for CompiledCodeCache {
         &self,
         key: &near_primitives::hash::CryptoHash,
     ) -> std::io::Result<Option<near_vm_runner::logic::CompiledContract>> {
-        Ok(block_on(self.local_cache.write()).get(key).cloned())
+        Ok(block_on(self.local_cache.read()).get(key).cloned())
     }
 
     fn has(&self, key: &near_primitives::hash::CryptoHash) -> std::io::Result<bool> {
-        Ok(block_on(self.local_cache.write()).contains(key))
+        Ok(block_on(self.local_cache.read()).contains(key))
     }
 }

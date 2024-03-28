@@ -30,7 +30,7 @@ impl From<&near_primitives::views::BlockView> for CacheBlock {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BlockInfo {
     pub block_cache: CacheBlock,
     pub stream_message: near_indexer_primitives::StreamerMessage,
@@ -277,11 +277,16 @@ impl BlockInfo {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+pub struct CurrentValidatorInfo {
+    pub validators: near_primitives::views::EpochValidatorInfo,
+}
+
+#[derive(Debug, Clone)]
 pub struct BlocksInfoByFinality {
-    pub final_block: BlockInfo,
-    pub optimistic_block: BlockInfo,
-    pub current_validators: near_primitives::views::EpochValidatorInfo,
+    pub final_block: futures_locks::RwLock<BlockInfo>,
+    pub optimistic_block: futures_locks::RwLock<BlockInfo>,
+    pub current_validators: futures_locks::RwLock<CurrentValidatorInfo>,
 }
 
 impl BlocksInfoByFinality {
@@ -311,9 +316,67 @@ impl BlocksInfoByFinality {
             .put(final_block.header.height, CacheBlock::from(&final_block));
 
         Self {
-            final_block: BlockInfo::new_from_block_view(final_block).await,
-            optimistic_block: BlockInfo::new_from_block_view(optimistic_block).await,
-            current_validators: validators,
+            final_block: futures_locks::RwLock::new(
+                BlockInfo::new_from_block_view(final_block).await,
+            ),
+            optimistic_block: futures_locks::RwLock::new(
+                BlockInfo::new_from_block_view(optimistic_block).await,
+            ),
+            current_validators: futures_locks::RwLock::new(CurrentValidatorInfo { validators }),
         }
+    }
+
+    pub async fn update_final_block(&self, block_info: BlockInfo) {
+        let mut finale_block_lock = self.final_block.write().await;
+        finale_block_lock.block_cache = block_info.block_cache;
+        finale_block_lock.stream_message = block_info.stream_message;
+    }
+
+    pub async fn update_optimistic_block(&self, block_info: BlockInfo) {
+        let mut optimistic_block_lock = self.optimistic_block.write().await;
+        optimistic_block_lock.block_cache = block_info.block_cache;
+        optimistic_block_lock.stream_message = block_info.stream_message;
+    }
+
+    pub async fn update_current_validators(
+        &self,
+        near_rpc_client: &crate::utils::JsonRpcClient,
+    ) -> anyhow::Result<()> {
+        self.current_validators.write().await.validators =
+            crate::utils::get_current_validators(near_rpc_client).await?;
+        Ok(())
+    }
+    pub async fn final_block_info(&self) -> BlockInfo {
+        BlockInfo {
+            block_cache: self.final_cache_block().await,
+            stream_message: self.final_stream_message().await,
+        }
+    }
+
+    pub async fn final_cache_block(&self) -> CacheBlock {
+        self.final_block.read().await.block_cache
+    }
+
+    pub async fn final_stream_message(&self) -> near_indexer_primitives::StreamerMessage {
+        self.optimistic_block.read().await.stream_message.clone()
+    }
+
+    pub async fn optimistic_block_info(&self) -> BlockInfo {
+        BlockInfo {
+            block_cache: self.optimistic_cache_block().await,
+            stream_message: self.optimistic_stream_message().await,
+        }
+    }
+
+    pub async fn optimistic_cache_block(&self) -> CacheBlock {
+        self.optimistic_block.read().await.block_cache
+    }
+
+    pub async fn optimistic_stream_message(&self) -> near_indexer_primitives::StreamerMessage {
+        self.optimistic_block.read().await.stream_message.clone()
+    }
+
+    pub async fn validators(&self) -> near_primitives::views::EpochValidatorInfo {
+        self.current_validators.read().await.validators.clone()
     }
 }

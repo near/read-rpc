@@ -51,10 +51,8 @@ impl RPCHealthStatusResponse {
 
             final_block_height: server_context
                 .blocks_info_by_finality
-                .read()
+                .final_cache_block()
                 .await
-                .final_block
-                .block_cache
                 .block_height,
         }
     }
