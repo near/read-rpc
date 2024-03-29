@@ -54,8 +54,8 @@ impl<K: std::hash::Hash + Eq, V> LruMemoryCache<K, V> {
     }
 
     /// Returns a reference to the value of the key in the cache or None if it is not present in the cache.
-    pub fn get(&mut self, key: &K) -> Option<&V> {
-        self.inner.get(key)
+    pub fn get(&self, key: &K) -> Option<&V> {
+        self.inner.peek(key)
     }
 
     /// Returns a bool indicating whether the given key is in the cache.
@@ -77,5 +77,43 @@ impl<K: std::hash::Hash + Eq, V> LruMemoryCache<K, V> {
     /// Returns the number of key-value pairs that are currently in the the cache.
     pub fn len(&self) -> usize {
         self.inner.len()
+    }
+}
+
+// Wrapper RwLock around LruMemoryCache that provides async access to the cache.
+// This is necessary for safe use of the cache between threads.
+pub struct RwLockLruMemoryCache<K, V> {
+    inner: futures_locks::RwLock<LruMemoryCache<K, V>>,
+}
+
+impl<K: std::hash::Hash + Eq, V: Clone> RwLockLruMemoryCache<K, V> {
+    pub fn new(max_size: usize) -> Self {
+        RwLockLruMemoryCache {
+            inner: futures_locks::RwLock::new(LruMemoryCache::new(max_size)),
+        }
+    }
+
+    pub async fn put(&self, key: K, val: V) {
+        self.inner.write().await.put(key, val);
+    }
+
+    pub async fn get(&self, key: &K) -> Option<V> {
+        self.inner.read().await.get(key).cloned()
+    }
+
+    pub async fn contains(&self, key: &K) -> bool {
+        self.inner.read().await.contains(key)
+    }
+
+    pub async fn current_size(&self) -> usize {
+        self.inner.read().await.current_size()
+    }
+
+    pub async fn max_size(&self) -> usize {
+        self.inner.read().await.max_size()
+    }
+
+    pub async fn len(&self) -> usize {
+        self.inner.read().await.len()
     }
 }

@@ -305,7 +305,10 @@ async fn save_transaction_details(
         .await
     {
         Ok(_) => {
-            let mut attempts = 0;
+            // Validate that the transaction is saved correctly
+            // Before validating, we need to wait a little bit to make sure that the transaction is saved
+            tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+            let mut attempts = 1;
             let mut tx_bytes = tx_bytes.clone();
             while let Err(err) = db_manager
                 .validate_saved_transaction_deserializable(&transaction_hash, &tx_bytes)
@@ -346,6 +349,8 @@ async fn save_transaction_details(
                     );
                     return false;
                 };
+                // Wait a little bit before the next attempt
+                tokio::time::sleep(std::time::Duration::from_millis(150)).await;
             }
 
             db_manager

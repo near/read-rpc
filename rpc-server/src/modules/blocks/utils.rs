@@ -94,41 +94,23 @@ pub async fn fetch_block_from_cache_or_get(
                         }
                     })?,
             };
-            data.blocks_cache.write().await.get(&block_height).cloned()
+            data.blocks_cache.get(&block_height).await
         }
         near_primitives::types::BlockReference::Finality(finality) => {
             match finality {
                 near_primitives::types::Finality::None => {
                     if crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
                         // Returns the final_block for None.
-                        Some(
-                            data.blocks_info_by_finality
-                                .read()
-                                .await
-                                .final_block
-                                .block_cache,
-                        )
+                        Some(data.blocks_info_by_finality.final_cache_block().await)
                     } else {
                         // Returns the optimistic_block for None.
-                        Some(
-                            data.blocks_info_by_finality
-                                .read()
-                                .await
-                                .optimistic_block
-                                .block_cache,
-                        )
+                        Some(data.blocks_info_by_finality.optimistic_cache_block().await)
                     }
                 }
                 near_primitives::types::Finality::DoomSlug
                 | near_primitives::types::Finality::Final => {
                     // Returns the final_block for DoomSlug and Final.
-                    Some(
-                        data.blocks_info_by_finality
-                            .read()
-                            .await
-                            .final_block
-                            .block_cache,
-                    )
+                    Some(data.blocks_info_by_finality.final_cache_block().await)
                 }
             }
         }
@@ -145,10 +127,7 @@ pub async fn fetch_block_from_cache_or_get(
             let block_from_s3 = fetch_block(data, block_reference).await?;
             let block = CacheBlock::from(&block_from_s3.block_view);
 
-            data.blocks_cache
-                .write()
-                .await
-                .put(block.block_height, block);
+            data.blocks_cache.put(block.block_height, block).await;
             Ok(block)
         }
     }

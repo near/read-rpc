@@ -77,14 +77,13 @@ async fn query_call(
             crate::metrics::QUERY_VIEW_STATE_REQUESTS_TOTAL.inc();
             if include_proof {
                 // TODO: We can calculate the proof for state only on regular or archival nodes.
-                let blocks_info_by_finality = data.blocks_info_by_finality.read().await;
+                let final_block = data.blocks_info_by_finality.final_cache_block().await;
                 // `expected_earliest_available_block` calculated by formula:
                 // `final_block_height` - `node_epoch_count` * `epoch_length`
                 // Now near store 5 epochs, it can be changed in the future
                 // epoch_length = 43200 blocks
                 let expected_earliest_available_block =
-                    blocks_info_by_finality.final_block.block_cache.block_height
-                        - 5 * data.genesis_info.genesis_config.epoch_length;
+                    final_block.block_height - 5 * data.genesis_info.genesis_config.epoch_length;
                 return if block.block_height > expected_earliest_available_block {
                     // Proxy to regular rpc if the block is available
                     Ok(data.near_rpc_client.call(query_request).await?)
@@ -286,9 +285,8 @@ async fn optimistic_view_account(
 > {
     if let Ok(result) = data
         .blocks_info_by_finality
-        .read()
+        .optimistic_block_info()
         .await
-        .optimistic_block
         .account_changes_in_block(account_id)
         .await
     {
@@ -380,9 +378,8 @@ async fn optimistic_view_code(
 ) -> Result<Vec<u8>, near_jsonrpc::primitives::types::query::RpcQueryError> {
     let contract_code = if let Ok(result) = data
         .blocks_info_by_finality
-        .read()
+        .optimistic_block_info()
         .await
-        .optimistic_block
         .code_changes_in_block(account_id)
         .await
     {
@@ -473,9 +470,8 @@ async fn optimistic_function_call(
 ) -> Result<RunContractResponse, crate::errors::FunctionCallError> {
     let optimistic_data = data
         .blocks_info_by_finality
-        .read()
+        .optimistic_block_info()
         .await
-        .optimistic_block
         .state_changes_in_block(&account_id, &[])
         .await;
     run_contract(
@@ -565,9 +561,8 @@ async fn optimistic_view_state(
 > {
     let mut optimistic_data = data
         .blocks_info_by_finality
-        .read()
+        .optimistic_block_info()
         .await
-        .optimistic_block
         .state_changes_in_block(account_id, prefix)
         .await;
     let state_from_db =
@@ -685,9 +680,8 @@ async fn optimistic_view_access_key(
 > {
     if let Ok(result) = data
         .blocks_info_by_finality
-        .read()
+        .optimistic_block_info()
         .await
-        .optimistic_block
         .access_key_changes_in_block(account_id, &public_key)
         .await
     {

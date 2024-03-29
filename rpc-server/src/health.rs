@@ -21,40 +21,47 @@ pub struct RPCHealthStatusResponse {
 
 impl RPCHealthStatusResponse {
     pub async fn new(server_context: &ServerContext) -> Self {
-        let blocks_cache = server_context.blocks_cache.read().await;
-        let contract_code_cache = server_context.contract_code_cache.read().await;
-        let compiled_contract_code_cache = server_context
-            .compiled_contract_code_cache
-            .local_cache
-            .read()
-            .await;
         Self {
-            blocks_in_cache: blocks_cache.len(),
-            max_blocks_cache_size: friendly_memory_size_format(blocks_cache.max_size()),
-            current_blocks_cache_size: friendly_memory_size_format(blocks_cache.current_size()),
+            blocks_in_cache: server_context.blocks_cache.len().await,
+            max_blocks_cache_size: friendly_memory_size_format(
+                server_context.blocks_cache.max_size().await,
+            ),
+            current_blocks_cache_size: friendly_memory_size_format(
+                server_context.blocks_cache.current_size().await,
+            ),
 
-            contracts_codes_in_cache: contract_code_cache.len(),
+            contracts_codes_in_cache: server_context.contract_code_cache.len().await,
             max_contracts_codes_cache_size: friendly_memory_size_format(
-                contract_code_cache.max_size(),
+                server_context.contract_code_cache.max_size().await,
             ),
             current_contracts_codes_cache_size: friendly_memory_size_format(
-                contract_code_cache.current_size(),
+                server_context.contract_code_cache.current_size().await,
             ),
 
-            compiled_contracts_codes_in_cache: compiled_contract_code_cache.len(),
+            compiled_contracts_codes_in_cache: server_context
+                .compiled_contract_code_cache
+                .local_cache
+                .len()
+                .await,
             max_compiled_contracts_codes_cache_size: friendly_memory_size_format(
-                compiled_contract_code_cache.max_size(),
+                server_context
+                    .compiled_contract_code_cache
+                    .local_cache
+                    .max_size()
+                    .await,
             ),
             current_compiled_contracts_codes_cache_size: friendly_memory_size_format(
-                compiled_contract_code_cache.current_size(),
+                server_context
+                    .compiled_contract_code_cache
+                    .local_cache
+                    .current_size()
+                    .await,
             ),
 
             final_block_height: server_context
                 .blocks_info_by_finality
-                .read()
+                .final_cache_block()
                 .await
-                .final_block
-                .block_cache
                 .block_height,
         }
     }

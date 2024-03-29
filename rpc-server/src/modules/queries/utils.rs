@@ -155,11 +155,9 @@ pub async fn run_contract(
     db_manager: std::sync::Arc<Box<dyn database::ReaderDbManager + Sync + Send + 'static>>,
     compiled_contract_code_cache: &std::sync::Arc<CompiledCodeCache>,
     contract_code_cache: &std::sync::Arc<
-        futures_locks::RwLock<
-            crate::cache::LruMemoryCache<near_primitives::hash::CryptoHash, Vec<u8>>,
-        >,
+        crate::cache::RwLockLruMemoryCache<near_primitives::hash::CryptoHash, Vec<u8>>,
     >,
-    blocks_info_by_finality: &std::sync::Arc<futures_locks::RwLock<BlocksInfoByFinality>>,
+    blocks_info_by_finality: &std::sync::Arc<BlocksInfoByFinality>,
     block: crate::modules::blocks::CacheBlock,
     max_gas_burnt: near_primitives::types::Gas,
     optimistic_data: HashMap<
@@ -174,11 +172,7 @@ pub async fn run_contract(
             requested_account_id: account_id.clone(),
         })?;
 
-    let code: Option<Vec<u8>> = contract_code_cache
-        .write()
-        .await
-        .get(&contract.data.code_hash())
-        .cloned();
+    let code: Option<Vec<u8>> = contract_code_cache.get(&contract.data.code_hash()).await;
 
     let contract_code = match code {
         Some(code) => near_vm_runner::ContractCode::new(code, Some(contract.data.code_hash())),
@@ -190,39 +184,28 @@ pub async fn run_contract(
                     requested_account_id: account_id.clone(),
                 })?;
             contract_code_cache
-                .write()
-                .await
-                .put(contract.data.code_hash(), code.data.clone());
+                .put(contract.data.code_hash(), code.data.clone())
+                .await;
             near_vm_runner::ContractCode::new(code.data, Some(contract.data.code_hash()))
         }
     };
 
-    let (epoch_height, epoch_validators) = if blocks_info_by_finality
-        .read()
-        .await
-        .final_block
-        .block_cache
-        .epoch_id
-        == block.epoch_id
-    {
-        let validators = blocks_info_by_finality
-            .read()
-            .await
-            .current_validators
-            .clone();
-        (validators.epoch_height, validators.current_validators)
-    } else {
-        let validators = db_manager
-            .get_validators_by_epoch_id(block.epoch_id)
-            .await
-            .map_err(|_| FunctionCallError::InternalError {
-                error_message: "Failed to get epoch info".to_string(),
-            })?;
-        (
-            validators.epoch_height,
-            validators.validators_info.current_validators,
-        )
-    };
+    let (epoch_height, epoch_validators) =
+        if blocks_info_by_finality.final_cache_block().await.epoch_id == block.epoch_id {
+            let validators = blocks_info_by_finality.validators().await;
+            (validators.epoch_height, validators.current_validators)
+        } else {
+            let validators = db_manager
+                .get_validators_by_epoch_id(block.epoch_id)
+                .await
+                .map_err(|_| FunctionCallError::InternalError {
+                    error_message: "Failed to get epoch info".to_string(),
+                })?;
+            (
+                validators.epoch_height,
+                validators.validators_info.current_validators,
+            )
+        };
 
     let public_key = near_crypto::PublicKey::empty(near_crypto::KeyType::ED25519);
     let random_seed = near_primitives::utils::create_random_seed(

@@ -58,17 +58,14 @@ pub struct ServerContext {
     /// AWS s3 lake bucket name
     pub s3_bucket_name: String,
     /// Blocks cache
-    pub blocks_cache:
-        std::sync::Arc<futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>>,
+    pub blocks_cache: std::sync::Arc<crate::cache::RwLockLruMemoryCache<u64, CacheBlock>>,
     /// Final block info include final_block_cache and current_validators_info
-    pub blocks_info_by_finality: std::sync::Arc<futures_locks::RwLock<BlocksInfoByFinality>>,
+    pub blocks_info_by_finality: std::sync::Arc<BlocksInfoByFinality>,
     /// Cache to store compiled contract codes
     pub compiled_contract_code_cache: std::sync::Arc<CompiledCodeCache>,
     /// Cache to store contract codes
     pub contract_code_cache: std::sync::Arc<
-        futures_locks::RwLock<
-            crate::cache::LruMemoryCache<near_primitives::hash::CryptoHash, Vec<u8>>,
-        >,
+        crate::cache::RwLockLruMemoryCache<near_primitives::hash::CryptoHash, Vec<u8>>,
     >,
     /// Max gas burnt for contract function call
     pub max_gas_burnt: near_primitives::types::Gas,
@@ -104,23 +101,16 @@ impl ServerContext {
             limit_memory_cache_in_bytes,
         )
         .await;
-        let blocks_cache = std::sync::Arc::new(futures_locks::RwLock::new(
-            crate::cache::LruMemoryCache::new(block_cache_size_in_bytes),
+        let blocks_cache = std::sync::Arc::new(crate::cache::RwLockLruMemoryCache::new(
+            block_cache_size_in_bytes,
         ));
 
-        let contract_code_cache = std::sync::Arc::new(futures_locks::RwLock::new(
-            crate::cache::LruMemoryCache::new(contract_code_cache_size),
+        let contract_code_cache = std::sync::Arc::new(crate::cache::RwLockLruMemoryCache::new(
+            contract_code_cache_size,
         ));
 
-        let compiled_contract_code_cache = std::sync::Arc::new(CompiledCodeCache {
-            local_cache: std::sync::Arc::new(futures_locks::RwLock::new(
-                crate::cache::LruMemoryCache::new(contract_code_cache_size),
-            )),
-        });
-
-        let blocks_info_by_finality = std::sync::Arc::new(futures_locks::RwLock::new(
-            BlocksInfoByFinality::new(&near_rpc_client, &blocks_cache).await,
-        ));
+        let blocks_info_by_finality =
+            std::sync::Arc::new(BlocksInfoByFinality::new(&near_rpc_client, &blocks_cache).await);
 
         let s3_client = rpc_server_config.lake_config.lake_s3_client().await;
 
@@ -151,7 +141,9 @@ impl ServerContext {
             s3_bucket_name: rpc_server_config.lake_config.aws_bucket_name.clone(),
             blocks_cache,
             blocks_info_by_finality,
-            compiled_contract_code_cache,
+            compiled_contract_code_cache: std::sync::Arc::new(CompiledCodeCache::new(
+                contract_code_cache_size,
+            )),
             contract_code_cache,
             max_gas_burnt: rpc_server_config.general.max_gas_burnt,
             shadow_data_consistency_rate: rpc_server_config.general.shadow_data_consistency_rate,
@@ -169,13 +161,21 @@ impl ServerContext {
 #[derive(Clone)]
 pub struct CompiledCodeCache {
     pub local_cache: std::sync::Arc<
-        futures_locks::RwLock<
-            crate::cache::LruMemoryCache<
-                near_primitives::hash::CryptoHash,
-                near_vm_runner::logic::CompiledContract,
-            >,
+        crate::cache::RwLockLruMemoryCache<
+            near_primitives::hash::CryptoHash,
+            near_vm_runner::logic::CompiledContract,
         >,
     >,
+}
+
+impl CompiledCodeCache {
+    pub fn new(contract_code_cache_size: usize) -> Self {
+        Self {
+            local_cache: std::sync::Arc::new(crate::cache::RwLockLruMemoryCache::new(
+                contract_code_cache_size,
+            )),
+        }
+    }
 }
 
 impl near_vm_runner::logic::CompiledContractCache for CompiledCodeCache {
@@ -184,7 +184,7 @@ impl near_vm_runner::logic::CompiledContractCache for CompiledCodeCache {
         key: &near_primitives::hash::CryptoHash,
         value: near_vm_runner::logic::CompiledContract,
     ) -> std::io::Result<()> {
-        block_on(self.local_cache.write()).put(*key, value);
+        block_on(self.local_cache.put(*key, value));
         Ok(())
     }
 
@@ -192,10 +192,10 @@ impl near_vm_runner::logic::CompiledContractCache for CompiledCodeCache {
         &self,
         key: &near_primitives::hash::CryptoHash,
     ) -> std::io::Result<Option<near_vm_runner::logic::CompiledContract>> {
-        Ok(block_on(self.local_cache.write()).get(key).cloned())
+        Ok(block_on(self.local_cache.get(key)))
     }
 
     fn has(&self, key: &near_primitives::hash::CryptoHash) -> std::io::Result<bool> {
-        Ok(block_on(self.local_cache.write()).contains(key))
+        Ok(block_on(self.local_cache.contains(key)))
     }
 }
