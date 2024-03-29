@@ -328,9 +328,9 @@ impl BlocksInfoByFinality {
             "Update final block info: {:?}",
             block_info.block_cache.block_height
         );
-        let mut finale_block_lock = self.final_block.write().await;
-        finale_block_lock.block_cache = block_info.block_cache;
-        finale_block_lock.stream_message = block_info.stream_message;
+        let mut final_block_lock = self.final_block.write().await;
+        final_block_lock.block_cache = block_info.block_cache;
+        final_block_lock.stream_message = block_info.stream_message;
     }
 
     pub async fn update_optimistic_block(&self, block_info: BlockInfo) {

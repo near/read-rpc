@@ -11,7 +11,7 @@ pub struct GeneralRpcServerConfig {
     pub chain_id: ChainId,
     pub near_rpc_url: String,
     pub near_archival_rpc_url: Option<String>,
-    pub redis_url: String,
+    pub redis_url: url::Url,
     pub referer_header_value: String,
     pub server_port: u16,
     pub max_gas_burnt: u64,
@@ -44,7 +44,7 @@ pub struct GeneralStateIndexerConfig {
 #[derive(Debug, Clone)]
 pub struct GeneralNearStateIndexerConfig {
     pub chain_id: ChainId,
-    pub redis_url: String,
+    pub redis_url: url::Url,
     pub concurrency: usize,
 }
 
@@ -274,9 +274,12 @@ impl From<CommonGeneralConfig> for GeneralRpcServerConfig {
             chain_id: common_config.chain_id,
             near_rpc_url: required_value_or_panic("near_rpc_url", common_config.near_rpc_url),
             near_archival_rpc_url: common_config.near_archival_rpc_url,
-            redis_url: common_config
-                .redis_url
-                .unwrap_or("127.0.0.1:6379".to_string()),
+            redis_url: url::Url::parse(
+                &common_config
+                    .redis_url
+                    .unwrap_or("redis://127.0.0.1:6379".to_string()),
+            )
+            .expect("Invalid redis url"),
             referer_header_value: common_config
                 .rpc_server
                 .referer_header_value
@@ -354,9 +357,12 @@ impl From<CommonGeneralConfig> for GeneralNearStateIndexerConfig {
     fn from(common_config: CommonGeneralConfig) -> Self {
         Self {
             chain_id: common_config.chain_id,
-            redis_url: common_config
-                .redis_url
-                .unwrap_or("redis://127.0.0.1/".to_string()),
+            redis_url: url::Url::parse(
+                &common_config
+                    .redis_url
+                    .unwrap_or("redis://127.0.0.1:6379".to_string()),
+            )
+            .expect("Invalid redis url"),
             concurrency: common_config
                 .near_state_indexer
                 .concurrency
