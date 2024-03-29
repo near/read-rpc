@@ -276,7 +276,7 @@ impl From<CommonGeneralConfig> for GeneralRpcServerConfig {
             near_archival_rpc_url: common_config.near_archival_rpc_url,
             redis_url: common_config
                 .redis_url
-                .unwrap_or("redis://127.0.0.1/".to_string()),
+                .unwrap_or("127.0.0.1:6379".to_string()),
             referer_header_value: common_config
                 .rpc_server
                 .referer_header_value

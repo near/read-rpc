@@ -94,7 +94,7 @@ pub async fn fetch_block_from_cache_or_get(
                         }
                     })?,
             };
-            data.blocks_cache.read().await.get(&block_height).cloned()
+            data.blocks_cache.get(&block_height).await
         }
         near_primitives::types::BlockReference::Finality(finality) => {
             match finality {
@@ -127,10 +127,7 @@ pub async fn fetch_block_from_cache_or_get(
             let block_from_s3 = fetch_block(data, block_reference).await?;
             let block = CacheBlock::from(&block_from_s3.block_view);
 
-            data.blocks_cache
-                .write()
-                .await
-                .put(block.block_height, block);
+            data.blocks_cache.put(block.block_height, block).await;
             Ok(block)
         }
     }

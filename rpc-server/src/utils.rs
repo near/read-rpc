@@ -129,9 +129,7 @@ pub async fn get_current_validators(
 
 async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
-    blocks_cache: std::sync::Arc<
-        futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>,
-    >,
+    blocks_cache: std::sync::Arc<crate::cache::RwLockLruMemoryCache<u64, CacheBlock>>,
     blocks_info_by_finality: std::sync::Arc<BlocksInfoByFinality>,
     near_rpc_client: &JsonRpcClient,
 ) -> anyhow::Result<()> {
@@ -146,21 +144,18 @@ async fn handle_streamer_message(
     let block_cache = block.block_cache;
     blocks_info_by_finality.update_final_block(block).await;
     blocks_cache
-        .write()
-        .await
-        .put(block_cache.block_height, block_cache);
+        .put(block_cache.block_height, block_cache)
+        .await;
     crate::metrics::FINAL_BLOCK_HEIGHT.set(i64::try_from(block_cache.block_height)?);
     Ok(())
 }
 
 pub async fn update_final_block_regularly_from_lake(
-    blocks_cache: std::sync::Arc<
-        futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>,
-    >,
+    blocks_cache: std::sync::Arc<crate::cache::RwLockLruMemoryCache<u64, CacheBlock>>,
     blocks_info_by_finality: std::sync::Arc<BlocksInfoByFinality>,
     rpc_server_config: configuration::RpcServerConfig,
     near_rpc_client: JsonRpcClient,
-    current_optimistic_block_height: i64,
+    last_optimistic_block_height: i64,
 ) -> anyhow::Result<()> {
     tracing::info!("Task to get final block from lake and store in the cache started");
     let lake_config = rpc_server_config
@@ -189,7 +184,7 @@ pub async fn update_final_block_regularly_from_lake(
             tracing::warn!("{:?}", err);
         };
         let new_optimistic_block_height = crate::metrics::OPTIMISTIC_BLOCK_HEIGHT.get();
-        if new_optimistic_block_height != current_optimistic_block_height {
+        if new_optimistic_block_height > last_optimistic_block_height {
             tracing::info!("Task to get final block from lake and store in the cache stop");
             drop(handlers); // close the channel so the sender will stop
             return Ok(());
@@ -206,9 +201,7 @@ pub async fn update_final_block_regularly_from_lake(
 }
 
 pub async fn check_updating_optimistic_block_regularly(
-    blocks_cache: std::sync::Arc<
-        futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>,
-    >,
+    blocks_cache: std::sync::Arc<crate::cache::RwLockLruMemoryCache<u64, CacheBlock>>,
     blocks_info_by_finality: std::sync::Arc<BlocksInfoByFinality>,
     rpc_server_config: configuration::RpcServerConfig,
     near_rpc_client: JsonRpcClient,
@@ -243,20 +236,18 @@ pub async fn check_updating_optimistic_block_regularly(
 // Task to get and store final block in the cache
 // Subscribe to the redis channel and update the final block in the cache
 pub async fn update_final_block_regularly_from_redis(
-    blocks_cache: std::sync::Arc<
-        futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>,
-    >,
+    blocks_cache: std::sync::Arc<crate::cache::RwLockLruMemoryCache<u64, CacheBlock>>,
     blocks_info_by_finality: std::sync::Arc<BlocksInfoByFinality>,
-    redis_client: redis::Client,
+    redis_url: String,
     near_rpc_client: JsonRpcClient,
 ) -> anyhow::Result<()> {
     tracing::info!("Task to get and store final block in the cache started");
-    let mut subscriber = redis_client.get_async_connection().await?.into_pubsub();
-    subscriber.subscribe("final_block").await?;
-    let mut streamer = subscriber.on_message();
-    while let Some(message) = streamer.next().await {
-        match message.get_payload::<String>() {
-            Ok(payload) => match serde_json::from_str(&payload) {
+    let subscriber = redis_subscribe::RedisSub::new(&redis_url);
+    let mut stream = subscriber.listen().await?;
+    subscriber.subscribe("final_block".to_string()).await?;
+    while let Some(message) = stream.next().await {
+        if let redis_subscribe::Message::Message { message, .. } = message {
+            match serde_json::from_str(&message) {
                 Ok(streamer_message) => {
                     if let Err(err) = handle_streamer_message(
                         streamer_message,
@@ -272,10 +263,15 @@ pub async fn update_final_block_regularly_from_redis(
                 Err(err) => {
                     tracing::error!("Error parse payload: {:?}", err);
                 }
-            },
-            Err(err) => {
-                tracing::error!("Error reading message: {:?}", err);
             }
+        } else {
+            tracing::info!("Redis `final_block` message: {:?}", message);
+        }
+
+        // when optimistic updating is not working, we start update final block from the Lake
+        // and wait until optimistic updating is resumed
+        while crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
         }
     }
     Ok(())
@@ -285,15 +281,15 @@ pub async fn update_final_block_regularly_from_redis(
 // Subscribe to the redis channel and update the optimistic block in the cache
 pub async fn update_optimistic_block_regularly(
     blocks_info_by_finality: std::sync::Arc<BlocksInfoByFinality>,
-    redis_client: redis::Client,
+    redis_url: String,
 ) -> anyhow::Result<()> {
     tracing::info!("Task to get and store optimistic block in the cache started");
-    let mut subscriber = redis_client.get_async_connection().await?.into_pubsub();
-    subscriber.subscribe("optimistic_block").await?;
-    let mut streamer = subscriber.on_message();
-    while let Some(message) = streamer.next().await {
-        match message.get_payload::<String>() {
-            Ok(payload) => match serde_json::from_str(&payload) {
+    let subscriber = redis_subscribe::RedisSub::new(&redis_url);
+    let mut stream = subscriber.listen().await?;
+    subscriber.subscribe("optimistic_block".to_string()).await?;
+    while let Some(message) = stream.next().await {
+        if let redis_subscribe::Message::Message { message, .. } = message {
+            match serde_json::from_str(&message) {
                 Ok(streamer_message) => {
                     let optimistic_block =
                         BlockInfo::new_from_streamer_message(streamer_message).await;
@@ -306,10 +302,9 @@ pub async fn update_optimistic_block_regularly(
                 Err(err) => {
                     tracing::error!("Error parse payload: {:?}", err);
                 }
-            },
-            Err(err) => {
-                tracing::error!("Error reading message: {:?}", err);
             }
+        } else {
+            tracing::info!("Redis `optimistic_block` message: {:?}", message);
         }
     }
     Ok(())

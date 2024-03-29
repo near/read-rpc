@@ -292,9 +292,7 @@ pub struct BlocksInfoByFinality {
 impl BlocksInfoByFinality {
     pub async fn new(
         near_rpc_client: &crate::utils::JsonRpcClient,
-        blocks_cache: &std::sync::Arc<
-            futures_locks::RwLock<crate::cache::LruMemoryCache<u64, CacheBlock>>,
-        >,
+        blocks_cache: &std::sync::Arc<crate::cache::RwLockLruMemoryCache<u64, CacheBlock>>,
     ) -> Self {
         let final_block_future = crate::utils::get_final_block(near_rpc_client, false);
         let optimistic_block_future = crate::utils::get_final_block(near_rpc_client, true);
@@ -311,9 +309,8 @@ impl BlocksInfoByFinality {
         .expect("Error to get final block info");
 
         blocks_cache
-            .write()
-            .await
-            .put(final_block.header.height, CacheBlock::from(&final_block));
+            .put(final_block.header.height, CacheBlock::from(&final_block))
+            .await;
 
         Self {
             final_block: futures_locks::RwLock::new(
