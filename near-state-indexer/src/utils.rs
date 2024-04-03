@@ -1,6 +1,6 @@
 use near_o11y::WithSpanContextExt;
 
-const INTERVAL: std::time::Duration = std::time::Duration::from_millis(500);
+const INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
 
 pub(crate) async fn fetch_epoch_validators_info(
     epoch_id: near_indexer::near_primitives::hash::CryptoHash,
@@ -59,16 +59,16 @@ pub(crate) async fn fetch_status(
         .await??)
 }
 
-pub(crate) async fn publish_streamer_message(
-    topic: &str,
+pub(crate) async fn update_block_streamer_message(
+    block_type: &str,
     streamer_message: &near_indexer::StreamerMessage,
     redis_client: redis::aio::ConnectionManager,
 ) -> anyhow::Result<()> {
     let json_streamer_message = serde_json::to_string(streamer_message)?;
-    redis::cmd("publish")
-        .arg(topic)
+    redis::cmd("SET")
+        .arg(block_type)
         .arg(json_streamer_message)
-        .query_async::<redis::aio::ConnectionManager, u64>(&mut redis_client.clone())
+        .query_async(&mut redis_client.clone())
         .await?;
     Ok(())
 }
@@ -106,7 +106,7 @@ pub async fn optimistic_stream(
             match response {
                 Ok(streamer_message) => {
                     tracing::debug!(target: crate::INDEXER, "Optimistic block {:?}", &optimistic_block_height);
-                    if let Err(err) = publish_streamer_message(
+                    if let Err(err) = update_block_streamer_message(
                         "optimistic_block",
                         &streamer_message,
                         redis_client.clone(),

@@ -40,21 +40,16 @@ async fn main() -> anyhow::Result<()> {
     let blocks_info_by_finality_clone =
         std::sync::Arc::clone(&server_context.blocks_info_by_finality);
     let near_rpc_client_clone = near_rpc_client.clone();
-    let redis_addr = format!(
-        "{}:{}",
-        rpc_server_config
-            .general
-            .redis_url
-            .host()
-            .expect("Invalid redis host"),
-        rpc_server_config.general.redis_url.port().unwrap_or(6379)
-    );
-    let redis_addr_clone = redis_addr.clone();
+    let redis_client = redis::Client::open(rpc_server_config.general.redis_url.clone())?
+        .get_connection_manager()
+        .await?;
+    let redis_client_clone = redis_client.clone();
+
     tokio::spawn(async move {
         utils::update_final_block_regularly_from_redis(
             blocks_cache_clone,
             blocks_info_by_finality_clone,
-            redis_addr,
+            redis_client_clone,
             near_rpc_client_clone,
         )
         .await
@@ -62,14 +57,15 @@ async fn main() -> anyhow::Result<()> {
 
     let blocks_info_by_finality = std::sync::Arc::clone(&server_context.blocks_info_by_finality);
     tokio::spawn(async move {
-        utils::update_optimistic_block_regularly(blocks_info_by_finality, redis_addr_clone).await
+        utils::update_optimistic_block_regularly(blocks_info_by_finality, redis_client.clone())
+            .await
     });
 
     let blocks_cache_clone = std::sync::Arc::clone(&server_context.blocks_cache);
     let blocks_info_by_finality_clone =
         std::sync::Arc::clone(&server_context.blocks_info_by_finality);
     tokio::spawn(async move {
-        utils::check_updating_optimistic_block_regularly(
+        utils::check_updating_blocks_by_finality_regularly(
             blocks_cache_clone,
             blocks_info_by_finality_clone,
             rpc_server_config,

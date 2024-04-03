@@ -70,14 +70,14 @@ async fn handle_streamer_message(
         &indexer_config,
     );
 
-    let published_streamer_message_feature =
-        utils::publish_streamer_message("final_block", &streamer_message, redis_client);
+    let update_block_streamer_message_feature =
+        utils::update_block_streamer_message("final_block", &streamer_message, redis_client);
 
     futures::try_join!(
         handle_epoch_future,
         handle_block_future,
         handle_state_change_future,
-        published_streamer_message_feature,
+        update_block_streamer_message_feature,
     )?;
 
     let mut stats_lock = stats.write().await;

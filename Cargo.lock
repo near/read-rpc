@@ -6377,7 +6377,7 @@ dependencies = [
  "paste",
  "prometheus",
  "readnode-primitives",
- "redis-subscribe",
+ "redis",
  "rustc_version 0.4.0",
  "serde",
  "serde_json",
@@ -6425,21 +6425,6 @@ dependencies = [
  "tokio-retry",
  "tokio-util 0.7.10",
  "url",
-]
-
-[[package]]
-name = "redis-subscribe"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2466a48c69ca63a8753c51c3d9c31e77dcbd5f1a88618211f805e54e2415bc64"
-dependencies = [
- "async-stream",
- "nom",
- "rand 0.8.5",
- "thiserror",
- "tokio",
- "tokio-stream",
- "tracing",
 ]
 
 [[package]]
