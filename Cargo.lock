@@ -5593,6 +5593,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "optimistic-sync"
+version = "0.2.5"
+dependencies = [
+ "actix-web",
+ "anyhow",
+ "lazy_static",
+ "near-jsonrpc-client 0.8.0 (git+https://github.com/kobayurii/near-jsonrpc-client-rs.git?branch=0.8.5)",
+ "near-primitives 1.38.0",
+ "prometheus",
+ "tokio",
+]
+
+[[package]]
 name = "ordered-float"
 version = "2.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

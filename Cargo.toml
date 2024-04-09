@@ -13,6 +13,7 @@ members = [
     "database",
     "epoch-indexer",
     "near-state-indexer",
+    "optimistic-sync",
     "perf-testing",
     "readnode-primitives",
     "rpc-server",
