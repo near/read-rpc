@@ -104,6 +104,7 @@ pub async fn fetch_list_access_keys_from_db(
     tracing::instrument(skip(context, code_storage, contract_code, compiled_contract_code_cache))
 )]
 async fn run_code_in_vm_runner(
+    account: &near_primitives::account::Account,
     contract_code: near_vm_runner::ContractCode,
     method_name: &str,
     context: near_vm_runner::logic::VMContext,
@@ -120,12 +121,14 @@ async fn run_code_in_vm_runner(
         vm_kind: config.vm_kind.replace_with_wasmtime_if_unsupported(),
         ..config
     };
+    let account = account.clone();
     let results = tokio::task::spawn_blocking(move || {
         near_vm_runner::run(
-            &contract_code,
+            &account,
+            Some(&contract_code),
             &contract_method_name,
             &mut code_storage,
-            context,
+            &context,
             &vm_config,
             &near_parameters::RuntimeFeesConfig::free(),
             &[],
@@ -234,7 +237,7 @@ pub async fn run_contract(
 
     let code_storage = CodeStorage::init(
         db_manager.clone(),
-        account_id,
+        account_id.clone(),
         block.block_height,
         epoch_validators
             .iter()
@@ -244,6 +247,7 @@ pub async fn run_contract(
     );
 
     let result = run_code_in_vm_runner(
+        &contract.data,
         contract_code,
         method_name,
         context,

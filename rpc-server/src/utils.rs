@@ -184,7 +184,13 @@ pub async fn update_final_block_regularly_from_lake(
             tracing::warn!("{:?}", err);
         };
         let new_optimistic_block_height = crate::metrics::OPTIMISTIC_BLOCK_HEIGHT.get();
-        if new_optimistic_block_height > last_optimistic_block_height {
+        // if the optimistic block is updated and the difference between the optimistic block and the final block is less than 5 blocks
+        // we stop the task to get the final block from the lake and store in the cache
+        if new_optimistic_block_height > last_optimistic_block_height
+            && crate::metrics::OPTIMISTIC_BLOCK_HEIGHT.get()
+                - crate::metrics::FINAL_BLOCK_HEIGHT.get()
+                < 5
+        {
             tracing::info!("Task to get final block from lake and store in the cache stop");
             drop(handlers); // close the channel so the sender will stop
             return Ok(());
@@ -200,7 +206,7 @@ pub async fn update_final_block_regularly_from_lake(
     }
 }
 
-pub async fn check_updating_optimistic_block_regularly(
+pub async fn check_updating_blocks_by_finality_regularly(
     blocks_cache: std::sync::Arc<crate::cache::RwLockLruMemoryCache<u64, CacheBlock>>,
     blocks_info_by_finality: std::sync::Arc<BlocksInfoByFinality>,
     rpc_server_config: configuration::RpcServerConfig,
@@ -212,11 +218,16 @@ pub async fn check_updating_optimistic_block_regularly(
     loop {
         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
         let new_optimistic_block_height = crate::metrics::OPTIMISTIC_BLOCK_HEIGHT.get();
-        if new_optimistic_block_height > current_optimistic_block_height {
+        if new_optimistic_block_height > current_optimistic_block_height
+            && crate::metrics::OPTIMISTIC_BLOCK_HEIGHT.get()
+                - crate::metrics::FINAL_BLOCK_HEIGHT.get()
+                < 5
+        {
             current_optimistic_block_height = new_optimistic_block_height;
         } else {
             tracing::warn!(
-                "Optimistic block in is not updated. Start to update final block from the Lake"
+                "Optimistic block in is not updated or difference between the optimistic block and the final block is more than 4 blocks. \
+                Start to update final block from the Lake"
             );
             crate::metrics::OPTIMISTIC_UPDATING.set_not_working();
             update_final_block_regularly_from_lake(
@@ -233,81 +244,94 @@ pub async fn check_updating_optimistic_block_regularly(
     }
 }
 
+// Helper function to get the finality blocks streamer_message from the redis
+pub(crate) async fn get_block_streamer_message(
+    block_type: near_primitives::types::Finality,
+    redis_client: redis::aio::ConnectionManager,
+) -> anyhow::Result<near_indexer_primitives::StreamerMessage> {
+    let block_type = serde_json::to_string(&block_type)?;
+    let resp: String = redis::cmd("GET")
+        .arg(block_type)
+        .query_async(&mut redis_client.clone())
+        .await?;
+    Ok(serde_json::from_str(&resp)?)
+}
+
 // Task to get and store final block in the cache
 // Subscribe to the redis channel and update the final block in the cache
 pub async fn update_final_block_regularly_from_redis(
     blocks_cache: std::sync::Arc<crate::cache::RwLockLruMemoryCache<u64, CacheBlock>>,
     blocks_info_by_finality: std::sync::Arc<BlocksInfoByFinality>,
-    redis_url: String,
+    redis_client: redis::aio::ConnectionManager,
     near_rpc_client: JsonRpcClient,
-) -> anyhow::Result<()> {
+) {
     tracing::info!("Task to get and store final block in the cache started");
-    let subscriber = redis_subscribe::RedisSub::new(&redis_url);
-    let mut stream = subscriber.listen().await?;
-    subscriber.subscribe("final_block".to_string()).await?;
-    while let Some(message) = stream.next().await {
-        if let redis_subscribe::Message::Message { message, .. } = message {
-            match serde_json::from_str(&message) {
-                Ok(streamer_message) => {
-                    if let Err(err) = handle_streamer_message(
-                        streamer_message,
-                        std::sync::Arc::clone(&blocks_cache),
-                        std::sync::Arc::clone(&blocks_info_by_finality),
-                        &near_rpc_client,
-                    )
-                    .await
-                    {
-                        tracing::error!("Error to handle_streamer_message: {:?}", err);
-                    }
-                }
-                Err(err) => {
-                    tracing::error!("Error parse payload: {:?}", err);
+    loop {
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        match get_block_streamer_message(
+            near_primitives::types::Finality::Final,
+            redis_client.clone(),
+        )
+        .await
+        {
+            Ok(streamer_message) => {
+                if let Err(err) = handle_streamer_message(
+                    streamer_message,
+                    std::sync::Arc::clone(&blocks_cache),
+                    std::sync::Arc::clone(&blocks_info_by_finality),
+                    &near_rpc_client,
+                )
+                .await
+                {
+                    tracing::error!("Error to handle_streamer_message: {:?}", err);
                 }
             }
-        } else {
-            tracing::info!("Redis `final_block` message: {:?}", message);
+            Err(err) => {
+                tracing::error!("Error to get final block from redis: {:?}", err);
+            }
         }
-
-        // when optimistic updating is not working, we start update final block from the Lake
-        // and wait until optimistic updating is resumed
-        while crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
+        // when optimistic updating is not working or difference between the optimistic block and the final block is more than 4 blocks,
+        // we start update final block from the Lake and wait until optimistic updating is resumed
+        while crate::metrics::OPTIMISTIC_UPDATING.is_not_working()
+            || crate::metrics::OPTIMISTIC_BLOCK_HEIGHT.get()
+                - crate::metrics::FINAL_BLOCK_HEIGHT.get()
+                > 5
+        {
             tokio::time::sleep(std::time::Duration::from_secs(5)).await;
         }
     }
-    Ok(())
 }
 
 // Task to get and store optimistic block in the cache
 // Subscribe to the redis channel and update the optimistic block in the cache
 pub async fn update_optimistic_block_regularly(
     blocks_info_by_finality: std::sync::Arc<BlocksInfoByFinality>,
-    redis_url: String,
-) -> anyhow::Result<()> {
+    redis_client: redis::aio::ConnectionManager,
+) {
     tracing::info!("Task to get and store optimistic block in the cache started");
-    let subscriber = redis_subscribe::RedisSub::new(&redis_url);
-    let mut stream = subscriber.listen().await?;
-    subscriber.subscribe("optimistic_block".to_string()).await?;
-    while let Some(message) = stream.next().await {
-        if let redis_subscribe::Message::Message { message, .. } = message {
-            match serde_json::from_str(&message) {
-                Ok(streamer_message) => {
-                    let optimistic_block =
-                        BlockInfo::new_from_streamer_message(streamer_message).await;
-                    crate::metrics::OPTIMISTIC_BLOCK_HEIGHT
-                        .set(i64::try_from(optimistic_block.block_cache.block_height)?);
-                    blocks_info_by_finality
-                        .update_optimistic_block(optimistic_block)
-                        .await;
-                }
-                Err(err) => {
-                    tracing::error!("Error parse payload: {:?}", err);
-                }
+    loop {
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        match get_block_streamer_message(
+            near_primitives::types::Finality::None,
+            redis_client.clone(),
+        )
+        .await
+        {
+            Ok(streamer_message) => {
+                let optimistic_block = BlockInfo::new_from_streamer_message(streamer_message).await;
+                crate::metrics::OPTIMISTIC_BLOCK_HEIGHT.set(
+                    i64::try_from(optimistic_block.block_cache.block_height)
+                        .expect("Invalid optimistic block height"),
+                );
+                blocks_info_by_finality
+                    .update_optimistic_block(optimistic_block)
+                    .await;
             }
-        } else {
-            tracing::info!("Redis `optimistic_block` message: {:?}", message);
+            Err(err) => {
+                tracing::error!("Error to get optimistic block from redis: {:?}", err);
+            }
         }
     }
-    Ok(())
 }
 
 /// Calculate the cache size based on the available memory.
