@@ -1,5 +1,6 @@
 use clap::Parser;
 use futures::StreamExt;
+use near_indexer::near_primitives;
 
 use crate::configs::Opts;
 use near_indexer::near_primitives::hash::CryptoHash;
@@ -70,14 +71,17 @@ async fn handle_streamer_message(
         &indexer_config,
     );
 
-    let update_block_streamer_message_feature =
-        utils::update_block_streamer_message("final_block", &streamer_message, redis_client);
+    let update_block_streamer_message_future = utils::update_block_streamer_message(
+        near_primitives::types::Finality::Final,
+        &streamer_message,
+        redis_client,
+    );
 
     futures::try_join!(
         handle_epoch_future,
         handle_block_future,
         handle_state_change_future,
-        update_block_streamer_message_feature,
+        update_block_streamer_message_future,
     )?;
 
     let mut stats_lock = stats.write().await;

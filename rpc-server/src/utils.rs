@@ -246,9 +246,10 @@ pub async fn check_updating_blocks_by_finality_regularly(
 
 // Helper function to get the finality blocks streamer_message from the redis
 pub(crate) async fn get_block_streamer_message(
-    block_type: &str,
+    block_type: near_primitives::types::Finality,
     redis_client: redis::aio::ConnectionManager,
 ) -> anyhow::Result<near_indexer_primitives::StreamerMessage> {
+    let block_type = serde_json::to_string(&block_type)?;
     let resp: String = redis::cmd("GET")
         .arg(block_type)
         .query_async(&mut redis_client.clone())
@@ -267,7 +268,12 @@ pub async fn update_final_block_regularly_from_redis(
     tracing::info!("Task to get and store final block in the cache started");
     loop {
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-        match get_block_streamer_message("final_block", redis_client.clone()).await {
+        match get_block_streamer_message(
+            near_primitives::types::Finality::Final,
+            redis_client.clone(),
+        )
+        .await
+        {
             Ok(streamer_message) => {
                 if let Err(err) = handle_streamer_message(
                     streamer_message,
@@ -281,7 +287,7 @@ pub async fn update_final_block_regularly_from_redis(
                 }
             }
             Err(err) => {
-                tracing::error!("Error to get finale block from redis: {:?}", err);
+                tracing::error!("Error to get final block from redis: {:?}", err);
             }
         }
         // when optimistic updating is not working or difference between the optimistic block and the final block is more than 4 blocks,
@@ -305,7 +311,12 @@ pub async fn update_optimistic_block_regularly(
     tracing::info!("Task to get and store optimistic block in the cache started");
     loop {
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-        match get_block_streamer_message("optimistic_block", redis_client.clone()).await {
+        match get_block_streamer_message(
+            near_primitives::types::Finality::None,
+            redis_client.clone(),
+        )
+        .await
+        {
             Ok(streamer_message) => {
                 let optimistic_block = BlockInfo::new_from_streamer_message(streamer_message).await;
                 crate::metrics::OPTIMISTIC_BLOCK_HEIGHT.set(
