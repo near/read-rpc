@@ -276,15 +276,10 @@ async fn run(home_dir: std::path::PathBuf) -> anyhow::Result<()> {
         configuration::read_configuration::<configuration::NearStateIndexerConfig>().await?;
 
     tracing::info!(target: INDEXER, "Connecting to db...");
-    #[cfg(feature = "scylla_db")]
-    let db_manager = database::prepare_db_manager::<
-        database::scylladb::state_indexer::ScyllaDBManager,
-    >(&state_indexer_config.database)
-    .await?;
-    #[cfg(all(feature = "postgres_db", not(feature = "scylla_db")))]
-    let db_manager = database::prepare_db_manager::<
-        database::postgres::state_indexer::PostgresDBManager,
-    >(&state_indexer_config.database)
+
+    let db_manager = database::prepare_db_manager::<database::StateIndexerDBManager>(
+        &state_indexer_config.database,
+    )
     .await?;
 
     tracing::info!(target: INDEXER, "Connecting to redis...");

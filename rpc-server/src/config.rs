@@ -114,17 +114,9 @@ impl ServerContext {
 
         let s3_client = rpc_server_config.lake_config.lake_s3_client().await;
 
-        #[cfg(feature = "scylla_db")]
-        let db_manager = database::prepare_db_manager::<
-            database::scylladb::rpc_server::ScyllaDBManager,
-        >(&rpc_server_config.database)
-        .await?;
-
-        #[cfg(all(feature = "postgres_db", not(feature = "scylla_db")))]
-        let db_manager = database::prepare_db_manager::<
-            database::postgres::rpc_server::PostgresDBManager,
-        >(&rpc_server_config.database)
-        .await?;
+        let db_manager =
+            database::prepare_db_manager::<database::ReaderDBManager>(&rpc_server_config.database)
+                .await?;
 
         let genesis_info = GenesisInfo::get(
             &near_rpc_client,

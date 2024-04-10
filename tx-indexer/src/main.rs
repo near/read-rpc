@@ -19,24 +19,12 @@ async fn main() -> anyhow::Result<()> {
     let opts = config::Opts::parse();
 
     tracing::info!(target: INDEXER, "Connecting to db...");
-    #[cfg(feature = "scylla_db")]
-    let db_manager: std::sync::Arc<
-        Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>,
-    > = std::sync::Arc::new(Box::new(
-        database::prepare_db_manager::<database::scylladb::tx_indexer::ScyllaDBManager>(
-            &indexer_config.database,
-        )
-        .await?,
-    ));
-    #[cfg(all(feature = "postgres_db", not(feature = "scylla_db")))]
-    let db_manager: std::sync::Arc<
-        Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>,
-    > = std::sync::Arc::new(Box::new(
-        database::prepare_db_manager::<database::postgres::tx_indexer::PostgresDBManager>(
-            &indexer_config.database,
-        )
-        .await?,
-    ));
+
+    let db_manager: std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>> =
+        std::sync::Arc::new(Box::new(
+            database::prepare_db_manager::<database::TxIndexerDBManager>(&indexer_config.database)
+                .await?,
+        ));
 
     let rpc_client =
         near_jsonrpc_client::JsonRpcClient::connect(&indexer_config.general.near_rpc_url);

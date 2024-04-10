@@ -1,4 +1,4 @@
-# Database
+# Postgres Database
 
 This is a helper crate that provides Postgres db manager.
 

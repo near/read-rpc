@@ -190,15 +190,7 @@ async fn main() -> anyhow::Result<()> {
     let indexer_config = configuration::read_configuration::<configuration::StateIndexerConfig>().await?;
     let opts: Opts = Opts::parse();
 
-    #[cfg(feature = "scylla_db")]
-    let db_manager =
-        database::prepare_db_manager::<database::scylladb::state_indexer::ScyllaDBManager>(&indexer_config.database)
-            .await?;
-
-    #[cfg(all(feature = "postgres_db", not(feature = "scylla_db")))]
-    let db_manager =
-        database::prepare_db_manager::<database::postgres::state_indexer::PostgresDBManager>(&indexer_config.database)
-            .await?;
+    let db_manager = database::prepare_db_manager::<database::StateIndexerDBManager>(&indexer_config.database).await?;
 
     let rpc_client = near_jsonrpc_client::JsonRpcClient::connect(&indexer_config.general.near_rpc_url);
     let start_block_height = configs::get_start_block_height(
