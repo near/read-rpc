@@ -1,4 +1,5 @@
 use actix_web::{get, App, HttpServer, Responder};
+use lazy_static::lazy_static;
 use prometheus::{Encoder, IntCounter, IntGauge, Opts};
 
 fn try_create_int_counter(name: &str, help: &str) -> Result<IntCounter, prometheus::Error> {
@@ -16,7 +17,7 @@ fn try_create_int_gauge(name: &str, help: &str) -> Result<IntGauge, prometheus::
 }
 
 lazy_static! {
-   pub(crate) static ref FINAL_BLOCK_HEIGHT: IntGauge = try_create_int_gauge(
+    pub(crate) static ref FINAL_BLOCK_HEIGHT: IntGauge = try_create_int_gauge(
         "final_block_height",
         "The final block height from the perspective of the READ RPC server"
     )

@@ -5599,9 +5599,12 @@ dependencies = [
  "actix-web",
  "anyhow",
  "lazy_static",
- "near-jsonrpc-client 0.8.0 (git+https://github.com/kobayurii/near-jsonrpc-client-rs.git?branch=0.8.5)",
- "near-primitives 1.38.0",
+ "near-jsonrpc-client 0.8.0 (git+https://github.com/kobayurii/near-jsonrpc-client-rs.git?branch=0.8.6)",
+ "near-primitives 1.39.0",
  "prometheus",
+ "redis",
+ "serde",
+ "serde_json",
  "tokio",
 ]
 

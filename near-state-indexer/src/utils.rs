@@ -1,4 +1,3 @@
-use near_indexer::near_primitives;
 use near_o11y::WithSpanContextExt;
 
 const INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
@@ -61,7 +60,7 @@ pub(crate) async fn fetch_status(
 }
 
 pub(crate) async fn update_block_streamer_message(
-    block_type: near_primitives::types::Finality,
+    block_type: near_indexer::near_primitives::types::Finality,
     streamer_message: &near_indexer::StreamerMessage,
     redis_client: redis::aio::ConnectionManager,
 ) -> anyhow::Result<()> {
@@ -109,7 +108,7 @@ pub async fn optimistic_stream(
                 Ok(streamer_message) => {
                     tracing::debug!(target: crate::INDEXER, "Optimistic block {:?}", &optimistic_block_height);
                     if let Err(err) = update_block_streamer_message(
-                        near_primitives::types::Finality::None,
+                        near_indexer::near_primitives::types::Finality::None,
                         &streamer_message,
                         redis_client.clone(),
                     )
