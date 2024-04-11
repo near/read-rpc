@@ -270,7 +270,7 @@ pub async fn fetch_block(
                                 error_message: format!("BLOCK: {:?}", block_hash),
                             },
                         )
-                    },
+                    }
                 }
             }
         },
@@ -322,14 +322,12 @@ pub async fn fetch_block(
         block_height,
     )
     .await
-    .map_err(
-        |err| {
-            tracing::error!("Failed to fetch block from S3: {}", err);
-            near_jsonrpc::primitives::types::blocks::RpcBlockError::UnknownBlock {
-                error_message: format!("BLOCK HEIGHT: {:?}", block_height),
-            }
-        },
-    )?;
+    .map_err(|err| {
+        tracing::error!("Failed to fetch block from S3: {}", err);
+        near_jsonrpc::primitives::types::blocks::RpcBlockError::UnknownBlock {
+            error_message: format!("BLOCK HEIGHT: {:?}", block_height),
+        }
+    })?;
     Ok(near_jsonrpc::primitives::types::blocks::RpcBlockResponse { block_view })
 }
 
