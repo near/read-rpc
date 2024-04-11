@@ -263,11 +263,14 @@ pub async fn fetch_block(
             near_primitives::types::BlockId::Hash(block_hash) => {
                 match data.db_manager.get_block_by_hash(block_hash).await {
                     Ok(block_height) => Ok(block_height),
-                    Err(err) => Err(
-                        near_jsonrpc::primitives::types::blocks::RpcBlockError::UnknownBlock {
-                            error_message: err.to_string(),
-                        },
-                    ),
+                    Err(err) => {
+                        tracing::error!("Failed to fetch block by hash: {}", err);
+                        Err(
+                            near_jsonrpc::primitives::types::blocks::RpcBlockError::UnknownBlock {
+                                error_message: format!("BLOCK: {:?}", block_hash),
+                            },
+                        )
+                    },
                 }
             }
         },
@@ -312,16 +315,19 @@ pub async fn fetch_block(
         near_primitives::types::BlockReference::SyncCheckpoint(_) => {
             Ok(data.genesis_info.genesis_block_cache.block_height)
         }
-    };
+    }?;
     let block_view = near_lake_framework::s3_fetchers::fetch_block(
         &data.s3_client,
         &data.s3_bucket_name,
-        block_height?,
+        block_height,
     )
     .await
     .map_err(
-        |err| near_jsonrpc::primitives::types::blocks::RpcBlockError::UnknownBlock {
-            error_message: err.to_string(),
+        |err| {
+            tracing::error!("Failed to fetch block from S3: {}", err);
+            near_jsonrpc::primitives::types::blocks::RpcBlockError::UnknownBlock {
+                error_message: format!("BLOCK HEIGHT: {:?}", block_height),
+            }
         },
     )?;
     Ok(near_jsonrpc::primitives::types::blocks::RpcBlockResponse { block_view })
@@ -356,8 +362,9 @@ pub async fn fetch_chunk(
                     .get_block_by_hash(block_hash)
                     .await
                     .map_err(|err| {
+                        tracing::error!("Failed to fetch block by hash: {}", err);
                         near_jsonrpc::primitives::types::chunks::RpcChunkError::UnknownBlock {
-                            error_message: err.to_string(),
+                            error_message: format!("BLOCK: {:?}", block_hash),
                         }
                     })?;
                 (block_height, shard_id)
