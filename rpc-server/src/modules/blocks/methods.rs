@@ -399,17 +399,14 @@ async fn fetch_changes_in_block(
     near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockByTypeResponse,
     near_jsonrpc::primitives::types::changes::RpcStateChangesError,
 > {
-    let shards = fetch_shards(data, cache_block, block_reference)
+    let trie_keys = fetch_state_changes(data, cache_block, block_reference)
         .await
         .map_err(|err| {
             near_jsonrpc::primitives::types::changes::RpcStateChangesError::UnknownBlock {
                 error_message: err.to_string(),
             }
-        })?;
-
-    let trie_keys = shards
+        })?
         .into_iter()
-        .flat_map(|shard| shard.state_changes)
         .map(
             |state_change_with_cause| match state_change_with_cause.value {
                 StateChangeValueView::AccountUpdate { account_id, .. }
@@ -490,16 +487,15 @@ async fn fetch_changes_in_block_by_type(
     near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockResponse,
     near_jsonrpc::primitives::types::changes::RpcStateChangesError,
 > {
-    let shards = fetch_shards(data, cache_block, block_reference)
+    let state_changes = fetch_state_changes(data, cache_block, block_reference)
         .await
         .map_err(|err| {
             near_jsonrpc::primitives::types::changes::RpcStateChangesError::UnknownBlock {
                 error_message: err.to_string(),
             }
         })?;
-    let changes = shards
+    let changes = state_changes
         .into_iter()
-        .flat_map(|shard| shard.state_changes)
         .filter(|change| is_matching_change(change, state_changes_request))
         .collect();
     Ok(
@@ -511,11 +507,11 @@ async fn fetch_changes_in_block_by_type(
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
-async fn fetch_shards(
+async fn fetch_state_changes(
     data: &Data<ServerContext>,
     cache_block: crate::modules::blocks::CacheBlock,
     block_reference: &near_primitives::types::BlockReference,
-) -> anyhow::Result<Vec<near_indexer_primitives::IndexerShard>> {
+) -> anyhow::Result<near_primitives::views::StateChangesView> {
     if let near_primitives::types::BlockReference::Finality(finality) = block_reference {
         match finality {
             near_primitives::types::Finality::None => {
@@ -528,7 +524,7 @@ async fn fetch_shards(
                         .blocks_info_by_finality
                         .optimistic_block_info()
                         .await
-                        .shards()
+                        .changes_in_block()
                         .await)
                 }
             }
@@ -537,29 +533,41 @@ async fn fetch_shards(
                 .blocks_info_by_finality
                 .final_block_info()
                 .await
-                .shards()
+                .changes_in_block()
                 .await),
         }
     } else {
-        let fetch_shards_futures = (0..cache_block.chunks_included)
-            .collect::<Vec<u64>>()
+        Ok(fetch_shards(data, cache_block)
+            .await?
             .into_iter()
-            .map(|shard_id| {
-                near_lake_framework::s3_fetchers::fetch_shard(
-                    &data.s3_client,
-                    &data.s3_bucket_name,
-                    cache_block.block_height,
-                    shard_id,
-                )
-            });
-        futures::future::try_join_all(fetch_shards_futures)
-            .await
-            .map_err(|err| {
-                anyhow::anyhow!(
-                    "Failed to fetch shards for block {} with error: {}",
-                    cache_block.block_height,
-                    err
-                )
-            })
+            .flat_map(|shard| shard.state_changes)
+            .collect())
     }
+}
+
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
+async fn fetch_shards(
+    data: &Data<ServerContext>,
+    cache_block: crate::modules::blocks::CacheBlock,
+) -> anyhow::Result<Vec<near_indexer_primitives::IndexerShard>> {
+    let fetch_shards_futures = (0..cache_block.chunks_included)
+        .collect::<Vec<u64>>()
+        .into_iter()
+        .map(|shard_id| {
+            near_lake_framework::s3_fetchers::fetch_shard(
+                &data.s3_client,
+                &data.s3_bucket_name,
+                cache_block.block_height,
+                shard_id,
+            )
+        });
+    futures::future::try_join_all(fetch_shards_futures)
+        .await
+        .map_err(|err| {
+            anyhow::anyhow!(
+                "Failed to fetch shards for block {} with error: {}",
+                cache_block.block_height,
+                err
+            )
+        })
 }

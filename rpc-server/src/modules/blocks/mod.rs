@@ -1,4 +1,4 @@
-use near_primitives::views::StateChangeValueView;
+use near_primitives::views::{StateChangeValueView, StateChangesView};
 
 pub mod methods;
 pub mod utils;
@@ -13,6 +13,24 @@ pub struct CacheBlock {
     pub chunks_included: u64,
     pub state_root: near_primitives::hash::CryptoHash,
     pub epoch_id: near_primitives::hash::CryptoHash,
+}
+
+pub struct ChangesInBlock {
+    pub account: Option<near_primitives::views::AccountView>,
+    pub code: Option<Vec<u8>>,
+    pub access_key_changes: std::collections::HashMap<near_crypto::PublicKey, Option<near_primitives::views::AccessKeyView>>,
+    pub state_changes: std::collections::HashMap<readnode_primitives::StateKey, Option<readnode_primitives::StateValue>>,
+}
+
+impl ChangesInBlock {
+    pub fn new() -> Self {
+        Self {
+            account: None,
+            code: None,
+            access_key_changes: std::collections::HashMap::new(),
+            state_changes: std::collections::HashMap::new(),
+        }
+    }
 }
 
 impl From<&near_primitives::views::BlockView> for CacheBlock {
@@ -33,7 +51,8 @@ impl From<&near_primitives::views::BlockView> for CacheBlock {
 #[derive(Debug, Clone)]
 pub struct BlockInfo {
     pub block_cache: CacheBlock,
-    pub stream_message: near_indexer_primitives::StreamerMessage,
+    pub block_view: near_primitives::views::BlockView,
+    pub changes: StateChangesView,
 }
 
 impl BlockInfo {
@@ -41,10 +60,8 @@ impl BlockInfo {
     pub async fn new_from_block_view(block_view: near_primitives::views::BlockView) -> Self {
         Self {
             block_cache: CacheBlock::from(&block_view),
-            stream_message: near_indexer_primitives::StreamerMessage {
-                block: block_view,
-                shards: vec![], // We left shards empty because block_view doesn't contain shards.
-            },
+            block_view,
+            changes: vec![], // We left changes empty because block_view doesn't contain state changes.
         }
     }
 
@@ -55,18 +72,56 @@ impl BlockInfo {
     ) -> Self {
         Self {
             block_cache: CacheBlock::from(&stream_message.block),
-            stream_message,
+            block_view: stream_message.block,
+            changes: stream_message
+                .shards
+                .into_iter()
+                .flat_map(|shard| shard.state_changes)
+                .collect(),
         }
     }
 
     pub async fn block_view(&self) -> near_primitives::views::BlockView {
-        self.stream_message.block.clone()
+        self.block_view.clone()
     }
 
-    pub async fn shards(&self) -> Vec<near_indexer_primitives::IndexerShard> {
-        self.stream_message.shards.clone()
+    pub async fn changes_in_block(&self) -> StateChangesView {
+        self.changes.clone()
     }
-
+    
+    pub async fn changes_in_block_account_map(&self) -> std::collections::HashMap<near_primitives::types::AccountId, StateChangeValueView> {
+        let mut changes_map = std::collections::HashMap::<near_primitives::types::AccountId, StateChangeValueView>::new();
+        for changes in self.changes_in_block().await {
+            match changes.value {
+                StateChangeValueView::AccountUpdate { account_id, account } => {
+                    changes_map.entry(account_id);
+                }
+                StateChangeValueView::AccountDeletion { account_id } => {
+                    account_id
+                }
+                StateChangeValueView::ContractCodeUpdate { account_id, code } => {
+                    account_id
+                }
+                StateChangeValueView::ContractCodeDeletion { account_id } => {
+                    account_id
+                }
+                StateChangeValueView::AccessKeyUpdate { account_id, public_key, access_key } => {
+                    account_id
+                }
+                StateChangeValueView::AccessKeyDeletion { account_id, public_key } => {
+                    account_id
+                }
+                StateChangeValueView::DataUpdate { account_id, key, value } => {
+                    account_id
+                }
+                StateChangeValueView::DataDeletion { account_id, key } => {
+                    account_id
+                }
+            }
+        };
+        changes_map
+    }
+    
     // This method using for optimistic blocks info.
     // We fetch the account changes in the block by specific AccountId.
     // For optimistic block s we don't have information about account changes in the database,
@@ -77,18 +132,17 @@ impl BlockInfo {
     ) -> anyhow::Result<Option<near_primitives::views::AccountView>> {
         let mut result = None;
         let mut is_account_updated = false;
-        let initial_state_changes = self
-            .shards()
-            .await
-            .into_iter()
-            .flat_map(|shard| shard.state_changes.into_iter())
-            .filter(|state_change| {
-                matches!(
-                    state_change.value,
-                    StateChangeValueView::AccountUpdate { .. }
-                        | StateChangeValueView::AccountDeletion { .. }
-                )
-            });
+        let initial_state_changes =
+            self.changes_in_block()
+                .await
+                .into_iter()
+                .filter(|state_change| {
+                    matches!(
+                        state_change.value,
+                        StateChangeValueView::AccountUpdate { .. }
+                            | StateChangeValueView::AccountDeletion { .. }
+                    )
+                });
 
         for state_change in initial_state_changes {
             match state_change.value {
@@ -126,18 +180,17 @@ impl BlockInfo {
     ) -> anyhow::Result<Option<Vec<u8>>> {
         let mut result = None;
         let mut is_code_updated = false;
-        let initial_state_changes = self
-            .shards()
-            .await
-            .into_iter()
-            .flat_map(|shard| shard.state_changes.into_iter())
-            .filter(|state_change| {
-                matches!(
-                    state_change.value,
-                    StateChangeValueView::ContractCodeUpdate { .. }
-                        | StateChangeValueView::ContractCodeDeletion { .. }
-                )
-            });
+        let initial_state_changes =
+            self.changes_in_block()
+                .await
+                .into_iter()
+                .filter(|state_change| {
+                    matches!(
+                        state_change.value,
+                        StateChangeValueView::ContractCodeUpdate { .. }
+                            | StateChangeValueView::ContractCodeDeletion { .. }
+                    )
+                });
 
         for state_change in initial_state_changes {
             match state_change.value {
@@ -173,18 +226,17 @@ impl BlockInfo {
     ) -> anyhow::Result<Option<near_primitives::views::AccessKeyView>> {
         let mut result = None;
         let mut is_access_key_updated = false;
-        let initial_state_changes = self
-            .shards()
-            .await
-            .into_iter()
-            .flat_map(|shard| shard.state_changes.into_iter())
-            .filter(|state_change| {
-                matches!(
-                    state_change.value,
-                    StateChangeValueView::AccessKeyUpdate { .. }
-                        | StateChangeValueView::AccessKeyDeletion { .. }
-                )
-            });
+        let initial_state_changes =
+            self.changes_in_block()
+                .await
+                .into_iter()
+                .filter(|state_change| {
+                    matches!(
+                        state_change.value,
+                        StateChangeValueView::AccessKeyUpdate { .. }
+                            | StateChangeValueView::AccessKeyDeletion { .. }
+                    )
+                });
 
         for state_change in initial_state_changes {
             match state_change.value {
@@ -235,18 +287,17 @@ impl BlockInfo {
         >::new();
         let hex_str_prefix = hex::encode(prefix);
 
-        let initial_state_changes = self
-            .shards()
-            .await
-            .into_iter()
-            .flat_map(|shard| shard.state_changes.into_iter())
-            .filter(|state_change| {
-                matches!(
-                    state_change.value,
-                    StateChangeValueView::DataUpdate { .. }
-                        | StateChangeValueView::DataDeletion { .. }
-                )
-            });
+        let initial_state_changes =
+            self.changes_in_block()
+                .await
+                .into_iter()
+                .filter(|state_change| {
+                    matches!(
+                        state_change.value,
+                        StateChangeValueView::DataUpdate { .. }
+                            | StateChangeValueView::DataDeletion { .. }
+                    )
+                });
 
         for state_change in initial_state_changes {
             match state_change.value {
@@ -330,7 +381,8 @@ impl BlocksInfoByFinality {
         );
         let mut final_block_lock = self.final_block.write().await;
         final_block_lock.block_cache = block_info.block_cache;
-        final_block_lock.stream_message = block_info.stream_message;
+        final_block_lock.block_view = block_info.block_view;
+        final_block_lock.changes = block_info.changes;
     }
 
     pub async fn update_optimistic_block(&self, block_info: BlockInfo) {
@@ -340,7 +392,9 @@ impl BlocksInfoByFinality {
         );
         let mut optimistic_block_lock = self.optimistic_block.write().await;
         optimistic_block_lock.block_cache = block_info.block_cache;
-        optimistic_block_lock.stream_message = block_info.stream_message;
+        optimistic_block_lock.block_view = block_info.block_view;
+        optimistic_block_lock.changes = block_info.changes;
+        // TODO: extract needed changes
     }
 
     pub async fn update_current_validators(
@@ -353,10 +407,7 @@ impl BlocksInfoByFinality {
     }
     pub async fn final_block_info(&self) -> BlockInfo {
         let final_block_info_lock = self.final_block.read().await;
-        BlockInfo {
-            block_cache: final_block_info_lock.block_cache,
-            stream_message: final_block_info_lock.stream_message.clone(),
-        }
+        final_block_info_lock.clone()
     }
 
     pub async fn final_cache_block(&self) -> CacheBlock {
@@ -365,10 +416,7 @@ impl BlocksInfoByFinality {
 
     pub async fn optimistic_block_info(&self) -> BlockInfo {
         let optimistic_block_info_lock = self.optimistic_block.read().await;
-        BlockInfo {
-            block_cache: optimistic_block_info_lock.block_cache,
-            stream_message: optimistic_block_info_lock.stream_message.clone(),
-        }
+        optimistic_block_info_lock.clone()
     }
 
     pub async fn optimistic_cache_block(&self) -> CacheBlock {
