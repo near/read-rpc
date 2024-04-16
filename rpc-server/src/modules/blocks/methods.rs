@@ -278,12 +278,7 @@ pub async fn fetch_block(
             return match finality {
                 near_primitives::types::Finality::Final
                 | near_primitives::types::Finality::DoomSlug => {
-                    let block_view = data
-                        .blocks_info_by_finality
-                        .final_block_info()
-                        .await
-                        .block_view()
-                        .await;
+                    let block_view = data.blocks_info_by_finality.final_block_view().await;
                     Ok(near_jsonrpc::primitives::types::blocks::RpcBlockResponse { block_view })
                 }
                 near_primitives::types::Finality::None => {
@@ -295,12 +290,7 @@ pub async fn fetch_block(
                             },
                         )
                     } else {
-                        let block_view = data
-                            .blocks_info_by_finality
-                            .optimistic_block_info()
-                            .await
-                            .block_view()
-                            .await;
+                        let block_view = data.blocks_info_by_finality.optimistic_block_view().await;
                         Ok(
                             near_jsonrpc::primitives::types::blocks::RpcBlockResponse {
                                 block_view,
@@ -522,19 +512,14 @@ async fn fetch_state_changes(
                 } else {
                     Ok(data
                         .blocks_info_by_finality
-                        .optimistic_block_info()
-                        .await
-                        .changes_in_block()
+                        .optimistic_block_changes()
                         .await)
                 }
             }
             near_primitives::types::Finality::DoomSlug
-            | near_primitives::types::Finality::Final => Ok(data
-                .blocks_info_by_finality
-                .final_block_info()
-                .await
-                .changes_in_block()
-                .await),
+            | near_primitives::types::Finality::Final => {
+                Ok(data.blocks_info_by_finality.final_block_changes().await)
+            }
         }
     } else {
         Ok(fetch_shards(data, cache_block)

@@ -285,9 +285,7 @@ async fn optimistic_view_account(
 > {
     if let Ok(result) = data
         .blocks_info_by_finality
-        .optimistic_block_info()
-        .await
-        .account_changes_in_block(account_id)
+        .optimistic_account_changes_in_block(account_id)
         .await
     {
         if let Some(account_view) = result {
@@ -378,9 +376,7 @@ async fn optimistic_view_code(
 ) -> Result<Vec<u8>, near_jsonrpc::primitives::types::query::RpcQueryError> {
     let contract_code = if let Ok(result) = data
         .blocks_info_by_finality
-        .optimistic_block_info()
-        .await
-        .code_changes_in_block(account_id)
+        .optimistic_code_changes_in_block(account_id)
         .await
     {
         if let Some(code) = result {
@@ -470,9 +466,7 @@ async fn optimistic_function_call(
 ) -> Result<RunContractResponse, crate::errors::FunctionCallError> {
     let optimistic_data = data
         .blocks_info_by_finality
-        .optimistic_block_info()
-        .await
-        .state_changes_in_block(&account_id, &[])
+        .optimistic_state_changes_in_block(&account_id, &[])
         .await;
     run_contract(
         account_id,
@@ -561,9 +555,7 @@ async fn optimistic_view_state(
 > {
     let mut optimistic_data = data
         .blocks_info_by_finality
-        .optimistic_block_info()
-        .await
-        .state_changes_in_block(account_id, prefix)
+        .optimistic_state_changes_in_block(account_id, prefix)
         .await;
     let state_from_db =
         get_state_keys_from_db(&data.db_manager, account_id, block.block_height, prefix).await;
@@ -680,9 +672,7 @@ async fn optimistic_view_access_key(
 > {
     if let Ok(result) = data
         .blocks_info_by_finality
-        .optimistic_block_info()
-        .await
-        .access_key_changes_in_block(account_id, &public_key)
+        .optimistic_access_key_changes_in_block(account_id, &public_key)
         .await
     {
         if let Some(access_key) = result {
