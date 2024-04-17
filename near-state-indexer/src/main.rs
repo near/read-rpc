@@ -121,7 +121,7 @@ async fn handle_epoch(
 ) -> anyhow::Result<()> {
     if let Some(stats_epoch_id) = stats_current_epoch_id {
         if stats_epoch_id == current_epoch_id {
-            // If epoch didn't change, we don't need handle it
+            // If epoch didn't change, we don't need to handle it
             Ok(())
         } else {
             // If epoch changed, we need to save epoch info and update epoch_end_height
