@@ -495,7 +495,7 @@ async fn fetch_changes_in_block_by_type(
     )
 }
 
-// Help method to fetch state changes from the cache or from the S3
+// Helper method to fetch state changes from the cache or from the S3
 // depending on the block reference
 // If the block reference is Finality, then the state changes are returned from cached optimistic or final blocks
 // Otherwise, the state changes are fetched from the S3
@@ -533,7 +533,7 @@ async fn fetch_state_changes(
     }
 }
 
-// Help method to fetch block shards from the S3 by the cache block
+// Helper method to fetch block shards from the S3 by the cache block
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 async fn fetch_shards_by_cache_block(
     data: &Data<ServerContext>,
