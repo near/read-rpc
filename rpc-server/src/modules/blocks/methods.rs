@@ -477,14 +477,13 @@ async fn fetch_changes_in_block_by_type(
     near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockResponse,
     near_jsonrpc::primitives::types::changes::RpcStateChangesError,
 > {
-    let state_changes = fetch_state_changes(data, cache_block, block_reference)
+    let changes = fetch_state_changes(data, cache_block, block_reference)
         .await
         .map_err(|err| {
             near_jsonrpc::primitives::types::changes::RpcStateChangesError::UnknownBlock {
                 error_message: err.to_string(),
             }
-        })?;
-    let changes = state_changes
+        })?
         .into_iter()
         .filter(|change| is_matching_change(change, state_changes_request))
         .collect();
@@ -496,6 +495,10 @@ async fn fetch_changes_in_block_by_type(
     )
 }
 
+// Help method to fetch state changes from the cache or from the S3
+// depending on the block reference
+// If the block reference is Finality, then the state changes are returned from cached optimistic or final blocks
+// Otherwise, the state changes are fetched from the S3
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 async fn fetch_state_changes(
     data: &Data<ServerContext>,
@@ -522,7 +525,7 @@ async fn fetch_state_changes(
             }
         }
     } else {
-        Ok(fetch_shards(data, cache_block)
+        Ok(fetch_shards_by_cache_block(data, cache_block)
             .await?
             .into_iter()
             .flat_map(|shard| shard.state_changes)
@@ -530,8 +533,9 @@ async fn fetch_state_changes(
     }
 }
 
+// Help method to fetch block shards from the S3 by the cache block
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
-async fn fetch_shards(
+async fn fetch_shards_by_cache_block(
     data: &Data<ServerContext>,
     cache_block: crate::modules::blocks::CacheBlock,
 ) -> anyhow::Result<Vec<near_indexer_primitives::IndexerShard>> {

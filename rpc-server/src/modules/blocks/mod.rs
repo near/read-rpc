@@ -15,6 +15,7 @@ pub struct CacheBlock {
     pub epoch_id: near_primitives::hash::CryptoHash,
 }
 
+// Struct to store in the cache the account changes in the block
 #[derive(Debug, Clone)]
 pub struct AccountChangesInBlock {
     pub account: Option<near_primitives::views::AccountView>,
@@ -83,12 +84,12 @@ impl BlockInfo {
     // Create new BlockInfo from StreamerMessage.
     // This is using to update final and optimistic blocks regularly.
     pub async fn new_from_streamer_message(
-        stream_message: near_indexer_primitives::StreamerMessage,
+        streamer_message: near_indexer_primitives::StreamerMessage,
     ) -> Self {
         Self {
-            block_cache: CacheBlock::from(&stream_message.block),
-            block_view: stream_message.block,
-            changes: stream_message
+            block_cache: CacheBlock::from(&streamer_message.block),
+            block_view: streamer_message.block,
+            changes: streamer_message
                 .shards
                 .into_iter()
                 .flat_map(|shard| shard.state_changes)
@@ -96,20 +97,13 @@ impl BlockInfo {
         }
     }
 
-    pub async fn block_view(&self) -> near_primitives::views::BlockView {
-        self.block_view.clone()
-    }
-
-    pub async fn changes_in_block(&self) -> StateChangesView {
-        self.changes.clone()
-    }
-
+    // extract block changes and store it in the HashMap by AccountId.
     pub async fn changes_in_block_account_map(
         &self,
     ) -> std::collections::HashMap<near_primitives::types::AccountId, AccountChangesInBlock> {
         let mut changes_map = std::collections::HashMap::new();
-        for changes in self.changes_in_block().await {
-            match changes.value {
+        for changes in &self.changes {
+            match changes.value.clone() {
                 StateChangeValueView::AccountUpdate {
                     account_id,
                     account,
@@ -180,11 +174,13 @@ impl BlockInfo {
     }
 }
 
+// Struct to store the validators info for current epoch.
 #[derive(Debug, Clone)]
 pub struct CurrentValidatorInfo {
     pub validators: near_primitives::views::EpochValidatorInfo,
 }
 
+// Struct to store the optimistic changes in the block.
 #[derive(Debug, Clone)]
 pub struct OptimisticChanges {
     pub account_changes:
@@ -198,10 +194,10 @@ impl OptimisticChanges {
         }
     }
 
-    // This method using for optimistic blocks info.
+    // This method is used for optimistic block info.
     // We fetch the account changes in the block by specific AccountId.
-    // For optimistic block s we don't have information about account changes in the database,
-    // so we need to fetch it from the optimistic block streamer_message and merge it with data from database.
+    // For optimistic blocks, we don't have information about account changes in the database,
+    // so we need to fetch it from the optimistic block's streamer_message and merge it with data from the database.
     pub async fn account_changes_in_block(
         &self,
         target_account_id: &near_primitives::types::AccountId,
@@ -217,10 +213,10 @@ impl OptimisticChanges {
         }
     }
 
-    // This method using for optimistic blocks info.
+    // This method is used for optimistic block info.
     // We fetch the contract code changes in the block by specific AccountId.
-    // For optimistic block we don't have information about code changes in the database,
-    // so we need to fetch it from the optimistic block streamer_message and merge it with data from database.
+    // For optimistic blocks, we don't have information about code changes in the database,
+    // so we need to fetch it from the optimistic block's streamer_message and merge it with data from the database.
     pub async fn code_changes_in_block(
         &self,
         target_account_id: &near_primitives::types::AccountId,
@@ -236,10 +232,10 @@ impl OptimisticChanges {
         }
     }
 
-    // This method using for optimistic blocks info.
+    // This method is used for optimistic block info.
     // We fetch the access_key changes in the block by specific AccountId and PublicKey.
-    // For optimistic block we don't have information about AccessKey changes in the database,
-    // so we need to fetch it from the optimistic block streamer_message and merge it with data from database.
+    // For optimistic blocks, we don't have information about AccessKey changes in the database,
+    // so we need to fetch it from the optimistic block's streamer_message and merge it with data from the database.
     pub async fn access_key_changes_in_block(
         &self,
         target_account_id: &near_primitives::types::AccountId,
@@ -256,11 +252,11 @@ impl OptimisticChanges {
         }
     }
 
-    // This method using for optimistic blocks info.
+    // This method is used for optimistic block info.
     // We fetch the state changes in the block by specific AccountId and key_prefix.
     // if prefix is empty, we fetch all state changes by specific AccountId.
-    // For optimistic block we don't have information about state changes in the database,
-    // so we need to fetch it from the optimistic block streamer_message and merge it with data from database.
+    // For optimistic blocks, we don't have information about state changes in the database,
+    // so we need to fetch it from the optimistic block's streamer_message and merge it with data from the database.
     pub async fn state_changes_in_block(
         &self,
         target_account_id: &near_primitives::types::AccountId,
@@ -324,6 +320,8 @@ impl BlocksInfoByFinality {
         }
     }
 
+    // Update final block info in the cache.
+    // Executes every second.
     pub async fn update_final_block(&self, block_info: BlockInfo) {
         tracing::debug!(
             "Update final block info: {:?}",
@@ -335,6 +333,8 @@ impl BlocksInfoByFinality {
         final_block_lock.changes = block_info.changes;
     }
 
+    // Update optimistic block changes and optimistic block info in the cache.
+    // Executes every second.
     pub async fn update_optimistic_block(&self, block_info: BlockInfo) {
         tracing::debug!(
             "Update optimistic block info: {:?}",
@@ -350,6 +350,8 @@ impl BlocksInfoByFinality {
         optimistic_block_lock.changes = block_info.changes;
     }
 
+    // Update current validators info in the cache.
+    // This method executes when the epoch changes.
     pub async fn update_current_validators(
         &self,
         near_rpc_client: &crate::utils::JsonRpcClient,
@@ -358,29 +360,38 @@ impl BlocksInfoByFinality {
             crate::utils::get_current_validators(near_rpc_client).await?;
         Ok(())
     }
+
+    // return final block changes
     pub async fn final_block_changes(&self) -> StateChangesView {
-        self.final_block.read().await.changes_in_block().await
+        self.final_block.read().await.changes.clone()
     }
 
+    // return final block changes
     pub async fn final_cache_block(&self) -> CacheBlock {
         self.final_block.read().await.block_cache
     }
+
+    // return final block view
     pub async fn final_block_view(&self) -> near_primitives::views::BlockView {
-        self.final_block.read().await.block_view().await
+        self.final_block.read().await.block_view.clone()
     }
 
+    // return optimistic block changes
     pub async fn optimistic_block_changes(&self) -> StateChangesView {
-        self.optimistic_block.read().await.changes_in_block().await
+        self.optimistic_block.read().await.changes.clone()
     }
 
+    // return optimistic block cache
     pub async fn optimistic_cache_block(&self) -> CacheBlock {
         self.optimistic_block.read().await.block_cache
     }
 
+    // return optimistic block view
     pub async fn optimistic_block_view(&self) -> near_primitives::views::BlockView {
-        self.optimistic_block.read().await.block_view().await
+        self.optimistic_block.read().await.block_view.clone()
     }
 
+    // Get account changes in the block by specific AccountId.
     pub async fn optimistic_account_changes_in_block(
         &self,
         target_account_id: &near_primitives::types::AccountId,
@@ -392,6 +403,7 @@ impl BlocksInfoByFinality {
             .await
     }
 
+    // Get contract code changes in the block by specific AccountId.
     pub async fn optimistic_code_changes_in_block(
         &self,
         target_account_id: &near_primitives::types::AccountId,
@@ -403,6 +415,7 @@ impl BlocksInfoByFinality {
             .await
     }
 
+    // Get access_key changes in the block by specific AccountId and PublicKey.
     pub async fn optimistic_access_key_changes_in_block(
         &self,
         target_account_id: &near_primitives::types::AccountId,
@@ -415,6 +428,7 @@ impl BlocksInfoByFinality {
             .await
     }
 
+    // Get state changes in the block by specific AccountId and key_prefix.
     pub async fn optimistic_state_changes_in_block(
         &self,
         target_account_id: &near_primitives::types::AccountId,
@@ -430,6 +444,7 @@ impl BlocksInfoByFinality {
             .await
     }
 
+    // Return validators info for current epoch
     pub async fn validators(&self) -> near_primitives::views::EpochValidatorInfo {
         self.current_validators.read().await.validators.clone()
     }
