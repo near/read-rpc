@@ -15,15 +15,23 @@ pub struct CacheBlock {
     pub epoch_id: near_primitives::hash::CryptoHash,
 }
 
+#[derive(Debug, Clone)]
+pub enum AccountChanges {
+    None,
+    Changes(Option<near_primitives::views::AccountView>),
+}
+
+#[derive(Debug, Clone)]
+pub enum CodeChanges {
+    None,
+    Changes(Option<Vec<u8>>),
+}
+
 // Struct to store in the cache the account changes in the block
 #[derive(Debug, Clone)]
 pub struct AccountChangesInBlock {
-    pub account: Option<near_primitives::views::AccountView>,
-    pub is_account_changed: bool,
-
-    pub code: Option<Vec<u8>>,
-    pub is_code_changed: bool,
-
+    pub account_changes: AccountChanges,
+    pub code_changes: CodeChanges,
     pub access_key_changes: std::collections::HashMap<
         near_crypto::PublicKey,
         Option<near_primitives::views::AccessKeyView>,
@@ -37,12 +45,8 @@ pub struct AccountChangesInBlock {
 impl AccountChangesInBlock {
     pub fn new() -> Self {
         Self {
-            account: None,
-            is_account_changed: false,
-
-            code: None,
-            is_code_changed: false,
-
+            account_changes: AccountChanges::None,
+            code_changes: CodeChanges::None,
             access_key_changes: std::collections::HashMap::new(),
             state_changes: std::collections::HashMap::new(),
         }
@@ -111,27 +115,25 @@ impl BlockInfo {
                     let acc = changes_map
                         .entry(account_id)
                         .or_insert_with(AccountChangesInBlock::new);
-                    acc.account = Some(account);
-                    acc.is_account_changed = true;
+                    acc.account_changes = AccountChanges::Changes(Some(account));
                 }
                 StateChangeValueView::AccountDeletion { account_id } => {
                     let acc = changes_map
                         .entry(account_id)
                         .or_insert_with(AccountChangesInBlock::new);
-                    acc.is_account_changed = true;
+                    acc.account_changes = AccountChanges::Changes(None);
                 }
                 StateChangeValueView::ContractCodeUpdate { account_id, code } => {
                     let acc = changes_map
                         .entry(account_id)
                         .or_insert_with(AccountChangesInBlock::new);
-                    acc.code = Some(code);
-                    acc.is_code_changed = true;
+                    acc.code_changes = CodeChanges::Changes(Some(code));
                 }
                 StateChangeValueView::ContractCodeDeletion { account_id } => {
                     let acc = changes_map
                         .entry(account_id)
                         .or_insert_with(AccountChangesInBlock::new);
-                    acc.is_code_changed = true;
+                    acc.code_changes = CodeChanges::Changes(None);
                 }
                 StateChangeValueView::AccessKeyUpdate {
                     account_id,
@@ -203,8 +205,8 @@ impl OptimisticChanges {
         target_account_id: &near_primitives::types::AccountId,
     ) -> anyhow::Result<Option<near_primitives::views::AccountView>> {
         if let Some(account_changes) = self.account_changes.get(target_account_id) {
-            if account_changes.is_account_changed {
-                Ok(account_changes.account.clone())
+            if let AccountChanges::Changes(account) = &account_changes.account_changes {
+                Ok(account.clone())
             } else {
                 anyhow::bail!("Account not updated in this block");
             }
@@ -222,8 +224,8 @@ impl OptimisticChanges {
         target_account_id: &near_primitives::types::AccountId,
     ) -> anyhow::Result<Option<Vec<u8>>> {
         if let Some(account_changes) = self.account_changes.get(target_account_id) {
-            if account_changes.is_code_changed {
-                Ok(account_changes.code.clone())
+            if let CodeChanges::Changes(code) = &account_changes.code_changes {
+                Ok(code.clone())
             } else {
                 anyhow::bail!("Code not updated in this block");
             }
