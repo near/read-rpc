@@ -45,6 +45,11 @@ async fn main() -> anyhow::Result<()> {
         .await?;
     let redis_client_clone = redis_client.clone();
 
+    // We need to update final block from Redis and Lake
+    // Because we can't be sure that Redis has the latest block
+    // And Lake can be used as a backup source
+
+    // Update final block from Redis
     tokio::spawn(async move {
         utils::update_final_block_regularly_from_redis(
             blocks_cache_clone,
@@ -55,23 +60,24 @@ async fn main() -> anyhow::Result<()> {
         .await
     });
 
-    let blocks_info_by_finality = std::sync::Arc::clone(&server_context.blocks_info_by_finality);
-    tokio::spawn(async move {
-        utils::update_optimistic_block_regularly(blocks_info_by_finality, redis_client.clone())
-            .await
-    });
-
+    // Update final block from Lake
     let blocks_cache_clone = std::sync::Arc::clone(&server_context.blocks_cache);
     let blocks_info_by_finality_clone =
         std::sync::Arc::clone(&server_context.blocks_info_by_finality);
     tokio::spawn(async move {
-        utils::check_updating_blocks_by_finality_regularly(
+        utils::update_final_block_regularly_from_lake(
             blocks_cache_clone,
             blocks_info_by_finality_clone,
             rpc_server_config,
             near_rpc_client,
         )
         .await
+    });
+
+    let blocks_info_by_finality = std::sync::Arc::clone(&server_context.blocks_info_by_finality);
+    tokio::spawn(async move {
+        utils::update_optimistic_block_regularly(blocks_info_by_finality, redis_client.clone())
+            .await
     });
 
     let rpc = Server::new()
