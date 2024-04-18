@@ -279,7 +279,7 @@ pub async fn update_optimistic_block_regularly(
             }
         }
 
-        // When optimistic block is not updated or optimistic block less than final block
+        // When an optimistic block is not updated, or it is lower than the final block
         // we need to mark that optimistic updating is not working
         if crate::metrics::OPTIMISTIC_BLOCK_HEIGHT.get() <= crate::metrics::FINAL_BLOCK_HEIGHT.get()
             && !crate::metrics::OPTIMISTIC_UPDATING.is_not_working()
@@ -290,7 +290,7 @@ pub async fn update_optimistic_block_regularly(
             crate::metrics::OPTIMISTIC_UPDATING.set_not_working();
         };
 
-        // When optimistic block is updated and optimistic block more than final block
+        // When an optimistic block is updated, and it is greater than the final block
         // we need to mark that optimistic updating is working
         if crate::metrics::OPTIMISTIC_BLOCK_HEIGHT.get() > crate::metrics::FINAL_BLOCK_HEIGHT.get()
             && crate::metrics::OPTIMISTIC_UPDATING.is_not_working()
