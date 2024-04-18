@@ -142,11 +142,13 @@ async fn handle_streamer_message(
             .await?;
     }
     let block_cache = block.block_cache;
-    blocks_info_by_finality.update_final_block(block).await;
-    blocks_cache
-        .put(block_cache.block_height, block_cache)
-        .await;
-    crate::metrics::FINAL_BLOCK_HEIGHT.set(i64::try_from(block_cache.block_height)?);
+    if block_cache.block_height as i64 > crate::metrics::FINAL_BLOCK_HEIGHT.get() {
+        blocks_info_by_finality.update_final_block(block).await;
+        blocks_cache
+            .put(block_cache.block_height, block_cache)
+            .await;
+        crate::metrics::FINAL_BLOCK_HEIGHT.set(i64::try_from(block_cache.block_height)?);
+    }
     Ok(())
 }
 
@@ -155,7 +157,6 @@ pub async fn update_final_block_regularly_from_lake(
     blocks_info_by_finality: std::sync::Arc<BlocksInfoByFinality>,
     rpc_server_config: configuration::RpcServerConfig,
     near_rpc_client: JsonRpcClient,
-    last_optimistic_block_height: i64,
 ) -> anyhow::Result<()> {
     tracing::info!("Task to get final block from lake and store in the cache started");
     let lake_config = rpc_server_config
@@ -182,18 +183,6 @@ pub async fn update_final_block_regularly_from_lake(
     while let Some(_handle_message) = handlers.next().await {
         if let Err(err) = _handle_message {
             tracing::warn!("{:?}", err);
-        };
-        let new_optimistic_block_height = crate::metrics::OPTIMISTIC_BLOCK_HEIGHT.get();
-        // if the optimistic block is updated and the difference between the optimistic block and the final block is less than 5 blocks
-        // we stop the task to get the final block from the lake and store in the cache
-        if new_optimistic_block_height > last_optimistic_block_height
-            && crate::metrics::OPTIMISTIC_BLOCK_HEIGHT.get()
-                - crate::metrics::FINAL_BLOCK_HEIGHT.get()
-                < 5
-        {
-            tracing::info!("Task to get final block from lake and store in the cache stop");
-            drop(handlers); // close the channel so the sender will stop
-            return Ok(());
         }
     }
     drop(handlers); // close the channel so the sender will stop
@@ -203,44 +192,6 @@ pub async fn update_final_block_regularly_from_lake(
         Ok(Ok(())) => Ok(()),
         Ok(Err(e)) => Err(e),
         Err(e) => Err(anyhow::Error::from(e)), // JoinError
-    }
-}
-
-pub async fn check_updating_blocks_by_finality_regularly(
-    blocks_cache: std::sync::Arc<crate::cache::RwLockLruMemoryCache<u64, CacheBlock>>,
-    blocks_info_by_finality: std::sync::Arc<BlocksInfoByFinality>,
-    rpc_server_config: configuration::RpcServerConfig,
-    near_rpc_client: JsonRpcClient,
-) -> anyhow::Result<()> {
-    tracing::info!("Task to check updating optimistic block in the cache started");
-
-    let mut current_optimistic_block_height = crate::metrics::OPTIMISTIC_BLOCK_HEIGHT.get();
-    loop {
-        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-        let new_optimistic_block_height = crate::metrics::OPTIMISTIC_BLOCK_HEIGHT.get();
-        if new_optimistic_block_height > current_optimistic_block_height
-            && crate::metrics::OPTIMISTIC_BLOCK_HEIGHT.get()
-                - crate::metrics::FINAL_BLOCK_HEIGHT.get()
-                < 5
-        {
-            current_optimistic_block_height = new_optimistic_block_height;
-        } else {
-            tracing::warn!(
-                "Optimistic block in is not updated or difference between the optimistic block and the final block is more than 4 blocks. \
-                Start to update final block from the Lake"
-            );
-            crate::metrics::OPTIMISTIC_UPDATING.set_not_working();
-            update_final_block_regularly_from_lake(
-                std::sync::Arc::clone(&blocks_cache),
-                std::sync::Arc::clone(&blocks_info_by_finality),
-                rpc_server_config.clone(),
-                near_rpc_client.clone(),
-                current_optimistic_block_height,
-            )
-            .await?;
-            tracing::info!("Optimistic block updating is resumed.");
-            crate::metrics::OPTIMISTIC_UPDATING.set_working();
-        }
     }
 }
 
@@ -290,15 +241,6 @@ pub async fn update_final_block_regularly_from_redis(
                 tracing::error!("Error to get final block from redis: {:?}", err);
             }
         }
-        // when optimistic updating is not working or difference between the optimistic block and the final block is more than 4 blocks,
-        // we start update final block from the Lake and wait until optimistic updating is resumed
-        while crate::metrics::OPTIMISTIC_UPDATING.is_not_working()
-            || crate::metrics::OPTIMISTIC_BLOCK_HEIGHT.get()
-                - crate::metrics::FINAL_BLOCK_HEIGHT.get()
-                > 5
-        {
-            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-        }
     }
 }
 
@@ -319,18 +261,43 @@ pub async fn update_optimistic_block_regularly(
         {
             Ok(streamer_message) => {
                 let optimistic_block = BlockInfo::new_from_streamer_message(streamer_message).await;
-                crate::metrics::OPTIMISTIC_BLOCK_HEIGHT.set(
-                    i64::try_from(optimistic_block.block_cache.block_height)
-                        .expect("Invalid optimistic block height"),
-                );
-                blocks_info_by_finality
-                    .update_optimistic_block(optimistic_block)
-                    .await;
+                let optimistic_block_cache = optimistic_block.block_cache;
+                if optimistic_block_cache.block_height as i64
+                    > crate::metrics::OPTIMISTIC_BLOCK_HEIGHT.get()
+                {
+                    blocks_info_by_finality
+                        .update_optimistic_block(optimistic_block)
+                        .await;
+                    crate::metrics::OPTIMISTIC_BLOCK_HEIGHT.set(
+                        i64::try_from(optimistic_block_cache.block_height)
+                            .expect("Invalid optimistic block height"),
+                    );
+                }
             }
             Err(err) => {
                 tracing::error!("Error to get optimistic block from redis: {:?}", err);
             }
         }
+
+        // When an optimistic block is not updated, or it is lower than the final block
+        // we need to mark that optimistic updating is not working
+        if crate::metrics::OPTIMISTIC_BLOCK_HEIGHT.get() <= crate::metrics::FINAL_BLOCK_HEIGHT.get()
+            && !crate::metrics::OPTIMISTIC_UPDATING.is_not_working()
+        {
+            tracing::warn!(
+                "Optimistic block in is not updated or optimistic block less than final block"
+            );
+            crate::metrics::OPTIMISTIC_UPDATING.set_not_working();
+        };
+
+        // When an optimistic block is updated, and it is greater than the final block
+        // we need to mark that optimistic updating is working
+        if crate::metrics::OPTIMISTIC_BLOCK_HEIGHT.get() > crate::metrics::FINAL_BLOCK_HEIGHT.get()
+            && crate::metrics::OPTIMISTIC_UPDATING.is_not_working()
+        {
+            crate::metrics::OPTIMISTIC_UPDATING.set_working();
+            tracing::info!("Optimistic block updating is resumed.");
+        };
     }
 }
 
