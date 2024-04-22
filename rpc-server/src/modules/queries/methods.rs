@@ -118,7 +118,22 @@ async fn query_call(
         near_primitives::views::QueryRequest::ViewAccessKeyList { account_id } => {
             crate::metrics::QUERY_VIEW_ACCESS_KEYS_LIST_REQUESTS_TOTAL.inc();
             #[cfg(not(feature = "account_access_keys"))]
-            return Ok(data.near_rpc_client.call(query_request).await?);
+            {
+                let final_block = data.blocks_info_by_finality.final_cache_block().await;
+                // `expected_earliest_available_block` calculated by formula:
+                // `final_block_height` - `node_epoch_count` * `epoch_length`
+                // Now near store 5 epochs, it can be changed in the future
+                // epoch_length = 43200 blocks
+                let expected_earliest_available_block =
+                    final_block.block_height - 5 * data.genesis_info.genesis_config.epoch_length;
+                return if block.block_height > expected_earliest_available_block {
+                    // Proxy to regular rpc if the block is available
+                    Ok(data.near_rpc_client.call(query_request).await?)
+                } else {
+                    // Proxy to archival rpc if the block garbage collected
+                    Ok(data.near_rpc_client.archival_call(query_request).await?)
+                };
+            }
             #[cfg(feature = "account_access_keys")]
             {
                 view_access_keys_list(&data, block, &account_id).await

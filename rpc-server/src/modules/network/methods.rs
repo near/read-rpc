@@ -159,7 +159,30 @@ pub async fn validators_ordered(
 ) -> Result<near_jsonrpc::primitives::types::validator::RpcValidatorsOrderedResponse, RPCError> {
     let request =
         near_jsonrpc::primitives::types::validator::RpcValidatorsOrderedRequest::parse(params)?;
-    Ok(data.near_rpc_client.call(request).await?)
+
+    if let Some(block_id) = &request.block_id {
+        let block_reference = near_primitives::types::BlockReference::from(block_id.clone());
+        if let Ok(block) = fetch_block_from_cache_or_get(&data, block_reference).await {
+            let final_block = data.blocks_info_by_finality.final_cache_block().await;
+            // `expected_earliest_available_block` calculated by formula:
+            // `final_block_height` - `node_epoch_count` * `epoch_length`
+            // Now near store 5 epochs, it can be changed in the future
+            // epoch_length = 43200 blocks
+            let expected_earliest_available_block =
+                final_block.block_height - 5 * data.genesis_info.genesis_config.epoch_length;
+            if block.block_height > expected_earliest_available_block {
+                // Proxy to regular rpc if the block is available
+                Ok(data.near_rpc_client.call(request).await?)
+            } else {
+                // Proxy to archival rpc if the block garbage collected
+                Ok(data.near_rpc_client.archival_call(request).await?)
+            }
+        } else {
+            Ok(data.near_rpc_client.call(request).await?)
+        }
+    } else {
+        Ok(data.near_rpc_client.call(request).await?)
+    }
 }
 
 pub async fn genesis_config(
