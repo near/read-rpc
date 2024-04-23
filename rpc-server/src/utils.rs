@@ -140,15 +140,16 @@ async fn handle_streamer_message(
     near_rpc_client: &JsonRpcClient,
 ) -> anyhow::Result<()> {
     let block = BlockInfo::new_from_streamer_message(streamer_message).await;
-
-    if blocks_info_by_finality.final_cache_block().await.epoch_id != block.block_cache.epoch_id {
-        tracing::info!("New epoch started: {:?}", block.block_cache.epoch_id);
-        blocks_info_by_finality
-            .update_current_validators(near_rpc_client)
-            .await?;
-    }
     let block_cache = block.block_cache;
+
     if block_cache.block_height as i64 > crate::metrics::FINAL_BLOCK_HEIGHT.get() {
+        if blocks_info_by_finality.final_cache_block().await.epoch_id != block_cache.epoch_id {
+            tracing::info!("New epoch started: {:?}", block_cache.epoch_id);
+            blocks_info_by_finality
+                .update_current_validators(near_rpc_client)
+                .await?;
+        }
+
         blocks_info_by_finality.update_final_block(block).await;
         blocks_cache
             .put(block_cache.block_height, block_cache)
