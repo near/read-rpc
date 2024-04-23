@@ -2,6 +2,7 @@ use crate::modules::blocks::{BlockInfo, BlocksInfoByFinality, CacheBlock};
 #[cfg(feature = "shadow_data_consistency")]
 use assert_json_diff::{assert_json_matches_no_panic, CompareMode, Config, NumericMode};
 use futures::StreamExt;
+use std::path::PathBuf;
 
 #[cfg(feature = "shadow_data_consistency")]
 const DEFAULT_RETRY_COUNT: u8 = 3;
@@ -304,39 +305,6 @@ pub async fn update_optimistic_block_regularly(
             tracing::info!("Optimistic block updating is resumed.");
         };
     }
-}
-
-/// Calculate the cache size based on the available memory.
-/// For caching we use the limit or if it is not set then all available memory.
-/// We divide the memory equally between the 3 caches: blocks, compiled_contracts, contract_code.
-/// If the installed limit exceeds the size of the available memory, we get a panic.
-pub(crate) async fn calculate_contract_code_cache_sizes(
-    reserved_memory: usize,
-    block_cache_size: usize,
-    limit_memory_cache: Option<usize>,
-) -> usize {
-    let sys = sysinfo::System::new_all();
-    let total_memory = sys.total_memory() as usize; // Total memory in bytes
-    let used_memory = sys.used_memory() as usize; // Used memory in bytes
-    let available_memory = total_memory - used_memory - reserved_memory; // Available memory in bytes
-
-    let mem_cache_size = if let Some(limit) = limit_memory_cache {
-        if limit >= available_memory {
-            panic!(
-                "Not enough memory to run the server. Available memory: {}, required memory: {}",
-                friendly_memory_size_format(available_memory),
-                friendly_memory_size_format(limit),
-            );
-        } else {
-            limit
-        }
-    } else {
-        // half of available memory for caching `compiled_contracts` and `contract_code`.
-        // If you need more memory you can set the limit_memory_cache in the configuration file.
-        available_memory / 2
-    };
-
-    (mem_cache_size - block_cache_size) / 2 // divide on 2 because we have 2 caches: compiled_contracts and contract_code
 }
 
 /// Convert gigabytes to bytes
@@ -747,3 +715,16 @@ macro_rules! capture_shadow_consistency_error {
 
 #[cfg(feature = "shadow_data_consistency")]
 pub(crate) use capture_shadow_consistency_error;
+
+pub fn get_home_dir() -> PathBuf {
+    if let Ok(near_home) = std::env::var("NEAR_HOME") {
+        return near_home.into();
+    }
+
+    if let Some(mut home) = dirs::home_dir() {
+        home.push(".near");
+        return home;
+    }
+
+    PathBuf::default()
+}
