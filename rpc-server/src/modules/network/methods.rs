@@ -284,8 +284,10 @@ async fn protocol_config_call(
         &data.genesis_info.genesis_config.chain_id,
     );
     let runtime_config = store.get_config(block.latest_protocol_version);
+    let mut genesis_config = data.genesis_info.genesis_config.clone();
+    genesis_config.protocol_version = block.latest_protocol_version;
     let protocol_config = near_chain_configs::ProtocolConfig {
-        genesis_config: data.genesis_info.genesis_config.clone(),
+        genesis_config,
         runtime_config: near_parameters::RuntimeConfig {
             fees: runtime_config.fees.clone(),
             wasm_config: runtime_config.wasm_config.clone(),
