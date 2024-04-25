@@ -29,18 +29,50 @@ pub async fn get_epoch_validators(
     }
 }
 
+pub async fn get_epoch_config(
+    epoch_start_height: near_indexer_primitives::types::BlockHeight,
+    client: &near_jsonrpc_client::JsonRpcClient,
+) -> anyhow::Result<near_chain_configs::ProtocolConfigView> {
+    let mut attempt_counter = 0;
+    loop {
+        let params = near_jsonrpc_client::methods::EXPERIMENTAL_protocol_config::RpcProtocolConfigRequest {
+            block_reference: near_primitives::types::BlockReference::BlockId(
+                near_indexer_primitives::types::BlockId::Height(epoch_start_height)
+            ),
+        };
+        match client.call(params).await {
+            Ok(protocol_config_view) => {
+                return Ok(protocol_config_view);
+            },
+            Err(e) => {
+                attempt_counter += 1;
+                tracing::debug!(
+                    "Attempt: {}. Epoch start height: {}. Error fetching epoch protocol config: {:?}",
+                    attempt_counter,
+                    epoch_start_height,
+                    e
+                );
+                if attempt_counter > 20 {
+                    anyhow::bail!("Failed to fetch epoch protocol config. Epoch start height: {}", epoch_start_height)
+                }
+            }
+        }
+    }
+}
+
 pub async fn get_epoch_info_by_id(
     epoch_id: CryptoHash,
     rpc_client: &near_jsonrpc_client::JsonRpcClient,
 ) -> anyhow::Result<readnode_primitives::IndexedEpochInfo> {
     let validators_info = get_epoch_validators(epoch_id, rpc_client).await?;
-
+    let protocol_config = get_epoch_config(validators_info.epoch_start_height, rpc_client).await?;
     Ok(readnode_primitives::IndexedEpochInfo {
         epoch_id,
         epoch_height: validators_info.epoch_height,
         epoch_start_height: validators_info.epoch_start_height,
         epoch_end_height: None,
         validators_info,
+        protocol_config,
     })
 }
 
