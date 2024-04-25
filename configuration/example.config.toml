@@ -37,13 +37,9 @@ near_rpc_url = "https://beta.rpc.mainnet.near.org"
 ## Default value is 300_000_000_000_000
 #max_gas_burnt = 300_000_000_000_000
 
-## Max available memory for `block_cache` and `contract_code_cache` in gigabytes
-## By default we use all available memory
-#limit_memory_cache = 0
-
-## Reserved memory for running the application in gigabytes
+## Contract code cache in gigabytes
 ## By default we use 0.25 gigabyte (256MB or 268_435_456 bytes)
-#reserved_memory = 0.25
+#contract_code_cache_size = 0.25
 
 ## Block cache size in gigabytes
 ## By default we use 0.125 gigabyte (128MB or 134_217_728 bytes)

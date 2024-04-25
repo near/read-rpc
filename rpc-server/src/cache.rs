@@ -74,7 +74,7 @@ impl<K: std::hash::Hash + Eq, V> LruMemoryCache<K, V> {
         self.max_size
     }
 
-    /// Returns the number of key-value pairs that are currently in the the cache.
+    /// Returns the number of key-value pairs that are currently in the cache.
     pub fn len(&self) -> usize {
         self.inner.len()
     }
@@ -101,6 +101,7 @@ impl<K: std::hash::Hash + Eq, V: Clone> RwLockLruMemoryCache<K, V> {
         self.inner.read().await.get(key).cloned()
     }
 
+    #[allow(unused)]
     pub async fn contains(&self, key: &K) -> bool {
         self.inner.read().await.contains(key)
     }

@@ -1,9 +1,7 @@
 use std::collections::HashMap;
-use std::ops::Deref;
 
 use futures::StreamExt;
 
-use crate::config::CompiledCodeCache;
 use crate::errors::FunctionCallError;
 use crate::modules::blocks::BlocksInfoByFinality;
 use crate::modules::queries::CodeStorage;
@@ -110,10 +108,9 @@ async fn run_code_in_vm_runner(
     context: near_vm_runner::logic::VMContext,
     mut code_storage: CodeStorage,
     protocol_version: near_primitives::types::ProtocolVersion,
-    compiled_contract_code_cache: &std::sync::Arc<CompiledCodeCache>,
+    compiled_contract_code_cache: &near_vm_runner::FilesystemContractRuntimeCache,
 ) -> Result<near_vm_runner::logic::VMOutcome, near_vm_runner::logic::errors::VMRunnerError> {
     let contract_method_name = String::from(method_name);
-    let code_cache = std::sync::Arc::clone(compiled_contract_code_cache);
 
     let store = near_parameters::RuntimeConfigStore::free();
     let config = store.get_config(protocol_version).wasm_config.clone();
@@ -122,6 +119,9 @@ async fn run_code_in_vm_runner(
         ..config
     };
     let account = account.clone();
+    let compiled_contract_code_cache_handle =
+        near_vm_runner::ContractRuntimeCache::handle(compiled_contract_code_cache);
+    crate::metrics::START_EXETUTING_CONTRACT_COUNTER.inc();
     let results = tokio::task::spawn_blocking(move || {
         near_vm_runner::run(
             &account,
@@ -132,10 +132,11 @@ async fn run_code_in_vm_runner(
             &vm_config,
             &near_parameters::RuntimeFeesConfig::free(),
             &[],
-            Some(code_cache.deref()),
+            Some(&compiled_contract_code_cache_handle),
         )
     })
     .await;
+    crate::metrics::FINISH_EXECUTING_CONTRACT_COUNTER.inc();
     match results {
         Ok(result) => result,
         Err(err) => Err(
@@ -156,7 +157,7 @@ pub async fn run_contract(
     method_name: &str,
     args: near_primitives::types::FunctionArgs,
     db_manager: std::sync::Arc<Box<dyn database::ReaderDbManager + Sync + Send + 'static>>,
-    compiled_contract_code_cache: &std::sync::Arc<CompiledCodeCache>,
+    compiled_contract_code_cache: &near_vm_runner::FilesystemContractRuntimeCache,
     contract_code_cache: &std::sync::Arc<
         crate::cache::RwLockLruMemoryCache<near_primitives::hash::CryptoHash, Vec<u8>>,
     >,
