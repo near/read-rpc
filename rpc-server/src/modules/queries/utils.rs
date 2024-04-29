@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use futures::StreamExt;
+use near_vm_runner::ContractRuntimeCache;
 
 use crate::errors::FunctionCallError;
 use crate::modules::blocks::BlocksInfoByFinality;
@@ -103,7 +104,7 @@ pub async fn fetch_list_access_keys_from_db(
 )]
 async fn run_code_in_vm_runner(
     account: &near_primitives::account::Account,
-    contract_code: near_vm_runner::ContractCode,
+    contract_code: Option<near_vm_runner::ContractCode>,
     method_name: &str,
     context: near_vm_runner::logic::VMContext,
     mut code_storage: CodeStorage,
@@ -125,7 +126,7 @@ async fn run_code_in_vm_runner(
     let results = tokio::task::spawn_blocking(move || {
         near_vm_runner::run(
             &account,
-            Some(&contract_code),
+            contract_code.as_ref(),
             &contract_method_name,
             &mut code_storage,
             &context,
@@ -175,24 +176,6 @@ pub async fn run_contract(
         .map_err(|_| FunctionCallError::AccountDoesNotExist {
             requested_account_id: account_id.clone(),
         })?;
-
-    let code: Option<Vec<u8>> = contract_code_cache.get(&contract.data.code_hash()).await;
-
-    let contract_code = match code {
-        Some(code) => near_vm_runner::ContractCode::new(code, Some(contract.data.code_hash())),
-        None => {
-            let code = db_manager
-                .get_contract_code(&account_id, block.block_height)
-                .await
-                .map_err(|_| FunctionCallError::InvalidAccountId {
-                    requested_account_id: account_id.clone(),
-                })?;
-            contract_code_cache
-                .put(contract.data.code_hash(), code.data.clone())
-                .await;
-            near_vm_runner::ContractCode::new(code.data, Some(contract.data.code_hash()))
-        }
-    };
 
     let (epoch_height, epoch_validators) =
         if blocks_info_by_finality.final_cache_block().await.epoch_id == block.epoch_id {
@@ -246,6 +229,26 @@ pub async fn run_contract(
             .collect(),
         optimistic_data,
     );
+
+    let contract_code  = if compiled_contract_code_cache.has(&contract.data.code_hash()).unwrap_or(false) {
+        None
+    } else {
+        Some(match contract_code_cache.get(&contract.data.code_hash()).await {
+            Some(code) => near_vm_runner::ContractCode::new(code, Some(contract.data.code_hash())),
+            None => {
+                let code = db_manager
+                    .get_contract_code(&account_id, block.block_height)
+                    .await
+                    .map_err(|_| FunctionCallError::InvalidAccountId {
+                        requested_account_id: account_id.clone(),
+                    })?;
+                contract_code_cache
+                    .put(contract.data.code_hash(), code.data.clone())
+                    .await;
+                near_vm_runner::ContractCode::new(code.data, Some(contract.data.code_hash()))
+            }
+        })
+    };
 
     let result = run_code_in_vm_runner(
         &contract.data,
