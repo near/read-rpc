@@ -665,18 +665,6 @@ lazy_static! {
     ).unwrap();
 }
 
-lazy_static! {
-    // Execute contract counters
-    pub(crate) static ref START_EXETUTING_CONTRACT_COUNTER: IntCounter = try_create_int_counter(
-        "start_executing_contract_counter",
-        "Total number of the started executing contracts"
-    ).unwrap();
-    pub(crate) static ref FINISH_EXECUTING_CONTRACT_COUNTER: IntCounter = try_create_int_counter(
-        "finish_executing_contract_counter",
-        "Total number of the finish executing contracts"
-    ).unwrap();
-}
-
 /// Exposes prometheus metrics
 #[get("/metrics")]
 pub(crate) async fn get_metrics() -> impl Responder {
