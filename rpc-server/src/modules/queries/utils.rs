@@ -100,6 +100,48 @@ pub async fn fetch_list_access_keys_from_db(
 #[allow(clippy::too_many_arguments)]
 #[cfg_attr(
     feature = "tracing-instrumentation",
+    tracing::instrument(skip(context, code_storage, contract_code, compiled_contract_code_cache))
+)]
+async fn run_code_in_vm_runner(
+    account: near_primitives::account::Account,
+    contract_code: Option<near_vm_runner::ContractCode>,
+    method_name: String,
+    context: near_vm_runner::logic::VMContext,
+    mut code_storage: CodeStorage,
+    vm_config: near_parameters::vm::Config,
+    compiled_contract_code_cache: &near_vm_runner::FilesystemContractRuntimeCache,
+) -> Result<near_vm_runner::logic::VMOutcome, near_vm_runner::logic::errors::VMRunnerError> {
+    let compiled_contract_code_cache_handle =
+        near_vm_runner::ContractRuntimeCache::handle(compiled_contract_code_cache);
+
+    let results = tokio::task::spawn_blocking(move || {
+        near_vm_runner::run(
+            &account,
+            contract_code.as_ref(),
+            &method_name,
+            &mut code_storage,
+            &context,
+            &vm_config,
+            &near_parameters::RuntimeFeesConfig::free(),
+            &[],
+            Some(&compiled_contract_code_cache_handle),
+        )
+    })
+    .await;
+
+    match results {
+        Ok(result) => result,
+        Err(err) => Err(
+            near_vm_runner::logic::errors::VMRunnerError::WasmUnknownError {
+                debug_message: format!("Failed to run contract: {:?}", err),
+            },
+        ),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+#[cfg_attr(
+    feature = "tracing-instrumentation",
     tracing::instrument(skip(db_manager, compiled_contract_code_cache, contract_code_cache))
 )]
 pub async fn run_contract(
@@ -170,7 +212,7 @@ pub async fn run_contract(
     };
 
     // Init an external scylla interface for the Runtime logic
-    let mut code_storage = CodeStorage::init(
+    let code_storage = CodeStorage::init(
         db_manager.clone(),
         account_id.clone(),
         block.block_height,
@@ -218,37 +260,20 @@ pub async fn run_contract(
         )
     };
 
-    // Create a handle for the compiled contract code cache
-    let compiled_contract_code_cache_handle =
-        near_vm_runner::ContractRuntimeCache::handle(compiled_contract_code_cache);
-
-    // Execute the contract code in the NearVM
-    let result = match tokio::task::spawn_blocking(move || {
-        near_vm_runner::run(
-            &contract.data,
-            contract_code.as_ref(),
-            &method_name,
-            &mut code_storage,
-            &context,
-            &vm_config,
-            &near_parameters::RuntimeFeesConfig::free(),
-            &[],
-            Some(&compiled_contract_code_cache_handle),
-        )
-    })
+    // Execute the contract in the near VM
+    let result = run_code_in_vm_runner(
+        contract.data,
+        contract_code,
+        method_name,
+        context,
+        code_storage,
+        vm_config,
+        compiled_contract_code_cache,
+    )
     .await
-    {
-        Ok(result) => result,
-        Err(err) => Err(
-            near_vm_runner::logic::errors::VMRunnerError::WasmUnknownError {
-                debug_message: format!("Failed to run contract: {:?}", err),
-            },
-        ),
-    }
     .map_err(|e| FunctionCallError::InternalError {
         error_message: e.to_string(),
     })?;
-
     if let Some(err) = result.aborted {
         let message = format!("wasm execution failed with error: {:?}", err);
         Err(FunctionCallError::VMError {
