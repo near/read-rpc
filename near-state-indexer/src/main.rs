@@ -1,5 +1,6 @@
 use clap::Parser;
 use futures::StreamExt;
+use near_indexer::near_primitives;
 
 use crate::configs::Opts;
 use near_indexer::near_primitives::hash::CryptoHash;
@@ -70,14 +71,17 @@ async fn handle_streamer_message(
         &indexer_config,
     );
 
-    let published_streamer_message_feature =
-        utils::publish_streamer_message("final_block", &streamer_message, redis_client);
+    let update_block_streamer_message_future = utils::update_block_streamer_message(
+        near_primitives::types::Finality::Final,
+        &streamer_message,
+        redis_client,
+    );
 
     futures::try_join!(
         handle_epoch_future,
         handle_block_future,
         handle_state_change_future,
-        published_streamer_message_feature,
+        update_block_streamer_message_future,
     )?;
 
     let mut stats_lock = stats.write().await;
@@ -117,7 +121,7 @@ async fn handle_epoch(
 ) -> anyhow::Result<()> {
     if let Some(stats_epoch_id) = stats_current_epoch_id {
         if stats_epoch_id == current_epoch_id {
-            // If epoch didn't change, we don't need handle it
+            // If epoch didn't change, we don't need to handle it
             Ok(())
         } else {
             // If epoch changed, we need to save epoch info and update epoch_end_height

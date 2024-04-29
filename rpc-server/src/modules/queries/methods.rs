@@ -107,7 +107,7 @@ async fn query_call(
                 &data,
                 block,
                 account_id,
-                &method_name,
+                method_name,
                 args.clone(),
                 is_optimistic,
             )
@@ -118,7 +118,22 @@ async fn query_call(
         near_primitives::views::QueryRequest::ViewAccessKeyList { account_id } => {
             crate::metrics::QUERY_VIEW_ACCESS_KEYS_LIST_REQUESTS_TOTAL.inc();
             #[cfg(not(feature = "account_access_keys"))]
-            return Ok(data.near_rpc_client.call(query_request).await?);
+            {
+                let final_block = data.blocks_info_by_finality.final_cache_block().await;
+                // `expected_earliest_available_block` calculated by formula:
+                // `final_block_height` - `node_epoch_count` * `epoch_length`
+                // Now near store 5 epochs, it can be changed in the future
+                // epoch_length = 43200 blocks
+                let expected_earliest_available_block =
+                    final_block.block_height - 5 * data.genesis_info.genesis_config.epoch_length;
+                return if block.block_height > expected_earliest_available_block {
+                    // Proxy to regular rpc if the block is available
+                    Ok(data.near_rpc_client.call(query_request).await?)
+                } else {
+                    // Proxy to archival rpc if the block garbage collected
+                    Ok(data.near_rpc_client.archival_call(query_request).await?)
+                };
+            }
             #[cfg(feature = "account_access_keys")]
             {
                 view_access_keys_list(&data, block, &account_id).await
@@ -285,9 +300,7 @@ async fn optimistic_view_account(
 > {
     if let Ok(result) = data
         .blocks_info_by_finality
-        .optimistic_block_info()
-        .await
-        .account_changes_in_block(account_id)
+        .optimistic_account_changes_in_block(account_id)
         .await
     {
         if let Some(account_view) = result {
@@ -378,9 +391,7 @@ async fn optimistic_view_code(
 ) -> Result<Vec<u8>, near_jsonrpc::primitives::types::query::RpcQueryError> {
     let contract_code = if let Ok(result) = data
         .blocks_info_by_finality
-        .optimistic_block_info()
-        .await
-        .code_changes_in_block(account_id)
+        .optimistic_code_changes_in_block(account_id)
         .await
     {
         if let Some(code) = result {
@@ -425,7 +436,7 @@ async fn function_call(
     data: &Data<ServerContext>,
     block: CacheBlock,
     account_id: near_primitives::types::AccountId,
-    method_name: &str,
+    method_name: String,
     args: near_primitives::types::FunctionArgs,
     is_optimistic: bool,
 ) -> Result<
@@ -465,14 +476,12 @@ async fn optimistic_function_call(
     data: &Data<ServerContext>,
     block: CacheBlock,
     account_id: near_primitives::types::AccountId,
-    method_name: &str,
+    method_name: String,
     args: near_primitives::types::FunctionArgs,
 ) -> Result<RunContractResponse, crate::errors::FunctionCallError> {
     let optimistic_data = data
         .blocks_info_by_finality
-        .optimistic_block_info()
-        .await
-        .state_changes_in_block(&account_id, &[])
+        .optimistic_state_changes_in_block(&account_id, &[])
         .await;
     run_contract(
         account_id,
@@ -494,7 +503,7 @@ async fn database_function_call(
     data: &Data<ServerContext>,
     block: CacheBlock,
     account_id: near_primitives::types::AccountId,
-    method_name: &str,
+    method_name: String,
     args: near_primitives::types::FunctionArgs,
 ) -> Result<RunContractResponse, crate::errors::FunctionCallError> {
     run_contract(
@@ -561,9 +570,7 @@ async fn optimistic_view_state(
 > {
     let mut optimistic_data = data
         .blocks_info_by_finality
-        .optimistic_block_info()
-        .await
-        .state_changes_in_block(account_id, prefix)
+        .optimistic_state_changes_in_block(account_id, prefix)
         .await;
     let state_from_db =
         get_state_keys_from_db(&data.db_manager, account_id, block.block_height, prefix).await;
@@ -680,9 +687,7 @@ async fn optimistic_view_access_key(
 > {
     if let Ok(result) = data
         .blocks_info_by_finality
-        .optimistic_block_info()
-        .await
-        .access_key_changes_in_block(account_id, &public_key)
+        .optimistic_access_key_changes_in_block(account_id, &public_key)
         .await
     {
         if let Some(access_key) = result {

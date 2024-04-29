@@ -505,17 +505,17 @@ impl crate::TxIndexerDbManager for ScyllaDBManager {
         transaction_hash: &str,
         block_height: u64,
     ) -> anyhow::Result<()> {
-        let delete_transaction_feature = Self::execute_prepared_query(
+        let delete_transaction_future = Self::execute_prepared_query(
             &self.scylla_session,
             &self.cache_delete_transaction,
             (num_bigint::BigInt::from(block_height), transaction_hash),
         );
-        let delete_receipts_feature = Self::execute_prepared_query(
+        let delete_receipts_future = Self::execute_prepared_query(
             &self.scylla_session,
             &self.cache_delete_receipts,
             (num_bigint::BigInt::from(block_height), transaction_hash),
         );
-        futures::try_join!(delete_transaction_feature, delete_receipts_feature)?;
+        futures::try_join!(delete_transaction_future, delete_receipts_future)?;
         Ok(())
     }
 

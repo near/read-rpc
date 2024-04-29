@@ -12,10 +12,6 @@ pub struct RPCHealthStatusResponse {
     max_contracts_codes_cache_size: String,
     current_contracts_codes_cache_size: String,
 
-    compiled_contracts_codes_in_cache: usize,
-    max_compiled_contracts_codes_cache_size: String,
-    current_compiled_contracts_codes_cache_size: String,
-
     final_block_height: u64,
 }
 
@@ -36,26 +32,6 @@ impl RPCHealthStatusResponse {
             ),
             current_contracts_codes_cache_size: friendly_memory_size_format(
                 server_context.contract_code_cache.current_size().await,
-            ),
-
-            compiled_contracts_codes_in_cache: server_context
-                .compiled_contract_code_cache
-                .local_cache
-                .len()
-                .await,
-            max_compiled_contracts_codes_cache_size: friendly_memory_size_format(
-                server_context
-                    .compiled_contract_code_cache
-                    .local_cache
-                    .max_size()
-                    .await,
-            ),
-            current_compiled_contracts_codes_cache_size: friendly_memory_size_format(
-                server_context
-                    .compiled_contract_code_cache
-                    .local_cache
-                    .current_size()
-                    .await,
             ),
 
             final_block_height: server_context

@@ -15,8 +15,7 @@ pub struct GeneralRpcServerConfig {
     pub referer_header_value: String,
     pub server_port: u16,
     pub max_gas_burnt: u64,
-    pub limit_memory_cache: Option<f64>,
-    pub reserved_memory: f64,
+    pub contract_code_cache_size: f64,
     pub block_cache_size: f64,
     pub shadow_data_consistency_rate: f64,
 }
@@ -111,9 +110,7 @@ pub struct CommonGeneralRpcServerConfig {
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub max_gas_burnt: Option<u64>,
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
-    pub limit_memory_cache: Option<f64>,
-    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
-    pub reserved_memory: Option<f64>,
+    pub contract_code_cache_size: Option<f64>,
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub block_cache_size: Option<f64>,
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
@@ -133,7 +130,7 @@ impl CommonGeneralRpcServerConfig {
         300_000_000_000_000
     }
 
-    pub fn default_reserved_memory() -> f64 {
+    pub fn default_contract_code_cache_size() -> f64 {
         0.25
     }
 
@@ -152,8 +149,7 @@ impl Default for CommonGeneralRpcServerConfig {
             referer_header_value: Some(Self::default_referer_header_value()),
             server_port: Some(Self::default_server_port()),
             max_gas_burnt: Some(Self::default_max_gas_burnt()),
-            limit_memory_cache: Default::default(),
-            reserved_memory: Some(Self::default_reserved_memory()),
+            contract_code_cache_size: Some(Self::default_contract_code_cache_size()),
             block_cache_size: Some(Self::default_block_cache_size()),
             shadow_data_consistency_rate: Some(Self::default_shadow_data_consistency_rate()),
         }
@@ -292,11 +288,10 @@ impl From<CommonGeneralConfig> for GeneralRpcServerConfig {
                 .rpc_server
                 .max_gas_burnt
                 .unwrap_or_else(CommonGeneralRpcServerConfig::default_max_gas_burnt),
-            limit_memory_cache: common_config.rpc_server.limit_memory_cache,
-            reserved_memory: common_config
+            contract_code_cache_size: common_config
                 .rpc_server
-                .reserved_memory
-                .unwrap_or_else(CommonGeneralRpcServerConfig::default_reserved_memory),
+                .contract_code_cache_size
+                .unwrap_or_else(CommonGeneralRpcServerConfig::default_contract_code_cache_size),
             block_cache_size: common_config
                 .rpc_server
                 .block_cache_size
