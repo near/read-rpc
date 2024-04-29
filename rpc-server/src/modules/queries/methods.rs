@@ -107,7 +107,7 @@ async fn query_call(
                 &data,
                 block,
                 account_id,
-                &method_name,
+                method_name,
                 args.clone(),
                 is_optimistic,
             )
@@ -436,7 +436,7 @@ async fn function_call(
     data: &Data<ServerContext>,
     block: CacheBlock,
     account_id: near_primitives::types::AccountId,
-    method_name: &str,
+    method_name: String,
     args: near_primitives::types::FunctionArgs,
     is_optimistic: bool,
 ) -> Result<
@@ -476,7 +476,7 @@ async fn optimistic_function_call(
     data: &Data<ServerContext>,
     block: CacheBlock,
     account_id: near_primitives::types::AccountId,
-    method_name: &str,
+    method_name: String,
     args: near_primitives::types::FunctionArgs,
 ) -> Result<RunContractResponse, crate::errors::FunctionCallError> {
     let optimistic_data = data
@@ -503,7 +503,7 @@ async fn database_function_call(
     data: &Data<ServerContext>,
     block: CacheBlock,
     account_id: near_primitives::types::AccountId,
-    method_name: &str,
+    method_name: String,
     args: near_primitives::types::FunctionArgs,
 ) -> Result<RunContractResponse, crate::errors::FunctionCallError> {
     run_contract(

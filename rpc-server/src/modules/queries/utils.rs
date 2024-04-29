@@ -100,55 +100,11 @@ pub async fn fetch_list_access_keys_from_db(
 #[allow(clippy::too_many_arguments)]
 #[cfg_attr(
     feature = "tracing-instrumentation",
-    tracing::instrument(skip(context, code_storage, contract_code, compiled_contract_code_cache))
-)]
-async fn run_code_in_vm_runner(
-    account: &near_primitives::account::Account,
-    contract_code: Option<near_vm_runner::ContractCode>,
-    method_name: &str,
-    context: near_vm_runner::logic::VMContext,
-    mut code_storage: CodeStorage,
-    vm_config: near_parameters::vm::Config,
-    compiled_contract_code_cache: &near_vm_runner::FilesystemContractRuntimeCache,
-) -> Result<near_vm_runner::logic::VMOutcome, near_vm_runner::logic::errors::VMRunnerError> {
-    let contract_method_name = String::from(method_name);
-    let account = account.clone();
-    let compiled_contract_code_cache_handle =
-        near_vm_runner::ContractRuntimeCache::handle(compiled_contract_code_cache);
-    crate::metrics::START_EXETUTING_CONTRACT_COUNTER.inc();
-    let results = tokio::task::spawn_blocking(move || {
-        near_vm_runner::run(
-            &account,
-            contract_code.as_ref(),
-            &contract_method_name,
-            &mut code_storage,
-            &context,
-            &vm_config,
-            &near_parameters::RuntimeFeesConfig::free(),
-            &[],
-            Some(&compiled_contract_code_cache_handle),
-        )
-    })
-    .await;
-    crate::metrics::FINISH_EXECUTING_CONTRACT_COUNTER.inc();
-    match results {
-        Ok(result) => result,
-        Err(err) => Err(
-            near_vm_runner::logic::errors::VMRunnerError::WasmUnknownError {
-                debug_message: format!("Failed to run contract: {:?}", err),
-            },
-        ),
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-#[cfg_attr(
-    feature = "tracing-instrumentation",
     tracing::instrument(skip(db_manager, compiled_contract_code_cache, contract_code_cache))
 )]
 pub async fn run_contract(
     account_id: near_primitives::types::AccountId,
-    method_name: &str,
+    method_name: String,
     args: near_primitives::types::FunctionArgs,
     db_manager: std::sync::Arc<Box<dyn database::ReaderDbManager + Sync + Send + 'static>>,
     compiled_contract_code_cache: &near_vm_runner::FilesystemContractRuntimeCache,
@@ -187,6 +143,7 @@ pub async fn run_contract(
             )
         };
 
+    // Prepare context for the VM run contract
     let public_key = near_crypto::PublicKey::empty(near_crypto::KeyType::ED25519);
     let random_seed = near_primitives::utils::create_random_seed(
         block.latest_protocol_version,
@@ -212,7 +169,8 @@ pub async fn run_contract(
         output_data_receivers: vec![],
     };
 
-    let code_storage = CodeStorage::init(
+    // Init an external scylla interface for the Runtime logic
+    let mut code_storage = CodeStorage::init(
         db_manager.clone(),
         account_id.clone(),
         block.block_height,
@@ -223,6 +181,7 @@ pub async fn run_contract(
         optimistic_data,
     );
 
+    // Init runtime config for each protocol version
     let store = near_parameters::RuntimeConfigStore::free();
     let config = store
         .get_config(block.latest_protocol_version)
@@ -233,6 +192,7 @@ pub async fn run_contract(
         ..config
     };
 
+    // Check if the contract code is already in the cache
     let key = near_vm_runner::get_contract_cache_key(contract.data.code_hash(), &vm_config);
     let contract_code = if compiled_contract_code_cache.has(&key).unwrap_or(false) {
         None
@@ -258,19 +218,39 @@ pub async fn run_contract(
         )
     };
 
-    let result = run_code_in_vm_runner(
-        &contract.data,
-        contract_code,
-        method_name,
-        context,
-        code_storage,
-        vm_config,
-        compiled_contract_code_cache,
-    )
+    // Create a handle for the compiled contract code cache
+    let compiled_contract_code_cache_handle =
+        near_vm_runner::ContractRuntimeCache::handle(compiled_contract_code_cache);
+
+    // Execute the contract code in the NearVM
+    crate::metrics::START_EXETUTING_CONTRACT_COUNTER.inc();
+    let result = match tokio::task::spawn_blocking(move || {
+        near_vm_runner::run(
+            &contract.data,
+            contract_code.as_ref(),
+            &method_name,
+            &mut code_storage,
+            &context,
+            &vm_config,
+            &near_parameters::RuntimeFeesConfig::free(),
+            &[],
+            Some(&compiled_contract_code_cache_handle),
+        )
+    })
     .await
+    {
+        Ok(result) => result,
+        Err(err) => Err(
+            near_vm_runner::logic::errors::VMRunnerError::WasmUnknownError {
+                debug_message: format!("Failed to run contract: {:?}", err),
+            },
+        ),
+    }
     .map_err(|e| FunctionCallError::InternalError {
         error_message: e.to_string(),
     })?;
+    crate::metrics::FINISH_EXECUTING_CONTRACT_COUNTER.inc();
+
     if let Some(err) = result.aborted {
         let message = format!("wasm execution failed with error: {:?}", err);
         Err(FunctionCallError::VMError {
