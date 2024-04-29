@@ -108,17 +108,10 @@ async fn run_code_in_vm_runner(
     method_name: &str,
     context: near_vm_runner::logic::VMContext,
     mut code_storage: CodeStorage,
-    protocol_version: near_primitives::types::ProtocolVersion,
+    vm_config: near_parameters::vm::Config,
     compiled_contract_code_cache: &near_vm_runner::FilesystemContractRuntimeCache,
 ) -> Result<near_vm_runner::logic::VMOutcome, near_vm_runner::logic::errors::VMRunnerError> {
     let contract_method_name = String::from(method_name);
-
-    let store = near_parameters::RuntimeConfigStore::free();
-    let config = store.get_config(protocol_version).wasm_config.clone();
-    let vm_config = near_parameters::vm::Config {
-        vm_kind: config.vm_kind.replace_with_wasmtime_if_unsupported(),
-        ..config
-    };
     let account = account.clone();
     let compiled_contract_code_cache_handle =
         near_vm_runner::ContractRuntimeCache::handle(compiled_contract_code_cache);
@@ -230,24 +223,39 @@ pub async fn run_contract(
         optimistic_data,
     );
 
-    let contract_code  = if compiled_contract_code_cache.has(&contract.data.code_hash()).unwrap_or(false) {
+    let store = near_parameters::RuntimeConfigStore::free();
+    let config = store
+        .get_config(block.latest_protocol_version)
+        .wasm_config
+        .clone();
+    let vm_config = near_parameters::vm::Config {
+        vm_kind: config.vm_kind.replace_with_wasmtime_if_unsupported(),
+        ..config
+    };
+
+    let key = near_vm_runner::get_contract_cache_key(contract.data.code_hash(), &vm_config);
+    let contract_code = if compiled_contract_code_cache.has(&key).unwrap_or(false) {
         None
     } else {
-        Some(match contract_code_cache.get(&contract.data.code_hash()).await {
-            Some(code) => near_vm_runner::ContractCode::new(code, Some(contract.data.code_hash())),
-            None => {
-                let code = db_manager
-                    .get_contract_code(&account_id, block.block_height)
-                    .await
-                    .map_err(|_| FunctionCallError::InvalidAccountId {
-                        requested_account_id: account_id.clone(),
-                    })?;
-                contract_code_cache
-                    .put(contract.data.code_hash(), code.data.clone())
-                    .await;
-                near_vm_runner::ContractCode::new(code.data, Some(contract.data.code_hash()))
-            }
-        })
+        Some(
+            match contract_code_cache.get(&contract.data.code_hash()).await {
+                Some(code) => {
+                    near_vm_runner::ContractCode::new(code, Some(contract.data.code_hash()))
+                }
+                None => {
+                    let code = db_manager
+                        .get_contract_code(&account_id, block.block_height)
+                        .await
+                        .map_err(|_| FunctionCallError::InvalidAccountId {
+                            requested_account_id: account_id.clone(),
+                        })?;
+                    contract_code_cache
+                        .put(contract.data.code_hash(), code.data.clone())
+                        .await;
+                    near_vm_runner::ContractCode::new(code.data, Some(contract.data.code_hash()))
+                }
+            },
+        )
     };
 
     let result = run_code_in_vm_runner(
@@ -256,7 +264,7 @@ pub async fn run_contract(
         method_name,
         context,
         code_storage,
-        block.latest_protocol_version,
+        vm_config,
         compiled_contract_code_cache,
     )
     .await
