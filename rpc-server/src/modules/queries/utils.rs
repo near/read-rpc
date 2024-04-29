@@ -223,7 +223,6 @@ pub async fn run_contract(
         near_vm_runner::ContractRuntimeCache::handle(compiled_contract_code_cache);
 
     // Execute the contract code in the NearVM
-    crate::metrics::START_EXETUTING_CONTRACT_COUNTER.inc();
     let result = match tokio::task::spawn_blocking(move || {
         near_vm_runner::run(
             &contract.data,
@@ -249,7 +248,6 @@ pub async fn run_contract(
     .map_err(|e| FunctionCallError::InternalError {
         error_message: e.to_string(),
     })?;
-    crate::metrics::FINISH_EXECUTING_CONTRACT_COUNTER.inc();
 
     if let Some(err) = result.aborted {
         let message = format!("wasm execution failed with error: {:?}", err);
