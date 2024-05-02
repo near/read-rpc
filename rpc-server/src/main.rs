@@ -1,5 +1,9 @@
 use actix_web::dev::Service;
 use jsonrpc_v2::{Data, Server};
+use mimalloc::MiMalloc;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 #[macro_use]
 extern crate lazy_static;
@@ -15,7 +19,7 @@ mod utils;
 // Categories for logging
 pub(crate) const RPC_SERVER: &str = "read_rpc_server";
 
-#[tokio::main]
+#[actix_web::main]
 async fn main() -> anyhow::Result<()> {
     configuration::init_tracing(RPC_SERVER).await?;
     let rpc_server_config =
