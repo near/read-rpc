@@ -26,6 +26,7 @@ hex = "0.4.3"
 jsonrpc-v2 = { git = "https://github.com/kobayurii/jsonrpc-v2", branch = "master" }
 lazy_static = "1.4.0"
 lru = "0.12.2"
+mimalloc = { version = "0.1.41", default-features = false }
 paste = "1.0.14"
 prometheus = "0.13.1"
 redis = { version = "0.25.2", features = ["tokio-comp", "connection-manager"] }
