@@ -113,17 +113,18 @@ async fn run_code_in_vm_runner(
 ) -> Result<near_vm_runner::logic::VMOutcome, near_vm_runner::logic::errors::VMRunnerError> {
     let compiled_contract_code_cache_handle =
         near_vm_runner::ContractRuntimeCache::handle(compiled_contract_code_cache);
-    
+
     let results = tokio::task::spawn_blocking(move || {
-        
         if let Some(code) = contract_code {
             near_vm_runner::precompile_contract(
                 &code,
                 &vm_config,
-                Some(&compiled_contract_code_cache_handle)
-            ).expect("Compilation failed").expect("Cache failed");
+                Some(&compiled_contract_code_cache_handle),
+            )
+            .expect("Compilation failed")
+            .expect("Cache failed");
         };
-        
+
         near_vm_runner::run(
             &account,
             None,
@@ -135,10 +136,11 @@ async fn run_code_in_vm_runner(
             &[],
             Some(&compiled_contract_code_cache_handle),
         )
-    }).await;
-    
+    })
+    .await;
+
     match results {
-        Ok(result) =>  result,
+        Ok(result) => result,
         Err(err) => Err(
             near_vm_runner::logic::errors::VMRunnerError::WasmUnknownError {
                 debug_message: format!("Failed to run contract: {:?}", err),
@@ -254,7 +256,7 @@ pub async fn run_contract(
                 }
                 None => {
                     let code = db_manager
-                        .get_contract_code(&account_id, block.block_height)
+                        .get_contract_code(account_id, block.block_height)
                         .await
                         .map_err(|_| FunctionCallError::InvalidAccountId {
                             requested_account_id: account_id.clone(),
