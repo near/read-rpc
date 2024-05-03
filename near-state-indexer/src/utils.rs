@@ -4,14 +4,14 @@ use near_o11y::WithSpanContextExt;
 const INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
 
 pub(crate) async fn fetch_epoch_validators_info(
-    epoch_id: near_indexer::near_primitives::hash::CryptoHash,
+    epoch_id: near_primitives::hash::CryptoHash,
     client: &actix::Addr<near_client::ViewClientActor>,
-) -> anyhow::Result<near_indexer::near_primitives::views::EpochValidatorInfo> {
+) -> anyhow::Result<near_primitives::views::EpochValidatorInfo> {
     Ok(client
         .send(
             near_client::GetValidatorInfo {
-                epoch_reference: near_indexer::near_primitives::types::EpochReference::EpochId(
-                    near_indexer::near_primitives::types::EpochId(epoch_id),
+                epoch_reference: near_primitives::types::EpochReference::EpochId(
+                    near_primitives::types::EpochId(epoch_id),
                 ),
             }
             .with_span_context(),
@@ -26,11 +26,9 @@ pub(crate) async fn fetch_latest_block(
 ) -> anyhow::Result<u64> {
     let block = client
         .send(
-            near_client::GetBlock(
-                near_indexer::near_primitives::types::BlockReference::Finality(
-                    near_indexer::near_primitives::types::Finality::Final,
-                ),
-            )
+            near_client::GetBlock(near_primitives::types::BlockReference::Finality(
+                near_primitives::types::Finality::Final,
+            ))
             .with_span_context(),
         )
         .await??;
@@ -39,7 +37,7 @@ pub(crate) async fn fetch_latest_block(
 
 pub(crate) async fn fetch_optimistic_block(
     client: &actix::Addr<near_client::ViewClientActor>,
-) -> anyhow::Result<near_indexer::near_primitives::views::BlockView> {
+) -> anyhow::Result<near_primitives::views::BlockView> {
     Ok(client
         .send(near_client::GetBlock::latest().with_span_context())
         .await??)
@@ -47,7 +45,7 @@ pub(crate) async fn fetch_optimistic_block(
 
 pub(crate) async fn fetch_status(
     client: &actix::Addr<near_client::ClientActor>,
-) -> anyhow::Result<near_indexer::near_primitives::views::StatusResponse> {
+) -> anyhow::Result<near_primitives::views::StatusResponse> {
     tracing::debug!(target: crate::INDEXER, "Fetching status");
     Ok(client
         .send(
@@ -65,13 +63,41 @@ pub(crate) async fn update_block_streamer_message(
     streamer_message: &near_indexer::StreamerMessage,
     redis_client: redis::aio::ConnectionManager,
 ) -> anyhow::Result<()> {
+    let block_height = streamer_message.block.header.height;
     let json_streamer_message = serde_json::to_string(streamer_message)?;
     let block_type = serde_json::to_string(&block_type)?;
-    redis::cmd("SET")
-        .arg(block_type)
-        .arg(json_streamer_message)
+
+    let last_height = redis::cmd("GET")
+        .arg(format!("{}_height", block_type))
         .query_async(&mut redis_client.clone())
-        .await?;
+        .await.unwrap_or(0);
+
+    // If the block height is greater than the last height, update the block streamer message
+    // if we have a few indexers running, we need to make sure that we are not updating the same block
+    // or block which is already processed or block less than the last processed block
+    if block_height > last_height {
+        // Update the last block height
+        // Create a clone of the redis client and redis cmd to avoid borrowing issues
+        let mut redis_client_clone = redis_client.clone();
+        let mut redis_set_cmd = redis::cmd("SET");
+        let update_height_feature = redis_set_cmd
+            .arg(format!("{}_height", block_type))
+            .arg(block_height)
+            .query_async::<redis::aio::ConnectionManager, u64>(&mut redis_client_clone);
+
+        // Update the block streamer message
+        // Create a clone of the redis client and redis cmd to avoid borrowing issues
+        let mut redis_client_clone = redis_client.clone();
+        let mut redis_set_cmd = redis::cmd("SET");
+        let update_stream_msg_feature =
+            redis_set_cmd
+                .arg(block_type)
+                .arg(json_streamer_message)
+                .query_async::<redis::aio::ConnectionManager, String>(&mut redis_client_clone);
+
+        // Wait for both futures to complete
+        futures::try_join!(update_height_feature, update_stream_msg_feature)?;
+    };
     Ok(())
 }
 
