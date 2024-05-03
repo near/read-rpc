@@ -415,7 +415,7 @@ impl crate::TxIndexerDbManager for ScyllaDBManager {
                     session,
                     prepared,
                     token_val_range_start,
-                    token_val_range_start + step - 1,
+                    token_val_range_start.saturating_add(step).saturating_sub(1),
                 )
                 .await;
                 let _permit = permit;
