@@ -70,7 +70,8 @@ pub(crate) async fn update_block_streamer_message(
     let last_height = redis::cmd("GET")
         .arg(format!("{}_height", block_type))
         .query_async(&mut redis_client.clone())
-        .await.unwrap_or(0);
+        .await
+        .unwrap_or(0);
 
     // If the block height is greater than the last height, update the block streamer message
     // if we have a few indexers running, we need to make sure that we are not updating the same block
