@@ -658,9 +658,15 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-s3"
+<<<<<<< HEAD
 version = "1.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "966646a69665bb0427460d78747204317f6639bdf5ec61305c4c5195af3dc086"
+=======
+version = "1.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cedc97499da49c3e36cde578340f9925284685073cb3e512aaf9ab16cd9a2541"
+>>>>>>> bc78c15 (feat: tx-indexer to store transactions to object storage (GCS))
 dependencies = [
  "ahash 0.8.11",
  "aws-credential-types",
@@ -872,9 +878,15 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
+<<<<<<< HEAD
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c9ac79e9f3a4d576f3cd4a470a0275b138d9e7b11b1cd514a6858ae0a79dd5bb"
+=======
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1cf64e73ef8d4dac6c933230d56d136b75b252edcf82ed36e37d603090cd7348"
+>>>>>>> bc78c15 (feat: tx-indexer to store transactions to object storage (GCS))
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-http",
@@ -898,9 +910,15 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api"
+<<<<<<< HEAD
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04ec42c2f5c0e7796a2848dde4d9f3bf8ce12ccbb3d5aa40c52fa0cdd61a1c47"
+=======
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8c19fdae6e3d5ac9cd01f2d6e6c359c5f5a3e028c2d148a8f5b90bf3399a18a7"
+>>>>>>> bc78c15 (feat: tx-indexer to store transactions to object storage (GCS))
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-types",
@@ -950,9 +968,15 @@ dependencies = [
 
 [[package]]
 name = "aws-types"
+<<<<<<< HEAD
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a807d90cd50a969b3d95e4e7ad1491fcae13c6e83948d8728363ecc09d66343a"
+=======
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a43b56df2c529fe44cb4d92bd64d0479883fb9608ff62daede4df5405381814"
+>>>>>>> bc78c15 (feat: tx-indexer to store transactions to object storage (GCS))
 dependencies = [
  "aws-credential-types",
  "aws-smithy-async",
@@ -8500,6 +8524,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tx-details-storage"
+version = "0.2.5"
+dependencies = [
+ "anyhow",
+ "aws-credential-types",
+ "aws-sdk-s3",
+ "aws-types",
+]
+
+[[package]]
 name = "tx-indexer"
 version = "0.2.10"
 dependencies = [
@@ -8521,6 +8555,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
+ "tx-details-storage",
 ]
 
 [[package]]

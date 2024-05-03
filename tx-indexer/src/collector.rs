@@ -1,3 +1,4 @@
+use borsh::BorshDeserialize;
 use futures::{
     future::{join_all, try_join_all},
     StreamExt,
@@ -21,6 +22,7 @@ pub(crate) async fn index_transactions(
     streamer_message: &near_indexer_primitives::StreamerMessage,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<crate::storage::HashStorageWithDB>,
+    tx_details_storage: &std::sync::Arc<crate::TxDetailsStorage>,
     indexer_config: &configuration::TxIndexerConfig,
 ) -> anyhow::Result<()> {
     extract_transactions_to_collect(
@@ -42,10 +44,12 @@ pub(crate) async fn index_transactions(
 
     if !finished_transaction_details.is_empty() {
         let db_manager = db_manager.clone();
+        let tx_details_storage = tx_details_storage.clone();
         tokio::spawn(async move {
-            let send_finished_transaction_details_futures = finished_transaction_details
-                .into_iter()
-                .map(|tx_details| save_transaction_details(&db_manager, tx_details));
+            let send_finished_transaction_details_futures =
+                finished_transaction_details.into_iter().map(|tx_details| {
+                    save_transaction_details(&db_manager, &tx_details_storage, tx_details)
+                });
 
             join_all(send_finished_transaction_details_futures).await;
         });
@@ -277,6 +281,7 @@ async fn process_receipt_execution_outcome(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn save_transaction_details(
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
+    tx_details_storage: &std::sync::Arc<crate::TxDetailsStorage>,
     tx_details: readnode_primitives::CollectingTransactionDetails,
 ) -> bool {
     let transaction_details = match tx_details.to_final_transaction_result() {
@@ -292,81 +297,82 @@ async fn save_transaction_details(
         }
     };
     let transaction_hash = transaction_details.transaction.hash.to_string();
-    let signer_id = transaction_details.transaction.signer_id.to_string();
-    let tx_bytes = &borsh::to_vec(&transaction_details).expect("Failed to serialize transaction");
+    let tx_bytes = borsh::to_vec(&transaction_details).expect("Failed to serialize transaction");
 
-    match db_manager
-        .add_transaction(
-            &transaction_hash,
-            tx_bytes.clone(),
-            tx_details.block_height,
-            &signer_id,
-        )
-        .await
-    {
-        Ok(_) => {
-            // Validate that the transaction is saved correctly
-            // Before validating, we need to wait a little bit to make sure that the transaction is saved
-            tokio::time::sleep(std::time::Duration::from_millis(150)).await;
-            let mut attempts = 1;
-            let mut tx_bytes = tx_bytes.clone();
-            while let Err(err) = db_manager
-                .validate_saved_transaction_deserializable(&transaction_hash, &tx_bytes)
-                .await
-            {
-                tracing::warn!(
-                    target: crate::INDEXER,
-                    "Failed to validate transaction {} \n{:#?}",
-                    transaction_hash,
-                    err
-                );
-                if attempts >= 3 {
-                    tracing::error!(
-                        target: crate::INDEXER,
-                        "Failed to validate transaction {} after 3 attempts",
-                        transaction_hash
-                    );
-                    return false;
-                } else {
-                    attempts += 1;
-                };
-                tx_bytes =
-                    borsh::to_vec(&transaction_details).expect("Failed to serialize transaction");
-                if let Err(err) = db_manager
-                    .add_transaction(
-                        &transaction_hash,
-                        tx_bytes.clone(),
-                        tx_details.block_height,
-                        &signer_id,
-                    )
-                    .await
-                {
-                    tracing::error!(
-                        target: crate::INDEXER,
-                        "Failed to save transaction {} \n{:#?}",
-                        transaction_hash,
-                        err
-                    );
-                    return false;
-                };
-                // Wait a little bit before the next attempt
-                tokio::time::sleep(std::time::Duration::from_millis(150)).await;
-            }
-
-            db_manager
-                .cache_delete_transaction(&transaction_hash, tx_details.block_height)
-                .await
-                .expect("Failed to delete transaction from memory storage");
-            true
-        }
-        Err(err) => {
+    // We faced the issue when the transaction was saved to the storage but later
+    // was failing to deserialize. To avoid this issue and monitor the situation
+    // without runing the user experience, we will try to save the transaction
+    // to the storage and validate that it is saved correctly for 3 attempts
+    // before we throw an error.
+    let mut save_attempts = 0;
+    'retry: loop {
+        save_attempts += 1;
+        if save_attempts > 3 {
             tracing::error!(
                 target: crate::INDEXER,
-                "Failed to save transaction {} \n{:#?}",
-                tx_details.transaction.hash,
-                err
+                "Failed to save transaction {} after 3 attempts",
+                transaction_hash
             );
-            false
+            break false;
+        }
+        match tx_details_storage
+            .store(&transaction_hash, tx_bytes.clone())
+            .await
+        {
+            Ok(_) => {
+                // At this moment transaction seems to be stored, and we want to validate the correctness of the stored data
+                // To validate we will try to retrieve the transaction from the storage and validate that it is deserializable
+                // If the transaction is not deserializable, we will try to save it again
+                'validator: loop {
+                    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+                    let Ok(tx_details_bytes_from_storage) =
+                        tx_details_storage.retrieve(&transaction_hash).await
+                    else {
+                        tracing::error!(
+                            target: crate::INDEXER,
+                            "Failed to retrieve transaction {} from storage",
+                            transaction_hash,
+                        );
+                        continue 'validator;
+                    };
+
+                    match readnode_primitives::TransactionDetails::try_from_slice(
+                        &tx_details_bytes_from_storage,
+                    ) {
+                        Ok(_) => {
+                            // We assume that the transaction is saved correctly
+                            // We can remove the transaction from the cache storage
+                            db_manager
+                                .cache_delete_transaction(
+                                    &transaction_hash,
+                                    tx_details.block_height,
+                                )
+                                .await
+                                .expect("Failed to delete transaction from memory storage");
+                            break 'retry true;
+                        }
+                        Err(err) => {
+                            tracing::warn!(
+                                target: crate::INDEXER,
+                                "Failed to validate transaction {} \n{:#?}",
+                                transaction_hash,
+                                err
+                            );
+                            // If the transaction is not deserializable, we will try to save it again
+                            continue 'retry;
+                        }
+                    }
+                }
+            }
+            Err(err) => {
+                tracing::error!(
+                    target: crate::INDEXER,
+                    "Failed to save transaction {} \n{:#?}",
+                    tx_details.transaction.hash,
+                    err
+                );
+                continue 'retry;
+            }
         }
     }
 }

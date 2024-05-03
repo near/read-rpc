@@ -1,0 +1,16 @@
+[package]
+name = "tx-details-storage"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+aws-credential-types = "1.1.4"
+anyhow = "1.0.70"
+aws-sdk-s3 = { version = "1.14.0", features = ["behavior-version-latest"] }
+aws-types = "1.1.4"
