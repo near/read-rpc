@@ -734,3 +734,53 @@ impl Validators {
         Ok(response)
     }
 }
+
+#[derive(Insertable, Queryable, Selectable)]
+#[diesel(table_name = protocol_configs)]
+pub struct ProtocolConfig {
+    pub epoch_id: String,
+    pub epoch_height: bigdecimal::BigDecimal,
+    pub epoch_start_height: bigdecimal::BigDecimal,
+    pub epoch_end_height: Option<bigdecimal::BigDecimal>,
+    pub protocol_config: serde_json::Value,
+}
+
+impl ProtocolConfig {
+    pub async fn insert_or_ignore(
+        &self,
+        mut conn: crate::postgres::PgAsyncConn,
+    ) -> anyhow::Result<()> {
+        diesel::insert_into(protocol_configs::table)
+            .values(self)
+            .on_conflict_do_nothing()
+            .execute(&mut conn)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn update_epoch_end_height(
+        mut conn: crate::postgres::PgAsyncConn,
+        epoch_id: near_indexer_primitives::CryptoHash,
+        epoch_end_height: bigdecimal::BigDecimal,
+    ) -> anyhow::Result<()> {
+        diesel::update(protocol_configs::table)
+            .filter(protocol_configs::epoch_id.eq(epoch_id.to_string()))
+            .set(protocol_configs::epoch_end_height.eq(epoch_end_height))
+            .execute(&mut conn)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn get_protocol_config(
+        mut conn: crate::postgres::PgAsyncConn,
+        epoch_id: near_indexer_primitives::CryptoHash,
+    ) -> anyhow::Result<Self> {
+        let response = protocol_configs::table
+            .filter(protocol_configs::epoch_id.eq(epoch_id.to_string()))
+            .select(Self::as_select())
+            .first(&mut conn)
+            .await?;
+
+        Ok(response)
+    }
+}

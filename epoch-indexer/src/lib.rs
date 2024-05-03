@@ -29,43 +29,62 @@ pub async fn get_epoch_validators(
     }
 }
 
-pub async fn get_epoch_config(
-    epoch_start_height: near_indexer_primitives::types::BlockHeight,
+/// util to fetch protocol config by epoch_start_height
+/// try_another_blocks - special flag to try another blocks if we have error
+/// in case of error we try to fetch protocol config for next block
+pub async fn get_protocol_config(
+    epoch_start_height: u64,
     client: &near_jsonrpc_client::JsonRpcClient,
+    try_another_blocks: bool,
 ) -> anyhow::Result<near_chain_configs::ProtocolConfigView> {
     let mut attempt_counter = 0;
+    let mut block_height = epoch_start_height;
     loop {
-        let params = near_jsonrpc_client::methods::EXPERIMENTAL_protocol_config::RpcProtocolConfigRequest {
-            block_reference: near_primitives::types::BlockReference::BlockId(
-                near_indexer_primitives::types::BlockId::Height(epoch_start_height)
-            ),
-        };
+        let params =
+            near_jsonrpc_client::methods::EXPERIMENTAL_protocol_config::RpcProtocolConfigRequest {
+                block_reference: near_primitives::types::BlockReference::BlockId(
+                    near_indexer_primitives::types::BlockId::Height(block_height),
+                ),
+            };
         match client.call(params).await {
-            Ok(protocol_config_view) => {
-                return Ok(protocol_config_view);
-            },
+            Ok(response) => return Ok(response),
             Err(e) => {
                 attempt_counter += 1;
+                if try_another_blocks {
+                    block_height += 1;
+                }
                 tracing::debug!(
-                    "Attempt: {}. Epoch start height: {}. Error fetching epoch protocol config: {:?}",
+                    "Attempt: {}. Epoch_start_height {}. Error fetching protocol config: {:?}",
                     attempt_counter,
-                    epoch_start_height,
+                    block_height,
                     e
                 );
                 if attempt_counter > 20 {
-                    anyhow::bail!("Failed to fetch epoch protocol config. Epoch start height: {}", epoch_start_height)
+                    anyhow::bail!(
+                        "Failed to fetch epoch protocol config for epoch_start_height: {}",
+                        epoch_start_height
+                    )
                 }
             }
         }
     }
 }
-
 pub async fn get_epoch_info_by_id(
     epoch_id: CryptoHash,
     rpc_client: &near_jsonrpc_client::JsonRpcClient,
 ) -> anyhow::Result<readnode_primitives::IndexedEpochInfo> {
     let validators_info = get_epoch_validators(epoch_id, rpc_client).await?;
-    let protocol_config = get_epoch_config(validators_info.epoch_start_height, rpc_client).await?;
+    let protocol_config =
+        match get_protocol_config(validators_info.epoch_start_height, rpc_client, false).await {
+            Ok(protocol_config) => protocol_config,
+            Err(e) => {
+                tracing::warn!(
+                    "Error fetching protocol config: {:?}. Try with another blocks",
+                    e
+                );
+                get_protocol_config(validators_info.epoch_start_height, rpc_client, true).await?
+            }
+        };
     Ok(readnode_primitives::IndexedEpochInfo {
         epoch_id,
         epoch_height: validators_info.epoch_height,
@@ -197,14 +216,22 @@ pub async fn save_epoch_info(
         epoch.epoch_height
     };
 
-    db_manager
-        .add_validators(
-            epoch.epoch_id,
-            epoch_height,
-            epoch.epoch_start_height,
-            &epoch.validators_info,
-        )
-        .await?;
+    let save_validators_feature = db_manager.add_validators(
+        epoch.epoch_id,
+        epoch_height,
+        epoch.epoch_start_height,
+        &epoch.validators_info,
+    );
+
+    let save_protocol_config_feature = db_manager.add_protocol_config(
+        epoch.epoch_id,
+        epoch_height,
+        epoch.epoch_start_height,
+        &epoch.protocol_config,
+    );
+
+    futures::try_join!(save_validators_feature, save_protocol_config_feature)?;
+
     tracing::info!(
         "Save epoch info: epoch_id: {:?}, epoch_height: {:?}, epoch_start_height: {}",
         epoch.epoch_id,
