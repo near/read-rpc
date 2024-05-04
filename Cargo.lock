@@ -6603,6 +6603,7 @@ dependencies = [
  "tokio-stream",
  "tracing",
  "tracing-actix-web",
+ "tx-details-storage",
 ]
 
 [[package]]

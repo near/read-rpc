@@ -175,6 +175,7 @@ async fn tx_status_common(
         } => *tx_hash,
     };
 
+    // This is the piece of code that gets the transaction details from the database
     let (block_height, transaction_details) = data
         .db_manager
         .get_transaction_by_hash(&tx_hash.to_string(), method_name)
@@ -196,6 +197,24 @@ async fn tx_status_common(
     )
     .await;
 
+    // And this is the piece of code that gets the transaction details from the tx_details_storage (bucket)
+    // TODO: refactor to retrieve bytes from tx_details_storage
+    let transaction_details = super::try_get_transaction_details_by_hash(
+        data,
+        tx_hash.to_string().as_str(),
+    )
+    .await
+    .map_err(|err| {
+        // logging the error at debug level since it's expected to see some "not found"
+        // errors in the logs that doesn't mean that something is really wrong, but want to
+        // keep track of them to see if there are any patterns
+        tracing::debug!("Error while fetching transaction details: {:?}", err);
+        near_jsonrpc::primitives::types::transactions::RpcTransactionError::UnknownTransaction {
+            requested_transaction_hash: tx_hash,
+        }
+    })?;
+
+    // TODO rewrite this since we support optimistic finalities already
     if fetch_receipt {
         Ok(
             near_jsonrpc::primitives::types::transactions::RpcTransactionResponse {

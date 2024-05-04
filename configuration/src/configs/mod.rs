@@ -93,6 +93,7 @@ pub struct RpcServerConfig {
     pub general: general::GeneralRpcServerConfig,
     pub lake_config: lake::LakeConfig,
     pub database: database::DatabaseConfig,
+    pub tx_details_storage: tx_details_storage::TxDetailsStorageConfig,
 }
 
 impl Config for RpcServerConfig {
@@ -101,6 +102,9 @@ impl Config for RpcServerConfig {
             general: common_config.general.into(),
             lake_config: common_config.lake_config.into(),
             database: database::DatabaseRpcServerConfig::from(common_config.database).into(),
+            tx_details_storage: tx_details_storage::TxDetailsStorageConfig::from(
+                common_config.tx_details_storage,
+            ),
         }
     }
 }
