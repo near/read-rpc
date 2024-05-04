@@ -104,7 +104,7 @@ async fn new_transaction_details_to_collecting_pool(
     if !indexer_config.tx_should_be_indexed(transaction) {
         return Ok(());
     };
-
+    crate::metrics::TX_IN_MEMORY_CACHE.inc();
     let converted_into_receipt_id = transaction
         .outcome
         .execution_outcome
@@ -365,6 +365,7 @@ async fn save_transaction_details(
                 }
             }
             Err(err) => {
+                crate::metrics::TX_STORE_ERRORS_TOTAL.inc();
                 tracing::error!(
                     target: crate::INDEXER,
                     "Failed to save transaction {} \n{:#?}",
