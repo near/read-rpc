@@ -275,7 +275,7 @@ impl From<CommonGeneralConfig> for GeneralRpcServerConfig {
             .expect("Invalid redis url"),
             referer_header_value: common_config
                 .referer_header_value
-                .unwrap_or("read-rpc".to_string()),
+                .unwrap_or("http://read-rpc.local".to_string()),
             server_port: common_config
                 .rpc_server
                 .server_port
@@ -330,7 +330,7 @@ impl From<CommonGeneralConfig> for GeneralStateIndexerConfig {
             near_archival_rpc_url: common_config.near_archival_rpc_url,
             referer_header_value: common_config
                 .referer_header_value
-                .unwrap_or("read-rpc".to_string()),
+                .unwrap_or("http://read-rpc.local".to_string()),
             indexer_id: common_config
                 .state_indexer
                 .indexer_id
@@ -373,7 +373,7 @@ impl From<CommonGeneralConfig> for GeneralEpochIndexerConfig {
             near_archival_rpc_url: common_config.near_archival_rpc_url,
             referer_header_value: common_config
                 .referer_header_value
-                .unwrap_or("read-rpc".to_string()),
+                .unwrap_or("http://read-rpc.local".to_string()),
             indexer_id: common_config
                 .epoch_indexer
                 .indexer_id

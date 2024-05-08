@@ -8,6 +8,11 @@ chain_id = "mainnet"
 ## Using for proxying some requests to near network and to handle finality block
 near_rpc_url = "https://beta.rpc.mainnet.near.org"
 
+## Referer header value
+## We want to set a custom referer to let NEAR JSON RPC nodes know that we are a read-rpc instance
+## Default value is "http://read-rpc.local"
+#referer_header_value = "http://read-rpc.local"
+
 ## near network archival rpc url
 ## Using under the hood in near network rpc
 ## Not needed for regular users.
@@ -22,11 +27,6 @@ near_rpc_url = "https://beta.rpc.mainnet.near.org"
 
 ### Rpc server general configuration
 [general.rpc_server]
-
-## Referer header value
-## We want to set a custom referer to let NEAR JSON RPC nodes know that we are a read-rpc instance
-## Default value is "read-rpc"
-#referer_header_value = "read-rpc"
 
 ## Port for RPC server
 ## Default port is 8000
