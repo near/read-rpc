@@ -4881,6 +4881,7 @@ dependencies = [
  "futures",
  "hex",
  "humantime",
+ "near-chain-configs 1.39.1",
  "near-client",
  "near-indexer",
  "near-o11y 1.39.1",

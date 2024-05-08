@@ -71,7 +71,8 @@ async fn main() -> anyhow::Result<()> {
     let indexer_id = &indexer_config.general.indexer_id;
     let s3_client = indexer_config.lake_config.lake_s3_client().await;
     let rpc_client =
-        near_jsonrpc_client::JsonRpcClient::connect(&indexer_config.general.near_rpc_url);
+        near_jsonrpc_client::JsonRpcClient::connect(&indexer_config.general.near_rpc_url)
+            .header(("Referer", indexer_config.general.referer_header_value))?;
 
     let epoch = match opts.start_options {
         StartOptions::FromGenesis => {

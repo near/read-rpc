@@ -200,7 +200,8 @@ async fn main() -> anyhow::Result<()> {
         database::prepare_db_manager::<database::postgres::state_indexer::PostgresDBManager>(&indexer_config.database)
             .await?;
 
-    let rpc_client = near_jsonrpc_client::JsonRpcClient::connect(&indexer_config.general.near_rpc_url);
+    let rpc_client = near_jsonrpc_client::JsonRpcClient::connect(&indexer_config.general.near_rpc_url)
+        .header(("Referer", indexer_config.general.referer_header_value.clone()))?;
     let start_block_height = configs::get_start_block_height(
         &rpc_client,
         &db_manager,

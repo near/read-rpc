@@ -216,21 +216,21 @@ pub async fn save_epoch_info(
         epoch.epoch_height
     };
 
-    let save_validators_feature = db_manager.add_validators(
+    let save_validators_future = db_manager.add_validators(
         epoch.epoch_id,
         epoch_height,
         epoch.epoch_start_height,
         &epoch.validators_info,
     );
 
-    let save_protocol_config_feature = db_manager.add_protocol_config(
+    let save_protocol_config_future = db_manager.add_protocol_config(
         epoch.epoch_id,
         epoch_height,
         epoch.epoch_start_height,
         &epoch.protocol_config,
     );
 
-    futures::try_join!(save_validators_feature, save_protocol_config_feature)?;
+    futures::try_join!(save_validators_future, save_protocol_config_future)?;
 
     tracing::info!(
         "Save epoch info: epoch_id: {:?}, epoch_height: {:?}, epoch_start_height: {}",
