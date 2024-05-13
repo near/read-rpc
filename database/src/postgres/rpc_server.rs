@@ -408,4 +408,19 @@ impl crate::ReaderDbManager for PostgresDBManager {
             validators_info,
         })
     }
+
+    async fn get_protocol_config_by_epoch_id(
+        &self,
+        epoch_id: near_indexer_primitives::CryptoHash,
+    ) -> anyhow::Result<near_chain_configs::ProtocolConfigView> {
+        let protocol_config = crate::models::ProtocolConfig::get_protocol_config(
+            Self::get_connection(&self.pg_pool).await?,
+            epoch_id,
+        )
+        .await?;
+        let (protocol_config,) = serde_json::from_value::<(near_chain_configs::ProtocolConfigView,)>(
+            protocol_config.protocol_config,
+        )?;
+        Ok(protocol_config)
+    }
 }

@@ -25,6 +25,7 @@ pub struct ScyllaDBManager {
     get_indexing_transaction_receipts: PreparedStatement,
     get_stored_at_block_height_and_shard_id_by_block_height: PreparedStatement,
     get_validators_by_epoch_id: PreparedStatement,
+    get_protocol_config_by_epoch_id: PreparedStatement,
     get_validators_by_end_block_height: PreparedStatement,
 }
 
@@ -140,6 +141,10 @@ impl ScyllaStorageManager for ScyllaDBManager {
             get_validators_by_epoch_id: Self::prepare_read_query(
                 &scylla_db_session,
                 "SELECT epoch_height, validators_info FROM state_indexer.validators WHERE epoch_id = ?",
+            ).await?,
+            get_protocol_config_by_epoch_id: Self::prepare_read_query(
+                &scylla_db_session,
+                "SELECT protocol_config FROM state_indexer.protocol_configs WHERE epoch_id = ?",
             ).await?,
             get_validators_by_end_block_height: Self::prepare_read_query(
                 &scylla_db_session,
@@ -567,6 +572,25 @@ impl crate::ReaderDbManager for ScyllaDBManager {
             epoch_start_height: validators_info.epoch_start_height,
             validators_info,
         })
+    }
+
+    async fn get_protocol_config_by_epoch_id(
+        &self,
+        epoch_id: near_primitives::hash::CryptoHash,
+    ) -> anyhow::Result<near_chain_configs::ProtocolConfigView> {
+        let (protocol_config,) = Self::execute_prepared_query(
+            &self.scylla_session,
+            &self.get_protocol_config_by_epoch_id,
+            (epoch_id.to_string(),),
+        )
+        .await?
+        .single_row()?
+        .into_typed::<(String,)>()?;
+
+        let protocol_config: near_chain_configs::ProtocolConfigView =
+            serde_json::from_str(&protocol_config)?;
+
+        Ok(protocol_config)
     }
 
     async fn get_validators_by_end_block_height(

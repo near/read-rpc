@@ -1,4 +1,5 @@
 use crate::modules::blocks::{BlockInfo, BlocksInfoByFinality, CacheBlock};
+use crate::modules::network::epoch_config_from_protocol_config_view;
 #[cfg(feature = "shadow_data_consistency")]
 use assert_json_diff::{assert_json_matches_no_panic, CompareMode, Config, NumericMode};
 use futures::StreamExt;
@@ -133,6 +134,19 @@ pub async fn get_current_validators(
     Ok(near_rpc_client.call(params).await?)
 }
 
+pub async fn get_current_epoch_config(
+    near_rpc_client: &JsonRpcClient,
+) -> anyhow::Result<near_primitives::epoch_manager::EpochConfig> {
+    let params =
+        near_jsonrpc_client::methods::EXPERIMENTAL_protocol_config::RpcProtocolConfigRequest {
+            block_reference: near_primitives::types::BlockReference::Finality(
+                near_primitives::types::Finality::Final,
+            ),
+        };
+    let protocol_config_view = near_rpc_client.call(params).await?;
+    Ok(epoch_config_from_protocol_config_view(protocol_config_view).await)
+}
+
 async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
     blocks_cache: std::sync::Arc<crate::cache::RwLockLruMemoryCache<u64, CacheBlock>>,
@@ -146,7 +160,7 @@ async fn handle_streamer_message(
         if blocks_info_by_finality.final_cache_block().await.epoch_id != block_cache.epoch_id {
             tracing::info!("New epoch started: {:?}", block_cache.epoch_id);
             blocks_info_by_finality
-                .update_current_validators(near_rpc_client)
+                .update_current_epoch_info(near_rpc_client)
                 .await?;
         }
 

@@ -125,21 +125,35 @@ async fn handle_epoch(
             Ok(())
         } else {
             // If epoch changed, we need to save epoch info and update epoch_end_height
-            let validators_info =
-                utils::fetch_epoch_validators_info(stats_epoch_id, client).await?;
+            let validators_info_future = utils::fetch_epoch_validators_info(stats_epoch_id, client);
+            let protocol_config_future = utils::fetch_epoch_protocol_config(client);
 
-            db_manager
-                .add_validators(
-                    stats_epoch_id,
-                    stats_current_epoch_height,
-                    validators_info.epoch_start_height,
-                    &validators_info,
-                )
-                .await?;
+            let (validators_info, protocol_config) =
+                futures::try_join!(validators_info_future, protocol_config_future)?;
 
-            db_manager
-                .update_epoch_end_height(stats_epoch_id, next_epoch_id)
-                .await?;
+            let save_validators_future = db_manager.add_validators(
+                stats_epoch_id,
+                stats_current_epoch_height,
+                validators_info.epoch_start_height,
+                &validators_info,
+            );
+
+            let save_protocol_config_future = db_manager.add_protocol_config(
+                stats_epoch_id,
+                stats_current_epoch_height,
+                validators_info.epoch_start_height,
+                &protocol_config,
+            );
+
+            let update_epoch_end_height_future =
+                db_manager.update_epoch_end_height(stats_epoch_id, next_epoch_id);
+
+            futures::try_join!(
+                save_validators_future,
+                save_protocol_config_future,
+                update_epoch_end_height_future
+            )?;
+
             Ok(())
         }
     } else {

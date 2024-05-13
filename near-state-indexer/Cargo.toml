@@ -37,6 +37,7 @@ configuration.workspace = true
 database.workspace = true
 
 near-o11y.workspace = true
+near-chain-configs.workspace = true
 near-client.workspace = true
 near-indexer.workspace = true
 

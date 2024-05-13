@@ -182,6 +182,12 @@ pub struct CurrentValidatorInfo {
     pub validators: near_primitives::views::EpochValidatorInfo,
 }
 
+// Struct to store the protocol config for current epoch.
+#[derive(Debug, Clone)]
+pub struct CurrentEpochConfig {
+    pub epoch_config: near_primitives::epoch_manager::EpochConfig,
+}
+
 // Struct to store the optimistic changes in the block.
 #[derive(Debug, Clone)]
 pub struct OptimisticChanges {
@@ -285,6 +291,7 @@ pub struct BlocksInfoByFinality {
     pub optimistic_block: futures_locks::RwLock<BlockInfo>,
     pub optimistic_changes: futures_locks::RwLock<OptimisticChanges>,
     pub current_validators: futures_locks::RwLock<CurrentValidatorInfo>,
+    pub current_epoch_config: futures_locks::RwLock<CurrentEpochConfig>,
 }
 
 impl BlocksInfoByFinality {
@@ -295,10 +302,12 @@ impl BlocksInfoByFinality {
         let final_block_future = crate::utils::get_final_block(near_rpc_client, false);
         let optimistic_block_future = crate::utils::get_final_block(near_rpc_client, true);
         let validators_future = crate::utils::get_current_validators(near_rpc_client);
-        let (final_block, optimistic_block, validators) = tokio::try_join!(
+        let epoch_config_future = crate::utils::get_current_epoch_config(near_rpc_client);
+        let (final_block, optimistic_block, validators, epoch_config) = tokio::try_join!(
             final_block_future,
             optimistic_block_future,
             validators_future,
+            epoch_config_future
         )
         .map_err(|err| {
             tracing::error!("Error to fetch final block info: {:?}", err);
@@ -319,6 +328,7 @@ impl BlocksInfoByFinality {
             ),
             optimistic_changes: futures_locks::RwLock::new(OptimisticChanges::new()),
             current_validators: futures_locks::RwLock::new(CurrentValidatorInfo { validators }),
+            current_epoch_config: futures_locks::RwLock::new(CurrentEpochConfig { epoch_config }),
         }
     }
 
@@ -354,12 +364,14 @@ impl BlocksInfoByFinality {
 
     // Update current validators info in the cache.
     // This method executes when the epoch changes.
-    pub async fn update_current_validators(
+    pub async fn update_current_epoch_info(
         &self,
         near_rpc_client: &crate::utils::JsonRpcClient,
     ) -> anyhow::Result<()> {
         self.current_validators.write().await.validators =
             crate::utils::get_current_validators(near_rpc_client).await?;
+        self.current_epoch_config.write().await.epoch_config =
+            crate::utils::get_current_epoch_config(near_rpc_client).await?;
         Ok(())
     }
 
@@ -449,5 +461,10 @@ impl BlocksInfoByFinality {
     // Return validators info for current epoch
     pub async fn validators(&self) -> near_primitives::views::EpochValidatorInfo {
         self.current_validators.read().await.validators.clone()
+    }
+
+    // Return current epoch config
+    pub async fn epoch_config(&self) -> near_primitives::epoch_manager::EpochConfig {
+        self.current_epoch_config.read().await.epoch_config.clone()
     }
 }

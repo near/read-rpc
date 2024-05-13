@@ -123,6 +123,16 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    protocol_configs (epoch_id) {
+        epoch_id -> Text,
+        epoch_height -> Numeric,
+        epoch_start_height -> Numeric,
+        epoch_end_height -> Nullable<Numeric>,
+        protocol_config -> Jsonb,
+    }
+}
+
 diesel::allow_tables_to_appear_in_same_query!(
     account_state,
     block,
@@ -138,4 +148,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     transaction_cache,
     transaction_detail,
     validators,
+    protocol_configs,
 );
