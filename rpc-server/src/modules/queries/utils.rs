@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use futures::StreamExt;
+use near_vm_runner::internal::VMKindExt;
 use near_vm_runner::ContractRuntimeCache;
 
 use crate::errors::FunctionCallError;
@@ -103,7 +104,7 @@ pub async fn fetch_list_access_keys_from_db(
     tracing::instrument(skip(context, code_storage, contract_code, compiled_contract_code_cache))
 )]
 async fn run_code_in_vm_runner(
-    account: near_primitives::account::Account,
+    code_hash: near_primitives::hash::CryptoHash,
     contract_code: Option<near_vm_runner::ContractCode>,
     method_name: String,
     context: near_vm_runner::logic::VMContext,
@@ -113,32 +114,36 @@ async fn run_code_in_vm_runner(
 ) -> Result<near_vm_runner::logic::VMOutcome, near_vm_runner::logic::errors::VMRunnerError> {
     let compiled_contract_code_cache_handle =
         near_vm_runner::ContractRuntimeCache::handle(compiled_contract_code_cache);
+    let promise_results = vec![];
+    let fees = near_parameters::RuntimeFeesConfig::free();
 
     let results = tokio::task::spawn_blocking(move || {
-        if let Some(code) = contract_code {
-            near_vm_runner::precompile_contract(
-                &code,
-                &vm_config,
-                Some(&compiled_contract_code_cache_handle),
-            )
-            .expect("Compilation failed")
-            .expect("Cache failed");
+        let runtime = vm_config
+            .vm_kind
+            .runtime(vm_config.clone())
+            .expect("runtime has not been enabled at compile time");
+
+        if let Some(code) = &contract_code {
+            runtime
+                .precompile(code, &compiled_contract_code_cache_handle)
+                .expect("Compilation failed")
+                .expect("Cache failed");
         };
 
-        near_vm_runner::run(
-            &account,
+        let result = runtime.run(
+            code_hash,
             None,
             &method_name,
             &mut code_storage,
             &context,
-            &vm_config,
-            &near_parameters::RuntimeFeesConfig::free(),
-            &[],
+            &fees,
+            &promise_results,
             Some(&compiled_contract_code_cache_handle),
-        )
+        );
+        drop(runtime);
+        result
     })
     .await;
-
     match results {
         Ok(result) => result,
         Err(err) => Err(
@@ -243,36 +248,30 @@ pub async fn run_contract(
         vm_kind: config.vm_kind.replace_with_wasmtime_if_unsupported(),
         ..config
     };
-
+    let code_hash = contract.data.code_hash();
     // Check if the contract code is already in the cache
-    let key = near_vm_runner::get_contract_cache_key(contract.data.code_hash(), &vm_config);
+    let key = near_vm_runner::get_contract_cache_key(code_hash, &vm_config);
     let contract_code = if compiled_contract_code_cache.has(&key).unwrap_or(false) {
         None
     } else {
-        Some(
-            match contract_code_cache.get(&contract.data.code_hash()).await {
-                Some(code) => {
-                    near_vm_runner::ContractCode::new(code, Some(contract.data.code_hash()))
-                }
-                None => {
-                    let code = db_manager
-                        .get_contract_code(account_id, block.block_height)
-                        .await
-                        .map_err(|_| FunctionCallError::InvalidAccountId {
-                            requested_account_id: account_id.clone(),
-                        })?;
-                    contract_code_cache
-                        .put(contract.data.code_hash(), code.data.clone())
-                        .await;
-                    near_vm_runner::ContractCode::new(code.data, Some(contract.data.code_hash()))
-                }
-            },
-        )
+        Some(match contract_code_cache.get(&code_hash).await {
+            Some(code) => near_vm_runner::ContractCode::new(code, Some(code_hash)),
+            None => {
+                let code = db_manager
+                    .get_contract_code(account_id, block.block_height)
+                    .await
+                    .map_err(|_| FunctionCallError::InvalidAccountId {
+                        requested_account_id: account_id.clone(),
+                    })?;
+                contract_code_cache.put(code_hash, code.data.clone()).await;
+                near_vm_runner::ContractCode::new(code.data, Some(code_hash))
+            }
+        })
     };
 
     // Execute the contract in the near VM
     let result = run_code_in_vm_runner(
-        contract.data,
+        code_hash,
         contract_code,
         method_name.to_string(),
         context,

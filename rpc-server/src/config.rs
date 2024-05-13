@@ -118,12 +118,10 @@ impl ServerContext {
             &rpc_server_config.lake_config.aws_bucket_name,
         )
         .await;
-        let compiled_contract_code_cache =
-            near_vm_runner::FilesystemContractRuntimeCache::with_memory_cache(
-                &crate::utils::get_home_dir(), // home directory ~/.near
-                None::<&str>,                  // data - by default
-                256,                           // value from nearcore config
-            )?;
+        let compiled_contract_code_cache = near_vm_runner::FilesystemContractRuntimeCache::new(
+            &crate::utils::get_home_dir(), // home directory ~/.near
+            None::<&str>,                  // data - by default
+        )?;
 
         Ok(Self {
             s3_client,
