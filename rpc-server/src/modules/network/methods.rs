@@ -284,7 +284,7 @@ async fn protocol_config_call(
                 error_message: err.to_string(),
             }
         })?;
-    
+
     let protocol_config = if data
         .blocks_info_by_finality
         .final_cache_block()

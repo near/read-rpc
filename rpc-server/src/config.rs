@@ -1,5 +1,7 @@
 use std::string::ToString;
 
+use futures::executor::block_on;
+
 use crate::modules::blocks::{BlocksInfoByFinality, CacheBlock};
 
 static NEARD_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -60,7 +62,7 @@ pub struct ServerContext {
     /// Final block info include final_block_cache and current_validators_info
     pub blocks_info_by_finality: std::sync::Arc<BlocksInfoByFinality>,
     /// Cache to store compiled contract codes
-    pub compiled_contract_code_cache: near_vm_runner::FilesystemContractRuntimeCache,
+    pub compiled_contract_code_cache: std::sync::Arc<CompiledCodeCache>,
     /// Cache to store contract codes
     pub contract_code_cache: std::sync::Arc<
         crate::cache::RwLockLruMemoryCache<near_primitives::hash::CryptoHash, Vec<u8>>,
@@ -118,10 +120,8 @@ impl ServerContext {
             &rpc_server_config.lake_config.aws_bucket_name,
         )
         .await;
-        let compiled_contract_code_cache = near_vm_runner::FilesystemContractRuntimeCache::new(
-            &crate::utils::get_home_dir(), // home directory ~/.near
-            None::<&str>,                  // data - by default
-        )?;
+        let compiled_contract_code_cache =
+            std::sync::Arc::new(CompiledCodeCache::new(contract_code_cache_size_in_bytes));
 
         Ok(Self {
             s3_client,
@@ -143,5 +143,58 @@ impl ServerContext {
                 rustc_version: RUSTC_VERSION.to_string(),
             },
         })
+    }
+}
+
+#[derive(Clone)]
+pub struct CompiledCodeCache {
+    // AnyCache is not used in the current implementation
+    pub any_cache: std::sync::Arc<near_vm_runner::AnyCache>,
+    pub local_cache: std::sync::Arc<
+        crate::cache::RwLockLruMemoryCache<
+            near_primitives::hash::CryptoHash,
+            near_vm_runner::CompiledContractInfo,
+        >,
+    >,
+}
+
+impl CompiledCodeCache {
+    pub fn new(contract_code_cache_size: usize) -> Self {
+        Self {
+            any_cache: std::sync::Arc::new(near_vm_runner::AnyCache { cache: None }),
+            local_cache: std::sync::Arc::new(crate::cache::RwLockLruMemoryCache::new(
+                contract_code_cache_size,
+            )),
+        }
+    }
+}
+
+impl near_vm_runner::ContractRuntimeCache for CompiledCodeCache {
+    fn handle(&self) -> Box<dyn near_vm_runner::ContractRuntimeCache> {
+        Box::new(self.clone())
+    }
+
+    fn memory_cache(&self) -> &near_vm_runner::AnyCache {
+        &self.any_cache
+    }
+
+    fn put(
+        &self,
+        key: &near_primitives::hash::CryptoHash,
+        value: near_vm_runner::CompiledContractInfo,
+    ) -> std::io::Result<()> {
+        block_on(self.local_cache.put(*key, value));
+        Ok(())
+    }
+
+    fn get(
+        &self,
+        key: &near_primitives::hash::CryptoHash,
+    ) -> std::io::Result<Option<near_vm_runner::CompiledContractInfo>> {
+        Ok(block_on(self.local_cache.get(key)))
+    }
+
+    fn has(&self, key: &near_primitives::hash::CryptoHash) -> std::io::Result<bool> {
+        Ok(block_on(self.local_cache.contains(key)))
     }
 }

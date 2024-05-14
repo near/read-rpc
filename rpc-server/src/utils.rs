@@ -731,6 +731,7 @@ macro_rules! capture_shadow_consistency_error {
 #[cfg(feature = "shadow_data_consistency")]
 pub(crate) use capture_shadow_consistency_error;
 
+#[allow(unused)]
 pub fn get_home_dir() -> PathBuf {
     if let Ok(near_home) = std::env::var("NEAR_HOME") {
         return near_home.into();

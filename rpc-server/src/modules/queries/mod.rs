@@ -15,6 +15,8 @@ pub struct CodeStorage {
     validators: HashMap<near_primitives::types::AccountId, near_primitives::types::Balance>,
     data_count: u64,
     is_optimistic: bool,
+    prefetched_data:
+        Option<HashMap<readnode_primitives::StateKey, readnode_primitives::StateValue>>,
     optimistic_data:
         HashMap<readnode_primitives::StateKey, Option<readnode_primitives::StateValue>>,
 }
@@ -39,6 +41,9 @@ impl CodeStorage {
         account_id: near_primitives::types::AccountId,
         block_height: near_primitives::types::BlockHeight,
         validators: HashMap<near_primitives::types::AccountId, near_primitives::types::Balance>,
+        prefetched_data: Option<
+            HashMap<readnode_primitives::StateKey, readnode_primitives::StateValue>,
+        >,
         optimistic_data: HashMap<
             readnode_primitives::StateKey,
             Option<readnode_primitives::StateValue>,
@@ -51,7 +56,22 @@ impl CodeStorage {
             validators,
             data_count: Default::default(), // TODO: Using for generate_data_id
             is_optimistic: !optimistic_data.is_empty(),
+            prefetched_data,
             optimistic_data,
+        }
+    }
+
+    fn get_state_key_data(&self, key: &[u8]) -> readnode_primitives::StateValue {
+        if let Some(prefetched_data) = &self.prefetched_data {
+            prefetched_data.get(key).cloned().unwrap_or_default()
+        } else {
+            let get_db_data = self.db_manager.get_state_key_value(
+                &self.account_id,
+                self.block_height,
+                key.to_vec(),
+            );
+            let (_, data) = block_on(get_db_data);
+            data
         }
     }
 
@@ -74,10 +94,7 @@ impl CodeStorage {
         &self,
         key: &[u8],
     ) -> Result<Option<Box<dyn near_vm_runner::logic::ValuePtr>>> {
-        let get_db_data =
-            self.db_manager
-                .get_state_key_value(&self.account_id, self.block_height, key.to_vec());
-        let (_, data) = block_on(get_db_data);
+        let data = self.get_state_key_data(key);
         Ok(if !data.is_empty() {
             Some(Box::new(StorageValuePtr { value: data }) as Box<_>)
         } else {
@@ -94,11 +111,7 @@ impl CodeStorage {
     }
 
     fn database_storage_has_key(&mut self, key: &[u8]) -> Result<bool> {
-        let get_db_state_keys =
-            self.db_manager
-                .get_state_key_value(&self.account_id, self.block_height, key.to_vec());
-        let (_, data) = block_on(get_db_state_keys);
-        Ok(!data.is_empty())
+        Ok(!self.get_state_key_data(key).is_empty())
     }
 }
 
