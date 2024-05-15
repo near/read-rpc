@@ -53,20 +53,14 @@ pub async fn status(
             latest_block_hash: final_block.block_hash,
             latest_block_height: final_block.block_height,
             latest_state_root: final_block.state_root,
-            latest_block_time: time::OffsetDateTime::from_unix_timestamp_nanos(
-                final_block.block_timestamp as i128,
-            )
-            .unwrap(),
+            latest_block_time: near_primitives::utils::from_timestamp(final_block.block_timestamp),
             // Always false because read_node is not need to sync
             syncing: false,
             earliest_block_hash: Some(data.genesis_info.genesis_block_cache.block_hash),
             earliest_block_height: Some(data.genesis_info.genesis_block_cache.block_height),
-            earliest_block_time: Some(
-                time::OffsetDateTime::from_unix_timestamp_nanos(
-                    data.genesis_info.genesis_block_cache.block_timestamp as i128,
-                )
-                .unwrap(),
-            ),
+            earliest_block_time: Some(near_primitives::utils::from_timestamp(
+                data.genesis_info.genesis_block_cache.block_timestamp,
+            )),
             epoch_id: Some(near_primitives::types::EpochId(final_block.epoch_id)),
             epoch_start_height: Some(validators.epoch_start_height),
         },
@@ -77,8 +71,6 @@ pub async fn status(
         node_key: None,
         // return uptime current read_node
         uptime_sec: chrono::Utc::now().timestamp() - data.boot_time_seconds,
-        // Genesis hash of the chain.
-        genesis_hash: data.genesis_info.genesis_block_cache.block_hash,
         // Not using for status method
         detailed_debug_status: None,
     })
@@ -336,7 +328,6 @@ async fn protocol_config_call(
                 fees: runtime_config.fees.clone(),
                 wasm_config: runtime_config.wasm_config.clone(),
                 account_creation_config: runtime_config.account_creation_config.clone(),
-                storage_proof_size_soft_limit: runtime_config.storage_proof_size_soft_limit,
             },
         };
         protocol_config.into()

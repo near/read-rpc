@@ -148,8 +148,6 @@ impl ServerContext {
 
 #[derive(Clone)]
 pub struct CompiledCodeCache {
-    // AnyCache is not used in the current implementation
-    pub any_cache: std::sync::Arc<near_vm_runner::AnyCache>,
     pub local_cache: std::sync::Arc<
         crate::cache::RwLockLruMemoryCache<
             near_primitives::hash::CryptoHash,
@@ -161,7 +159,6 @@ pub struct CompiledCodeCache {
 impl CompiledCodeCache {
     pub fn new(contract_code_cache_size: usize) -> Self {
         Self {
-            any_cache: std::sync::Arc::new(near_vm_runner::AnyCache { cache: None }),
             local_cache: std::sync::Arc::new(crate::cache::RwLockLruMemoryCache::new(
                 contract_code_cache_size,
             )),
@@ -172,10 +169,6 @@ impl CompiledCodeCache {
 impl near_vm_runner::ContractRuntimeCache for CompiledCodeCache {
     fn handle(&self) -> Box<dyn near_vm_runner::ContractRuntimeCache> {
         Box::new(self.clone())
-    }
-
-    fn memory_cache(&self) -> &near_vm_runner::AnyCache {
-        &self.any_cache
     }
 
     fn put(
