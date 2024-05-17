@@ -53,7 +53,7 @@ pub async fn get_protocol_config(
                 if try_another_blocks {
                     block_height += 1;
                 }
-                tracing::debug!(
+                tracing::info!(
                     "Attempt: {}. Epoch_start_height {}. Error fetching protocol config: {:?}",
                     attempt_counter,
                     block_height,

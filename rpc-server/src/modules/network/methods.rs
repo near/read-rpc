@@ -1,6 +1,5 @@
 use jsonrpc_v2::{Data, Params};
 use near_jsonrpc::RpcRequest;
-use near_primitives::utils::from_timestamp;
 
 use crate::config::ServerContext;
 use crate::errors::RPCError;
@@ -54,12 +53,12 @@ pub async fn status(
             latest_block_hash: final_block.block_hash,
             latest_block_height: final_block.block_height,
             latest_state_root: final_block.state_root,
-            latest_block_time: from_timestamp(final_block.block_timestamp),
+            latest_block_time: near_primitives::utils::from_timestamp(final_block.block_timestamp),
             // Always false because read_node is not need to sync
             syncing: false,
             earliest_block_hash: Some(data.genesis_info.genesis_block_cache.block_hash),
             earliest_block_height: Some(data.genesis_info.genesis_block_cache.block_height),
-            earliest_block_time: Some(from_timestamp(
+            earliest_block_time: Some(near_primitives::utils::from_timestamp(
                 data.genesis_info.genesis_block_cache.block_timestamp,
             )),
             epoch_id: Some(near_primitives::types::EpochId(final_block.epoch_id)),
@@ -81,8 +80,6 @@ pub async fn health(
     data: Data<ServerContext>,
     Params(_params): Params<serde_json::Value>,
 ) -> Result<crate::health::RPCHealthStatusResponse, RPCError> {
-    // TODO: Improve to return error after implementing optimistic block
-    // see nearcore/chain/client/src/client_actor.rs:627 to get details
     Ok(crate::health::RPCHealthStatusResponse::new(&data).await)
 }
 

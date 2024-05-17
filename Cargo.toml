@@ -1,8 +1,8 @@
 [workspace.package]
-version = "0.2.5"
+version = "0.2.8"
 authors = ["Near Inc <hello@nearprotocol.com>"]
 edition = "2021"
-rust-version = "1.76.0"
+rust-version = "1.77.0"
 repository = "https://github.com/near/read-rpc"
 license = "MIT OR Apache-2.0"
 
@@ -54,4 +54,4 @@ near-vm-runner = { git = 'https://github.com/kobayurii/nearcore.git', branch = "
 ] }
 
 near-lake-framework = { git = 'https://github.com/kobayurii/near-lake-framework-rs.git', branch = '0.7.13' }
-near-jsonrpc-client = { git = 'https://github.com/kobayurii/near-jsonrpc-client-rs.git', branch = '0.8.7' }
+near-jsonrpc-client = { git = 'https://github.com/kobayurii/near-jsonrpc-client-rs.git', branch = '0.9.0' }
