@@ -97,7 +97,7 @@ pub(crate) async fn update_block_streamer_message(
         let update_height_feature = redis_set_cmd
             .arg(format!("{}_height", block_type))
             .arg(block_height)
-            .query_async::<redis::aio::ConnectionManager, u64>(&mut redis_client_clone);
+            .query_async::<redis::aio::ConnectionManager, String>(&mut redis_client_clone);
 
         // Update the block streamer message
         // Create a clone of the redis client and redis cmd to avoid borrowing issues
