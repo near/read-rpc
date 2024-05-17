@@ -262,6 +262,7 @@ pub async fn run_contract(
     };
 
     // TODO: Refactor this part. It's a temporary solution to fetch state keys from DB for the poolv1.near contracts
+    // https://github.com/near/read-rpc/issues/150
     let contract_state = if account_id.to_string().ends_with("poolv1.near") {
         if let Ok(result) = tokio::time::timeout(
             std::time::Duration::from_secs(20),
