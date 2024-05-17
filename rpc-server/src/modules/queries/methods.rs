@@ -55,26 +55,20 @@ async fn query_call(
         .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
     let result = match &query_request.request {
         near_primitives::views::QueryRequest::ViewAccount { account_id } => {
-            crate::metrics::QUERY_VIEW_ACCOUNT_REQUESTS_TOTAL.inc();
             view_account(data, block, account_id, is_optimistic).await
         }
         near_primitives::views::QueryRequest::ViewCode { account_id } => {
-            crate::metrics::QUERY_VIEW_CODE_REQUESTS_TOTAL.inc();
             view_code(data, block, account_id, is_optimistic).await
         }
         near_primitives::views::QueryRequest::ViewAccessKey {
             account_id,
             public_key,
-        } => {
-            crate::metrics::QUERY_VIEW_ACCESS_KEY_REQUESTS_TOTAL.inc();
-            view_access_key(data, block, account_id, public_key, is_optimistic).await
-        }
+        } => view_access_key(data, block, account_id, public_key, is_optimistic).await,
         near_primitives::views::QueryRequest::ViewState {
             account_id,
             prefix,
             include_proof,
         } => {
-            crate::metrics::QUERY_VIEW_STATE_REQUESTS_TOTAL.inc();
             if *include_proof {
                 // TODO: We can calculate the proof for state only on regular or archival nodes.
                 let final_block = data.blocks_info_by_finality.final_cache_block().await;
@@ -101,14 +95,10 @@ async fn query_call(
             account_id,
             method_name,
             args,
-        } => {
-            crate::metrics::QUERY_FUNCTION_CALL_REQUESTS_TOTAL.inc();
-            function_call(data, block, account_id, method_name, args, is_optimistic).await
-        }
+        } => function_call(data, block, account_id, method_name, args, is_optimistic).await,
         #[allow(unused_variables)]
         // `account_id` is used in the `#[cfg(feature = "account_access_keys")]` branch.
         near_primitives::views::QueryRequest::ViewAccessKeyList { account_id } => {
-            crate::metrics::QUERY_VIEW_ACCESS_KEYS_LIST_REQUESTS_TOTAL.inc();
             #[cfg(not(feature = "account_access_keys"))]
             {
                 let final_block = data.blocks_info_by_finality.final_cache_block().await;

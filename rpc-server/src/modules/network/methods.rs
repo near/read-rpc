@@ -9,6 +9,9 @@ pub async fn client_config(
     _data: Data<ServerContext>,
     Params(_params): Params<serde_json::Value>,
 ) -> Result<(), RPCError> {
+    crate::metrics::METHODS_CALLS_COUNTER
+        .with_label_values(&["client_config"])
+        .inc();
     Err(RPCError::unimplemented_error("client_config"))
 }
 
@@ -30,6 +33,9 @@ pub async fn status(
     data: Data<ServerContext>,
     Params(_params): Params<serde_json::Value>,
 ) -> Result<near_primitives::views::StatusResponse, RPCError> {
+    crate::metrics::METHODS_CALLS_COUNTER
+        .with_label_values(&["status"])
+        .inc();
     let final_block = data.blocks_info_by_finality.final_cache_block().await;
     let validators = data.blocks_info_by_finality.validators().await;
     let current_validators = validators
@@ -80,6 +86,9 @@ pub async fn health(
     data: Data<ServerContext>,
     Params(_params): Params<serde_json::Value>,
 ) -> Result<crate::health::RPCHealthStatusResponse, RPCError> {
+    crate::metrics::METHODS_CALLS_COUNTER
+        .with_label_values(&["health"])
+        .inc();
     Ok(crate::health::RPCHealthStatusResponse::new(&data).await)
 }
 
@@ -87,6 +96,9 @@ pub async fn network_info(
     data: Data<ServerContext>,
     Params(_params): Params<serde_json::Value>,
 ) -> Result<near_jsonrpc::primitives::types::network_info::RpcNetworkInfoResponse, RPCError> {
+    crate::metrics::METHODS_CALLS_COUNTER
+        .with_label_values(&["network_info"])
+        .inc();
     Ok(data
         .near_rpc_client
         .call(near_jsonrpc_client::methods::network_info::RpcNetworkInfoRequest)
@@ -99,7 +111,9 @@ pub async fn validators(
 ) -> Result<near_jsonrpc::primitives::types::validator::RpcValidatorResponse, RPCError> {
     let request = near_jsonrpc::primitives::types::validator::RpcValidatorRequest::parse(params)?;
     tracing::debug!("`validators` called with parameters: {:?}", request);
-    crate::metrics::VALIDATORS_REQUESTS_TOTAL.inc();
+    crate::metrics::METHODS_CALLS_COUNTER
+        .with_label_values(&["validators"])
+        .inc();
     // Latest epoch validators fetches from the Near RPC node
     if let near_primitives::types::EpochReference::Latest = &request.epoch_reference {
         let validator_info = data.near_rpc_client.call(request).await?;
@@ -199,7 +213,6 @@ pub async fn protocol_config(
     );
     let protocol_config_request =
         near_jsonrpc::primitives::types::config::RpcProtocolConfigRequest::parse(params)?;
-    crate::metrics::PROTOCOL_CONFIG_REQUESTS_TOTAL.inc();
 
     let config_view =
         protocol_config_call(&data, protocol_config_request.block_reference.clone()).await;

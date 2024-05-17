@@ -1,5 +1,9 @@
+use actix_web::dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform};
 use actix_web::{get, Responder};
-use prometheus::{Encoder, IntCounter, IntGauge, Opts};
+use futures::future::LocalBoxFuture;
+use futures::StreamExt;
+use prometheus::{Encoder, IntCounter, IntCounterVec, IntGauge, Opts};
+use std::future::{ready, Ready};
 
 type Result<T, E> = std::result::Result<T, E>;
 
@@ -15,6 +19,25 @@ fn try_create_int_gauge(name: &str, help: &str) -> Result<IntGauge, prometheus::
     let gauge = IntGauge::with_opts(opts)?;
     prometheus::register(Box::new(gauge.clone()))?;
     Ok(gauge)
+}
+
+fn register_int_counter_vec(
+    name: &str,
+    help: &str,
+    label_names: &[&str],
+) -> Result<IntCounterVec, prometheus::Error> {
+    let opts = Opts::new(name, help);
+    let counter = IntCounterVec::new(opts, label_names)?;
+    prometheus::register(Box::new(counter.clone()))?;
+    Ok(counter)
+}
+
+lazy_static! {
+    pub(crate) static ref METHODS_CALLS_COUNTER: IntCounterVec = register_int_counter_vec(
+        "methods_calls_counter",
+        "Total number of calls to the method",
+        &["method_name"] // This declares a label named `method name`
+    ).unwrap();
 }
 
 // Struct to store the optimistic updating state
@@ -101,83 +124,83 @@ lazy_static! {
     )
     .unwrap();
 
-    // query requests counters
-    pub(crate) static ref QUERY_VIEW_ACCOUNT_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
-        "query_view_account_requests_counter",
-        "Total number requests to the query view account endpoint"
-    )
-    .unwrap();
-    pub(crate) static ref QUERY_VIEW_CODE_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
-        "query_view_code_requests_counter",
-        "Total number requests to the query view code endpoint"
-    )
-    .unwrap();
-    pub(crate) static ref QUERY_VIEW_ACCESS_KEY_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
-        "query_view_access_key_requests_counter",
-        "Total number requests to the query view access key endpoint"
-    ).unwrap();
-    pub(crate) static ref QUERY_VIEW_STATE_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
-        "query_view_state_requests_counter",
-        "Total number requests to the query view state endpoint"
-    ).unwrap();
-    pub(crate) static ref QUERY_FUNCTION_CALL_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
-        "query_function_call_requests_counter",
-        "Total number requests to the query function call endpoint"
-    ).unwrap();
-    pub(crate) static ref QUERY_VIEW_ACCESS_KEYS_LIST_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
-        "query_access_keys_list_requests_counter",
-        "Total number requests to the query access keys list endpoint"
-    ).unwrap();
+    // // query requests counters
+    // pub(crate) static ref QUERY_VIEW_ACCOUNT_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+    //     "query_view_account_requests_counter",
+    //     "Total number requests to the query view account endpoint"
+    // )
+    // .unwrap();
+    // pub(crate) static ref QUERY_VIEW_CODE_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+    //     "query_view_code_requests_counter",
+    //     "Total number requests to the query view code endpoint"
+    // )
+    // .unwrap();
+    // pub(crate) static ref QUERY_VIEW_ACCESS_KEY_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+    //     "query_view_access_key_requests_counter",
+    //     "Total number requests to the query view access key endpoint"
+    // ).unwrap();
+    // pub(crate) static ref QUERY_VIEW_STATE_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+    //     "query_view_state_requests_counter",
+    //     "Total number requests to the query view state endpoint"
+    // ).unwrap();
+    // pub(crate) static ref QUERY_FUNCTION_CALL_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+    //     "query_function_call_requests_counter",
+    //     "Total number requests to the query function call endpoint"
+    // ).unwrap();
+    // pub(crate) static ref QUERY_VIEW_ACCESS_KEYS_LIST_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+    //     "query_access_keys_list_requests_counter",
+    //     "Total number requests to the query access keys list endpoint"
+    // ).unwrap();
 
-    // blocks requests counters
-    pub(crate) static ref BLOCK_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
-        "block_requests_counter",
-        "Total number requests to the block endpoint"
-    ).unwrap();
-    pub(crate) static ref CHNGES_IN_BLOCK_BY_TYPE_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
-        "changes_in_block_by_type_requests_counter",
-        "Total number requests to the changes in block by type endpoint"
-    ).unwrap();
-    pub(crate) static ref CHNGES_IN_BLOCK_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
-        "changes_in_block_requests_counter",
-        "Total number requests to the changes in block endpoint"
-    ).unwrap();
-    pub(crate) static ref CHUNK_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
-        "chunk_requests_counter",
-        "Total number requests to the chunk endpoint"
-    ).unwrap();
+    // // blocks requests counters
+    // pub(crate) static ref BLOCK_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+    //     "block_requests_counter",
+    //     "Total number requests to the block endpoint"
+    // ).unwrap();
+    // pub(crate) static ref CHNGES_IN_BLOCK_BY_TYPE_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+    //     "changes_in_block_by_type_requests_counter",
+    //     "Total number requests to the changes in block by type endpoint"
+    // ).unwrap();
+    // pub(crate) static ref CHNGES_IN_BLOCK_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+    //     "changes_in_block_requests_counter",
+    //     "Total number requests to the changes in block endpoint"
+    // ).unwrap();
+    // pub(crate) static ref CHUNK_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+    //     "chunk_requests_counter",
+    //     "Total number requests to the chunk endpoint"
+    // ).unwrap();
 
-    // gas_price requests counters
-    pub(crate) static ref GAS_PRICE_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
-        "gas_price_requests_counter",
-        "Total number requests to the gas_price endpoint"
-    ).unwrap();
+    // // gas_price requests counters
+    // pub(crate) static ref GAS_PRICE_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+    //     "gas_price_requests_counter",
+    //     "Total number requests to the gas_price endpoint"
+    // ).unwrap();
+    //
+    // // transactions requests counters
+    // pub(crate) static ref TX_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+    //     "tx_requests_counter",
+    //     "Total number requests to the tx endpoint"
+    // ).unwrap();
+    // pub(crate) static ref TX_STATUS_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+    //     "tx_status_requests_counter",
+    //     "Total number requests to the tx status endpoint"
+    // ).unwrap();
+    // pub(crate) static ref RECEIPT_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+    //     "receipt_requests_counter",
+    //     "Total number requests to the receipt endpoint"
+    // ).unwrap();
+    //
+    // // validators requests counters
+    // pub(crate) static ref VALIDATORS_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+    //     "validators_requests_counter",
+    //     "Total number requests to the validators endpoint"
+    // ).unwrap();
 
-    // transactions requests counters
-    pub(crate) static ref TX_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
-        "tx_requests_counter",
-        "Total number requests to the tx endpoint"
-    ).unwrap();
-    pub(crate) static ref TX_STATUS_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
-        "tx_status_requests_counter",
-        "Total number requests to the tx status endpoint"
-    ).unwrap();
-    pub(crate) static ref RECEIPT_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
-        "receipt_requests_counter",
-        "Total number requests to the receipt endpoint"
-    ).unwrap();
-
-    // validators requests counters
-    pub(crate) static ref VALIDATORS_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
-        "validators_requests_counter",
-        "Total number requests to the validators endpoint"
-    ).unwrap();
-
-    // protocol config requests counters
-    pub(crate) static ref PROTOCOL_CONFIG_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
-        "protocol_config_requests_counter",
-        "Total number requests to the protocol_config endpoint"
-    ).unwrap();
+    // // protocol config requests counters
+    // pub(crate) static ref PROTOCOL_CONFIG_REQUESTS_TOTAL: IntCounter = try_create_int_counter(
+    //     "protocol_config_requests_counter",
+    //     "Total number requests to the protocol_config endpoint"
+    // ).unwrap();
 }
 
 // Error counters

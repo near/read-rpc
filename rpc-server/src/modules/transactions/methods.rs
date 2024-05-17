@@ -10,6 +10,9 @@ pub async fn send_tx(
     data: Data<ServerContext>,
     Params(params): Params<serde_json::Value>,
 ) -> Result<near_jsonrpc::primitives::types::transactions::RpcTransactionResponse, RPCError> {
+    crate::metrics::METHODS_CALLS_COUNTER
+        .with_label_values(&["send_tx"])
+        .inc();
     let request = near_jsonrpc_client::methods::send_tx::RpcSendTransactionRequest::parse(params)?;
     Ok(data.near_rpc_client.call(request).await?)
 }
@@ -21,7 +24,9 @@ pub async fn tx(
     Params(params): Params<serde_json::Value>,
 ) -> Result<near_jsonrpc::primitives::types::transactions::RpcTransactionResponse, RPCError> {
     tracing::debug!("`tx` call. Params: {:?}", params);
-    crate::metrics::TX_REQUESTS_TOTAL.inc();
+    crate::metrics::METHODS_CALLS_COUNTER
+        .with_label_values(&["tx"])
+        .inc();
 
     let tx_status_request =
         near_jsonrpc::primitives::types::transactions::RpcTransactionStatusRequest::parse(params)?;
@@ -31,7 +36,10 @@ pub async fn tx(
     #[cfg(feature = "shadow_data_consistency")]
     {
         if let Some(err_code) = crate::utils::shadow_compare_results_handler(
-            crate::metrics::TX_REQUESTS_TOTAL.get(),
+            crate::metrics::METHODS_CALLS_COUNTER
+                .get_metric_with_label_values(&["tx"])
+                .unwrap()
+                .get(),
             data.shadow_data_consistency_rate,
             &result,
             data.near_rpc_client.clone(),
@@ -61,7 +69,6 @@ pub async fn tx_status(
     Params(params): Params<serde_json::Value>,
 ) -> Result<near_jsonrpc::primitives::types::transactions::RpcTransactionResponse, RPCError> {
     tracing::debug!("`tx_status` call. Params: {:?}", params);
-    crate::metrics::TX_STATUS_REQUESTS_TOTAL.inc();
 
     let tx_status_request =
         near_jsonrpc::primitives::types::transactions::RpcTransactionStatusRequest::parse(params)?;
@@ -71,7 +78,10 @@ pub async fn tx_status(
     #[cfg(feature = "shadow_data_consistency")]
     {
         if let Some(err_code) = crate::utils::shadow_compare_results_handler(
-            crate::metrics::TX_STATUS_REQUESTS_TOTAL.get(),
+            crate::metrics::METHODS_CALLS_COUNTER
+                .get_metric_with_label_values(&["tx_status"])
+                .unwrap()
+                .get(),
             data.shadow_data_consistency_rate,
             &result,
             data.near_rpc_client.clone(),
@@ -99,6 +109,9 @@ pub async fn broadcast_tx_async(
     Params(params): Params<serde_json::Value>,
 ) -> Result<near_primitives::hash::CryptoHash, RPCError> {
     tracing::debug!("`broadcast_tx_async` call. Params: {:?}", params);
+    crate::metrics::METHODS_CALLS_COUNTER
+        .with_label_values(&["broadcast_tx_async"])
+        .inc();
     if cfg!(feature = "send_tx_methods") {
         let tx_async_request =
             near_jsonrpc::primitives::types::transactions::RpcSendTransactionRequest::parse(
@@ -125,6 +138,9 @@ pub async fn broadcast_tx_commit(
     Params(params): Params<serde_json::Value>,
 ) -> Result<near_jsonrpc::primitives::types::transactions::RpcTransactionResponse, RPCError> {
     tracing::debug!("`broadcast_tx_commit` call. Params: {:?}", params);
+    crate::metrics::METHODS_CALLS_COUNTER
+        .with_label_values(&["broadcast_tx_commit"])
+        .inc();
     if cfg!(feature = "send_tx_methods") {
         let tx_commit_request =
             near_jsonrpc::primitives::types::transactions::RpcSendTransactionRequest::parse(

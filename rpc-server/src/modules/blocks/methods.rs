@@ -45,12 +45,14 @@ pub async fn chunk(
 ) -> Result<near_jsonrpc::primitives::types::chunks::RpcChunkResponse, RPCError> {
     tracing::debug!("`chunk` called with parameters: {:?}", params);
     let chunk_request = near_jsonrpc::primitives::types::chunks::RpcChunkRequest::parse(params)?;
-    crate::metrics::CHUNK_REQUESTS_TOTAL.inc();
     let result = fetch_chunk(&data, chunk_request.chunk_reference.clone()).await;
     #[cfg(feature = "shadow_data_consistency")]
     {
         if let Some(err_code) = crate::utils::shadow_compare_results_handler(
-            crate::metrics::CHUNK_REQUESTS_TOTAL.get(),
+            crate::metrics::METHODS_CALLS_COUNTER
+                .get_metric_with_label_values(&["chunk"])
+                .unwrap()
+                .get(),
             data.shadow_data_consistency_rate,
             &result,
             data.near_rpc_client.clone(),
@@ -136,7 +138,9 @@ async fn block_call(
     mut block_request: near_jsonrpc::primitives::types::blocks::RpcBlockRequest,
 ) -> Result<near_jsonrpc::primitives::types::blocks::RpcBlockResponse, RPCError> {
     tracing::debug!("`block` called with parameters: {:?}", block_request);
-    crate::metrics::BLOCK_REQUESTS_TOTAL.inc();
+    crate::metrics::METHODS_CALLS_COUNTER
+        .with_label_values(&["block"])
+        .inc();
     let result = fetch_block(&data, block_request.block_reference.clone()).await;
 
     #[cfg(feature = "shadow_data_consistency")]
@@ -152,7 +156,10 @@ async fn block_call(
         };
 
         if let Some(err_code) = crate::utils::shadow_compare_results_handler(
-            crate::metrics::BLOCK_REQUESTS_TOTAL.get(),
+            crate::metrics::METHODS_CALLS_COUNTER
+                .get_metric_with_label_values(&["block"])
+                .unwrap()
+                .get(),
             data.shadow_data_consistency_rate,
             &result,
             data.near_rpc_client.clone(),
@@ -176,7 +183,9 @@ async fn changes_in_block_call(
     mut params: near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockRequest,
 ) -> Result<near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockByTypeResponse, RPCError>
 {
-    crate::metrics::CHNGES_IN_BLOCK_REQUESTS_TOTAL.inc();
+    crate::metrics::METHODS_CALLS_COUNTER
+        .with_label_values(&["EXPERIMENTAL_changes_in_block"])
+        .inc();
     let cache_block = fetch_block_from_cache_or_get(&data, params.block_reference.clone())
         .await
         .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
@@ -189,7 +198,10 @@ async fn changes_in_block_call(
             )
         }
         if let Some(err_code) = crate::utils::shadow_compare_results_handler(
-            crate::metrics::CHNGES_IN_BLOCK_REQUESTS_TOTAL.get(),
+            crate::metrics::METHODS_CALLS_COUNTER
+                .get_metric_with_label_values(&["EXPERIMENTAL_changes_in_block"])
+                .unwrap()
+                .get(),
             data.shadow_data_consistency_rate,
             &result,
             data.near_rpc_client.clone(),
@@ -212,7 +224,9 @@ async fn changes_in_block_by_type_call(
     data: Data<ServerContext>,
     mut params: near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockByTypeRequest,
 ) -> Result<near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockResponse, RPCError> {
-    crate::metrics::CHNGES_IN_BLOCK_BY_TYPE_REQUESTS_TOTAL.inc();
+    crate::metrics::METHODS_CALLS_COUNTER
+        .with_label_values(&["EXPERIMENTAL_changes"])
+        .inc();
     let cache_block = fetch_block_from_cache_or_get(&data, params.block_reference.clone())
         .await
         .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
@@ -232,7 +246,10 @@ async fn changes_in_block_by_type_call(
             )
         }
         if let Some(err_code) = crate::utils::shadow_compare_results_handler(
-            crate::metrics::CHNGES_IN_BLOCK_BY_TYPE_REQUESTS_TOTAL.get(),
+            crate::metrics::METHODS_CALLS_COUNTER
+                .get_metric_with_label_values(&["EXPERIMENTAL_changes"])
+                .unwrap()
+                .get(),
             data.shadow_data_consistency_rate,
             &result,
             data.near_rpc_client.clone(),

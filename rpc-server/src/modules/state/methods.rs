@@ -8,6 +8,9 @@ pub async fn view_state_paginated(
     data: Data<ServerContext>,
     Params(params): Params<crate::modules::state::RpcViewStatePaginatedRequest>,
 ) -> Result<crate::modules::state::RpcViewStatePaginatedResponse, RPCError> {
+    crate::metrics::METHODS_CALLS_COUNTER
+        .with_label_values(&["view_state_paginated"])
+        .inc();
     let block_reference = near_primitives::types::BlockReference::BlockId(params.block_id.clone());
     let block = fetch_block_from_cache_or_get(&data, block_reference)
         .await

@@ -10,6 +10,9 @@ pub async fn light_client_proof(
     near_jsonrpc::primitives::types::light_client::RpcLightClientExecutionProofResponse,
     RPCError,
 > {
+    crate::metrics::METHODS_CALLS_COUNTER
+        .with_label_values(&["light_client_proof"])
+        .inc();
     let request =
         near_jsonrpc::primitives::types::light_client::RpcLightClientExecutionProofRequest::parse(
             params,
@@ -23,6 +26,9 @@ pub async fn next_light_client_block(
     Params(params): Params<serde_json::Value>,
 ) -> Result<near_jsonrpc::primitives::types::light_client::RpcLightClientNextBlockResponse, RPCError>
 {
+    crate::metrics::METHODS_CALLS_COUNTER
+        .with_label_values(&["next_light_client_block"])
+        .inc();
     let request =
         near_jsonrpc::primitives::types::light_client::RpcLightClientNextBlockRequest::parse(
             params,

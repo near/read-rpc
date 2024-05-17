@@ -17,7 +17,9 @@ pub async fn gas_price(
         "`gas_price` called with parameters: {:?}",
         gas_price_request
     );
-    crate::metrics::GAS_PRICE_REQUESTS_TOTAL.inc();
+    crate::metrics::METHODS_CALLS_COUNTER
+        .with_label_values(&["gas_price"])
+        .inc();
     let block_reference = match gas_price_request.block_id.clone() {
         Some(block_id) => near_primitives::types::BlockReference::BlockId(block_id),
         None => near_primitives::types::BlockReference::Finality(
@@ -42,7 +44,10 @@ pub async fn gas_price(
         };
 
         if let Some(err_code) = crate::utils::shadow_compare_results_handler(
-            crate::metrics::GAS_PRICE_REQUESTS_TOTAL.get(),
+            crate::metrics::METHODS_CALLS_COUNTER
+                .get_metric_with_label_values(&["gas_price"])
+                .unwrap()
+                .get(),
             data.shadow_data_consistency_rate,
             &result,
             data.near_rpc_client.clone(),

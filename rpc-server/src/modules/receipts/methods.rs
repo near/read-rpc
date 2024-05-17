@@ -13,14 +13,16 @@ pub async fn receipt(
     tracing::debug!("`receipt` call. Params: {:?}", params);
     let receipt_request =
         near_jsonrpc::primitives::types::receipts::RpcReceiptRequest::parse(params)?;
-    crate::metrics::RECEIPT_REQUESTS_TOTAL.inc();
 
     let result = fetch_receipt(&data, &receipt_request).await;
 
     #[cfg(feature = "shadow_data_consistency")]
     {
         if let Some(err_code) = crate::utils::shadow_compare_results_handler(
-            crate::metrics::RECEIPT_REQUESTS_TOTAL.get(),
+            crate::metrics::METHODS_CALLS_COUNTER
+                .get_metric_with_label_values(&["receipt"])
+                .unwrap()
+                .get(),
             data.shadow_data_consistency_rate,
             &result,
             data.near_rpc_client.clone(),
