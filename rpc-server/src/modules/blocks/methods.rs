@@ -52,17 +52,14 @@ pub async fn chunk(
     let result = fetch_chunk(&data, chunk_request.chunk_reference.clone()).await;
     #[cfg(feature = "shadow_data_consistency")]
     {
-        if let Some(err_code) = crate::utils::shadow_compare_results_handler(
+        crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
             &result,
             data.near_rpc_client.clone(),
             chunk_request,
             "chunk",
         )
-        .await
-        {
-            crate::utils::capture_shadow_consistency_error!(&err_code, "CHUNK")
-        };
+        .await;
     }
     Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)
 }
@@ -160,17 +157,14 @@ async fn block_call(
             }
         };
 
-        if let Some(err_code) = crate::utils::shadow_compare_results_handler(
+        crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
             &result,
             data.near_rpc_client.clone(),
             block_request,
             "block",
         )
-        .await
-        {
-            crate::utils::capture_shadow_consistency_error!(&err_code, "BLOCK")
-        };
+        .await;
     };
 
     Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)
@@ -195,17 +189,14 @@ async fn changes_in_block_call(
                 near_primitives::types::BlockId::Height(cache_block.block_height),
             )
         }
-        if let Some(err_code) = crate::utils::shadow_compare_results_handler(
+        crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
             &result,
             data.near_rpc_client.clone(),
             params,
             "EXPERIMENTAL_changes_in_block",
         )
-        .await
-        {
-            crate::utils::capture_shadow_consistency_error!(&err_code, "CHANGES_IN_BLOCK")
-        };
+        .await;
     }
 
     Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)
@@ -236,17 +227,14 @@ async fn changes_in_block_by_type_call(
                 near_primitives::types::BlockId::Height(cache_block.block_height),
             )
         }
-        if let Some(err_code) = crate::utils::shadow_compare_results_handler(
+        crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
             &result,
             data.near_rpc_client.clone(),
             params,
             "EXPERIMENTAL_changes",
         )
-        .await
-        {
-            crate::utils::capture_shadow_consistency_error!(&err_code, "CHANGES_IN_BLOCK_BY_TYPE")
-        };
+        .await;
     }
 
     Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)

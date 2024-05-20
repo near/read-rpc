@@ -3,7 +3,6 @@ use crate::modules::network::epoch_config_from_protocol_config_view;
 #[cfg(feature = "shadow_data_consistency")]
 use assert_json_diff::{assert_json_matches_no_panic, CompareMode, Config, NumericMode};
 use futures::StreamExt;
-use std::path::PathBuf;
 
 #[cfg(feature = "shadow_data_consistency")]
 const DEFAULT_RETRY_COUNT: u8 = 3;
@@ -121,12 +120,12 @@ pub async fn get_final_block(
     // https://github.com/tikv/rust-prometheus/issues/470
     if optimistic {
         // optimistic block height
-        crate::metrics::FINALITIY_BLOCKS_HEIGHT
+        crate::metrics::LATEST_BLOCK_HEIGHT_BY_FINALITIY
             .with_label_values(&["optimistic"])
             .set(i64::try_from(block_view.header.height)?);
     } else {
         // final block height
-        crate::metrics::FINALITIY_BLOCKS_HEIGHT
+        crate::metrics::LATEST_BLOCK_HEIGHT_BY_FINALITIY
             .with_label_values(&["final"])
             .set(i64::try_from(block_view.header.height)?);
     }
@@ -165,7 +164,7 @@ async fn handle_streamer_message(
     let block_cache = block.block_cache;
 
     if block_cache.block_height as i64
-        > crate::metrics::FINALITIY_BLOCKS_HEIGHT
+        > crate::metrics::LATEST_BLOCK_HEIGHT_BY_FINALITIY
             .with_label_values(&["final"])
             .get()
     {
@@ -180,7 +179,7 @@ async fn handle_streamer_message(
         blocks_cache
             .put(block_cache.block_height, block_cache)
             .await;
-        crate::metrics::FINALITIY_BLOCKS_HEIGHT
+        crate::metrics::LATEST_BLOCK_HEIGHT_BY_FINALITIY
             .with_label_values(&["final"])
             .set(i64::try_from(block_cache.block_height)?);
     }
@@ -298,14 +297,14 @@ pub async fn update_optimistic_block_regularly(
                 let optimistic_block = BlockInfo::new_from_streamer_message(streamer_message).await;
                 let optimistic_block_cache = optimistic_block.block_cache;
                 if optimistic_block_cache.block_height as i64
-                    > crate::metrics::FINALITIY_BLOCKS_HEIGHT
+                    > crate::metrics::LATEST_BLOCK_HEIGHT_BY_FINALITIY
                         .with_label_values(&["optimistic"])
                         .get()
                 {
                     blocks_info_by_finality
                         .update_optimistic_block(optimistic_block)
                         .await;
-                    crate::metrics::FINALITIY_BLOCKS_HEIGHT
+                    crate::metrics::LATEST_BLOCK_HEIGHT_BY_FINALITIY
                         .with_label_values(&["optimistic"])
                         .set(
                             i64::try_from(optimistic_block_cache.block_height)
@@ -320,10 +319,10 @@ pub async fn update_optimistic_block_regularly(
 
         // When an optimistic block is not updated, or it is lower than the final block
         // we need to mark that optimistic updating is not working
-        if crate::metrics::FINALITIY_BLOCKS_HEIGHT
+        if crate::metrics::LATEST_BLOCK_HEIGHT_BY_FINALITIY
             .with_label_values(&["optimistic"])
             .get()
-            <= crate::metrics::FINALITIY_BLOCKS_HEIGHT
+            <= crate::metrics::LATEST_BLOCK_HEIGHT_BY_FINALITIY
                 .with_label_values(&["final"])
                 .get()
             && !crate::metrics::OPTIMISTIC_UPDATING.is_not_working()
@@ -336,10 +335,10 @@ pub async fn update_optimistic_block_regularly(
 
         // When an optimistic block is updated, and it is greater than the final block
         // we need to mark that optimistic updating is working
-        if crate::metrics::FINALITIY_BLOCKS_HEIGHT
+        if crate::metrics::LATEST_BLOCK_HEIGHT_BY_FINALITIY
             .with_label_values(&["optimistic"])
             .get()
-            > crate::metrics::FINALITIY_BLOCKS_HEIGHT
+            > crate::metrics::LATEST_BLOCK_HEIGHT_BY_FINALITIY
                 .with_label_values(&["final"])
                 .get()
             && crate::metrics::OPTIMISTIC_UPDATING.is_not_working()
@@ -378,18 +377,17 @@ pub async fn shadow_compare_results_handler<T, E, M>(
     near_rpc_client: JsonRpcClient,
     params: M,
     method_name: &str,
-) -> Option<String>
-where
+) where
     M: near_jsonrpc_client::methods::RpcMethod + std::fmt::Debug,
     <M as near_jsonrpc_client::methods::RpcMethod>::Response: serde::ser::Serialize,
     <M as near_jsonrpc_client::methods::RpcMethod>::Error: std::fmt::Debug + serde::ser::Serialize,
     T: serde::ser::Serialize,
     E: std::fmt::Debug + serde::ser::Serialize,
 {
-    let method_total_requests = crate::metrics::METHODS_CALLS_COUNTER
+    let method_total_requests = crate::metrics::METHOD_CALLS_COUNTER
         .with_label_values(&[method_name])
         .get();
-    if is_should_shadow_compare_results(method_total_requests, shadow_rate).await {
+    let err_code = if is_should_shadow_compare_results(method_total_requests, shadow_rate).await {
         let meta_data = format!("{:?}", params);
         let (read_rpc_response_json, is_response_ok) = match read_rpc_result {
             Ok(res) => (serde_json::to_value(res), true),
@@ -434,13 +432,18 @@ where
                         meta_data,
                         format!("NearRPC: {}, ReadRPC: {:?}", err, read_rpc_response_meta_data),
                     );
-                    Some(String::from("4"))
+                    Some("4".to_string())
                 }
             }
         }
     } else {
         None
-    }
+    };
+    if let Some(err_code) = &err_code {
+        crate::metrics::REQUESTS_ERRORS
+            .with_label_values(&[method_name, err_code])
+            .inc();
+    };
 }
 
 #[cfg(feature = "shadow_data_consistency")]
@@ -633,10 +636,10 @@ impl DataMismatchReason {
     /// metrics like BLOCK_ERROR_0, BLOCK_ERROR_1, BLOCK_ERROR_2, BLOCK_ERROR_3 etc.
     pub fn code(&self) -> String {
         match self {
-            DataMismatchReason::ReadRpcSuccessNearRpcSuccess => String::from("0"),
-            DataMismatchReason::ReadRpcSuccessNearRpcError => String::from("1"),
-            DataMismatchReason::ReadRpcErrorNearRpcSuccess => String::from("2"),
-            DataMismatchReason::ReadRpcErrorNearRpcError => String::from("3"),
+            DataMismatchReason::ReadRpcSuccessNearRpcSuccess => "0".to_string(),
+            DataMismatchReason::ReadRpcSuccessNearRpcError => "1".to_string(),
+            DataMismatchReason::ReadRpcErrorNearRpcSuccess => "2".to_string(),
+            DataMismatchReason::ReadRpcErrorNearRpcError => "3".to_string(),
         }
     }
 
@@ -723,30 +726,4 @@ fn generate_array_key(value: &serde_json::Value) -> String {
             format!("{}/{}:{}", str_key, key, val)
         }),
     }
-}
-
-#[cfg(feature = "shadow_data_consistency")]
-macro_rules! capture_shadow_consistency_error {
-    ($err_code:expr, $method_metric_name:expr) => {
-        paste::paste! {
-            crate::metrics::[<$method_metric_name _ERRORS>].with_label_values(&[$err_code]).inc()
-        }
-    };
-}
-
-#[cfg(feature = "shadow_data_consistency")]
-pub(crate) use capture_shadow_consistency_error;
-
-#[allow(unused)]
-pub fn get_home_dir() -> PathBuf {
-    if let Ok(near_home) = std::env::var("NEAR_HOME") {
-        return near_home.into();
-    }
-
-    if let Some(mut home) = dirs::home_dir() {
-        home.push(".near");
-        return home;
-    }
-
-    PathBuf::default()
 }

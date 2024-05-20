@@ -1,5 +1,5 @@
 use actix_web::{get, Responder};
-use prometheus::{Encoder, IntCounterVec, IntGaugeVec, Opts};
+use prometheus::{Encoder, IntCounterVec, IntGauge, IntGaugeVec, Opts};
 
 type Result<T, E> = std::result::Result<T, E>;
 
@@ -12,6 +12,13 @@ fn register_int_counter_vec(
     let counter = IntCounterVec::new(opts, label_names)?;
     prometheus::register(Box::new(counter.clone()))?;
     Ok(counter)
+}
+
+fn try_create_int_gauge(name: &str, help: &str) -> Result<IntGauge, prometheus::Error> {
+    let opts = Opts::new(name, help);
+    let gauge = IntGauge::with_opts(opts)?;
+    prometheus::register(Box::new(gauge.clone()))?;
+    Ok(gauge)
 }
 
 fn register_int_gauge_vec(
@@ -34,6 +41,7 @@ pub struct OptimisticUpdating {
 
 impl OptimisticUpdating {
     pub fn new() -> Self {
+        OPTIMISTIC_STATUS.set(0);
         Self {
             is_not_working: std::sync::atomic::AtomicBool::new(false),
         }
@@ -59,33 +67,44 @@ impl OptimisticUpdating {
     // Set optimistic updating as not working
     pub fn set_not_working(&self) {
         self.set(true);
+        OPTIMISTIC_STATUS.set(1);
     }
 
     // Set optimistic updating as working
     pub fn set_working(&self) {
         self.set(false);
+        OPTIMISTIC_STATUS.set(0);
     }
 }
 
+// Is not a metric, but a global variable to track the optimistic updating status
 lazy_static! {
-    pub(crate) static ref FINALITIY_BLOCKS_HEIGHT: IntGaugeVec = register_int_gauge_vec(
-        "finality_blocks_height",
-        "Block height by finality",
+    pub(crate) static ref OPTIMISTIC_UPDATING: OptimisticUpdating = OptimisticUpdating::new();
+}
+
+// Metrics
+lazy_static! {
+    pub(crate) static ref LATEST_BLOCK_HEIGHT_BY_FINALITIY: IntGaugeVec = register_int_gauge_vec(
+        "latest_block_height_by_finality",
+        "Latest block height by finality",
         &["block_type"] // This declares a label named `block_type`
     ).unwrap();
 
-    pub(crate) static ref METHODS_CALLS_COUNTER: IntCounterVec = register_int_counter_vec(
-        "methods_calls_counter",
+    pub(crate) static ref METHOD_CALLS_COUNTER: IntCounterVec = register_int_counter_vec(
+        "method_calls_counter",
         "Total number of calls to the method",
         &["method_name"] // This declares a label named `method name`
     ).unwrap();
-
-    pub(crate) static ref OPTIMISTIC_UPDATING: OptimisticUpdating = OptimisticUpdating::new();
 
     pub(crate) static ref REQUESTS_COUNTER: IntCounterVec = register_int_counter_vec(
         "requests_counter",
         "Total number of requests",
         &["request_type"] // This declares a label named `request_type`
+    ).unwrap();
+
+    pub(crate) static ref OPTIMISTIC_STATUS: IntGauge = try_create_int_gauge(
+        "optimistic_status",
+        "Optimistic updating status. 0: working, 1: not working",
     ).unwrap();
 
     // Error metrics
@@ -94,108 +113,12 @@ lazy_static! {
     // 2: ReadRPC error, NEAR RPC success"
     // 3: ReadRPC error, NEAR RPC error"
     // 4: Failed to compare. Network or parsing error"
-
-    // QUERY
-    pub(crate) static ref QUERY_VIEW_ACCOUNT_ERRORS: IntCounterVec = register_int_counter_vec(
-        "query_view_account_errors",
-        "Total number of errors in Query.view_account",
-        &["error_type"]
-    ).unwrap();
-    pub(crate) static ref QUERY_VIEW_CODE_ERRORS: IntCounterVec = register_int_counter_vec(
-        "query_view_code_errors",
-        "Total number of errors in Query.view_code",
-        &["error_type"]
-    ).unwrap();
-    pub(crate) static ref QUERY_VIEW_ACCESS_KEY_ERRORS: IntCounterVec = register_int_counter_vec(
-        "query_view_access_key_errors",
-        "Total number of errors in Query.view_access_key",
-        &["error_type"]
-    ).unwrap();
-    pub(crate) static ref QUERY_VIEW_STATE_ERRORS: IntCounterVec = register_int_counter_vec(
-        "query_view_state_errors",
-        "Total number of errors in Query.view_state",
-        &["error_type"]
-    ).unwrap();
-    pub(crate) static ref QUERY_FUNCTION_CALL_ERRORS: IntCounterVec = register_int_counter_vec(
-        "query_function_call_errors",
-        "Total number of errors in Query.function_call",
-        &["error_type"]
-    ).unwrap();
-    pub(crate) static ref QUERY_VIEW_ACCESS_KEY_LIST_ERRORS: IntCounterVec = register_int_counter_vec(
-        "query_view_access_key_list_errors",
-        "Total number of errors in Query.view_access_key_list",
-        &["error_type"]
+    pub(crate) static ref REQUESTS_ERRORS: IntCounterVec = register_int_counter_vec(
+        "requests_methods_errors",
+        "Total number of errors for method with code",
+        &["method", "error_type"]
     ).unwrap();
 
-    // BLOCK
-    pub(crate) static ref BLOCK_ERRORS: IntCounterVec = register_int_counter_vec(
-        "block_errors",
-        "Total number of errors in Block",
-        &["error_type"]
-    ).unwrap();
-
-    // CHUNK
-    pub(crate) static ref CHUNK_ERRORS: IntCounterVec = register_int_counter_vec(
-        "chunk_errors",
-        "Total number of errors in Chunk",
-        &["error_type"]
-    ).unwrap();
-
-    // GAS_PRICE
-    pub(crate) static ref GAS_PRICE_ERRORS: IntCounterVec = register_int_counter_vec(
-        "gas_price_errors",
-        "Total number of errors in GasPrice",
-        &["error_type"]
-    ).unwrap();
-
-    // PROTOCOL_CONFIG
-    pub(crate) static ref PROTOCOL_CONFIG_ERRORS: IntCounterVec = register_int_counter_vec(
-        "protocol_config_errors",
-        "Total number of errors in ProtocolConfig",
-        &["error_type"]
-    ).unwrap();
-
-    // VALIDATORS
-    pub(crate) static ref VALIDATORS_ERRORS: IntCounterVec = register_int_counter_vec(
-        "validators_errors",
-        "Total number of errors in Validators",
-        &["error_type"]
-    ).unwrap();
-
-    // TX
-    pub(crate) static ref TX_ERRORS: IntCounterVec = register_int_counter_vec(
-        "tx_errors",
-        "Total number of errors in Tx",
-        &["error_type"]
-    ).unwrap();
-
-    // TX_STATUS
-    pub(crate) static ref TX_STATUS_ERRORS: IntCounterVec = register_int_counter_vec(
-        "tx_status_errors",
-        "Total number of errors in TxStatus",
-        &["error_type"]
-    ).unwrap();
-
-    // CHANGES_IN_BLOCK_BY_TYPE
-    pub(crate) static ref CHANGES_IN_BLOCK_BY_TYPE_ERRORS: IntCounterVec = register_int_counter_vec(
-        "changes_in_block_by_type_errors",
-        "Total number of errors in ChangesInBlockByType",
-        &["error_type"]
-    ).unwrap();
-
-    // CHANGES_IN_BLOCK
-    pub(crate) static ref CHANGES_IN_BLOCK_ERRORS: IntCounterVec = register_int_counter_vec(
-        "changes_in_block_errors",
-        "Total number of errors in ChangesInBlock",
-        &["error_type"]
-    ).unwrap();
-
-    // RECEIPT
-    pub(crate) static ref RECEIPT_ERRORS: IntCounterVec = register_int_counter_vec(
-        "receipt_errors",
-        "Total number of errors in Receipt",
-        &["error_type"]
-    ).unwrap();
 }
 
 /// Exposes prometheus metrics

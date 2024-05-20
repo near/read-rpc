@@ -40,17 +40,14 @@ pub async fn gas_price(
             Err(err) => Err(err),
         };
 
-        if let Some(err_code) = crate::utils::shadow_compare_results_handler(
+        crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
             &result,
             data.near_rpc_client.clone(),
             gas_price_request,
             "gas_price",
         )
-        .await
-        {
-            crate::utils::capture_shadow_consistency_error!(&err_code, "GAS_PRICE")
-        };
+        .await;
     };
     let gas_price_view = near_primitives::views::GasPriceView {
         gas_price: cache_block

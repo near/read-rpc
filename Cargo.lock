@@ -611,7 +611,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5aeeee1a5defa63cba39097a510dfe63ef53658fc8995202a610f6a8a4d03639"
 dependencies = [
  "attohttpc",
- "dirs 4.0.0",
+ "dirs",
  "rust-ini",
  "serde",
  "serde-xml-rs",
@@ -2263,16 +2263,7 @@ version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca3aa72a6f96ea37bbc5aa912f6788242832f75369bdfdadcb0e38423f100059"
 dependencies = [
- "dirs-sys 0.3.7",
-]
-
-[[package]]
-name = "dirs"
-version = "5.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44c45a9d03d6676652bcb5e724c7e988de1acad23a711b5217ab9cbecbec2225"
-dependencies = [
- "dirs-sys 0.4.1",
+ "dirs-sys",
 ]
 
 [[package]]
@@ -2294,18 +2285,6 @@ dependencies = [
  "libc",
  "redox_users",
  "winapi",
-]
-
-[[package]]
-name = "dirs-sys"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "520f05a5cbd335fae5a99ff7a6ab8627577660ee5cfd6a94a6a929b52ff0321c"
-dependencies = [
- "libc",
- "option-ext",
- "redox_users",
- "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -5183,7 +5162,7 @@ dependencies = [
  "borsh 1.5.0",
  "chrono",
  "cloud-storage",
- "dirs 4.0.0",
+ "dirs",
  "easy-ext",
  "futures",
  "hex",
@@ -5647,12 +5626,6 @@ dependencies = [
  "tokio",
  "tokio-stream",
 ]
-
-[[package]]
-name = "option-ext"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
 name = "ordered-float"
@@ -6461,7 +6434,6 @@ dependencies = [
  "chrono",
  "configuration",
  "database",
- "dirs 5.0.1",
  "erased-serde",
  "futures",
  "futures-locks",
@@ -6479,7 +6451,6 @@ dependencies = [
  "near-parameters 1.39.1",
  "near-primitives 1.39.1",
  "near-vm-runner 1.39.1",
- "paste",
  "prometheus",
  "readnode-primitives",
  "redis",
@@ -6488,7 +6459,6 @@ dependencies = [
  "serde_json",
  "sysinfo 0.30.12",
  "thiserror",
- "time",
  "tokio",
  "tokio-stream",
  "tracing",

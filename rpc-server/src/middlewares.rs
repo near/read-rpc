@@ -1,4 +1,4 @@
-use crate::metrics::{METHODS_CALLS_COUNTER, REQUESTS_COUNTER};
+use crate::metrics::{METHOD_CALLS_COUNTER, REQUESTS_COUNTER};
 use actix_web::dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform};
 use futures::future::LocalBoxFuture;
 use futures::StreamExt;
@@ -7,6 +7,8 @@ use near_jsonrpc::RpcRequest;
 use serde_json::Value;
 use std::future::{ready, Ready};
 
+// Middleware to count requests and methods calls
+// This middleware is used to count the number of requests and the number of calls to each method
 pub struct RequestsCounters;
 
 impl<S, B> Transform<S, ServiceRequest> for RequestsCounters
@@ -97,10 +99,10 @@ where
                                 "query_call_function"
                             }
                         };
-                        METHODS_CALLS_COUNTER.with_label_values(&[method]).inc()
+                        METHOD_CALLS_COUNTER.with_label_values(&[method]).inc()
                     }
                 } else {
-                    METHODS_CALLS_COUNTER.with_label_values(&[method]).inc()
+                    METHOD_CALLS_COUNTER.with_label_values(&[method]).inc()
                 }
             };
 

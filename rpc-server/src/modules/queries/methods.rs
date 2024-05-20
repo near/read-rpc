@@ -131,7 +131,7 @@ async fn query_call(
 
     #[cfg(feature = "shadow_data_consistency")]
     {
-        let request_copy = query_request.request.clone();
+        // let request_copy = query_request.request.clone();
 
         // Since we do queries with the clause WHERE block_height <= X, we need to
         // make sure that the block we are doing a shadow data consistency check for
@@ -152,95 +152,24 @@ async fn query_call(
         // are not proxying the requests anymore and respond with the error to the client.
         // Since we already have the dashboard using these metric names, we don't want to
         // change them and reuse them for the observability of the shadow data consistency checks.
-        match request_copy {
-            near_primitives::views::QueryRequest::ViewAccount { .. } => {
-                if let Some(err_code) = crate::utils::shadow_compare_results_handler(
-                    data.shadow_data_consistency_rate,
-                    &result,
-                    data.near_rpc_client.clone(),
-                    query_request,
-                    "query_view_account",
-                )
-                .await
-                {
-                    crate::utils::capture_shadow_consistency_error!(&err_code, "QUERY_VIEW_ACCOUNT")
-                };
-            }
-            near_primitives::views::QueryRequest::ViewCode { .. } => {
-                if let Some(err_code) = crate::utils::shadow_compare_results_handler(
-                    data.shadow_data_consistency_rate,
-                    &result,
-                    data.near_rpc_client.clone(),
-                    query_request,
-                    "query_view_code",
-                )
-                .await
-                {
-                    crate::utils::capture_shadow_consistency_error!(&err_code, "QUERY_VIEW_CODE")
-                };
-            }
-            near_primitives::views::QueryRequest::ViewAccessKey { .. } => {
-                if let Some(err_code) = crate::utils::shadow_compare_results_handler(
-                    data.shadow_data_consistency_rate,
-                    &result,
-                    data.near_rpc_client.clone(),
-                    query_request,
-                    "query_view_access_key",
-                )
-                .await
-                {
-                    crate::utils::capture_shadow_consistency_error!(
-                        &err_code,
-                        "QUERY_VIEW_ACCESS_KEY"
-                    )
-                };
-            }
-            near_primitives::views::QueryRequest::ViewState { .. } => {
-                if let Some(err_code) = crate::utils::shadow_compare_results_handler(
-                    data.shadow_data_consistency_rate,
-                    &result,
-                    data.near_rpc_client.clone(),
-                    query_request,
-                    "query_view_state",
-                )
-                .await
-                {
-                    crate::utils::capture_shadow_consistency_error!(&err_code, "QUERY_VIEW_STATE")
-                };
-            }
-            near_primitives::views::QueryRequest::CallFunction { .. } => {
-                if let Some(err_code) = crate::utils::shadow_compare_results_handler(
-                    data.shadow_data_consistency_rate,
-                    &result,
-                    data.near_rpc_client.clone(),
-                    query_request,
-                    "query_call_function",
-                )
-                .await
-                {
-                    crate::utils::capture_shadow_consistency_error!(
-                        &err_code,
-                        "QUERY_FUNCTION_CALL"
-                    )
-                };
-            }
+        let method_name = match &query_request.request {
+            near_primitives::views::QueryRequest::ViewAccount { .. } => "query_view_account",
+            near_primitives::views::QueryRequest::ViewCode { .. } => "query_view_code",
+            near_primitives::views::QueryRequest::ViewAccessKey { .. } => "query_view_access_key",
+            near_primitives::views::QueryRequest::ViewState { .. } => "query_view_state",
+            near_primitives::views::QueryRequest::CallFunction { .. } => "query_call_function",
             near_primitives::views::QueryRequest::ViewAccessKeyList { .. } => {
-                if let Some(err_code) = crate::utils::shadow_compare_results_handler(
-                    data.shadow_data_consistency_rate,
-                    &result,
-                    data.near_rpc_client.clone(),
-                    query_request,
-                    "query_view_access_key_list",
-                )
-                .await
-                {
-                    crate::utils::capture_shadow_consistency_error!(
-                        &err_code,
-                        "QUERY_VIEW_ACCESS_KEY_LIST"
-                    )
-                };
+                "query_view_access_key_list"
             }
         };
+        crate::utils::shadow_compare_results_handler(
+            data.shadow_data_consistency_rate,
+            &result,
+            data.near_rpc_client.clone(),
+            query_request,
+            method_name,
+        )
+        .await;
     }
 
     Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)

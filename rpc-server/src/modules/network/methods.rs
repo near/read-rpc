@@ -127,17 +127,14 @@ pub async fn validators(
 
     #[cfg(feature = "shadow_data_consistency")]
     {
-        if let Some(err_code) = crate::utils::shadow_compare_results_handler(
+        crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
             &validator_info,
             data.near_rpc_client.clone(),
             request,
             "validators",
         )
-        .await
-        {
-            crate::utils::capture_shadow_consistency_error!(&err_code, "VALIDATORS")
-        };
+        .await;
     }
 
     Ok(
@@ -203,17 +200,14 @@ pub async fn protocol_config(
 
     #[cfg(feature = "shadow_data_consistency")]
     {
-        if let Some(err_code) = crate::utils::shadow_compare_results_handler(
+        crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
             &config_view,
             data.near_rpc_client.clone(),
             protocol_config_request,
             "EXPERIMENTAL_protocol_config",
         )
-        .await
-        {
-            crate::utils::capture_shadow_consistency_error!(&err_code, "PROTOCOL_CONFIG")
-        };
+        .await;
     }
 
     Ok(

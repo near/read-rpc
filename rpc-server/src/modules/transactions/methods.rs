@@ -29,7 +29,7 @@ pub async fn tx(
 
     #[cfg(feature = "shadow_data_consistency")]
     {
-        if let Some(err_code) = crate::utils::shadow_compare_results_handler(
+        crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
             &result,
             data.near_rpc_client.clone(),
@@ -43,10 +43,7 @@ pub async fn tx(
             },
             "tx",
         )
-        .await
-        {
-            crate::utils::capture_shadow_consistency_error!(&err_code, "TX")
-        };
+        .await;
     }
 
     Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)
@@ -67,7 +64,7 @@ pub async fn tx_status(
 
     #[cfg(feature = "shadow_data_consistency")]
     {
-        if let Some(err_code) = crate::utils::shadow_compare_results_handler(
+        crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
             &result,
             data.near_rpc_client.clone(),
@@ -80,10 +77,7 @@ pub async fn tx_status(
             },
             "EXPERIMENTAL_tx_status",
         )
-        .await
-        {
-            crate::utils::capture_shadow_consistency_error!(&err_code, "TX_STATUS")
-        };
+        .await;
     }
 
     Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)

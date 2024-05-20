@@ -18,17 +18,14 @@ pub async fn receipt(
 
     #[cfg(feature = "shadow_data_consistency")]
     {
-        if let Some(err_code) = crate::utils::shadow_compare_results_handler(
+        crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
             &result,
             data.near_rpc_client.clone(),
             receipt_request,
             "EXPERIMENTAL_receipt",
         )
-        .await
-        {
-            crate::utils::capture_shadow_consistency_error!(&err_code, "RECEIPT")
-        };
+        .await;
     }
 
     Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)
