@@ -99,7 +99,6 @@ pub async fn validators(
 ) -> Result<near_jsonrpc::primitives::types::validator::RpcValidatorResponse, RPCError> {
     let request = near_jsonrpc::primitives::types::validator::RpcValidatorRequest::parse(params)?;
     tracing::debug!("`validators` called with parameters: {:?}", request);
-    crate::metrics::VALIDATORS_REQUESTS_TOTAL.inc();
     // Latest epoch validators fetches from the Near RPC node
     if let near_primitives::types::EpochReference::Latest = &request.epoch_reference {
         let validator_info = data.near_rpc_client.call(request).await?;
@@ -128,18 +127,14 @@ pub async fn validators(
 
     #[cfg(feature = "shadow_data_consistency")]
     {
-        if let Some(err_code) = crate::utils::shadow_compare_results_handler(
-            crate::metrics::VALIDATORS_REQUESTS_TOTAL.get(),
+        crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
             &validator_info,
             data.near_rpc_client.clone(),
             request,
-            "VALIDATORS",
+            "validators",
         )
-        .await
-        {
-            crate::utils::capture_shadow_consistency_error!(err_code, "VALIDATORS")
-        };
+        .await;
     }
 
     Ok(
@@ -199,25 +194,20 @@ pub async fn protocol_config(
     );
     let protocol_config_request =
         near_jsonrpc::primitives::types::config::RpcProtocolConfigRequest::parse(params)?;
-    crate::metrics::PROTOCOL_CONFIG_REQUESTS_TOTAL.inc();
 
     let config_view =
         protocol_config_call(&data, protocol_config_request.block_reference.clone()).await;
 
     #[cfg(feature = "shadow_data_consistency")]
     {
-        if let Some(err_code) = crate::utils::shadow_compare_results_handler(
-            crate::metrics::PROTOCOL_CONFIG_REQUESTS_TOTAL.get(),
+        crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
             &config_view,
             data.near_rpc_client.clone(),
             protocol_config_request,
-            "PROTOCOL_CONFIG",
+            "EXPERIMENTAL_protocol_config",
         )
-        .await
-        {
-            crate::utils::capture_shadow_consistency_error!(err_code, "PROTOCOL_CONFIG")
-        };
+        .await;
     }
 
     Ok(

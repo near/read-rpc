@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 use near_jsonrpc_client::errors::{JsonRpcError, JsonRpcServerError};
 
-type BoxedSerialize = Box<dyn erased_serde::Serialize + Send>;
+type BoxedSerialize = Box<dyn erased_serde::Serialize + Send + 'static>;
 
 #[derive(Debug, serde::Serialize)]
 #[serde(transparent)]

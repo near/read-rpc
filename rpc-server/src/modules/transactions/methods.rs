@@ -21,7 +21,6 @@ pub async fn tx(
     Params(params): Params<serde_json::Value>,
 ) -> Result<near_jsonrpc::primitives::types::transactions::RpcTransactionResponse, RPCError> {
     tracing::debug!("`tx` call. Params: {:?}", params);
-    crate::metrics::TX_REQUESTS_TOTAL.inc();
 
     let tx_status_request =
         near_jsonrpc::primitives::types::transactions::RpcTransactionStatusRequest::parse(params)?;
@@ -30,8 +29,7 @@ pub async fn tx(
 
     #[cfg(feature = "shadow_data_consistency")]
     {
-        if let Some(err_code) = crate::utils::shadow_compare_results_handler(
-            crate::metrics::TX_REQUESTS_TOTAL.get(),
+        crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
             &result,
             data.near_rpc_client.clone(),
@@ -43,12 +41,9 @@ pub async fn tx(
                 transaction_info: tx_status_request.transaction_info,
                 wait_until: tx_status_request.wait_until,
             },
-            "TX",
+            "tx",
         )
-        .await
-        {
-            crate::utils::capture_shadow_consistency_error!(err_code, "TX")
-        };
+        .await;
     }
 
     Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)
@@ -61,7 +56,6 @@ pub async fn tx_status(
     Params(params): Params<serde_json::Value>,
 ) -> Result<near_jsonrpc::primitives::types::transactions::RpcTransactionResponse, RPCError> {
     tracing::debug!("`tx_status` call. Params: {:?}", params);
-    crate::metrics::TX_STATUS_REQUESTS_TOTAL.inc();
 
     let tx_status_request =
         near_jsonrpc::primitives::types::transactions::RpcTransactionStatusRequest::parse(params)?;
@@ -70,8 +64,7 @@ pub async fn tx_status(
 
     #[cfg(feature = "shadow_data_consistency")]
     {
-        if let Some(err_code) = crate::utils::shadow_compare_results_handler(
-            crate::metrics::TX_STATUS_REQUESTS_TOTAL.get(),
+        crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
             &result,
             data.near_rpc_client.clone(),
@@ -82,12 +75,9 @@ pub async fn tx_status(
                 transaction_info: tx_status_request.transaction_info,
                 wait_until: tx_status_request.wait_until,
             },
-            "EXPERIMENTAL_TX_STATUS",
+            "EXPERIMENTAL_tx_status",
         )
-        .await
-        {
-            crate::utils::capture_shadow_consistency_error!(err_code, "EXPERIMENTAL_TX_STATUS")
-        };
+        .await;
     }
 
     Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)

@@ -25,11 +25,15 @@ pub async fn block(
     {
         // Increase the OPTIMISTIC_REQUESTS_TOTAL metric
         // if the request has optimistic finality
-        crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
+        crate::metrics::REQUESTS_COUNTER
+            .with_label_values(&["optimistic"])
+            .inc();
         if crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
             // Increase the PROXY_OPTIMISTIC_REQUESTS_TOTAL metric
             // if optimistic not updating and proxy to near-rpc
-            crate::metrics::PROXY_OPTIMISTIC_REQUESTS_TOTAL.inc();
+            crate::metrics::REQUESTS_COUNTER
+                .with_label_values(&["proxy_optimistic"])
+                .inc();
             let block_view = data.near_rpc_client.call(block_request).await?;
             return Ok(near_jsonrpc::primitives::types::blocks::RpcBlockResponse { block_view });
         }
@@ -45,22 +49,17 @@ pub async fn chunk(
 ) -> Result<near_jsonrpc::primitives::types::chunks::RpcChunkResponse, RPCError> {
     tracing::debug!("`chunk` called with parameters: {:?}", params);
     let chunk_request = near_jsonrpc::primitives::types::chunks::RpcChunkRequest::parse(params)?;
-    crate::metrics::CHUNK_REQUESTS_TOTAL.inc();
     let result = fetch_chunk(&data, chunk_request.chunk_reference.clone()).await;
     #[cfg(feature = "shadow_data_consistency")]
     {
-        if let Some(err_code) = crate::utils::shadow_compare_results_handler(
-            crate::metrics::CHUNK_REQUESTS_TOTAL.get(),
+        crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
             &result,
             data.near_rpc_client.clone(),
             chunk_request,
-            "CHUNK",
+            "chunk",
         )
-        .await
-        {
-            crate::utils::capture_shadow_consistency_error!(err_code, "CHUNK")
-        };
+        .await;
     }
     Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)
 }
@@ -85,11 +84,15 @@ pub async fn changes_in_block_by_type(
     {
         // Increase the OPTIMISTIC_REQUESTS_TOTAL metric
         // if the request has optimistic finality
-        crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
+        crate::metrics::REQUESTS_COUNTER
+            .with_label_values(&["optimistic"])
+            .inc();
         if crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
             // Increase the PROXY_OPTIMISTIC_REQUESTS_TOTAL metric
             // if optimistic not updating and proxy to near-rpc
-            crate::metrics::PROXY_OPTIMISTIC_REQUESTS_TOTAL.inc();
+            crate::metrics::REQUESTS_COUNTER
+                .with_label_values(&["proxy_optimistic"])
+                .inc();
             return Ok(data.near_rpc_client.call(changes_in_block_request).await?);
         }
     };
@@ -116,11 +119,15 @@ pub async fn changes_in_block(
     {
         // Increase the OPTIMISTIC_REQUESTS_TOTAL metric
         // if the request has optimistic finality
-        crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
+        crate::metrics::REQUESTS_COUNTER
+            .with_label_values(&["optimistic"])
+            .inc();
         if crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
             // Increase the PROXY_OPTIMISTIC_REQUESTS_TOTAL metric
             // if optimistic not updating and proxy to near-rpc
-            crate::metrics::PROXY_OPTIMISTIC_REQUESTS_TOTAL.inc();
+            crate::metrics::REQUESTS_COUNTER
+                .with_label_values(&["proxy_optimistic"])
+                .inc();
             return Ok(data.near_rpc_client.call(changes_in_block_request).await?);
         }
     };
@@ -136,7 +143,6 @@ async fn block_call(
     mut block_request: near_jsonrpc::primitives::types::blocks::RpcBlockRequest,
 ) -> Result<near_jsonrpc::primitives::types::blocks::RpcBlockResponse, RPCError> {
     tracing::debug!("`block` called with parameters: {:?}", block_request);
-    crate::metrics::BLOCK_REQUESTS_TOTAL.inc();
     let result = fetch_block(&data, block_request.block_reference.clone()).await;
 
     #[cfg(feature = "shadow_data_consistency")]
@@ -151,18 +157,14 @@ async fn block_call(
             }
         };
 
-        if let Some(err_code) = crate::utils::shadow_compare_results_handler(
-            crate::metrics::BLOCK_REQUESTS_TOTAL.get(),
+        crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
             &result,
             data.near_rpc_client.clone(),
             block_request,
-            "BLOCK",
+            "block",
         )
-        .await
-        {
-            crate::utils::capture_shadow_consistency_error!(err_code, "BLOCK")
-        };
+        .await;
     };
 
     Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)
@@ -176,7 +178,6 @@ async fn changes_in_block_call(
     mut params: near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockRequest,
 ) -> Result<near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockByTypeResponse, RPCError>
 {
-    crate::metrics::CHNGES_IN_BLOCK_REQUESTS_TOTAL.inc();
     let cache_block = fetch_block_from_cache_or_get(&data, params.block_reference.clone())
         .await
         .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
@@ -188,18 +189,14 @@ async fn changes_in_block_call(
                 near_primitives::types::BlockId::Height(cache_block.block_height),
             )
         }
-        if let Some(err_code) = crate::utils::shadow_compare_results_handler(
-            crate::metrics::CHNGES_IN_BLOCK_REQUESTS_TOTAL.get(),
+        crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
             &result,
             data.near_rpc_client.clone(),
             params,
-            "CHANGES_IN_BLOCK",
+            "EXPERIMENTAL_changes_in_block",
         )
-        .await
-        {
-            crate::utils::capture_shadow_consistency_error!(err_code, "CHANGES_IN_BLOCK")
-        };
+        .await;
     }
 
     Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)
@@ -212,7 +209,6 @@ async fn changes_in_block_by_type_call(
     data: Data<ServerContext>,
     mut params: near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockByTypeRequest,
 ) -> Result<near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockResponse, RPCError> {
-    crate::metrics::CHNGES_IN_BLOCK_BY_TYPE_REQUESTS_TOTAL.inc();
     let cache_block = fetch_block_from_cache_or_get(&data, params.block_reference.clone())
         .await
         .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
@@ -231,18 +227,14 @@ async fn changes_in_block_by_type_call(
                 near_primitives::types::BlockId::Height(cache_block.block_height),
             )
         }
-        if let Some(err_code) = crate::utils::shadow_compare_results_handler(
-            crate::metrics::CHNGES_IN_BLOCK_BY_TYPE_REQUESTS_TOTAL.get(),
+        crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
             &result,
             data.near_rpc_client.clone(),
             params,
-            "CHANGES_IN_BLOCK_BY_TYPE",
+            "EXPERIMENTAL_changes",
         )
-        .await
-        {
-            crate::utils::capture_shadow_consistency_error!(err_code, "CHANGES_IN_BLOCK_BY_TYPE")
-        };
+        .await;
     }
 
     Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)

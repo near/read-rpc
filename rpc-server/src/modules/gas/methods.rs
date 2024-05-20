@@ -17,7 +17,6 @@ pub async fn gas_price(
         "`gas_price` called with parameters: {:?}",
         gas_price_request
     );
-    crate::metrics::GAS_PRICE_REQUESTS_TOTAL.inc();
     let block_reference = match gas_price_request.block_id.clone() {
         Some(block_id) => near_primitives::types::BlockReference::BlockId(block_id),
         None => near_primitives::types::BlockReference::Finality(
@@ -41,18 +40,14 @@ pub async fn gas_price(
             Err(err) => Err(err),
         };
 
-        if let Some(err_code) = crate::utils::shadow_compare_results_handler(
-            crate::metrics::GAS_PRICE_REQUESTS_TOTAL.get(),
+        crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
             &result,
             data.near_rpc_client.clone(),
             gas_price_request,
-            "GAS_PRICE",
+            "gas_price",
         )
-        .await
-        {
-            crate::utils::capture_shadow_consistency_error!(err_code, "GAS_PRICE")
-        };
+        .await;
     };
     let gas_price_view = near_primitives::views::GasPriceView {
         gas_price: cache_block
