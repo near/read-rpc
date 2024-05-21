@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::modules::queries::utils::get_state_key_value_from_db;
 use database::ReaderDbManager;
 use futures::executor::block_on;
 
@@ -65,7 +66,8 @@ impl CodeStorage {
         if let Some(prefetched_data) = &self.prefetched_data {
             prefetched_data.get(key).cloned().unwrap_or_default()
         } else {
-            let get_db_data = self.db_manager.get_state_key_value(
+            let get_db_data = get_state_key_value_from_db(
+                &self.db_manager,
                 &self.account_id,
                 self.block_height,
                 key.to_vec(),

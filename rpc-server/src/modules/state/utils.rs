@@ -6,14 +6,14 @@ use futures::StreamExt;
     feature = "tracing-instrumentation",
     tracing::instrument(skip(db_manager))
 )]
-pub async fn get_state_keys_from_db_paginated(
+pub async fn get_state_from_db_paginated(
     db_manager: &std::sync::Arc<Box<dyn database::ReaderDbManager + Sync + Send + 'static>>,
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
     page_token: database::PageToken,
 ) -> crate::modules::state::PageStateValues {
     tracing::debug!(
-        "`get_state_keys_from_db_paginated` call. AccountId {}, block {}, page_token {:?}",
+        "`get_state_from_db_paginated` call. AccountId {}, block {}, page_token {:?}",
         account_id,
         block_height,
         page_token,

@@ -67,7 +67,7 @@ impl JsonRpcClient {
     {
         tracing::debug!("PROXY call. {:?}", params);
         crate::metrics::REQUESTS_COUNTER
-            .with_label_values(&["archive_proxy"])
+            .with_label_values(&["regular_proxy"])
             .inc();
         self.rpc_call(params, false).await
     }
@@ -82,7 +82,7 @@ impl JsonRpcClient {
     {
         tracing::debug!("ARCHIVAL PROXY call. {:?}", params);
         crate::metrics::REQUESTS_COUNTER
-            .with_label_values(&["regular_proxy"])
+            .with_label_values(&["archive_proxy"])
             .inc();
         self.rpc_call(params, true).await
     }
