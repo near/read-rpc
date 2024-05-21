@@ -320,7 +320,13 @@ pub async fn run_contract(
     let contract_state = if account_id.to_string().ends_with("poolv1.near") {
         if let Ok(result) = tokio::time::timeout(
             std::time::Duration::from_secs(20),
-            get_state_from_db(db_manager, account_id, block.block_height, &[], "query_call_function"),
+            get_state_from_db(
+                db_manager,
+                account_id,
+                block.block_height,
+                &[],
+                "query_call_function",
+            ),
         )
         .await
         {

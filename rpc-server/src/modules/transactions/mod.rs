@@ -8,10 +8,7 @@ pub async fn get_transaction_by_hash(
     crate::metrics::SCYLLA_QUERIES
         .with_label_values(&[method_name, "tx_indexer.transactions_details"])
         .inc();
-    if let Ok(tx) = db_manager
-        .get_transaction_by_hash(transaction_hash)
-        .await
-    {
+    if let Ok(tx) = db_manager.get_transaction_by_hash(transaction_hash).await {
         Ok(tx)
     } else {
         crate::metrics::SCYLLA_QUERIES

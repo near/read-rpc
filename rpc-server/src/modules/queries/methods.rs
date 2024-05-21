@@ -501,8 +501,14 @@ async fn optimistic_view_state(
         .blocks_info_by_finality
         .optimistic_state_changes_in_block(account_id, prefix)
         .await;
-    let state_from_db =
-        get_state_from_db(&data.db_manager, account_id, block.block_height, prefix, "query_view_state").await;
+    let state_from_db = get_state_from_db(
+        &data.db_manager,
+        account_id,
+        block.block_height,
+        prefix,
+        "query_view_state",
+    )
+    .await;
     if state_from_db.is_empty() && optimistic_data.is_empty() {
         Err(
             near_jsonrpc::primitives::types::query::RpcQueryError::UnknownAccount {
@@ -552,8 +558,14 @@ async fn database_view_state(
     Vec<near_primitives::views::StateItem>,
     near_jsonrpc::primitives::types::query::RpcQueryError,
 > {
-    let state_from_db =
-        get_state_from_db(&data.db_manager, account_id, block.block_height, prefix, "query_view_state").await;
+    let state_from_db = get_state_from_db(
+        &data.db_manager,
+        account_id,
+        block.block_height,
+        prefix,
+        "query_view_state",
+    )
+    .await;
     if state_from_db.is_empty() {
         Err(
             near_jsonrpc::primitives::types::query::RpcQueryError::UnknownAccount {
