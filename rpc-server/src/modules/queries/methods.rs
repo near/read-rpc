@@ -4,7 +4,7 @@ use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
 use crate::modules::blocks::CacheBlock;
 #[cfg(feature = "account_access_keys")]
 use crate::modules::queries::utils::fetch_list_access_keys_from_db;
-use crate::modules::queries::utils::{get_state_keys_from_db, run_contract, RunContractResponse};
+use crate::modules::queries::utils::{get_state_from_db, run_contract, RunContractResponse};
 use jsonrpc_v2::{Data, Params};
 use near_jsonrpc::RpcRequest;
 
@@ -487,7 +487,7 @@ async fn optimistic_view_state(
         .optimistic_state_changes_in_block(account_id, prefix)
         .await;
     let state_from_db =
-        get_state_keys_from_db(&data.db_manager, account_id, block.block_height, prefix).await;
+        get_state_from_db(&data.db_manager, account_id, block.block_height, prefix).await;
     if state_from_db.is_empty() && optimistic_data.is_empty() {
         Err(
             near_jsonrpc::primitives::types::query::RpcQueryError::UnknownAccount {
@@ -538,7 +538,7 @@ async fn database_view_state(
     near_jsonrpc::primitives::types::query::RpcQueryError,
 > {
     let state_from_db =
-        get_state_keys_from_db(&data.db_manager, account_id, block.block_height, prefix).await;
+        get_state_from_db(&data.db_manager, account_id, block.block_height, prefix).await;
     if state_from_db.is_empty() {
         Err(
             near_jsonrpc::primitives::types::query::RpcQueryError::UnknownAccount {
