@@ -495,13 +495,17 @@ impl crate::ReaderDbManager for ScyllaDBManager {
             borsh::from_slice::<readnode_primitives::CollectingTransactionDetails>(&data_value)?;
         Ok(transaction_details)
     }
-    
+
     async fn get_receipts_outcomes(
-        &self, 
+        &self,
         transaction_hash: &str,
         block_height: near_primitives::types::BlockHeight,
-    ) -> anyhow::Result<Vec<(near_primitives::views::ReceiptView, near_primitives::views::ExecutionOutcomeWithIdView)>> {
-        
+    ) -> anyhow::Result<
+        Vec<(
+            near_primitives::views::ReceiptView,
+            near_primitives::views::ExecutionOutcomeWithIdView,
+        )>,
+    > {
         let mut rows_stream = self
             .scylla_session
             .execute_iter(
@@ -513,7 +517,7 @@ impl crate::ReaderDbManager for ScyllaDBManager {
             )
             .await?
             .into_typed::<(Vec<u8>, Vec<u8>)>();
-        
+
         let mut receipts_outcomes = vec![];
         while let Some(next_row_res) = rows_stream.next().await {
             let (receipt, outcome) = next_row_res?;

@@ -86,9 +86,10 @@ pub async fn fetch_block_from_cache_or_get(
             let block_height = match block_id {
                 near_primitives::types::BlockId::Height(block_height) => block_height,
                 near_primitives::types::BlockId::Hash(hash) => {
-                    crate::metrics::SCYLLA_QUERIES.with_label_values(&[method_name, "state_indexer.blocks"]).inc();
-                    data
-                        .db_manager
+                    crate::metrics::SCYLLA_QUERIES
+                        .with_label_values(&[method_name, "state_indexer.blocks"])
+                        .inc();
+                    data.db_manager
                         .get_block_by_hash(hash)
                         .await
                         .map_err(|err| {
@@ -96,7 +97,7 @@ pub async fn fetch_block_from_cache_or_get(
                                 error_message: err.to_string(),
                             }
                         })?
-                },
+                }
             };
             data.blocks_cache.get(&block_height).await
         }

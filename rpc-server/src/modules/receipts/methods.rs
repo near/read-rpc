@@ -54,15 +54,17 @@ async fn fetch_receipt(
                 receipt_id,
             }
         })?;
-    
-    let transaction_details = get_transaction_by_hash(&data.db_manager, &receipt_record.parent_transaction_hash.to_string(), "EXPERIMENTAL_receipt")
-        .await
-        .map_err(|err| {
-            tracing::warn!("Error in `receipt` call: {:?}", err);
-            near_jsonrpc::primitives::types::receipts::RpcReceiptError::UnknownReceipt {
-                receipt_id,
-            }
-        })?;
+
+    let transaction_details = get_transaction_by_hash(
+        &data.db_manager,
+        &receipt_record.parent_transaction_hash.to_string(),
+        "EXPERIMENTAL_receipt",
+    )
+    .await
+    .map_err(|err| {
+        tracing::warn!("Error in `receipt` call: {:?}", err);
+        near_jsonrpc::primitives::types::receipts::RpcReceiptError::UnknownReceipt { receipt_id }
+    })?;
 
     let receipt_view = transaction_details
         .receipts

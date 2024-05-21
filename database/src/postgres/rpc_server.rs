@@ -327,15 +327,17 @@ impl crate::ReaderDbManager for PostgresDBManager {
 
         Ok(transaction_details)
     }
-    
+
     async fn get_receipts_outcomes(
         &self,
         transaction_hash: &str,
         block_height: near_primitives::types::BlockHeight,
-    ) -> anyhow::Result<Vec<(
-        near_primitives::views::ReceiptView,
-        near_primitives::views::ExecutionOutcomeWithIdView,
-    )>> {
+    ) -> anyhow::Result<
+        Vec<(
+            near_primitives::views::ReceiptView,
+            near_primitives::views::ExecutionOutcomeWithIdView,
+        )>,
+    > {
         let result = crate::models::ReceiptOutcome::get_receipt_outcome(
             Self::get_connection(&self.pg_pool).await?,
             block_height,

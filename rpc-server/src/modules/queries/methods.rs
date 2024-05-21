@@ -596,7 +596,10 @@ async fn view_access_key(
         optimistic_view_access_key(data, block, account_id, public_key).await?
     } else {
         crate::metrics::SCYLLA_QUERIES
-            .with_label_values(&["query_view_access_key", "state_indexer.state_changes_access_key"])
+            .with_label_values(&[
+                "query_view_access_key",
+                "state_indexer.state_changes_access_key",
+            ])
             .inc();
         database_view_access_key(data, block, account_id, public_key).await?
     };
@@ -635,7 +638,10 @@ async fn optimistic_view_access_key(
         }
     } else {
         crate::metrics::SCYLLA_QUERIES
-            .with_label_values(&["query_view_access_key", "state_indexer.state_changes_access_key"])
+            .with_label_values(&[
+                "query_view_access_key",
+                "state_indexer.state_changes_access_key",
+            ])
             .inc();
         database_view_access_key(data, block, account_id, public_key).await
     }

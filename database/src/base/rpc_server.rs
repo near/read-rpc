@@ -119,8 +119,13 @@ pub trait ReaderDbManager {
         epoch_id: near_primitives::hash::CryptoHash,
     ) -> anyhow::Result<near_chain_configs::ProtocolConfigView>;
     async fn get_receipts_outcomes(
-        &self, 
+        &self,
         transaction_hash: &str,
         block_height: near_primitives::types::BlockHeight,
-    ) -> anyhow::Result<Vec<(near_primitives::views::ReceiptView, near_primitives::views::ExecutionOutcomeWithIdView)>>;
+    ) -> anyhow::Result<
+        Vec<(
+            near_primitives::views::ReceiptView,
+            near_primitives::views::ExecutionOutcomeWithIdView,
+        )>,
+    >;
 }

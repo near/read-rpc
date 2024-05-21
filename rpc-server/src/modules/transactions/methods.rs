@@ -1,11 +1,11 @@
 use crate::config::ServerContext;
 use crate::errors::RPCError;
+use crate::modules::transactions::get_transaction_by_hash;
 use jsonrpc_v2::{Data, Params};
 use near_jsonrpc::RpcRequest;
 use near_primitives::views::FinalExecutionOutcomeViewEnum::{
     FinalExecutionOutcome, FinalExecutionOutcomeWithReceipt,
 };
-use crate::modules::transactions::get_transaction_by_hash;
 
 pub async fn send_tx(
     data: Data<ServerContext>,
@@ -61,7 +61,13 @@ pub async fn tx_status(
     let tx_status_request =
         near_jsonrpc::primitives::types::transactions::RpcTransactionStatusRequest::parse(params)?;
 
-    let result = tx_status_common(&data, &tx_status_request.transaction_info, true, "EXPERIMENTAL_tx_status").await;
+    let result = tx_status_common(
+        &data,
+        &tx_status_request.transaction_info,
+        true,
+        "EXPERIMENTAL_tx_status",
+    )
+    .await;
 
     #[cfg(feature = "shadow_data_consistency")]
     {
@@ -162,7 +168,7 @@ async fn tx_status_common(
             ..
         } => *tx_hash,
     };
-    
+
     // let transaction_details = data
     //     .db_manager
     //     .get_transaction_by_hash(&tx_hash.to_string())
@@ -173,13 +179,18 @@ async fn tx_status_common(
     //         }
     //     })?;
 
-    let transaction_details = get_transaction_by_hash(&data.db_manager, &tx_hash.to_string(), method_name).await
-        .map_err(|_err| {
-            near_jsonrpc::primitives::types::transactions::RpcTransactionError::UnknownTransaction {
-                requested_transaction_hash: tx_hash,
-            }
-        })?;
-    
+    let transaction_details = get_transaction_by_hash(
+        &data.db_manager,
+        &tx_hash.to_string(),
+        method_name,
+    )
+    .await
+    .map_err(|_err| {
+        near_jsonrpc::primitives::types::transactions::RpcTransactionError::UnknownTransaction {
+            requested_transaction_hash: tx_hash,
+        }
+    })?;
+
     if fetch_receipt {
         Ok(
             near_jsonrpc::primitives::types::transactions::RpcTransactionResponse {

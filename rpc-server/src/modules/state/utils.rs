@@ -19,12 +19,13 @@ pub async fn get_state_from_db_paginated(
         page_token,
     );
     if let Ok((state_keys, next_page_token)) = {
-        crate::metrics::SCYLLA_QUERIES.with_label_values(&["view_state_paginated", "state_indexer.account_state"]).inc();
+        crate::metrics::SCYLLA_QUERIES
+            .with_label_values(&["view_state_paginated", "state_indexer.account_state"])
+            .inc();
         db_manager
             .get_state_keys_by_page(account_id, page_token)
             .await
-    }
-    {
+    } {
         let futures = state_keys.iter().map(|state_key| {
             db_manager.get_state_key_value(account_id, block_height, state_key.clone())
         });
@@ -32,7 +33,9 @@ pub async fn get_state_from_db_paginated(
         let mut data: HashMap<readnode_primitives::StateKey, readnode_primitives::StateValue> =
             HashMap::new();
         while let Some((state_key, state_value)) = tasks.next().await {
-            crate::metrics::SCYLLA_QUERIES.with_label_values(&["view_state_paginated", "state_indexer.state_changes_data"]).inc();
+            crate::metrics::SCYLLA_QUERIES
+                .with_label_values(&["view_state_paginated", "state_indexer.state_changes_data"])
+                .inc();
             if !state_value.is_empty() {
                 data.insert(state_key, state_value);
             }

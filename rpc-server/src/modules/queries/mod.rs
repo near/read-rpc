@@ -72,6 +72,9 @@ impl CodeStorage {
                 self.block_height,
                 key.to_vec(),
             );
+            crate::metrics::SCYLLA_QUERIES
+                .with_label_values(&["query_call_function", "state_indexer.state_changes_data"])
+                .inc();
             let (_, data) = block_on(get_db_data);
             data
         }

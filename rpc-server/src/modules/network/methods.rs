@@ -154,7 +154,10 @@ pub async fn validators_ordered(
 
     if let Some(block_id) = &request.block_id {
         let block_reference = near_primitives::types::BlockReference::from(block_id.clone());
-        if let Ok(block) = fetch_block_from_cache_or_get(&data, block_reference, "EXPERIMENTAL_validators_ordered").await {
+        if let Ok(block) =
+            fetch_block_from_cache_or_get(&data, block_reference, "EXPERIMENTAL_validators_ordered")
+                .await
+        {
             let final_block = data.blocks_info_by_finality.final_cache_block().await;
             // `expected_earliest_available_block` calculated by formula:
             // `final_block_height` - `node_epoch_count` * `epoch_length`
@@ -262,13 +265,14 @@ async fn protocol_config_call(
     near_chain_configs::ProtocolConfigView,
     near_jsonrpc::primitives::types::config::RpcProtocolConfigError,
 > {
-    let block = fetch_block_from_cache_or_get(data, block_reference, "EXPERIMENTAL_protocol_config")
-        .await
-        .map_err(|err| {
-            near_jsonrpc::primitives::types::config::RpcProtocolConfigError::UnknownBlock {
-                error_message: err.to_string(),
-            }
-        })?;
+    let block =
+        fetch_block_from_cache_or_get(data, block_reference, "EXPERIMENTAL_protocol_config")
+            .await
+            .map_err(|err| {
+                near_jsonrpc::primitives::types::config::RpcProtocolConfigError::UnknownBlock {
+                    error_message: err.to_string(),
+                }
+            })?;
 
     let protocol_config = if data
         .blocks_info_by_finality
@@ -326,7 +330,10 @@ async fn protocol_config_call(
         protocol_config.into()
     } else {
         crate::metrics::SCYLLA_QUERIES
-            .with_label_values(&["EXPERIMENTAL_protocol_config", "state_indexer.protocol_config"])
+            .with_label_values(&[
+                "EXPERIMENTAL_protocol_config",
+                "state_indexer.protocol_config",
+            ])
             .inc();
         data.db_manager
             .get_protocol_config_by_epoch_id(block.epoch_id)
