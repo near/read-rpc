@@ -143,7 +143,7 @@ async fn block_call(
     mut block_request: near_jsonrpc::primitives::types::blocks::RpcBlockRequest,
 ) -> Result<near_jsonrpc::primitives::types::blocks::RpcBlockResponse, RPCError> {
     tracing::debug!("`block` called with parameters: {:?}", block_request);
-    let result = fetch_block(&data, block_request.block_reference.clone()).await;
+    let result = fetch_block(&data, block_request.block_reference.clone(), "block").await;
 
     #[cfg(feature = "shadow_data_consistency")]
     {
@@ -178,7 +178,7 @@ async fn changes_in_block_call(
     mut params: near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockRequest,
 ) -> Result<near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockByTypeResponse, RPCError>
 {
-    let cache_block = fetch_block_from_cache_or_get(&data, params.block_reference.clone())
+    let cache_block = fetch_block_from_cache_or_get(&data, params.block_reference.clone(), "EXPERIMENTAL_changes_in_block")
         .await
         .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
     let result = fetch_changes_in_block(&data, cache_block, &params.block_reference).await;
@@ -209,7 +209,7 @@ async fn changes_in_block_by_type_call(
     data: Data<ServerContext>,
     mut params: near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockByTypeRequest,
 ) -> Result<near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockResponse, RPCError> {
-    let cache_block = fetch_block_from_cache_or_get(&data, params.block_reference.clone())
+    let cache_block = fetch_block_from_cache_or_get(&data, params.block_reference.clone(), "EXPERIMENTAL_changes")
         .await
         .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
     let result = fetch_changes_in_block_by_type(
@@ -244,6 +244,7 @@ async fn changes_in_block_by_type_call(
 pub async fn fetch_block(
     data: &Data<ServerContext>,
     block_reference: near_primitives::types::BlockReference,
+    method_name: &str,
 ) -> Result<
     near_jsonrpc::primitives::types::blocks::RpcBlockResponse,
     near_jsonrpc::primitives::types::blocks::RpcBlockError,
@@ -253,6 +254,7 @@ pub async fn fetch_block(
         near_primitives::types::BlockReference::BlockId(block_id) => match block_id {
             near_primitives::types::BlockId::Height(block_height) => Ok(block_height),
             near_primitives::types::BlockId::Hash(block_hash) => {
+                crate::metrics::SCYLLA_QUERIES.with_label_values(&[method_name, "state_indexer.blocks"]).inc();
                 match data.db_manager.get_block_by_hash(block_hash).await {
                     Ok(block_height) => Ok(block_height),
                     Err(err) => {
@@ -326,17 +328,21 @@ pub async fn fetch_chunk(
             block_id,
             shard_id,
         } => match block_id {
-            near_primitives::types::BlockId::Height(block_height) => data
-                .db_manager
-                .get_block_by_height_and_shard_id(block_height, shard_id)
-                .await
-                .map_err(|_err| {
-                    near_jsonrpc::primitives::types::chunks::RpcChunkError::InvalidShardId {
-                        shard_id,
-                    }
-                })
-                .map(|block_height_shard_id| (block_height_shard_id.0, block_height_shard_id.1))?,
+            near_primitives::types::BlockId::Height(block_height) => {
+                crate::metrics::SCYLLA_QUERIES.with_label_values(&["chunk", "state_indexer.chunks"]).inc();
+                data
+                    .db_manager
+                    .get_block_by_height_and_shard_id(block_height, shard_id)
+                    .await
+                    .map_err(|_err| {
+                        near_jsonrpc::primitives::types::chunks::RpcChunkError::InvalidShardId {
+                            shard_id,
+                        }
+                    })
+                    .map(|block_height_shard_id| (block_height_shard_id.0, block_height_shard_id.1))?
+            },
             near_primitives::types::BlockId::Hash(block_hash) => {
+                crate::metrics::SCYLLA_QUERIES.with_label_values(&["chunk", "state_indexer.blocks"]).inc();
                 let block_height = data
                     .db_manager
                     .get_block_by_hash(block_hash)
@@ -350,16 +356,19 @@ pub async fn fetch_chunk(
                 (block_height, shard_id)
             }
         },
-        near_jsonrpc::primitives::types::chunks::ChunkReference::ChunkHash { chunk_id } => data
-            .db_manager
-            .get_block_by_chunk_hash(chunk_id)
-            .await
-            .map_err(
-                |_err| near_jsonrpc::primitives::types::chunks::RpcChunkError::UnknownChunk {
-                    chunk_hash: chunk_id.into(),
-                },
-            )
-            .map(|block_height_shard_id| (block_height_shard_id.0, block_height_shard_id.1))?,
+        near_jsonrpc::primitives::types::chunks::ChunkReference::ChunkHash { chunk_id } => {
+            crate::metrics::SCYLLA_QUERIES.with_label_values(&["chunk", "state_indexer.chunks"]).inc();
+            data
+                .db_manager
+                .get_block_by_chunk_hash(chunk_id)
+                .await
+                .map_err(
+                    |_err| near_jsonrpc::primitives::types::chunks::RpcChunkError::UnknownChunk {
+                        chunk_hash: chunk_id.into(),
+                    },
+                )
+                .map(|block_height_shard_id| (block_height_shard_id.0, block_height_shard_id.1))?
+        },
     };
     let chunk_view = fetch_chunk_from_s3(
         &data.s3_client,

@@ -9,7 +9,7 @@ pub async fn view_state_paginated(
     Params(params): Params<crate::modules::state::RpcViewStatePaginatedRequest>,
 ) -> Result<crate::modules::state::RpcViewStatePaginatedResponse, RPCError> {
     let block_reference = near_primitives::types::BlockReference::BlockId(params.block_id.clone());
-    let block = fetch_block_from_cache_or_get(&data, block_reference)
+    let block = fetch_block_from_cache_or_get(&data, block_reference, "state_changes_data")
         .await
         .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
 

@@ -298,7 +298,7 @@ impl crate::ReaderDbManager for PostgresDBManager {
     async fn get_indexing_transaction_by_hash(
         &self,
         transaction_hash: &str,
-    ) -> anyhow::Result<readnode_primitives::TransactionDetails> {
+    ) -> anyhow::Result<readnode_primitives::CollectingTransactionDetail> {
         let data_value = crate::models::TransactionCache::get_transaction_by_hash(
             Self::get_connection(&self.pg_pool).await?,
             transaction_hash,
@@ -325,7 +325,33 @@ impl crate::ReaderDbManager for PostgresDBManager {
                 .push(execution_outcome)
         }
 
-        Ok(transaction_details.into())
+        Ok(transaction_details)
+    }
+    
+    async fn get_receipts_outcomes(
+        &self,
+        transaction_hash: &str,
+        block_height: near_primitives::types::BlockHeight,
+    ) -> anyhow::Result<Vec<(
+        near_primitives::views::ReceiptView,
+        near_primitives::views::ExecutionOutcomeWithIdView,
+    )>> {
+        let result = crate::models::ReceiptOutcome::get_receipt_outcome(
+            Self::get_connection(&self.pg_pool).await?,
+            block_height,
+            transaction_hash,
+        )
+        .await?;
+        let mut receipts_outcomes = Vec::new();
+        for receipt_outcome in result {
+            let receipt =
+                borsh::from_slice::<near_primitives::views::ReceiptView>(&receipt_outcome.receipt)?;
+            let execution_outcome = borsh::from_slice::<
+                near_primitives::views::ExecutionOutcomeWithIdView,
+            >(&receipt_outcome.outcome)?;
+            receipts_outcomes.push((receipt, execution_outcome));
+        }
+        Ok(receipts_outcomes)
     }
 
     async fn get_block_by_height_and_shard_id(

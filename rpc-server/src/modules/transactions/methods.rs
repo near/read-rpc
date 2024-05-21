@@ -5,6 +5,7 @@ use near_jsonrpc::RpcRequest;
 use near_primitives::views::FinalExecutionOutcomeViewEnum::{
     FinalExecutionOutcome, FinalExecutionOutcomeWithReceipt,
 };
+use crate::modules::transactions::get_transaction_by_hash;
 
 pub async fn send_tx(
     data: Data<ServerContext>,
@@ -25,7 +26,7 @@ pub async fn tx(
     let tx_status_request =
         near_jsonrpc::primitives::types::transactions::RpcTransactionStatusRequest::parse(params)?;
 
-    let result = tx_status_common(&data, &tx_status_request.transaction_info, false).await;
+    let result = tx_status_common(&data, &tx_status_request.transaction_info, false, "tx").await;
 
     #[cfg(feature = "shadow_data_consistency")]
     {
@@ -60,7 +61,7 @@ pub async fn tx_status(
     let tx_status_request =
         near_jsonrpc::primitives::types::transactions::RpcTransactionStatusRequest::parse(params)?;
 
-    let result = tx_status_common(&data, &tx_status_request.transaction_info, true).await;
+    let result = tx_status_common(&data, &tx_status_request.transaction_info, true, "EXPERIMENTAL_tx_status").await;
 
     #[cfg(feature = "shadow_data_consistency")]
     {
@@ -146,6 +147,7 @@ async fn tx_status_common(
     data: &Data<ServerContext>,
     transaction_info: &near_jsonrpc::primitives::types::transactions::TransactionInfo,
     fetch_receipt: bool,
+    method_name: &str,
 ) -> Result<
     near_jsonrpc::primitives::types::transactions::RpcTransactionResponse,
     near_jsonrpc::primitives::types::transactions::RpcTransactionError,
@@ -160,17 +162,24 @@ async fn tx_status_common(
             ..
         } => *tx_hash,
     };
+    
+    // let transaction_details = data
+    //     .db_manager
+    //     .get_transaction_by_hash(&tx_hash.to_string())
+    //     .await
+    //     .map_err(|_err| {
+    //         near_jsonrpc::primitives::types::transactions::RpcTransactionError::UnknownTransaction {
+    //             requested_transaction_hash: tx_hash,
+    //         }
+    //     })?;
 
-    let transaction_details = data
-        .db_manager
-        .get_transaction_by_hash(&tx_hash.to_string())
-        .await
+    let transaction_details = get_transaction_by_hash(&data.db_manager, &tx_hash.to_string(), method_name).await
         .map_err(|_err| {
             near_jsonrpc::primitives::types::transactions::RpcTransactionError::UnknownTransaction {
                 requested_transaction_hash: tx_hash,
             }
         })?;
-
+    
     if fetch_receipt {
         Ok(
             near_jsonrpc::primitives::types::transactions::RpcTransactionResponse {

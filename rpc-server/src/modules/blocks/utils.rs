@@ -79,20 +79,24 @@ pub async fn fetch_chunk_from_s3(
 pub async fn fetch_block_from_cache_or_get(
     data: &jsonrpc_v2::Data<ServerContext>,
     block_reference: near_primitives::types::BlockReference,
+    method_name: &str,
 ) -> Result<CacheBlock, near_jsonrpc::primitives::types::blocks::RpcBlockError> {
     let block = match block_reference.clone() {
         near_primitives::types::BlockReference::BlockId(block_id) => {
             let block_height = match block_id {
                 near_primitives::types::BlockId::Height(block_height) => block_height,
-                near_primitives::types::BlockId::Hash(hash) => data
-                    .db_manager
-                    .get_block_by_hash(hash)
-                    .await
-                    .map_err(|err| {
-                        near_jsonrpc::primitives::types::blocks::RpcBlockError::UnknownBlock {
-                            error_message: err.to_string(),
-                        }
-                    })?,
+                near_primitives::types::BlockId::Hash(hash) => {
+                    crate::metrics::SCYLLA_QUERIES.with_label_values(&[method_name, "state_indexer.blocks"]).inc();
+                    data
+                        .db_manager
+                        .get_block_by_hash(hash)
+                        .await
+                        .map_err(|err| {
+                            near_jsonrpc::primitives::types::blocks::RpcBlockError::UnknownBlock {
+                                error_message: err.to_string(),
+                            }
+                        })?
+                },
             };
             data.blocks_cache.get(&block_height).await
         }
@@ -124,7 +128,7 @@ pub async fn fetch_block_from_cache_or_get(
     match block {
         Some(block) => Ok(block),
         None => {
-            let block_from_s3 = fetch_block(data, block_reference).await?;
+            let block_from_s3 = fetch_block(data, block_reference, method_name).await?;
             let block = CacheBlock::from(&block_from_s3.block_view);
 
             data.blocks_cache.put(block.block_height, block).await;

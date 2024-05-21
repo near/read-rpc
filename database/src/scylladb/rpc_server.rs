@@ -21,8 +21,8 @@ pub struct ScyllaDBManager {
     get_account_access_keys: PreparedStatement,
     get_receipt: PreparedStatement,
     get_transaction_by_hash: PreparedStatement,
-    get_indexing_transaction_by_hash: PreparedStatement,
-    get_indexing_transaction_receipts: PreparedStatement,
+    pub get_indexing_transaction_by_hash: PreparedStatement,
+    pub get_indexing_transaction_receipts: PreparedStatement,
     get_stored_at_block_height_and_shard_id_by_block_height: PreparedStatement,
     get_validators_by_epoch_id: PreparedStatement,
     get_protocol_config_by_epoch_id: PreparedStatement,
@@ -441,12 +441,13 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         &self,
         transaction_hash: &str,
     ) -> anyhow::Result<readnode_primitives::TransactionDetails> {
-        if let Ok(transaction) = self.get_indexed_transaction_by_hash(transaction_hash).await {
-            Ok(transaction)
-        } else {
-            self.get_indexing_transaction_by_hash(transaction_hash)
-                .await
-        }
+        self.get_indexed_transaction_by_hash(transaction_hash).await
+        // if let Ok(transaction) = self.get_indexed_transaction_by_hash(transaction_hash).await {
+        //     Ok(transaction)
+        // } else {
+        //     self.get_indexing_transaction_by_hash(transaction_hash)
+        //         .await
+        // }
     }
 
     /// Returns the readnode_primitives::TransactionDetails
@@ -481,7 +482,7 @@ impl crate::ReaderDbManager for ScyllaDBManager {
     async fn get_indexing_transaction_by_hash(
         &self,
         transaction_hash: &str,
-    ) -> anyhow::Result<readnode_primitives::TransactionDetails> {
+    ) -> anyhow::Result<readnode_primitives::CollectingTransactionDetails> {
         let (data_value,) = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_indexing_transaction_by_hash,
@@ -490,32 +491,39 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         .await?
         .single_row()?
         .into_typed::<(Vec<u8>,)>()?;
-        let mut transaction_details =
+        let transaction_details =
             borsh::from_slice::<readnode_primitives::CollectingTransactionDetails>(&data_value)?;
-
+        Ok(transaction_details)
+    }
+    
+    async fn get_receipts_outcomes(
+        &self, 
+        transaction_hash: &str,
+        block_height: near_primitives::types::BlockHeight,
+    ) -> anyhow::Result<Vec<(near_primitives::views::ReceiptView, near_primitives::views::ExecutionOutcomeWithIdView)>> {
+        
         let mut rows_stream = self
             .scylla_session
             .execute_iter(
                 self.get_indexing_transaction_receipts.clone(),
                 (
-                    num_bigint::BigInt::from(transaction_details.block_height),
+                    num_bigint::BigInt::from(block_height),
                     transaction_hash.to_string(),
                 ),
             )
             .await?
             .into_typed::<(Vec<u8>, Vec<u8>)>();
+        
+        let mut receipts_outcomes = vec![];
         while let Some(next_row_res) = rows_stream.next().await {
             let (receipt, outcome) = next_row_res?;
             let receipt = borsh::from_slice::<near_primitives::views::ReceiptView>(&receipt)?;
             let execution_outcome =
                 borsh::from_slice::<near_primitives::views::ExecutionOutcomeWithIdView>(&outcome)?;
-            transaction_details.receipts.push(receipt);
-            transaction_details
-                .execution_outcomes
-                .push(execution_outcome);
+            receipts_outcomes.push((receipt, execution_outcome));
         }
 
-        Ok(transaction_details.into())
+        Ok(receipts_outcomes)
     }
 
     /// Returns the block height and shard id by the given block height

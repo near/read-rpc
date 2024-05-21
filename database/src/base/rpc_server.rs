@@ -92,7 +92,7 @@ pub trait ReaderDbManager {
     async fn get_indexing_transaction_by_hash(
         &self,
         transaction_hash: &str,
-    ) -> anyhow::Result<readnode_primitives::TransactionDetails>;
+    ) -> anyhow::Result<readnode_primitives::CollectingTransactionDetails>;
 
     /// Returns the block height and shard id by the given block height
     async fn get_block_by_height_and_shard_id(
@@ -118,4 +118,9 @@ pub trait ReaderDbManager {
         &self,
         epoch_id: near_primitives::hash::CryptoHash,
     ) -> anyhow::Result<near_chain_configs::ProtocolConfigView>;
+    async fn get_receipts_outcomes(
+        &self, 
+        transaction_hash: &str,
+        block_height: near_primitives::types::BlockHeight,
+    ) -> anyhow::Result<Vec<(near_primitives::views::ReceiptView, near_primitives::views::ExecutionOutcomeWithIdView)>>;
 }

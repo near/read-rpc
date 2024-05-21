@@ -3,6 +3,7 @@ use near_jsonrpc::RpcRequest;
 
 use crate::config::ServerContext;
 use crate::errors::RPCError;
+use crate::modules::transactions::get_transaction_by_hash;
 
 /// Fetches a receipt by it's ID (as is, without a status or execution outcome)
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
@@ -40,7 +41,9 @@ async fn fetch_receipt(
     near_jsonrpc::primitives::types::receipts::RpcReceiptError,
 > {
     let receipt_id = request.receipt_reference.receipt_id;
-
+    crate::metrics::SCYLLA_QUERIES
+        .with_label_values(&["EXPERIMENTAL_receipt", "tx_indexer.receipts_map"])
+        .inc();
     let receipt_record = data
         .db_manager
         .get_receipt_by_id(receipt_id)
@@ -51,11 +54,8 @@ async fn fetch_receipt(
                 receipt_id,
             }
         })?;
-
-    // Getting the raw Vec<u8> of the TransactionDetails from ScyllaDB
-    let transaction_details = data
-        .db_manager
-        .get_transaction_by_hash(&receipt_record.parent_transaction_hash.to_string())
+    
+    let transaction_details = get_transaction_by_hash(&data.db_manager, &receipt_record.parent_transaction_hash.to_string(), "EXPERIMENTAL_receipt")
         .await
         .map_err(|err| {
             tracing::warn!("Error in `receipt` call: {:?}", err);

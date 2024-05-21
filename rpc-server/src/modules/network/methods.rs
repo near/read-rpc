@@ -154,7 +154,7 @@ pub async fn validators_ordered(
 
     if let Some(block_id) = &request.block_id {
         let block_reference = near_primitives::types::BlockReference::from(block_id.clone());
-        if let Ok(block) = fetch_block_from_cache_or_get(&data, block_reference).await {
+        if let Ok(block) = fetch_block_from_cache_or_get(&data, block_reference, "EXPERIMENTAL_validators_ordered").await {
             let final_block = data.blocks_info_by_finality.final_cache_block().await;
             // `expected_earliest_available_block` calculated by formula:
             // `final_block_height` - `node_epoch_count` * `epoch_length`
@@ -234,11 +234,14 @@ async fn validators_call(
             })?,
         near_primitives::types::EpochReference::BlockId(block_id) => {
             let block_reference = near_primitives::types::BlockReference::BlockId(block_id.clone());
-            let block = fetch_block_from_cache_or_get(data, block_reference)
+            let block = fetch_block_from_cache_or_get(data, block_reference, "validators")
                 .await
                 .map_err(|_err| {
                     near_jsonrpc::primitives::types::validator::RpcValidatorError::UnknownEpoch
                 })?;
+            crate::metrics::SCYLLA_QUERIES
+                .with_label_values(&["validators", "state_indexer.validators"])
+                .inc();
             data.db_manager
                 .get_validators_by_end_block_height(block.block_height)
                 .await.map_err(|_err| {
@@ -259,7 +262,7 @@ async fn protocol_config_call(
     near_chain_configs::ProtocolConfigView,
     near_jsonrpc::primitives::types::config::RpcProtocolConfigError,
 > {
-    let block = fetch_block_from_cache_or_get(data, block_reference)
+    let block = fetch_block_from_cache_or_get(data, block_reference, "EXPERIMENTAL_protocol_config")
         .await
         .map_err(|err| {
             near_jsonrpc::primitives::types::config::RpcProtocolConfigError::UnknownBlock {
@@ -322,6 +325,9 @@ async fn protocol_config_call(
         };
         protocol_config.into()
     } else {
+        crate::metrics::SCYLLA_QUERIES
+            .with_label_values(&["EXPERIMENTAL_protocol_config", "state_indexer.protocol_config"])
+            .inc();
         data.db_manager
             .get_protocol_config_by_epoch_id(block.epoch_id)
             .await

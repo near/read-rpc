@@ -118,6 +118,13 @@ lazy_static! {
         "Total number of errors for method with code",
         &["method", "error_type"]
     ).unwrap();
+    
+    // Total number of Scylla queries
+    pub(crate) static ref SCYLLA_QUERIES: IntCounterVec = register_int_counter_vec(
+        "scylla_queries",
+        "Total number of Scylla queries",
+        &["method", "table"]
+    ).unwrap();
 
 }
 

@@ -66,6 +66,7 @@ pub async fn get_state_from_db(
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
     prefix: &[u8],
+    method_name: &str,
 ) -> HashMap<readnode_primitives::StateKey, readnode_primitives::StateValue> {
     tracing::debug!(
         "`get_state_from_db` call. AccountId {}, block {}, prefix {:?}",
@@ -75,7 +76,9 @@ pub async fn get_state_from_db(
     );
     let mut data: HashMap<readnode_primitives::StateKey, readnode_primitives::StateValue> =
         HashMap::new();
-
+    crate::metrics::SCYLLA_QUERIES
+        .with_label_values(&[method_name, "state_indexer.account_state"])
+        .inc();
     match get_state_keys_from_db(db_manager, account_id, prefix).await {
         Ok(state_keys) => {
             // 3 nodes * 8 cpus * 100 = 2400
@@ -91,6 +94,9 @@ pub async fn get_state_from_db(
                 });
                 let mut tasks = futures::stream::FuturesUnordered::from_iter(futures);
                 while let Some((state_key, state_value)) = tasks.next().await {
+                    crate::metrics::SCYLLA_QUERIES
+                        .with_label_values(&[method_name, "state_indexer.state_changes_data"])
+                        .inc();
                     if !state_value.is_empty() {
                         data.insert(state_key, state_value);
                     }
@@ -215,6 +221,9 @@ pub async fn run_contract(
         Option<readnode_primitives::StateValue>,
     >,
 ) -> Result<RunContractResponse, FunctionCallError> {
+    crate::metrics::SCYLLA_QUERIES
+        .with_label_values(&["query_call_function", "state_indexer.state_changes_account"])
+        .inc();
     let contract = db_manager
         .get_account(account_id, block.block_height)
         .await
@@ -227,6 +236,9 @@ pub async fn run_contract(
             let validators = blocks_info_by_finality.validators().await;
             (validators.epoch_height, validators.current_validators)
         } else {
+            crate::metrics::SCYLLA_QUERIES
+                .with_label_values(&["query_call_function", "state_indexer.validators"])
+                .inc();
             let validators = db_manager
                 .get_validators_by_epoch_id(block.epoch_id)
                 .await
@@ -308,7 +320,7 @@ pub async fn run_contract(
     let contract_state = if account_id.to_string().ends_with("poolv1.near") {
         if let Ok(result) = tokio::time::timeout(
             std::time::Duration::from_secs(20),
-            get_state_from_db(db_manager, account_id, block.block_height, &[]),
+            get_state_from_db(db_manager, account_id, block.block_height, &[], "query_call_function"),
         )
         .await
         {

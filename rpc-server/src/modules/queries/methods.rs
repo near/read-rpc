@@ -54,7 +54,7 @@ async fn query_call(
 ) -> Result<near_jsonrpc::primitives::types::query::RpcQueryResponse, RPCError> {
     tracing::debug!("`query` call. Params: {:?}", query_request,);
 
-    let block = fetch_block_from_cache_or_get(data, query_request.block_reference.clone())
+    let block = fetch_block_from_cache_or_get(data, query_request.block_reference.clone(), "query")
         .await
         .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
     let result = match &query_request.request {
@@ -194,6 +194,9 @@ async fn view_account(
     let account_view = if is_optimistic {
         optimistic_view_account(data, block, account_id).await?
     } else {
+        crate::metrics::SCYLLA_QUERIES
+            .with_label_values(&["query_view_account", "state_indexer.state_changes_account"])
+            .inc();
         database_view_account(data, block, account_id).await?
     };
     Ok(near_jsonrpc::primitives::types::query::RpcQueryResponse {
@@ -229,6 +232,9 @@ async fn optimistic_view_account(
             )
         }
     } else {
+        crate::metrics::SCYLLA_QUERIES
+            .with_label_values(&["query_view_account", "state_indexer.state_changes_account"])
+            .inc();
         database_view_account(data, block, account_id).await
     }
 }
@@ -279,6 +285,12 @@ async fn view_code(
             optimistic_view_account(data, block, account_id),
         )?
     } else {
+        crate::metrics::SCYLLA_QUERIES
+            .with_label_values(&["query_view_code", "state_indexer.state_changes_account"])
+            .inc();
+        crate::metrics::SCYLLA_QUERIES
+            .with_label_values(&["query_view_code", "state_indexer.state_changes_contract"])
+            .inc();
         tokio::try_join!(
             database_view_code(data, block, account_id),
             database_view_account(data, block, account_id),
@@ -320,6 +332,9 @@ async fn optimistic_view_code(
             );
         }
     } else {
+        crate::metrics::SCYLLA_QUERIES
+            .with_label_values(&["query_view_code", "state_indexer.state_changes_contract"])
+            .inc();
         database_view_code(data, block, account_id).await?
     };
     Ok(contract_code)
@@ -487,7 +502,7 @@ async fn optimistic_view_state(
         .optimistic_state_changes_in_block(account_id, prefix)
         .await;
     let state_from_db =
-        get_state_from_db(&data.db_manager, account_id, block.block_height, prefix).await;
+        get_state_from_db(&data.db_manager, account_id, block.block_height, prefix, "query_view_state").await;
     if state_from_db.is_empty() && optimistic_data.is_empty() {
         Err(
             near_jsonrpc::primitives::types::query::RpcQueryError::UnknownAccount {
@@ -538,7 +553,7 @@ async fn database_view_state(
     near_jsonrpc::primitives::types::query::RpcQueryError,
 > {
     let state_from_db =
-        get_state_from_db(&data.db_manager, account_id, block.block_height, prefix).await;
+        get_state_from_db(&data.db_manager, account_id, block.block_height, prefix, "query_view_state").await;
     if state_from_db.is_empty() {
         Err(
             near_jsonrpc::primitives::types::query::RpcQueryError::UnknownAccount {
@@ -580,6 +595,9 @@ async fn view_access_key(
     let access_key_view = if is_optimistic {
         optimistic_view_access_key(data, block, account_id, public_key).await?
     } else {
+        crate::metrics::SCYLLA_QUERIES
+            .with_label_values(&["query_view_access_key", "state_indexer.state_changes_access_key"])
+            .inc();
         database_view_access_key(data, block, account_id, public_key).await?
     };
     Ok(near_jsonrpc::primitives::types::query::RpcQueryResponse {
@@ -616,6 +634,9 @@ async fn optimistic_view_access_key(
             )
         }
     } else {
+        crate::metrics::SCYLLA_QUERIES
+            .with_label_values(&["query_view_access_key", "state_indexer.state_changes_access_key"])
+            .inc();
         database_view_access_key(data, block, account_id, public_key).await
     }
 }
