@@ -101,7 +101,13 @@ async fn query_call(
             account_id,
             method_name,
             args,
-        } => function_call(data, block, account_id, method_name, args, is_optimistic).await,
+        } => {
+            if account_id.to_string().ends_with("poolv1.near") {
+                return Ok(data.near_rpc_client.call(query_request).await?);
+            } else{
+                function_call(data, block, account_id, method_name, args, is_optimistic).await
+            }
+        },
         #[allow(unused_variables)]
         // `account_id` is used in the `#[cfg(feature = "account_access_keys")]` branch.
         near_primitives::views::QueryRequest::ViewAccessKeyList { account_id } => {
@@ -380,7 +386,6 @@ async fn function_call(
         args,
         is_optimistic,
     );
-
     let call_results = if is_optimistic {
         optimistic_function_call(data, block, account_id, method_name, args).await
     } else {

@@ -315,30 +315,30 @@ pub async fn run_contract(
         })
     };
 
-    // TODO: Refactor this part. It's a temporary solution to fetch state keys from DB for the poolv1.near contracts
-    // https://github.com/near/read-rpc/issues/150
-    let contract_state = if account_id.to_string().ends_with("poolv1.near") {
-        if let Ok(result) = tokio::time::timeout(
-            std::time::Duration::from_secs(20),
-            get_state_from_db(
-                db_manager,
-                account_id,
-                block.block_height,
-                &[],
-                "query_call_function",
-            ),
-        )
-        .await
-        {
-            tracing::debug!("State keys fetched from DB");
-            Some(result)
-        } else {
-            tracing::error!("Failed to fetch state keys from DB");
-            None
-        }
-    } else {
-        None
-    };
+    // // TODO: Refactor this part. It's a temporary solution to fetch state keys from DB for the poolv1.near contracts
+    // // https://github.com/near/read-rpc/issues/150
+    // let contract_state = if account_id.to_string().ends_with("poolv1.near") {
+    //     if let Ok(result) = tokio::time::timeout(
+    //         std::time::Duration::from_secs(20),
+    //         get_state_from_db(
+    //             db_manager,
+    //             account_id,
+    //             block.block_height,
+    //             &[],
+    //             "query_call_function",
+    //         ),
+    //     )
+    //     .await
+    //     {
+    //         tracing::debug!("State keys fetched from DB");
+    //         Some(result)
+    //     } else {
+    //         tracing::error!("Failed to fetch state keys from DB");
+    //         None
+    //     }
+    // } else {
+    //     None
+    // };
 
     // Init an external scylla interface for the Runtime logic
     let code_storage = CodeStorage::init(
@@ -346,7 +346,7 @@ pub async fn run_contract(
         account_id.clone(),
         block.block_height,
         validators,
-        contract_state,
+        None,
         optimistic_data,
     );
 
