@@ -162,7 +162,7 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         block_hash: near_primitives::hash::CryptoHash,
         method_name: &str,
     ) -> anyhow::Result<u64> {
-        crate::metrics::DATABASE_QUERIES
+        crate::metrics::DATABASE_READ_QUERIES
             .with_label_values(&[method_name, "state_indexer.blocks"])
             .inc();
         let (result,) = Self::execute_prepared_query(
@@ -185,7 +185,7 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         chunk_hash: near_primitives::hash::CryptoHash,
         method_name: &str,
     ) -> anyhow::Result<readnode_primitives::BlockHeightShardId> {
-        crate::metrics::DATABASE_QUERIES
+        crate::metrics::DATABASE_READ_QUERIES
             .with_label_values(&[method_name, "state_indexer.chunks"])
             .inc();
         let block_height_shard_id = Self::execute_prepared_query(
@@ -218,7 +218,7 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         account_id: &near_primitives::types::AccountId,
         method_name: &str,
     ) -> anyhow::Result<Vec<readnode_primitives::StateKey>> {
-        crate::metrics::DATABASE_QUERIES
+        crate::metrics::DATABASE_READ_QUERIES
             .with_label_values(&[method_name, "state_indexer.account_state"])
             .inc();
         let mut paged_query = self.get_all_state_keys.clone();
@@ -247,7 +247,7 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         page_token: crate::PageToken,
         method_name: &str,
     ) -> anyhow::Result<(Vec<readnode_primitives::StateKey>, crate::PageToken)> {
-        crate::metrics::DATABASE_QUERIES
+        crate::metrics::DATABASE_READ_QUERIES
             .with_label_values(&[method_name, "state_indexer.account_state"])
             .inc();
         let mut paged_query = self.get_all_state_keys.clone();
@@ -283,7 +283,7 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         prefix: &[u8],
         method_name: &str,
     ) -> anyhow::Result<Vec<readnode_primitives::StateKey>> {
-        crate::metrics::DATABASE_QUERIES
+        crate::metrics::DATABASE_READ_QUERIES
             .with_label_values(&[method_name, "state_indexer.account_state"])
             .inc();
         let hex_str_prefix = hex::encode(prefix);
@@ -313,7 +313,7 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         readnode_primitives::StateKey,
         readnode_primitives::StateValue,
     ) {
-        crate::metrics::DATABASE_QUERIES
+        crate::metrics::DATABASE_READ_QUERIES
             .with_label_values(&[method_name, "state_indexer.state_changes_data"])
             .inc();
         let value = match Self::execute_prepared_query(
@@ -346,7 +346,7 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         request_block_height: near_primitives::types::BlockHeight,
         method_name: &str,
     ) -> anyhow::Result<readnode_primitives::QueryData<near_primitives::account::Account>> {
-        crate::metrics::DATABASE_QUERIES
+        crate::metrics::DATABASE_READ_QUERIES
             .with_label_values(&[method_name, "state_indexer.state_changes_account"])
             .inc();
         let (block_height, block_hash, data_blob) = Self::execute_prepared_query(
@@ -377,7 +377,7 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         request_block_height: near_primitives::types::BlockHeight,
         method_name: &str,
     ) -> anyhow::Result<readnode_primitives::QueryData<Vec<u8>>> {
-        crate::metrics::DATABASE_QUERIES
+        crate::metrics::DATABASE_READ_QUERIES
             .with_label_values(&[method_name, "state_indexer.state_changes_contract"])
             .inc();
         let (block_height, block_hash, contract_code) = Self::execute_prepared_query(
@@ -409,7 +409,7 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         public_key: near_crypto::PublicKey,
         method_name: &str,
     ) -> anyhow::Result<readnode_primitives::QueryData<near_primitives::account::AccessKey>> {
-        crate::metrics::DATABASE_QUERIES
+        crate::metrics::DATABASE_READ_QUERIES
             .with_label_values(&[method_name, "state_indexer.state_changes_access_key"])
             .inc();
         let key_data = borsh::to_vec(&public_key)?;
@@ -442,7 +442,7 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         block_height: near_primitives::types::BlockHeight,
         method_name: &str,
     ) -> anyhow::Result<std::collections::HashMap<String, Vec<u8>>> {
-        crate::metrics::DATABASE_QUERIES
+        crate::metrics::DATABASE_READ_QUERIES
             .with_label_values(&[method_name, "state_indexer.account_access_keys"])
             .inc();
         let (account_keys,) = Self::execute_prepared_query(
@@ -465,7 +465,7 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         receipt_id: near_primitives::hash::CryptoHash,
         method_name: &str,
     ) -> anyhow::Result<readnode_primitives::ReceiptRecord> {
-        crate::metrics::DATABASE_QUERIES
+        crate::metrics::DATABASE_READ_QUERIES
             .with_label_values(&[method_name, "tx_indexer.receipts_map"])
             .inc();
         let row = Self::execute_prepared_query(
@@ -504,7 +504,7 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         transaction_hash: &str,
         method_name: &str,
     ) -> anyhow::Result<readnode_primitives::TransactionDetails> {
-        crate::metrics::DATABASE_QUERIES
+        crate::metrics::DATABASE_READ_QUERIES
             .with_label_values(&[method_name, "tx_indexer.transactions_details"])
             .inc();
         let (data_value,) = Self::execute_prepared_query(
@@ -535,7 +535,7 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         transaction_hash: &str,
         method_name: &str,
     ) -> anyhow::Result<readnode_primitives::TransactionDetails> {
-        crate::metrics::DATABASE_QUERIES
+        crate::metrics::DATABASE_READ_QUERIES
             .with_label_values(&[method_name, "tx_indexer_cache.transactions"])
             .inc();
         let (data_value,) = Self::execute_prepared_query(
@@ -549,7 +549,7 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         let mut transaction_details =
             borsh::from_slice::<readnode_primitives::CollectingTransactionDetails>(&data_value)?;
 
-        crate::metrics::DATABASE_QUERIES
+        crate::metrics::DATABASE_READ_QUERIES
             .with_label_values(&[method_name, "tx_indexer_cache.receipts_outcomes"])
             .inc();
         let mut rows_stream = self
@@ -584,7 +584,7 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         shard_id: near_primitives::types::ShardId,
         method_name: &str,
     ) -> anyhow::Result<readnode_primitives::BlockHeightShardId> {
-        crate::metrics::DATABASE_QUERIES
+        crate::metrics::DATABASE_READ_QUERIES
             .with_label_values(&[method_name, "state_indexer.chunks"])
             .inc();
         let rows = Self::execute_prepared_query(
@@ -616,7 +616,7 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         epoch_id: near_primitives::hash::CryptoHash,
         method_name: &str,
     ) -> anyhow::Result<readnode_primitives::EpochValidatorsInfo> {
-        crate::metrics::DATABASE_QUERIES
+        crate::metrics::DATABASE_READ_QUERIES
             .with_label_values(&[method_name, "state_indexer.validators"])
             .inc();
         let (epoch_height, validators_info) = Self::execute_prepared_query(
@@ -646,7 +646,7 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         epoch_id: near_primitives::hash::CryptoHash,
         method_name: &str,
     ) -> anyhow::Result<near_chain_configs::ProtocolConfigView> {
-        crate::metrics::DATABASE_QUERIES
+        crate::metrics::DATABASE_READ_QUERIES
             .with_label_values(&[method_name, "state_indexer.protocol_configs"])
             .inc();
         let (protocol_config,) = Self::execute_prepared_query(
@@ -669,7 +669,7 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         block_height: near_primitives::types::BlockHeight,
         method_name: &str,
     ) -> anyhow::Result<readnode_primitives::EpochValidatorsInfo> {
-        crate::metrics::DATABASE_QUERIES
+        crate::metrics::DATABASE_READ_QUERIES
             .with_label_values(&[method_name, "state_indexer.validators"])
             .inc();
         let (epoch_id, epoch_height, validators_info) = Self::execute_prepared_query(
