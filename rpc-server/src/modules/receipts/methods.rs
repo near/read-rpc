@@ -43,7 +43,7 @@ async fn fetch_receipt(
 
     let receipt_record = data
         .db_manager
-        .get_receipt_by_id(receipt_id)
+        .get_receipt_by_id(receipt_id, "EXPERIMENTAL_receipt")
         .await
         .map_err(|err| {
             tracing::warn!("Error in `receipt` call: {:?}", err);
@@ -55,7 +55,10 @@ async fn fetch_receipt(
     // Getting the raw Vec<u8> of the TransactionDetails from ScyllaDB
     let transaction_details = data
         .db_manager
-        .get_transaction_by_hash(&receipt_record.parent_transaction_hash.to_string())
+        .get_transaction_by_hash(
+            &receipt_record.parent_transaction_hash.to_string(),
+            "EXPERIMENTAL_receipt",
+        )
         .await
         .map_err(|err| {
             tracing::warn!("Error in `receipt` call: {:?}", err);

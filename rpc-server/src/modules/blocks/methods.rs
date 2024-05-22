@@ -143,7 +143,7 @@ async fn block_call(
     mut block_request: near_jsonrpc::primitives::types::blocks::RpcBlockRequest,
 ) -> Result<near_jsonrpc::primitives::types::blocks::RpcBlockResponse, RPCError> {
     tracing::debug!("`block` called with parameters: {:?}", block_request);
-    let result = fetch_block(&data, block_request.block_reference.clone()).await;
+    let result = fetch_block(&data, block_request.block_reference.clone(), "block").await;
 
     #[cfg(feature = "shadow_data_consistency")]
     {
@@ -178,9 +178,13 @@ async fn changes_in_block_call(
     mut params: near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockRequest,
 ) -> Result<near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockByTypeResponse, RPCError>
 {
-    let cache_block = fetch_block_from_cache_or_get(&data, params.block_reference.clone())
-        .await
-        .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
+    let cache_block = fetch_block_from_cache_or_get(
+        &data,
+        params.block_reference.clone(),
+        "EXPERIMENTAL_changes_in_block",
+    )
+    .await
+    .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
     let result = fetch_changes_in_block(&data, cache_block, &params.block_reference).await;
     #[cfg(feature = "shadow_data_consistency")]
     {
@@ -209,9 +213,13 @@ async fn changes_in_block_by_type_call(
     data: Data<ServerContext>,
     mut params: near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockByTypeRequest,
 ) -> Result<near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockResponse, RPCError> {
-    let cache_block = fetch_block_from_cache_or_get(&data, params.block_reference.clone())
-        .await
-        .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
+    let cache_block = fetch_block_from_cache_or_get(
+        &data,
+        params.block_reference.clone(),
+        "EXPERIMENTAL_changes",
+    )
+    .await
+    .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
     let result = fetch_changes_in_block_by_type(
         &data,
         cache_block,
@@ -244,6 +252,7 @@ async fn changes_in_block_by_type_call(
 pub async fn fetch_block(
     data: &Data<ServerContext>,
     block_reference: near_primitives::types::BlockReference,
+    method_name: &str,
 ) -> Result<
     near_jsonrpc::primitives::types::blocks::RpcBlockResponse,
     near_jsonrpc::primitives::types::blocks::RpcBlockError,
@@ -253,7 +262,11 @@ pub async fn fetch_block(
         near_primitives::types::BlockReference::BlockId(block_id) => match block_id {
             near_primitives::types::BlockId::Height(block_height) => Ok(block_height),
             near_primitives::types::BlockId::Hash(block_hash) => {
-                match data.db_manager.get_block_by_hash(block_hash).await {
+                match data
+                    .db_manager
+                    .get_block_by_hash(block_hash, method_name)
+                    .await
+                {
                     Ok(block_height) => Ok(block_height),
                     Err(err) => {
                         tracing::error!("Failed to fetch block by hash: {}", err);
@@ -328,7 +341,7 @@ pub async fn fetch_chunk(
         } => match block_id {
             near_primitives::types::BlockId::Height(block_height) => data
                 .db_manager
-                .get_block_by_height_and_shard_id(block_height, shard_id)
+                .get_block_by_height_and_shard_id(block_height, shard_id, "chunk")
                 .await
                 .map_err(|_err| {
                     near_jsonrpc::primitives::types::chunks::RpcChunkError::InvalidShardId {
@@ -339,7 +352,7 @@ pub async fn fetch_chunk(
             near_primitives::types::BlockId::Hash(block_hash) => {
                 let block_height = data
                     .db_manager
-                    .get_block_by_hash(block_hash)
+                    .get_block_by_hash(block_hash, "chunk")
                     .await
                     .map_err(|err| {
                         tracing::error!("Failed to fetch block by hash: {}", err);
@@ -352,7 +365,7 @@ pub async fn fetch_chunk(
         },
         near_jsonrpc::primitives::types::chunks::ChunkReference::ChunkHash { chunk_id } => data
             .db_manager
-            .get_block_by_chunk_hash(chunk_id)
+            .get_block_by_chunk_hash(chunk_id, "chunk")
             .await
             .map_err(
                 |_err| near_jsonrpc::primitives::types::chunks::RpcChunkError::UnknownChunk {

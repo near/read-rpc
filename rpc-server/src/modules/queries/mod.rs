@@ -71,6 +71,7 @@ impl CodeStorage {
                 &self.account_id,
                 self.block_height,
                 key.to_vec(),
+                "query_call_function",
             );
             let (_, data) = block_on(get_db_data);
             data
