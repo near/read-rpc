@@ -54,7 +54,7 @@ async fn query_call(
 ) -> Result<near_jsonrpc::primitives::types::query::RpcQueryResponse, RPCError> {
     tracing::debug!("`query` call. Params: {:?}", query_request,);
 
-    let block = fetch_block_from_cache_or_get(data, query_request.block_reference.clone())
+    let block = fetch_block_from_cache_or_get(data, query_request.block_reference.clone(), "query")
         .await
         .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
     let result = match &query_request.request {
@@ -192,9 +192,9 @@ async fn view_account(
         is_optimistic
     );
     let account_view = if is_optimistic {
-        optimistic_view_account(data, block, account_id).await?
+        optimistic_view_account(data, block, account_id, "query_view_account").await?
     } else {
-        database_view_account(data, block, account_id).await?
+        database_view_account(data, block, account_id, "query_view_account").await?
     };
     Ok(near_jsonrpc::primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc::primitives::types::query::QueryResponseKind::ViewAccount(account_view),
@@ -208,6 +208,7 @@ async fn optimistic_view_account(
     data: &Data<ServerContext>,
     block: CacheBlock,
     account_id: &near_primitives::types::AccountId,
+    method_name: &str,
 ) -> Result<
     near_primitives::views::AccountView,
     near_jsonrpc::primitives::types::query::RpcQueryError,
@@ -229,7 +230,7 @@ async fn optimistic_view_account(
             )
         }
     } else {
-        database_view_account(data, block, account_id).await
+        database_view_account(data, block, account_id, method_name).await
     }
 }
 
@@ -238,13 +239,14 @@ async fn database_view_account(
     data: &Data<ServerContext>,
     block: CacheBlock,
     account_id: &near_primitives::types::AccountId,
+    method_name: &str,
 ) -> Result<
     near_primitives::views::AccountView,
     near_jsonrpc::primitives::types::query::RpcQueryError,
 > {
     let account = data
         .db_manager
-        .get_account(account_id, block.block_height)
+        .get_account(account_id, block.block_height, method_name)
         .await
         .map_err(
             |_err| near_jsonrpc::primitives::types::query::RpcQueryError::UnknownAccount {
@@ -275,13 +277,13 @@ async fn view_code(
     );
     let (code, account) = if is_optimistic {
         tokio::try_join!(
-            optimistic_view_code(data, block, account_id),
-            optimistic_view_account(data, block, account_id),
+            optimistic_view_code(data, block, account_id, "query_view_code"),
+            optimistic_view_account(data, block, account_id, "query_view_code"),
         )?
     } else {
         tokio::try_join!(
-            database_view_code(data, block, account_id),
-            database_view_account(data, block, account_id),
+            database_view_code(data, block, account_id, "query_view_code"),
+            database_view_account(data, block, account_id, "query_view_code"),
         )?
     };
 
@@ -302,6 +304,7 @@ async fn optimistic_view_code(
     data: &Data<ServerContext>,
     block: CacheBlock,
     account_id: &near_primitives::types::AccountId,
+    method_name: &str,
 ) -> Result<Vec<u8>, near_jsonrpc::primitives::types::query::RpcQueryError> {
     let contract_code = if let Ok(result) = data
         .blocks_info_by_finality
@@ -320,7 +323,7 @@ async fn optimistic_view_code(
             );
         }
     } else {
-        database_view_code(data, block, account_id).await?
+        database_view_code(data, block, account_id, method_name).await?
     };
     Ok(contract_code)
 }
@@ -330,10 +333,11 @@ async fn database_view_code(
     data: &Data<ServerContext>,
     block: CacheBlock,
     account_id: &near_primitives::types::AccountId,
+    method_name: &str,
 ) -> Result<Vec<u8>, near_jsonrpc::primitives::types::query::RpcQueryError> {
     Ok(data
         .db_manager
-        .get_contract_code(account_id, block.block_height)
+        .get_contract_code(account_id, block.block_height, method_name)
         .await
         .map_err(
             |_err| near_jsonrpc::primitives::types::query::RpcQueryError::NoContractCode {
@@ -486,8 +490,14 @@ async fn optimistic_view_state(
         .blocks_info_by_finality
         .optimistic_state_changes_in_block(account_id, prefix)
         .await;
-    let state_from_db =
-        get_state_from_db(&data.db_manager, account_id, block.block_height, prefix).await;
+    let state_from_db = get_state_from_db(
+        &data.db_manager,
+        account_id,
+        block.block_height,
+        prefix,
+        "query_view_state",
+    )
+    .await;
     if state_from_db.is_empty() && optimistic_data.is_empty() {
         Err(
             near_jsonrpc::primitives::types::query::RpcQueryError::UnknownAccount {
@@ -537,8 +547,14 @@ async fn database_view_state(
     Vec<near_primitives::views::StateItem>,
     near_jsonrpc::primitives::types::query::RpcQueryError,
 > {
-    let state_from_db =
-        get_state_from_db(&data.db_manager, account_id, block.block_height, prefix).await;
+    let state_from_db = get_state_from_db(
+        &data.db_manager,
+        account_id,
+        block.block_height,
+        prefix,
+        "query_view_state",
+    )
+    .await;
     if state_from_db.is_empty() {
         Err(
             near_jsonrpc::primitives::types::query::RpcQueryError::UnknownAccount {
@@ -632,7 +648,12 @@ async fn database_view_access_key(
 > {
     let access_key = data
         .db_manager
-        .get_access_key(account_id, block.block_height, public_key.clone())
+        .get_access_key(
+            account_id,
+            block.block_height,
+            public_key.clone(),
+            "query_view_access_key",
+        )
         .await
         .map_err(
             |_err| near_jsonrpc::primitives::types::query::RpcQueryError::UnknownAccessKey {

@@ -160,7 +160,11 @@ impl crate::ReaderDbManager for ScyllaDBManager {
     async fn get_block_by_hash(
         &self,
         block_hash: near_primitives::hash::CryptoHash,
+        method_name: &str,
     ) -> anyhow::Result<u64> {
+        crate::metrics::DATABASE_READ_QUERIES
+            .with_label_values(&[method_name, "state_indexer.blocks"])
+            .inc();
         let (result,) = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_block_by_hash,
@@ -179,7 +183,11 @@ impl crate::ReaderDbManager for ScyllaDBManager {
     async fn get_block_by_chunk_hash(
         &self,
         chunk_hash: near_primitives::hash::CryptoHash,
+        method_name: &str,
     ) -> anyhow::Result<readnode_primitives::BlockHeightShardId> {
+        crate::metrics::DATABASE_READ_QUERIES
+            .with_label_values(&[method_name, "state_indexer.chunks"])
+            .inc();
         let block_height_shard_id = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_block_by_chunk_id,
@@ -208,7 +216,11 @@ impl crate::ReaderDbManager for ScyllaDBManager {
     async fn get_state_keys_all(
         &self,
         account_id: &near_primitives::types::AccountId,
+        method_name: &str,
     ) -> anyhow::Result<Vec<readnode_primitives::StateKey>> {
+        crate::metrics::DATABASE_READ_QUERIES
+            .with_label_values(&[method_name, "state_indexer.account_state"])
+            .inc();
         let mut paged_query = self.get_all_state_keys.clone();
         paged_query.set_page_size(25000);
         let mut rows_stream = self
@@ -233,7 +245,11 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         &self,
         account_id: &near_primitives::types::AccountId,
         page_token: crate::PageToken,
+        method_name: &str,
     ) -> anyhow::Result<(Vec<readnode_primitives::StateKey>, crate::PageToken)> {
+        crate::metrics::DATABASE_READ_QUERIES
+            .with_label_values(&[method_name, "state_indexer.account_state"])
+            .inc();
         let mut paged_query = self.get_all_state_keys.clone();
         paged_query.set_page_size(1000);
 
@@ -265,7 +281,11 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         &self,
         account_id: &near_primitives::types::AccountId,
         prefix: &[u8],
+        method_name: &str,
     ) -> anyhow::Result<Vec<readnode_primitives::StateKey>> {
+        crate::metrics::DATABASE_READ_QUERIES
+            .with_label_values(&[method_name, "state_indexer.account_state"])
+            .inc();
         let hex_str_prefix = hex::encode(prefix);
         let result = Self::execute_prepared_query(
             &self.scylla_session,
@@ -288,10 +308,14 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         account_id: &near_primitives::types::AccountId,
         block_height: near_primitives::types::BlockHeight,
         key_data: readnode_primitives::StateKey,
+        method_name: &str,
     ) -> (
         readnode_primitives::StateKey,
         readnode_primitives::StateValue,
     ) {
+        crate::metrics::DATABASE_READ_QUERIES
+            .with_label_values(&[method_name, "state_indexer.state_changes_data"])
+            .inc();
         let value = match Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_state_key_value,
@@ -320,7 +344,11 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         &self,
         account_id: &near_primitives::types::AccountId,
         request_block_height: near_primitives::types::BlockHeight,
+        method_name: &str,
     ) -> anyhow::Result<readnode_primitives::QueryData<near_primitives::account::Account>> {
+        crate::metrics::DATABASE_READ_QUERIES
+            .with_label_values(&[method_name, "state_indexer.state_changes_account"])
+            .inc();
         let (block_height, block_hash, data_blob) = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_account,
@@ -347,7 +375,11 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         &self,
         account_id: &near_primitives::types::AccountId,
         request_block_height: near_primitives::types::BlockHeight,
+        method_name: &str,
     ) -> anyhow::Result<readnode_primitives::QueryData<Vec<u8>>> {
+        crate::metrics::DATABASE_READ_QUERIES
+            .with_label_values(&[method_name, "state_indexer.state_changes_contract"])
+            .inc();
         let (block_height, block_hash, contract_code) = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_contract_code,
@@ -375,7 +407,11 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         account_id: &near_primitives::types::AccountId,
         request_block_height: near_primitives::types::BlockHeight,
         public_key: near_crypto::PublicKey,
+        method_name: &str,
     ) -> anyhow::Result<readnode_primitives::QueryData<near_primitives::account::AccessKey>> {
+        crate::metrics::DATABASE_READ_QUERIES
+            .with_label_values(&[method_name, "state_indexer.state_changes_access_key"])
+            .inc();
         let key_data = borsh::to_vec(&public_key)?;
         let (block_height, block_hash, data_blob) = Self::execute_prepared_query(
             &self.scylla_session,
@@ -404,7 +440,11 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         &self,
         account_id: &near_primitives::types::AccountId,
         block_height: near_primitives::types::BlockHeight,
+        method_name: &str,
     ) -> anyhow::Result<std::collections::HashMap<String, Vec<u8>>> {
+        crate::metrics::DATABASE_READ_QUERIES
+            .with_label_values(&[method_name, "state_indexer.account_access_keys"])
+            .inc();
         let (account_keys,) = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_account_access_keys,
@@ -423,7 +463,11 @@ impl crate::ReaderDbManager for ScyllaDBManager {
     async fn get_receipt_by_id(
         &self,
         receipt_id: near_primitives::hash::CryptoHash,
+        method_name: &str,
     ) -> anyhow::Result<readnode_primitives::ReceiptRecord> {
+        crate::metrics::DATABASE_READ_QUERIES
+            .with_label_values(&[method_name, "tx_indexer.receipts_map"])
+            .inc();
         let row = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_receipt,
@@ -440,11 +484,15 @@ impl crate::ReaderDbManager for ScyllaDBManager {
     async fn get_transaction_by_hash(
         &self,
         transaction_hash: &str,
+        method_name: &str,
     ) -> anyhow::Result<readnode_primitives::TransactionDetails> {
-        if let Ok(transaction) = self.get_indexed_transaction_by_hash(transaction_hash).await {
+        if let Ok(transaction) = self
+            .get_indexed_transaction_by_hash(transaction_hash, method_name)
+            .await
+        {
             Ok(transaction)
         } else {
-            self.get_indexing_transaction_by_hash(transaction_hash)
+            self.get_indexing_transaction_by_hash(transaction_hash, method_name)
                 .await
         }
     }
@@ -454,7 +502,11 @@ impl crate::ReaderDbManager for ScyllaDBManager {
     async fn get_indexed_transaction_by_hash(
         &self,
         transaction_hash: &str,
+        method_name: &str,
     ) -> anyhow::Result<readnode_primitives::TransactionDetails> {
+        crate::metrics::DATABASE_READ_QUERIES
+            .with_label_values(&[method_name, "tx_indexer.transactions_details"])
+            .inc();
         let (data_value,) = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_transaction_by_hash,
@@ -481,7 +533,11 @@ impl crate::ReaderDbManager for ScyllaDBManager {
     async fn get_indexing_transaction_by_hash(
         &self,
         transaction_hash: &str,
+        method_name: &str,
     ) -> anyhow::Result<readnode_primitives::TransactionDetails> {
+        crate::metrics::DATABASE_READ_QUERIES
+            .with_label_values(&[method_name, "tx_indexer_cache.transactions"])
+            .inc();
         let (data_value,) = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_indexing_transaction_by_hash,
@@ -493,6 +549,9 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         let mut transaction_details =
             borsh::from_slice::<readnode_primitives::CollectingTransactionDetails>(&data_value)?;
 
+        crate::metrics::DATABASE_READ_QUERIES
+            .with_label_values(&[method_name, "tx_indexer_cache.receipts_outcomes"])
+            .inc();
         let mut rows_stream = self
             .scylla_session
             .execute_iter(
@@ -523,7 +582,11 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         &self,
         block_height: near_primitives::types::BlockHeight,
         shard_id: near_primitives::types::ShardId,
+        method_name: &str,
     ) -> anyhow::Result<readnode_primitives::BlockHeightShardId> {
+        crate::metrics::DATABASE_READ_QUERIES
+            .with_label_values(&[method_name, "state_indexer.chunks"])
+            .inc();
         let rows = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_stored_at_block_height_and_shard_id_by_block_height,
@@ -551,7 +614,11 @@ impl crate::ReaderDbManager for ScyllaDBManager {
     async fn get_validators_by_epoch_id(
         &self,
         epoch_id: near_primitives::hash::CryptoHash,
+        method_name: &str,
     ) -> anyhow::Result<readnode_primitives::EpochValidatorsInfo> {
+        crate::metrics::DATABASE_READ_QUERIES
+            .with_label_values(&[method_name, "state_indexer.validators"])
+            .inc();
         let (epoch_height, validators_info) = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_validators_by_epoch_id,
@@ -577,7 +644,11 @@ impl crate::ReaderDbManager for ScyllaDBManager {
     async fn get_protocol_config_by_epoch_id(
         &self,
         epoch_id: near_primitives::hash::CryptoHash,
+        method_name: &str,
     ) -> anyhow::Result<near_chain_configs::ProtocolConfigView> {
+        crate::metrics::DATABASE_READ_QUERIES
+            .with_label_values(&[method_name, "state_indexer.protocol_configs"])
+            .inc();
         let (protocol_config,) = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_protocol_config_by_epoch_id,
@@ -596,7 +667,11 @@ impl crate::ReaderDbManager for ScyllaDBManager {
     async fn get_validators_by_end_block_height(
         &self,
         block_height: near_primitives::types::BlockHeight,
+        method_name: &str,
     ) -> anyhow::Result<readnode_primitives::EpochValidatorsInfo> {
+        crate::metrics::DATABASE_READ_QUERIES
+            .with_label_values(&[method_name, "state_indexer.validators"])
+            .inc();
         let (epoch_id, epoch_height, validators_info) = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_validators_by_end_block_height,

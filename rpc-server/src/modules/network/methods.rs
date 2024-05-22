@@ -154,7 +154,10 @@ pub async fn validators_ordered(
 
     if let Some(block_id) = &request.block_id {
         let block_reference = near_primitives::types::BlockReference::from(block_id.clone());
-        if let Ok(block) = fetch_block_from_cache_or_get(&data, block_reference).await {
+        if let Ok(block) =
+            fetch_block_from_cache_or_get(&data, block_reference, "EXPERIMENTAL_validators_ordered")
+                .await
+        {
             let final_block = data.blocks_info_by_finality.final_cache_block().await;
             // `expected_earliest_available_block` calculated by formula:
             // `final_block_height` - `node_epoch_count` * `epoch_length`
@@ -227,20 +230,20 @@ async fn validators_call(
     let validators = match &validator_request.epoch_reference {
         near_primitives::types::EpochReference::EpochId(epoch_id) => data
             .db_manager
-            .get_validators_by_epoch_id(epoch_id.0)
+            .get_validators_by_epoch_id(epoch_id.0, "validators")
             .await
             .map_err(|_err| {
                 near_jsonrpc::primitives::types::validator::RpcValidatorError::UnknownEpoch
             })?,
         near_primitives::types::EpochReference::BlockId(block_id) => {
             let block_reference = near_primitives::types::BlockReference::BlockId(block_id.clone());
-            let block = fetch_block_from_cache_or_get(data, block_reference)
+            let block = fetch_block_from_cache_or_get(data, block_reference, "validators")
                 .await
                 .map_err(|_err| {
                     near_jsonrpc::primitives::types::validator::RpcValidatorError::UnknownEpoch
                 })?;
             data.db_manager
-                .get_validators_by_end_block_height(block.block_height)
+                .get_validators_by_end_block_height(block.block_height, "validators")
                 .await.map_err(|_err| {
                 near_jsonrpc::primitives::types::validator::RpcValidatorError::ValidatorInfoUnavailable
             })?
@@ -259,13 +262,14 @@ async fn protocol_config_call(
     near_chain_configs::ProtocolConfigView,
     near_jsonrpc::primitives::types::config::RpcProtocolConfigError,
 > {
-    let block = fetch_block_from_cache_or_get(data, block_reference)
-        .await
-        .map_err(|err| {
-            near_jsonrpc::primitives::types::config::RpcProtocolConfigError::UnknownBlock {
-                error_message: err.to_string(),
-            }
-        })?;
+    let block =
+        fetch_block_from_cache_or_get(data, block_reference, "EXPERIMENTAL_protocol_config")
+            .await
+            .map_err(|err| {
+                near_jsonrpc::primitives::types::config::RpcProtocolConfigError::UnknownBlock {
+                    error_message: err.to_string(),
+                }
+            })?;
 
     let protocol_config = if data
         .blocks_info_by_finality
@@ -323,7 +327,7 @@ async fn protocol_config_call(
         protocol_config.into()
     } else {
         data.db_manager
-            .get_protocol_config_by_epoch_id(block.epoch_id)
+            .get_protocol_config_by_epoch_id(block.epoch_id, "EXPERIMENTAL_protocol_config")
             .await
             .map_err(|err| {
                 near_jsonrpc::primitives::types::config::RpcProtocolConfigError::InternalError {

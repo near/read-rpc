@@ -16,8 +16,6 @@ pub struct CodeStorage {
     validators: HashMap<near_primitives::types::AccountId, near_primitives::types::Balance>,
     data_count: u64,
     is_optimistic: bool,
-    prefetched_data:
-        Option<HashMap<readnode_primitives::StateKey, readnode_primitives::StateValue>>,
     optimistic_data:
         HashMap<readnode_primitives::StateKey, Option<readnode_primitives::StateValue>>,
 }
@@ -42,9 +40,6 @@ impl CodeStorage {
         account_id: near_primitives::types::AccountId,
         block_height: near_primitives::types::BlockHeight,
         validators: HashMap<near_primitives::types::AccountId, near_primitives::types::Balance>,
-        prefetched_data: Option<
-            HashMap<readnode_primitives::StateKey, readnode_primitives::StateValue>,
-        >,
         optimistic_data: HashMap<
             readnode_primitives::StateKey,
             Option<readnode_primitives::StateValue>,
@@ -57,24 +52,20 @@ impl CodeStorage {
             validators,
             data_count: Default::default(), // TODO: Using for generate_data_id
             is_optimistic: !optimistic_data.is_empty(),
-            prefetched_data,
             optimistic_data,
         }
     }
 
     fn get_state_key_data(&self, key: &[u8]) -> readnode_primitives::StateValue {
-        if let Some(prefetched_data) = &self.prefetched_data {
-            prefetched_data.get(key).cloned().unwrap_or_default()
-        } else {
-            let get_db_data = get_state_key_value_from_db(
-                &self.db_manager,
-                &self.account_id,
-                self.block_height,
-                key.to_vec(),
-            );
-            let (_, data) = block_on(get_db_data);
-            data
-        }
+        let get_db_data = get_state_key_value_from_db(
+            &self.db_manager,
+            &self.account_id,
+            self.block_height,
+            key.to_vec(),
+            "query_call_function",
+        );
+        let (_, data) = block_on(get_db_data);
+        data
     }
 
     fn optimistic_storage_get(

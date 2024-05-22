@@ -27,12 +27,13 @@ pub async fn get_state_key_value_from_db(
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
     key_data: readnode_primitives::StateKey,
+    method_name: &str,
 ) -> (
     readnode_primitives::StateKey,
     readnode_primitives::StateValue,
 ) {
     db_manager
-        .get_state_key_value(account_id, block_height, key_data)
+        .get_state_key_value(account_id, block_height, key_data, method_name)
         .await
 }
 
@@ -47,13 +48,14 @@ pub async fn get_state_keys_from_db(
     db_manager: &std::sync::Arc<Box<dyn database::ReaderDbManager + Sync + Send + 'static>>,
     account_id: &near_primitives::types::AccountId,
     prefix: &[u8],
+    method_name: &str,
 ) -> anyhow::Result<Vec<readnode_primitives::StateKey>> {
     if !prefix.is_empty() {
         db_manager
-            .get_state_keys_by_prefix(account_id, prefix)
+            .get_state_keys_by_prefix(account_id, prefix, method_name)
             .await
     } else {
-        db_manager.get_state_keys_all(account_id).await
+        db_manager.get_state_keys_all(account_id, method_name).await
     }
 }
 
@@ -66,6 +68,7 @@ pub async fn get_state_from_db(
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
     prefix: &[u8],
+    method_name: &str,
 ) -> HashMap<readnode_primitives::StateKey, readnode_primitives::StateValue> {
     tracing::debug!(
         "`get_state_from_db` call. AccountId {}, block {}, prefix {:?}",
@@ -76,7 +79,7 @@ pub async fn get_state_from_db(
     let mut data: HashMap<readnode_primitives::StateKey, readnode_primitives::StateValue> =
         HashMap::new();
 
-    match get_state_keys_from_db(db_manager, account_id, prefix).await {
+    match get_state_keys_from_db(db_manager, account_id, prefix, method_name).await {
         Ok(state_keys) => {
             // 3 nodes * 8 cpus * 100 = 2400
             // TODO: 2400 is hardcoded value. Make it configurable.
@@ -87,6 +90,7 @@ pub async fn get_state_from_db(
                         account_id,
                         block_height,
                         state_key.clone(),
+                        method_name,
                     )
                 });
                 let mut tasks = futures::stream::FuturesUnordered::from_iter(futures);
@@ -118,7 +122,7 @@ pub async fn fetch_list_access_keys_from_db(
         block_height,
     );
     let account_keys = db_manager
-        .get_account_access_keys(account_id, block_height)
+        .get_account_access_keys(account_id, block_height, "query_view_access_key_list")
         .await?;
     let account_keys_view = account_keys
         .into_iter()
@@ -216,7 +220,7 @@ pub async fn run_contract(
     >,
 ) -> Result<RunContractResponse, FunctionCallError> {
     let contract = db_manager
-        .get_account(account_id, block.block_height)
+        .get_account(account_id, block.block_height, "query_call_function")
         .await
         .map_err(|_| FunctionCallError::AccountDoesNotExist {
             requested_account_id: account_id.clone(),
@@ -228,7 +232,7 @@ pub async fn run_contract(
             (validators.epoch_height, validators.current_validators)
         } else {
             let validators = db_manager
-                .get_validators_by_epoch_id(block.epoch_id)
+                .get_validators_by_epoch_id(block.epoch_id, "query_call_function")
                 .await
                 .map_err(|_| FunctionCallError::InternalError {
                     error_message: "Failed to get epoch info".to_string(),
@@ -290,7 +294,7 @@ pub async fn run_contract(
             Some(code) => near_vm_runner::ContractCode::new(code, Some(code_hash)),
             None => {
                 let code = db_manager
-                    .get_contract_code(account_id, block.block_height)
+                    .get_contract_code(account_id, block.block_height, "query_call_function")
                     .await
                     .map_err(|_| FunctionCallError::InvalidAccountId {
                         requested_account_id: account_id.clone(),
@@ -303,32 +307,12 @@ pub async fn run_contract(
         })
     };
 
-    // TODO: Refactor this part. It's a temporary solution to fetch state keys from DB for the poolv1.near contracts
-    // https://github.com/near/read-rpc/issues/150
-    let contract_state = if account_id.to_string().ends_with("poolv1.near") {
-        if let Ok(result) = tokio::time::timeout(
-            std::time::Duration::from_secs(20),
-            get_state_from_db(db_manager, account_id, block.block_height, &[]),
-        )
-        .await
-        {
-            tracing::debug!("State keys fetched from DB");
-            Some(result)
-        } else {
-            tracing::error!("Failed to fetch state keys from DB");
-            None
-        }
-    } else {
-        None
-    };
-
     // Init an external scylla interface for the Runtime logic
     let code_storage = CodeStorage::init(
         db_manager.clone(),
         account_id.clone(),
         block.block_height,
         validators,
-        contract_state,
         optimistic_data,
     );
 

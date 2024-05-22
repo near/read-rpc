@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate lazy_static;
+
 mod base;
 
 use crate::base::BaseDbManager;
@@ -16,6 +19,7 @@ pub mod postgres;
 #[cfg(feature = "postgres_db")]
 pub use postgres::{models, schema};
 
+pub(crate) mod metrics;
 pub mod primitives;
 
 pub async fn prepare_db_manager<T>(config: &configuration::DatabaseConfig) -> anyhow::Result<T>

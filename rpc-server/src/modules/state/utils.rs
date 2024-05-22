@@ -19,11 +19,16 @@ pub async fn get_state_from_db_paginated(
         page_token,
     );
     if let Ok((state_keys, next_page_token)) = db_manager
-        .get_state_keys_by_page(account_id, page_token)
+        .get_state_keys_by_page(account_id, page_token, "view_state_paginated")
         .await
     {
         let futures = state_keys.iter().map(|state_key| {
-            db_manager.get_state_key_value(account_id, block_height, state_key.clone())
+            db_manager.get_state_key_value(
+                account_id,
+                block_height,
+                state_key.clone(),
+                "view_state_paginated",
+            )
         });
         let mut tasks = futures::stream::FuturesUnordered::from_iter(futures);
         let mut data: HashMap<readnode_primitives::StateKey, readnode_primitives::StateValue> =
