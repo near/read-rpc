@@ -261,7 +261,7 @@ pub async fn fetch_block(
             near_primitives::types::BlockId::Hash(block_hash) => {
                 match data
                     .db_manager
-                    .get_block_by_hash(block_hash.clone(), method_name)
+                    .get_block_by_hash(*block_hash, method_name)
                     .await
                 {
                     Ok(block_height) => Ok(block_height),
