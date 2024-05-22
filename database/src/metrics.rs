@@ -13,6 +13,8 @@ fn register_int_counter_vec(
     Ok(counter)
 }
 
+// TODO: Implement metrics for postgres database
+// https://github.com/near/read-rpc/issues/260
 lazy_static! {
     pub(crate) static ref DATABASE_QUERIES: IntCounterVec = register_int_counter_vec(
         "database_queries_counter",
