@@ -287,7 +287,10 @@ impl crate::ReaderDbManager for PostgresDBManager {
         transaction_hash: &str,
         method_name: &str,
     ) -> anyhow::Result<readnode_primitives::TransactionDetails> {
-        if let Ok(transaction) = self.get_indexed_transaction_by_hash(transaction_hash, method_name).await {
+        if let Ok(transaction) = self
+            .get_indexed_transaction_by_hash(transaction_hash, method_name)
+            .await
+        {
             Ok(transaction)
         } else {
             self.get_indexing_transaction_by_hash(transaction_hash, method_name)
