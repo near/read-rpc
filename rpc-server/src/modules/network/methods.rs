@@ -154,9 +154,12 @@ pub async fn validators_ordered(
 
     if let Some(block_id) = &request.block_id {
         let block_reference = near_primitives::types::BlockReference::from(block_id.clone());
-        if let Ok(block) =
-            fetch_block_from_cache_or_get(&data, block_reference, "EXPERIMENTAL_validators_ordered")
-                .await
+        if let Ok(block) = fetch_block_from_cache_or_get(
+            &data,
+            &block_reference,
+            "EXPERIMENTAL_validators_ordered",
+        )
+        .await
         {
             let final_block = data.blocks_info_by_finality.final_cache_block().await;
             // `expected_earliest_available_block` calculated by formula:
@@ -237,7 +240,7 @@ async fn validators_call(
             })?,
         near_primitives::types::EpochReference::BlockId(block_id) => {
             let block_reference = near_primitives::types::BlockReference::BlockId(block_id.clone());
-            let block = fetch_block_from_cache_or_get(data, block_reference, "validators")
+            let block = fetch_block_from_cache_or_get(data, &block_reference, "validators")
                 .await
                 .map_err(|_err| {
                     near_jsonrpc::primitives::types::validator::RpcValidatorError::UnknownEpoch
@@ -263,7 +266,7 @@ async fn protocol_config_call(
     near_jsonrpc::primitives::types::config::RpcProtocolConfigError,
 > {
     let block =
-        fetch_block_from_cache_or_get(data, block_reference, "EXPERIMENTAL_protocol_config")
+        fetch_block_from_cache_or_get(data, &block_reference, "EXPERIMENTAL_protocol_config")
             .await
             .map_err(|err| {
                 near_jsonrpc::primitives::types::config::RpcProtocolConfigError::UnknownBlock {

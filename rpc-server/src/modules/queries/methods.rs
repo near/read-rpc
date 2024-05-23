@@ -2,11 +2,13 @@ use crate::config::ServerContext;
 use crate::errors::RPCError;
 use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
 use crate::modules::blocks::CacheBlock;
-#[cfg(feature = "account_access_keys")]
-use crate::modules::queries::utils::fetch_list_access_keys_from_db;
-use crate::modules::queries::utils::{get_state_from_db, run_contract, RunContractResponse};
 use jsonrpc_v2::{Data, Params};
 use near_jsonrpc::RpcRequest;
+
+use super::contract_runner;
+#[cfg(feature = "account_access_keys")]
+use super::utils::fetch_list_access_keys_from_db;
+use super::utils::get_state_from_db;
 
 /// `query` rpc method implementation
 /// calls proxy_rpc_call to get `query` from near-rpc if request parameters not supported by read-rpc
@@ -54,7 +56,7 @@ async fn query_call(
 ) -> Result<near_jsonrpc::primitives::types::query::RpcQueryResponse, RPCError> {
     tracing::debug!("`query` call. Params: {:?}", query_request,);
 
-    let block = fetch_block_from_cache_or_get(data, query_request.block_reference.clone(), "query")
+    let block = fetch_block_from_cache_or_get(data, &query_request.block_reference, "query")
         .await
         .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
     let result = match &query_request.request {
@@ -370,11 +372,30 @@ async fn function_call(
         is_optimistic,
     );
 
-    let call_results = if is_optimistic {
-        optimistic_function_call(data, block, account_id, method_name, args).await
+    // Depending on the optimistic flag we need to run the contract with the optimistic
+    // state changes or not.
+    let maybe_optimistic_data = if is_optimistic {
+        data.blocks_info_by_finality
+            .optimistic_state_changes_in_block(account_id, &[])
+            .await
     } else {
-        database_function_call(data, block, account_id, method_name, args).await
+        Default::default()
     };
+
+    let call_results = contract_runner::run_contract(
+        account_id,
+        method_name,
+        args,
+        &data.db_manager,
+        &data.compiled_contract_code_cache,
+        &data.contract_code_cache,
+        &data.blocks_info_by_finality,
+        block,
+        data.max_gas_burnt,
+        maybe_optimistic_data,
+    )
+    .await;
+
     let call_results =
         call_results.map_err(|err| err.to_rpc_query_error(block.block_height, block.block_hash))?;
     Ok(near_jsonrpc::primitives::types::query::RpcQueryResponse {
@@ -387,56 +408,6 @@ async fn function_call(
         block_height: block.block_height,
         block_hash: block.block_hash,
     })
-}
-
-#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
-async fn optimistic_function_call(
-    data: &Data<ServerContext>,
-    block: CacheBlock,
-    account_id: &near_primitives::types::AccountId,
-    method_name: &str,
-    args: &near_primitives::types::FunctionArgs,
-) -> Result<RunContractResponse, crate::errors::FunctionCallError> {
-    let optimistic_data = data
-        .blocks_info_by_finality
-        .optimistic_state_changes_in_block(account_id, &[])
-        .await;
-    run_contract(
-        account_id,
-        method_name,
-        args,
-        &data.db_manager,
-        &data.compiled_contract_code_cache,
-        &data.contract_code_cache,
-        &data.blocks_info_by_finality,
-        block,
-        data.max_gas_burnt,
-        optimistic_data, // run contract with optimistic data
-    )
-    .await
-}
-
-#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
-async fn database_function_call(
-    data: &Data<ServerContext>,
-    block: CacheBlock,
-    account_id: &near_primitives::types::AccountId,
-    method_name: &str,
-    args: &near_primitives::types::FunctionArgs,
-) -> Result<RunContractResponse, crate::errors::FunctionCallError> {
-    run_contract(
-        account_id,
-        method_name,
-        args,
-        &data.db_manager,
-        &data.compiled_contract_code_cache,
-        &data.contract_code_cache,
-        &data.blocks_info_by_finality,
-        block,
-        data.max_gas_burnt,
-        Default::default(), // run contract with empty optimistic data
-    )
-    .await
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]

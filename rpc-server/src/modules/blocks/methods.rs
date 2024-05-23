@@ -143,7 +143,7 @@ async fn block_call(
     mut block_request: near_jsonrpc::primitives::types::blocks::RpcBlockRequest,
 ) -> Result<near_jsonrpc::primitives::types::blocks::RpcBlockResponse, RPCError> {
     tracing::debug!("`block` called with parameters: {:?}", block_request);
-    let result = fetch_block(&data, block_request.block_reference.clone(), "block").await;
+    let result = fetch_block(&data, &block_request.block_reference, "block").await;
 
     #[cfg(feature = "shadow_data_consistency")]
     {
@@ -180,7 +180,7 @@ async fn changes_in_block_call(
 {
     let cache_block = fetch_block_from_cache_or_get(
         &data,
-        params.block_reference.clone(),
+        &params.block_reference,
         "EXPERIMENTAL_changes_in_block",
     )
     .await
@@ -213,13 +213,10 @@ async fn changes_in_block_by_type_call(
     data: Data<ServerContext>,
     mut params: near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockByTypeRequest,
 ) -> Result<near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockResponse, RPCError> {
-    let cache_block = fetch_block_from_cache_or_get(
-        &data,
-        params.block_reference.clone(),
-        "EXPERIMENTAL_changes",
-    )
-    .await
-    .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
+    let cache_block =
+        fetch_block_from_cache_or_get(&data, &params.block_reference, "EXPERIMENTAL_changes")
+            .await
+            .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
     let result = fetch_changes_in_block_by_type(
         &data,
         cache_block,
@@ -251,7 +248,7 @@ async fn changes_in_block_by_type_call(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn fetch_block(
     data: &Data<ServerContext>,
-    block_reference: near_primitives::types::BlockReference,
+    block_reference: &near_primitives::types::BlockReference,
     method_name: &str,
 ) -> Result<
     near_jsonrpc::primitives::types::blocks::RpcBlockResponse,
@@ -260,11 +257,11 @@ pub async fn fetch_block(
     tracing::debug!("`fetch_block` call");
     let block_height = match block_reference {
         near_primitives::types::BlockReference::BlockId(block_id) => match block_id {
-            near_primitives::types::BlockId::Height(block_height) => Ok(block_height),
+            near_primitives::types::BlockId::Height(block_height) => Ok(*block_height),
             near_primitives::types::BlockId::Hash(block_hash) => {
                 match data
                     .db_manager
-                    .get_block_by_hash(block_hash, method_name)
+                    .get_block_by_hash(*block_hash, method_name)
                     .await
                 {
                     Ok(block_height) => Ok(block_height),

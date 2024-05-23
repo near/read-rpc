@@ -62,7 +62,7 @@ async fn gas_price_call(
     data: &Data<ServerContext>,
     block_reference: near_primitives::types::BlockReference,
 ) -> Result<CacheBlock, near_jsonrpc::primitives::types::gas_price::RpcGasPriceError> {
-    let block = fetch_block_from_cache_or_get(data, block_reference, "gas_price")
+    let block = fetch_block_from_cache_or_get(data, &block_reference, "gas_price")
         .await
         .map_err(|err| {
             near_jsonrpc::primitives::types::gas_price::RpcGasPriceError::UnknownBlock {
