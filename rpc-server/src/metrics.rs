@@ -1,6 +1,4 @@
-use crate::config::ServerContext;
 use actix_web::{get, Responder};
-use jsonrpc_v2::Data;
 use prometheus::{Encoder, IntCounterVec, IntGauge, IntGaugeVec, Opts};
 
 type Result<T, E> = std::result::Result<T, E>;
@@ -128,7 +126,7 @@ lazy_static! {
 /// It should help to analyze the most popular requests
 /// And build s better caching strategy
 pub async fn increase_block_category_metrics(
-    data: &Data<ServerContext>,
+    data: &jsonrpc_v2::Data<crate::config::ServerContext>,
     block_reference: &near_primitives::types::BlockReference,
     block_height: Option<u64>,
 ) {

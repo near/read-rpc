@@ -191,7 +191,7 @@ async fn changes_in_block_call(
     )
     .await
     .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
-    
+
     // increase block category metrics
     crate::metrics::increase_block_category_metrics(
         &data,

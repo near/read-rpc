@@ -57,7 +57,7 @@ async fn query_call(
     let block = fetch_block_from_cache_or_get(data, &query_request.block_reference, "query")
         .await
         .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
-    
+
     // increase block category metrics
     crate::metrics::increase_block_category_metrics(
         data,
