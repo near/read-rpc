@@ -1,6 +1,7 @@
 use crate::scylladb::ScyllaStorageManager;
 use num_traits::ToPrimitive;
 use scylla::prepared_statement::PreparedStatement;
+use crate::postgres::PgAsyncConn;
 
 pub struct ScyllaDBManager {
     scylla_session: std::sync::Arc<scylla::Session>,
@@ -417,6 +418,11 @@ impl ScyllaStorageManager for ScyllaDBManager {
 
 #[async_trait::async_trait]
 impl crate::StateIndexerDbManager for ScyllaDBManager {
+    
+    async fn get_connection_pool(&self) -> anyhow::Result<PgAsyncConn> {
+        todo!()
+    }
+    
     async fn add_state_changes(
         &self,
         account_id: near_indexer_primitives::types::AccountId,

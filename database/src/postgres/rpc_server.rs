@@ -144,6 +144,18 @@ impl crate::ReaderDbManager for PostgresDBManager {
         (key_data, result)
     }
 
+    async fn get_all_state(
+        &self,
+        account_id: &near_primitives::types::AccountId,
+        block_height: near_primitives::types::BlockHeight,
+    ) -> std::collections::HashMap<readnode_primitives::StateKey, Option<readnode_primitives::StateValue>> {
+        crate::models::StateChangesData::get_all_state_for_specific_block(
+            Self::get_connection(&self.pg_pool).await.unwrap(),
+            account_id.as_str(),
+            block_height,
+        ).await
+    }
+
     async fn get_account(
         &self,
         account_id: &near_primitives::types::AccountId,

@@ -1,4 +1,4 @@
-use crate::postgres::PostgresStorageManager;
+use crate::postgres::{PgAsyncConn, PostgresStorageManager};
 use bigdecimal::ToPrimitive;
 
 pub struct PostgresDBManager {
@@ -24,6 +24,11 @@ impl PostgresStorageManager for PostgresDBManager {}
 
 #[async_trait::async_trait]
 impl crate::StateIndexerDbManager for PostgresDBManager {
+    
+    async fn get_connection_pool(&self) -> anyhow::Result<PgAsyncConn> {
+        Ok(Self::get_connection(&self.pg_pool).await?)
+    }
+
     async fn add_state_changes(
         &self,
         account_id: near_primitives::types::AccountId,

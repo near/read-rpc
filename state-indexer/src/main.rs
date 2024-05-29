@@ -130,8 +130,17 @@ async fn handle_state_changes(
     block_height: u64,
     block_hash: CryptoHash,
     indexer_config: &configuration::StateIndexerConfig,
-) -> anyhow::Result<Vec<()>> {
-    let mut state_changes_to_store =
+) -> anyhow::Result<()> {
+    let mut state_changes_to_store_data =
+        std::collections::HashMap::<String, &near_indexer_primitives::views::StateChangeWithCauseView>::new();
+
+    let mut state_changes_to_store_account =
+        std::collections::HashMap::<String, &near_indexer_primitives::views::StateChangeWithCauseView>::new();
+
+    let mut state_changes_to_store_code =
+        std::collections::HashMap::<String, &near_indexer_primitives::views::StateChangeWithCauseView>::new();
+
+    let mut state_changes_to_store_access_key =
         std::collections::HashMap::<String, &near_indexer_primitives::views::StateChangeWithCauseView>::new();
 
     let initial_state_changes = streamer_message
@@ -141,43 +150,74 @@ async fn handle_state_changes(
 
     // Collecting a unique list of StateChangeWithCauseView for account_id + change kind + suffix
     // by overwriting the records in the HashMap
+    let mut counter = 0;
     for state_change in initial_state_changes {
+        counter += 1;
         if !indexer_config.state_should_be_indexed(&state_change.value) {
             continue;
         };
-        let key = match &state_change.value {
+        match &state_change.value {
             StateChangeValueView::DataUpdate { account_id, key, .. }
             | StateChangeValueView::DataDeletion { account_id, key } => {
                 // returning a hex-encoded key to ensure we store data changes to the key
                 // (if there is more than one change to the same key)
-                let key: &[u8] = key.as_ref();
-                format!("{}_data_{}", account_id.as_str(), hex::encode(key))
+                let state_key = format!("{}_data_{}", account_id.as_str(), hex::encode(&key.to_vec()));
+                state_changes_to_store_data.insert(state_key, state_change);
             }
-            StateChangeValueView::AccessKeyUpdate {
-                account_id, public_key, ..
-            }
+            StateChangeValueView::AccessKeyUpdate { account_id, public_key, .. }
             | StateChangeValueView::AccessKeyDeletion { account_id, public_key } => {
                 // returning a hex-encoded key to ensure we store data changes to the key
                 // (if there is more than one change to the same key)
-                let data_key = borsh::to_vec(&public_key)?;
-                format!("{}_access_key_{}", account_id.as_str(), hex::encode(data_key))
+                let pub_key_hex = hex::encode(borsh::to_vec(&public_key)?);
+                let state_key = format!("{}_access_key_{}", account_id.as_str(), pub_key_hex);
+                state_changes_to_store_access_key.insert(state_key, state_change);
             }
             // ContractCode and Account changes is not separate-able by any key, we can omit the suffix
-            StateChangeValueView::ContractCodeUpdate { account_id, .. }
-            | StateChangeValueView::ContractCodeDeletion { account_id } => format!("{}_contract", account_id.as_str()),
+            StateChangeValueView::ContractCodeUpdate { account_id, .. } 
+            | StateChangeValueView::ContractCodeDeletion { account_id } => {
+                let state_key = format!("{}_contract", account_id.as_str());
+                state_changes_to_store_code.insert(state_key, state_change);
+            }
             StateChangeValueView::AccountUpdate { account_id, .. }
-            | StateChangeValueView::AccountDeletion { account_id } => format!("{}_account", account_id.as_str()),
+            | StateChangeValueView::AccountDeletion { account_id } => {
+                let state_key = format!("{}_account", account_id.as_str());
+                state_changes_to_store_account.insert(state_key, state_change);
+            }
         };
-        // This will override the previous record for this account_id + state change kind + suffix
-        state_changes_to_store.insert(key, state_change);
+        // // This will override the previous record for this account_id + state change kind + suffix
+        // state_changes_to_store.insert(key, state_change);
     }
-
+    println!("State changes count: {}", counter);
     // Asynchronous storing of StateChangeWithCauseView into the storage.
-    let futures = state_changes_to_store
-        .into_values()
-        .map(|state_change_with_cause| db_manager.save_state_change(state_change_with_cause, block_height, block_hash));
-
-    futures::future::try_join_all(futures).await
+    let save_data_futures = database::models::StateChangesData::bulk_insert_or_ignore(
+        db_manager,
+        block_height,
+        block_hash,
+        state_changes_to_store_data,
+    );
+    let save_access_key_futures = database::models::StateChangesAccessKey::bulk_insert_or_ignore(
+        db_manager,
+        block_height,
+        block_hash,
+        state_changes_to_store_access_key,
+    );
+    let save_code_futures = database::models::StateChangesContract::bulk_insert_or_ignore(
+        db_manager,
+        block_height,
+        block_hash,
+        state_changes_to_store_code,
+    );
+    let save_account_futures = database::models::StateChangesAccount::bulk_insert_or_ignore(
+        db_manager,
+        block_height,
+        block_hash,
+        state_changes_to_store_account,
+    );
+    let start = std::time::Instant::now();
+    futures::try_join!(save_data_futures, save_access_key_futures, save_code_futures, save_account_futures)?;
+    println!("State changes saved in {:?}", start.elapsed());
+    // futures::try_join!(save_data_futures)?;
+    Ok(())
 }
 
 #[tokio::main]

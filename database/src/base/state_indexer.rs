@@ -1,5 +1,10 @@
+use crate::postgres::PgAsyncConn;
+
 #[async_trait::async_trait]
 pub trait StateIndexerDbManager {
+
+    async fn get_connection_pool(&self) -> anyhow::Result<PgAsyncConn>;
+    
     async fn add_state_changes(
         &self,
         account_id: near_indexer_primitives::types::AccountId,

@@ -7,12 +7,14 @@ use futures::executor::block_on;
 pub type Result<T> = ::std::result::Result<T, near_vm_runner::logic::VMLogicError>;
 
 pub struct CodeStorage {
-    db_manager: std::sync::Arc<Box<dyn ReaderDbManager + Sync + Send + 'static>>,
-    account_id: near_primitives::types::AccountId,
-    block_height: near_primitives::types::BlockHeight,
+    // db_manager: std::sync::Arc<Box<dyn ReaderDbManager + Sync + Send + 'static>>,
+    // account_id: near_primitives::types::AccountId,
+    // block_height: near_primitives::types::BlockHeight,
     validators: HashMap<near_primitives::types::AccountId, near_primitives::types::Balance>,
     data_count: u64,
     is_optimistic: bool,
+    prefetch_data:
+        HashMap<readnode_primitives::StateKey, Option<readnode_primitives::StateValue>>,
     optimistic_data:
         HashMap<readnode_primitives::StateKey, Option<readnode_primitives::StateValue>>,
 }
@@ -32,7 +34,7 @@ impl near_vm_runner::logic::ValuePtr for StorageValuePtr {
 }
 
 impl CodeStorage {
-    pub fn init(
+    pub async fn init(
         db_manager: std::sync::Arc<Box<dyn ReaderDbManager + Sync + Send + 'static>>,
         account_id: near_primitives::types::AccountId,
         block_height: near_primitives::types::BlockHeight,
@@ -42,27 +44,31 @@ impl CodeStorage {
             Option<readnode_primitives::StateValue>,
         >,
     ) -> Self {
+        let prefetch_data = db_manager.get_all_state(&account_id, block_height).await;
         Self {
-            db_manager,
-            account_id,
-            block_height,
+            // db_manager,
+            // account_id,
+            // block_height,
             validators,
             data_count: Default::default(), // TODO: Using for generate_data_id
             is_optimistic: !optimistic_data.is_empty(),
+            prefetch_data,
             optimistic_data,
         }
     }
 
     fn get_state_key_data(&self, key: &[u8]) -> readnode_primitives::StateValue {
-        let get_db_data = get_state_key_value_from_db(
-            &self.db_manager,
-            &self.account_id,
-            self.block_height,
-            key.to_vec(),
-            "query_call_function",
-        );
-        let (_, data) = block_on(get_db_data);
-        data
+        self.prefetch_data.get(key).cloned().flatten().unwrap_or_default()
+
+        // let get_db_data = get_state_key_value_from_db(
+        //     &self.db_manager,
+        //     &self.account_id,
+        //     self.block_height,
+        //     key.to_vec(),
+        //     "query_call_function",
+        // );
+        // let (_, data) = block_on(get_db_data);
+        // data
     }
 
     fn optimistic_storage_get(

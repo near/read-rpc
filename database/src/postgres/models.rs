@@ -1,14 +1,22 @@
 use crate::schema::*;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use near_primitives::views::StateChangeValueView;
 
 /// State-indexer tables
-#[derive(Insertable, Queryable, Selectable)]
+#[derive(Insertable, Queryable, Selectable, Clone)]
 #[diesel(table_name = state_changes_data)]
 pub struct StateChangesData {
     pub account_id: String,
     pub block_height: bigdecimal::BigDecimal,
     pub block_hash: String,
+    pub data_key: String,
+    pub data_value: Option<Vec<u8>>,
+}
+
+#[derive(Queryable, QueryableByName, Debug)]
+#[table_name = "state_changes_data"]
+pub struct StateChange {
     pub data_key: String,
     pub data_value: Option<Vec<u8>>,
 }
@@ -20,6 +28,43 @@ impl StateChangesData {
     ) -> anyhow::Result<()> {
         diesel::insert_into(state_changes_data::table)
             .values(self)
+            .on_conflict_do_nothing()
+            .execute(&mut conn)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn bulk_insert_or_ignore(
+        db_manager: &(impl crate::StateIndexerDbManager + Sync + Send + 'static),
+        block_height: u64,
+        block_hash: near_primitives::hash::CryptoHash,
+        state_changes: std::collections::HashMap<String, &near_indexer_primitives::views::StateChangeWithCauseView>,
+    ) -> anyhow::Result<()> {
+        if state_changes.is_empty() {
+            return Ok(());
+        }
+        let state_changes = state_changes.values().map(|state|
+            match &state.value {
+                StateChangeValueView::DataUpdate { account_id, key, value } => Self {
+                    account_id: account_id.to_string(),
+                    block_height: bigdecimal::BigDecimal::from(block_height),
+                    block_hash: block_hash.to_string(),
+                    data_key: hex::encode(key.to_vec()).to_string(),
+                    data_value: Some(value.to_vec()),
+                },
+                StateChangeValueView::DataDeletion { account_id, key } => Self {
+                    account_id: account_id.to_string(),
+                    block_height: bigdecimal::BigDecimal::from(block_height),
+                    block_hash: block_hash.to_string(),
+                    data_key: hex::encode(key.to_vec()).to_string(),
+                    data_value: None,
+                },
+                _ => panic!("Unsupported state change type")
+            }
+        ).collect::<Vec<Self>>();
+        let mut conn = db_manager.get_connection_pool().await?;
+        diesel::insert_into(state_changes_data::table)
+            .values(&state_changes)
             .on_conflict_do_nothing()
             .execute(&mut conn)
             .await?;
@@ -43,9 +88,81 @@ impl StateChangesData {
 
         Ok(response.data_value)
     }
+
+    // Function to fetch a single page asynchronously
+    async fn fetch_page(
+        connection: &mut crate::postgres::PgAsyncConn,
+        specific_block_height: u64,
+        account_id: &str,
+        page: i64,
+        page_size: i64,
+    ) -> Result<Vec<StateChange>, diesel::result::Error> {
+        let query = format!(
+            "
+            SELECT
+                sc.data_key,
+                sc.data_value
+            FROM
+                state_changes_data sc
+            INNER JOIN (
+                SELECT
+                    data_key,
+                    account_id,
+                    MAX(block_height) as max_block_height
+                FROM
+                    state_changes_data
+                WHERE
+                    account_id = '{0}'
+                    AND block_height <= {1}
+                    AND data_value IS NOT NULL
+                GROUP BY
+                    data_key,
+                    account_id
+            ) sub
+            ON
+                sc.data_key = sub.data_key
+                AND sc.block_height = sub.max_block_height and sc.account_id = sub.account_id
+            OFFSET {2} LIMIT {3}
+            ",
+            account_id,
+            specific_block_height,
+            page * page_size,
+            page_size
+
+        );
+
+        diesel::sql_query(query)
+            .load::<StateChange>(connection)
+            .await
+    }
+
+    pub async fn get_all_state_for_specific_block(
+        mut conn: crate::postgres::PgAsyncConn,
+        account_id: &str,
+        block_height: u64,
+    ) -> std::collections::HashMap<readnode_primitives::StateKey, Option<readnode_primitives::StateValue>> {
+        let mut state = std::collections::HashMap::new();
+        // Fetch and process pages
+        let mut page = 0;
+        loop {
+            let results = Self::fetch_page(&mut conn, block_height, account_id, page, 10000)
+                .await
+                .expect("Error loading state changes");
+            if results.is_empty() {
+                break;
+            }
+            for result in results {
+               if let Ok(key) = hex::decode(result.data_key.clone()) {
+                    state.insert(key, result.data_value);
+               }
+            }
+            page += 1;
+        }
+        state
+    }
 }
 
-#[derive(Insertable, Queryable, Selectable)]
+#[derive(Insertable, Queryable, Selectable, Clone)]
 #[diesel(table_name = state_changes_access_key)]
 pub struct StateChangesAccessKey {
     pub account_id: String,
@@ -62,6 +179,43 @@ impl StateChangesAccessKey {
     ) -> anyhow::Result<()> {
         diesel::insert_into(state_changes_access_key::table)
             .values(self)
+            .on_conflict_do_nothing()
+            .execute(&mut conn)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn bulk_insert_or_ignore(
+        db_manager: &(impl crate::StateIndexerDbManager + Sync + Send + 'static),
+        block_height: u64,
+        block_hash: near_primitives::hash::CryptoHash,
+        state_changes: std::collections::HashMap<String, &near_indexer_primitives::views::StateChangeWithCauseView>,
+    ) -> anyhow::Result<()> {
+        if state_changes.is_empty() {
+            return Ok(());
+        }
+        let state_changes = state_changes.values().map(|state|
+            match &state.value {
+                StateChangeValueView::AccessKeyUpdate { account_id, public_key, access_key } => Self {
+                    account_id: account_id.to_string(),
+                    block_height: bigdecimal::BigDecimal::from(block_height),
+                    block_hash: block_hash.to_string(),
+                    data_key: hex::encode(borsh::to_vec(public_key).unwrap()),
+                    data_value: Some(borsh::to_vec(access_key).unwrap()),
+                },
+                StateChangeValueView::AccessKeyDeletion { account_id, public_key } => Self {
+                    account_id: account_id.to_string(),
+                    block_height: bigdecimal::BigDecimal::from(block_height),
+                    block_hash: block_hash.to_string(),
+                    data_key: hex::encode(borsh::to_vec(public_key).unwrap()),
+                    data_value: None,
+                },
+                _ => panic!("Unsupported state change type")
+            }
+        ).collect::<Vec<Self>>();
+        let mut conn = db_manager.get_connection_pool().await?;
+        diesel::insert_into(state_changes_access_key::table)
+            .values(&state_changes)
             .on_conflict_do_nothing()
             .execute(&mut conn)
             .await?;
@@ -131,7 +285,7 @@ impl StateChangesAccessKeys {
     }
 }
 
-#[derive(Insertable, Queryable, Selectable)]
+#[derive(Insertable, Queryable, Selectable, Clone)]
 #[diesel(table_name = state_changes_contract)]
 pub struct StateChangesContract {
     pub account_id: String,
@@ -147,6 +301,41 @@ impl StateChangesContract {
     ) -> anyhow::Result<()> {
         diesel::insert_into(state_changes_contract::table)
             .values(self)
+            .on_conflict_do_nothing()
+            .execute(&mut conn)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn bulk_insert_or_ignore(
+        db_manager: &(impl crate::StateIndexerDbManager + Sync + Send + 'static),
+        block_height: u64,
+        block_hash: near_primitives::hash::CryptoHash,
+        state_changes: std::collections::HashMap<String, &near_indexer_primitives::views::StateChangeWithCauseView>,
+    ) -> anyhow::Result<()> {
+        if state_changes.is_empty() {
+            return Ok(());
+        }
+        let state_changes = state_changes.values().map(|state|
+            match &state.value {
+                StateChangeValueView::ContractCodeUpdate { account_id, code } => Self {
+                    account_id: account_id.to_string(),
+                    block_height: bigdecimal::BigDecimal::from(block_height),
+                    block_hash: block_hash.to_string(),
+                    data_value: Some(code.to_vec()),
+                },
+                StateChangeValueView::ContractCodeDeletion { account_id } => Self {
+                    account_id: account_id.to_string(),
+                    block_height: bigdecimal::BigDecimal::from(block_height),
+                    block_hash: block_hash.to_string(),
+                    data_value: None,
+                },
+                _ => panic!("Unsupported state change type")
+            }
+        ).collect::<Vec<Self>>();
+        let mut conn = db_manager.get_connection_pool().await?;
+        diesel::insert_into(state_changes_contract::table)
+            .values(&state_changes)
             .on_conflict_do_nothing()
             .execute(&mut conn)
             .await?;
@@ -172,7 +361,7 @@ impl StateChangesContract {
     }
 }
 
-#[derive(Insertable, Queryable, Selectable)]
+#[derive(Insertable, Queryable, Selectable, Clone)]
 #[diesel(table_name = state_changes_account)]
 pub struct StateChangesAccount {
     pub account_id: String,
@@ -188,6 +377,41 @@ impl StateChangesAccount {
     ) -> anyhow::Result<()> {
         diesel::insert_into(state_changes_account::table)
             .values(self)
+            .on_conflict_do_nothing()
+            .execute(&mut conn)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn bulk_insert_or_ignore(
+        db_manager: &(impl crate::StateIndexerDbManager + Sync + Send + 'static),
+        block_height: u64,
+        block_hash: near_primitives::hash::CryptoHash,
+        state_changes: std::collections::HashMap<String, &near_indexer_primitives::views::StateChangeWithCauseView>,
+    ) -> anyhow::Result<()> {
+        if state_changes.is_empty() {
+            return Ok(());
+        }
+        let state_changes = state_changes.values().map(|state|
+            match &state.value {
+                StateChangeValueView::AccountUpdate { account_id, account } => Self {
+                    account_id: account_id.to_string(),
+                    block_height: bigdecimal::BigDecimal::from(block_height),
+                    block_hash: block_hash.to_string(),
+                    data_value: Some(borsh::to_vec(&near_primitives::account::Account::from(account)).unwrap()),
+                },
+                StateChangeValueView::AccountDeletion { account_id } => Self {
+                    account_id: account_id.to_string(),
+                    block_height: bigdecimal::BigDecimal::from(block_height),
+                    block_hash: block_hash.to_string(),
+                    data_value: None,
+                },
+                _ => panic!("Unsupported state change type")
+            }
+        ).collect::<Vec<Self>>();
+        let mut conn = db_manager.get_connection_pool().await?;
+        diesel::insert_into(state_changes_account::table)
+            .values(&state_changes)
             .on_conflict_do_nothing()
             .execute(&mut conn)
             .await?;

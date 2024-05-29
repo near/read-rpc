@@ -7506,6 +7506,7 @@ version = "0.2.8"
 dependencies = [
  "actix-web",
  "anyhow",
+ "bigdecimal",
  "borsh 1.5.0",
  "clap",
  "configuration",

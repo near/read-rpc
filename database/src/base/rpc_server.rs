@@ -49,6 +49,12 @@ pub trait ReaderDbManager {
         readnode_primitives::StateValue,
     );
 
+    async fn get_all_state(
+        &self,
+        account_id: &near_primitives::types::AccountId,
+        block_height: near_primitives::types::BlockHeight,
+    ) -> std::collections::HashMap<readnode_primitives::StateKey, Option<readnode_primitives::StateValue>>;
+
     /// Returns the near_primitives::account::Account at the given block height
     async fn get_account(
         &self,

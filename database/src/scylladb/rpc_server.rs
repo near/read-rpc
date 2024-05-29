@@ -302,6 +302,14 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         Ok(result.collect())
     }
 
+    async fn get_all_state(
+        &self,
+        _account_id: &near_primitives::types::AccountId,
+        _block_height: near_primitives::types::BlockHeight,
+    ) -> std::collections::HashMap<readnode_primitives::StateKey, Option<readnode_primitives::StateValue>> {
+        todo!("unimplemented for scylla db")
+    }
+
     /// Returns the state value for the given key of the given account at the given block height
     async fn get_state_key_value(
         &self,
