@@ -1,4 +1,6 @@
+use crate::config::ServerContext;
 use actix_web::{get, Responder};
+use jsonrpc_v2::Data;
 use prometheus::{Encoder, IntCounterVec, IntGauge, IntGaugeVec, Opts};
 
 type Result<T, E> = std::result::Result<T, E>;
@@ -119,6 +121,56 @@ lazy_static! {
         &["method", "error_type"]
     ).unwrap();
 
+}
+
+/// Help method to increment block category metrics
+/// Main idea is to have a single place to increment metrics
+/// It should help to analyze the most popular requests
+/// And build s better caching strategy
+pub async fn increase_block_category_metrics(
+    data: &Data<ServerContext>,
+    block_reference: &near_primitives::types::BlockReference,
+    block_height: Option<u64>,
+) {
+    match block_reference {
+        near_primitives::types::BlockReference::BlockId(_) => {
+            let final_block = data.blocks_info_by_finality.final_cache_block().await;
+            let expected_earliest_available_block =
+                final_block.block_height - 5 * data.genesis_info.genesis_config.epoch_length;
+            if block_height.unwrap_or_default() > expected_earliest_available_block {
+                // This is request to regular nodes which includes 5 last epochs
+                REQUESTS_COUNTER.with_label_values(&["regula_block"]).inc();
+            } else {
+                // This is request to archive nodes which includes oldest blocks than 5 last epochs
+                REQUESTS_COUNTER.with_label_values(&["archive_block"]).inc();
+            }
+        }
+        near_primitives::types::BlockReference::Finality(finality) => {
+            match finality {
+                // Increase the FINAL_REQUESTS_TOTAL metric
+                // if the request has final finality
+                near_primitives::types::Finality::DoomSlug
+                | near_primitives::types::Finality::Final => {
+                    REQUESTS_COUNTER.with_label_values(&["final"]).inc();
+                }
+                // Increase the OPTIMISTIC_REQUESTS_TOTAL metric
+                // if the request has optimistic finality
+                near_primitives::types::Finality::None => {
+                    REQUESTS_COUNTER.with_label_values(&["optimistic"]).inc();
+                    // Increase the PROXY_OPTIMISTIC_REQUESTS_TOTAL metric
+                    // if optimistic not updating and proxy to near-rpc
+                    if crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
+                        REQUESTS_COUNTER
+                            .with_label_values(&["proxy_optimistic"])
+                            .inc();
+                    }
+                }
+            }
+        }
+        near_primitives::types::BlockReference::SyncCheckpoint(_) => {
+            REQUESTS_COUNTER.with_label_values(&["archive_block"]).inc();
+        }
+    }
 }
 
 /// Exposes prometheus metrics

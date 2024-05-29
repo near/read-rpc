@@ -25,17 +25,15 @@ pub async fn query(
         near_primitives::types::Finality::None,
     ) = &query_request.block_reference
     {
-        // Increase the OPTIMISTIC_REQUESTS_TOTAL metric
-        // if the request has optimistic finality
-        crate::metrics::REQUESTS_COUNTER
-            .with_label_values(&["optimistic"])
-            .inc();
         return if crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
-            // Increase the PROXY_OPTIMISTIC_REQUESTS_TOTAL metric
-            // if optimistic not updating and proxy to near-rpc
-            crate::metrics::REQUESTS_COUNTER
-                .with_label_values(&["proxy_optimistic"])
-                .inc();
+            // increase metrics before proxy request
+            crate::metrics::increase_block_category_metrics(
+                &data,
+                &query_request.block_reference,
+                None,
+            )
+            .await;
+            // Proxy if the optimistic updating is not working
             Ok(data.near_rpc_client.call(query_request).await?)
         } else {
             // query_call with optimistic block
@@ -59,6 +57,14 @@ async fn query_call(
     let block = fetch_block_from_cache_or_get(data, &query_request.block_reference, "query")
         .await
         .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
+    
+    // increase block category metrics
+    crate::metrics::increase_block_category_metrics(
+        data,
+        &query_request.block_reference,
+        Some(block.block_height),
+    )
+    .await;
     let result = match &query_request.request {
         near_primitives::views::QueryRequest::ViewAccount { account_id } => {
             view_account(data, block, account_id, is_optimistic).await
