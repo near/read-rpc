@@ -23,17 +23,15 @@ pub async fn block(
         near_primitives::types::Finality::None,
     ) = &block_request.block_reference
     {
-        // Increase the OPTIMISTIC_REQUESTS_TOTAL metric
-        // if the request has optimistic finality
-        crate::metrics::REQUESTS_COUNTER
-            .with_label_values(&["optimistic"])
-            .inc();
         if crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
-            // Increase the PROXY_OPTIMISTIC_REQUESTS_TOTAL metric
-            // if optimistic not updating and proxy to near-rpc
-            crate::metrics::REQUESTS_COUNTER
-                .with_label_values(&["proxy_optimistic"])
-                .inc();
+            // increase metrics before proxy request
+            crate::metrics::increase_request_category_metrics(
+                &data,
+                &block_request.block_reference,
+                None,
+            )
+            .await;
+            // Proxy if the optimistic updating is not working
             let block_view = data.near_rpc_client.call(block_request).await?;
             return Ok(near_jsonrpc::primitives::types::blocks::RpcBlockResponse { block_view });
         }
@@ -82,17 +80,15 @@ pub async fn changes_in_block_by_type(
         near_primitives::types::Finality::None,
     ) = &changes_in_block_request.block_reference
     {
-        // Increase the OPTIMISTIC_REQUESTS_TOTAL metric
-        // if the request has optimistic finality
-        crate::metrics::REQUESTS_COUNTER
-            .with_label_values(&["optimistic"])
-            .inc();
         if crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
-            // Increase the PROXY_OPTIMISTIC_REQUESTS_TOTAL metric
-            // if optimistic not updating and proxy to near-rpc
-            crate::metrics::REQUESTS_COUNTER
-                .with_label_values(&["proxy_optimistic"])
-                .inc();
+            // increase metrics before proxy request
+            crate::metrics::increase_request_category_metrics(
+                &data,
+                &changes_in_block_request.block_reference,
+                None,
+            )
+            .await;
+            // Proxy if the optimistic updating is not working
             return Ok(data.near_rpc_client.call(changes_in_block_request).await?);
         }
     };
@@ -117,17 +113,15 @@ pub async fn changes_in_block(
         near_primitives::types::Finality::None,
     ) = &changes_in_block_request.block_reference
     {
-        // Increase the OPTIMISTIC_REQUESTS_TOTAL metric
-        // if the request has optimistic finality
-        crate::metrics::REQUESTS_COUNTER
-            .with_label_values(&["optimistic"])
-            .inc();
         if crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
-            // Increase the PROXY_OPTIMISTIC_REQUESTS_TOTAL metric
-            // if optimistic not updating and proxy to near-rpc
-            crate::metrics::REQUESTS_COUNTER
-                .with_label_values(&["proxy_optimistic"])
-                .inc();
+            // increase metrics before proxy request
+            crate::metrics::increase_request_category_metrics(
+                &data,
+                &changes_in_block_request.block_reference,
+                None,
+            )
+            .await;
+            // Proxy if the optimistic updating is not working
             return Ok(data.near_rpc_client.call(changes_in_block_request).await?);
         }
     };
@@ -143,7 +137,19 @@ async fn block_call(
     mut block_request: near_jsonrpc::primitives::types::blocks::RpcBlockRequest,
 ) -> Result<near_jsonrpc::primitives::types::blocks::RpcBlockResponse, RPCError> {
     tracing::debug!("`block` called with parameters: {:?}", block_request);
-    let result = fetch_block(&data, &block_request.block_reference, "block").await;
+    let result = match fetch_block(&data, &block_request.block_reference, "block").await {
+        Ok(block) => {
+            // increase block category metrics
+            crate::metrics::increase_request_category_metrics(
+                &data,
+                &block_request.block_reference,
+                Some(block.block_view.header.height),
+            )
+            .await;
+            Ok(block)
+        }
+        Err(err) => Err(err),
+    };
 
     #[cfg(feature = "shadow_data_consistency")]
     {
@@ -185,6 +191,15 @@ async fn changes_in_block_call(
     )
     .await
     .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
+
+    // increase block category metrics
+    crate::metrics::increase_request_category_metrics(
+        &data,
+        &params.block_reference,
+        Some(cache_block.block_height),
+    )
+    .await;
+
     let result = fetch_changes_in_block(&data, cache_block, &params.block_reference).await;
     #[cfg(feature = "shadow_data_consistency")]
     {
@@ -217,6 +232,15 @@ async fn changes_in_block_by_type_call(
         fetch_block_from_cache_or_get(&data, &params.block_reference, "EXPERIMENTAL_changes")
             .await
             .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
+
+    // increase block category metrics
+    crate::metrics::increase_request_category_metrics(
+        &data,
+        &params.block_reference,
+        Some(cache_block.block_height),
+    )
+    .await;
+
     let result = fetch_changes_in_block_by_type(
         &data,
         cache_block,
