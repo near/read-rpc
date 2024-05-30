@@ -25,7 +25,7 @@ pub async fn block(
     {
         if crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
             // increase metrics before proxy request
-            crate::metrics::increase_block_category_metrics(
+            crate::metrics::increase_request_category_metrics(
                 &data,
                 &block_request.block_reference,
                 None,
@@ -82,7 +82,7 @@ pub async fn changes_in_block_by_type(
     {
         if crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
             // increase metrics before proxy request
-            crate::metrics::increase_block_category_metrics(
+            crate::metrics::increase_request_category_metrics(
                 &data,
                 &changes_in_block_request.block_reference,
                 None,
@@ -115,7 +115,7 @@ pub async fn changes_in_block(
     {
         if crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
             // increase metrics before proxy request
-            crate::metrics::increase_block_category_metrics(
+            crate::metrics::increase_request_category_metrics(
                 &data,
                 &changes_in_block_request.block_reference,
                 None,
@@ -140,7 +140,7 @@ async fn block_call(
     let result = match fetch_block(&data, &block_request.block_reference, "block").await {
         Ok(block) => {
             // increase block category metrics
-            crate::metrics::increase_block_category_metrics(
+            crate::metrics::increase_request_category_metrics(
                 &data,
                 &block_request.block_reference,
                 Some(block.block_view.header.height),
@@ -193,7 +193,7 @@ async fn changes_in_block_call(
     .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
 
     // increase block category metrics
-    crate::metrics::increase_block_category_metrics(
+    crate::metrics::increase_request_category_metrics(
         &data,
         &params.block_reference,
         Some(cache_block.block_height),
@@ -234,7 +234,7 @@ async fn changes_in_block_by_type_call(
             .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
 
     // increase block category metrics
-    crate::metrics::increase_block_category_metrics(
+    crate::metrics::increase_request_category_metrics(
         &data,
         &params.block_reference,
         Some(cache_block.block_height),

@@ -125,7 +125,7 @@ lazy_static! {
 /// Main idea is to have a single place to increment metrics
 /// It should help to analyze the most popular requests
 /// And build s better caching strategy
-pub async fn increase_block_category_metrics(
+pub async fn increase_request_category_metrics(
     data: &jsonrpc_v2::Data<crate::config::ServerContext>,
     block_reference: &near_primitives::types::BlockReference,
     block_height: Option<u64>,
@@ -137,26 +137,26 @@ pub async fn increase_block_category_metrics(
                 final_block.block_height - 5 * data.genesis_info.genesis_config.epoch_length;
             if block_height.unwrap_or_default() > expected_earliest_available_block {
                 // This is request to regular nodes which includes 5 last epochs
-                REQUESTS_COUNTER.with_label_values(&["regula_block"]).inc();
+                REQUESTS_COUNTER.with_label_values(&["regular"]).inc();
             } else {
-                // This is request to archive nodes which includes oldest blocks than 5 last epochs
-                REQUESTS_COUNTER.with_label_values(&["archive_block"]).inc();
+                // This is a request to archival nodes which include blocks from genesis (later than 5 epochs ago)
+                REQUESTS_COUNTER.with_label_values(&["historical"]).inc();
             }
         }
         near_primitives::types::BlockReference::Finality(finality) => {
             match finality {
-                // Increase the FINAL_REQUESTS_TOTAL metric
+                // Increase the REQUESTS_COUNTER `final` metric
                 // if the request has final finality
                 near_primitives::types::Finality::DoomSlug
                 | near_primitives::types::Finality::Final => {
                     REQUESTS_COUNTER.with_label_values(&["final"]).inc();
                 }
-                // Increase the OPTIMISTIC_REQUESTS_TOTAL metric
+                // Increase the REQUESTS_COUNTER `optimistic` metric
                 // if the request has optimistic finality
                 near_primitives::types::Finality::None => {
                     REQUESTS_COUNTER.with_label_values(&["optimistic"]).inc();
-                    // Increase the PROXY_OPTIMISTIC_REQUESTS_TOTAL metric
-                    // if optimistic not updating and proxy to near-rpc
+                    // Increase the REQUESTS_COUNTER `proxy_optimistic` metric
+                    // if the optimistic is not updating and proxy to native JSON-RPC
                     if crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
                         REQUESTS_COUNTER
                             .with_label_values(&["proxy_optimistic"])
@@ -166,7 +166,7 @@ pub async fn increase_block_category_metrics(
             }
         }
         near_primitives::types::BlockReference::SyncCheckpoint(_) => {
-            REQUESTS_COUNTER.with_label_values(&["archive_block"]).inc();
+            REQUESTS_COUNTER.with_label_values(&["historical"]).inc();
         }
     }
 }

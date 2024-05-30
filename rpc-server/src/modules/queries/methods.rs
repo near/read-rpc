@@ -27,7 +27,7 @@ pub async fn query(
     {
         return if crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
             // increase metrics before proxy request
-            crate::metrics::increase_block_category_metrics(
+            crate::metrics::increase_request_category_metrics(
                 &data,
                 &query_request.block_reference,
                 None,
@@ -59,7 +59,7 @@ async fn query_call(
         .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
 
     // increase block category metrics
-    crate::metrics::increase_block_category_metrics(
+    crate::metrics::increase_request_category_metrics(
         data,
         &query_request.block_reference,
         Some(block.block_height),
