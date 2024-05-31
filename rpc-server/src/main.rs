@@ -91,6 +91,10 @@ async fn main() -> anyhow::Result<()> {
             "view_state_paginated",
             modules::state::methods::view_state_paginated,
         )
+        .with_method(
+            "view_receipt_record",
+            modules::receipts::methods::view_receipt_record,
+        )
         // requests methods
         .with_method("query", modules::queries::methods::query)
         // basic requests methods
