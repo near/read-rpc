@@ -36,14 +36,16 @@ pub async fn receipt(
 pub async fn view_receipt_record(
     data: Data<ServerContext>,
     Params(params): Params<serde_json::Value>,
-) -> Result<readnode_primitives::ReceiptRecord, RPCError> {
+) -> Result<crate::modules::receipts::RpcReceiptRecordResponse, RPCError> {
     tracing::debug!("`view_receipt_record` call. Params: {:?}", params);
     let receipt_request =
         near_jsonrpc::primitives::types::receipts::RpcReceiptRequest::parse(params)?;
 
     let result = fetch_receipt_record(&data, &receipt_request, "view_receipt_record").await;
 
-    Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)
+    Ok(result
+        .map_err(near_jsonrpc::primitives::errors::RpcError::from)?
+        .into())
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]

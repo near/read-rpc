@@ -177,7 +177,7 @@ pub struct QueryData<T: borsh::BorshDeserialize> {
     pub block_height: near_indexer_primitives::types::BlockHeight,
     pub block_hash: CryptoHash,
 }
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+
 pub struct ReceiptRecord {
     pub receipt_id: CryptoHash,
     pub parent_transaction_hash: CryptoHash,
