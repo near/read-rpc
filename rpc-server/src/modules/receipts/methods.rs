@@ -40,9 +40,8 @@ pub async fn view_receipt_record(
     tracing::debug!("`view_receipt_record` call. Params: {:?}", params);
     let receipt_request =
         near_jsonrpc::primitives::types::receipts::RpcReceiptRequest::parse(params)?;
-    crate::metrics::RECEIPT_RECORD_REQUESTS_TOTAL.inc();
 
-    let result = fetch_receipt_record(&data, &receipt_request).await;
+    let result = fetch_receipt_record(&data, &receipt_request, "view_receipt_record").await;
 
     Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)
 }
@@ -57,7 +56,7 @@ async fn fetch_receipt(
 > {
     let receipt_id = request.receipt_reference.receipt_id;
 
-    let receipt_record = fetch_receipt_record(data, request).await?;
+    let receipt_record = fetch_receipt_record(data, request, "EXPERIMENTAL_receipt").await?;
 
     // Getting the raw Vec<u8> of the TransactionDetails from ScyllaDB
     let transaction_details = data
@@ -97,6 +96,7 @@ async fn fetch_receipt(
 async fn fetch_receipt_record(
     data: &Data<ServerContext>,
     request: &near_jsonrpc::primitives::types::receipts::RpcReceiptRequest,
+    method_name: &str,
 ) -> Result<
     readnode_primitives::ReceiptRecord,
     near_jsonrpc::primitives::types::receipts::RpcReceiptError,
@@ -104,10 +104,10 @@ async fn fetch_receipt_record(
     let receipt_id = request.receipt_reference.receipt_id;
 
     data.db_manager
-        .get_receipt_by_id(receipt_id)
+        .get_receipt_by_id(receipt_id, method_name)
         .await
         .map_err(|err| {
-            tracing::warn!("Error in `fetch_receipt_record` call: {:?}", err);
+            tracing::warn!("Error in `{}` call: {:?}", method_name, err);
             near_jsonrpc::primitives::types::receipts::RpcReceiptError::UnknownReceipt {
                 receipt_id,
             }
