@@ -42,22 +42,6 @@ pub async fn view_receipt_record(
         near_jsonrpc::primitives::types::receipts::RpcReceiptRequest::parse(params)?;
     crate::metrics::RECEIPT_RECORD_REQUESTS_TOTAL.inc();
 
-    #[cfg(feature = "shadow_data_consistency")]
-    {
-        let shadow_result = crate::utils::shadow_compare_results_handler(
-            crate::metrics::RECEIPT_RECORD_REQUESTS_TOTAL.get(),
-            data.shadow_data_consistency_rate,
-            &fetch_receipt_record(&data, &receipt_request).await,
-            data.near_rpc_client.clone(),
-            receipt_request,
-            "RECEIPT_RECORD",
-        )
-        .await;
-        if let Some(err_code) = shadow_result {
-            crate::utils::capture_shadow_consistency_error!(err_code, "RECEIPT_RECORD)")
-        };
-    }
-
     let result = fetch_receipt_record(&data, &receipt_request).await;
 
     Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)
@@ -123,7 +107,6 @@ async fn fetch_receipt_record(
         .get_receipt_by_id(receipt_id)
         .await
         .map_err(|err| {
-            println!("Error in `fetch_receipt_record` call: {:?}", err);
             tracing::warn!("Error in `fetch_receipt_record` call: {:?}", err);
             near_jsonrpc::primitives::types::receipts::RpcReceiptError::UnknownReceipt {
                 receipt_id,
