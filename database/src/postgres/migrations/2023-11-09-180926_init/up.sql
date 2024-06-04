@@ -1,6 +1,7 @@
 ---
 --- State-indexer tables
 ---
+-- P 100
 CREATE TABLE IF NOT EXISTS state_changes_data (
     account_id text NOT NULL,
     block_height numeric(20,0) NOT NULL,
@@ -13,6 +14,7 @@ ALTER TABLE ONLY state_changes_data
     ADD CONSTRAINT state_changes_data_pk PRIMARY KEY (account_id, data_key, block_height);
 
 
+-- P 100
 CREATE TABLE IF NOT EXISTS state_changes_access_key (
     account_id text NOT NULL,
     block_height numeric(20,0) NOT NULL,
@@ -35,6 +37,7 @@ CREATE TABLE IF NOT EXISTS state_changes_access_keys (
 ALTER TABLE ONLY state_changes_access_keys
     ADD CONSTRAINT state_changes_access_keys_pk PRIMARY KEY (account_id, block_height);
 
+-- P 100
 CREATE TABLE IF NOT EXISTS state_changes_contract (
     account_id text NOT NULL,
     block_height numeric(20,0) NOT NULL,
@@ -46,6 +49,7 @@ ALTER TABLE ONLY state_changes_contract
     ADD CONSTRAINT state_changes_contract_pk PRIMARY KEY (account_id, block_height);
 
 
+-- P 100
 CREATE TABLE IF NOT EXISTS state_changes_account (
     account_id text NOT NULL,
     block_height numeric(20,0) NOT NULL,
@@ -56,6 +60,7 @@ CREATE TABLE IF NOT EXISTS state_changes_account (
 ALTER TABLE ONLY state_changes_account
     ADD CONSTRAINT state_changes_account_pk PRIMARY KEY (account_id, block_height);
 
+-- for test migration dont change
 CREATE TABLE IF NOT EXISTS block (
     block_height numeric(20,0) NOT NULL,
     block_hash text NOT NULL
@@ -67,6 +72,7 @@ ALTER TABLE ONLY block
 CREATE TABLE IF NOT EXISTS chunk (
     chunk_hash text NOT NULL,
     block_height numeric(20,0) NOT NULL,
+    -- block_hash text NOT NULL,
     shard_id numeric(20,0) NOT NULL,
     stored_at_block_height numeric(20,0) NOT NULL
 );
@@ -74,6 +80,7 @@ CREATE TABLE IF NOT EXISTS chunk (
 ALTER TABLE ONLY chunk
     ADD CONSTRAINT chunk_pk PRIMARY KEY (chunk_hash, block_height);
 
+-- Drop, dont need to migrate
 CREATE TABLE IF NOT EXISTS account_state (
     account_id text NOT NULL,
     data_key text NOT NULL
@@ -82,7 +89,9 @@ CREATE TABLE IF NOT EXISTS account_state (
 ALTER TABLE ONLY account_state
     ADD CONSTRAINT account_state_pk PRIMARY KEY (account_id, data_key);
 
----
+
+-- not needed for test migration
+--
 --- Tx-indexer tables
 ---
 
@@ -95,6 +104,7 @@ CREATE TABLE IF NOT EXISTS transaction_detail (
 
 ALTER TABLE ONLY transaction_detail
     ADD CONSTRAINT transaction_detail_pk PRIMARY KEY (transaction_hash, block_height);
+
 
 CREATE TABLE IF NOT EXISTS receipt_map (
     receipt_id text NOT NULL,

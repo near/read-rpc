@@ -16,6 +16,7 @@ members = [
     "perf-testing",
     "readnode-primitives",
     "rpc-server",
+    "scylla-indexer",
     "state-indexer",
     "tx-indexer",
 ]

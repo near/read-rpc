@@ -446,6 +446,48 @@ impl crate::StateIndexerDbManager for ScyllaDBManager {
         Ok(())
     }
 
+    async fn save_state_changes(
+        &self,
+        _state_changes: &Vec<crate::models::StateChangesData>,
+    ) -> anyhow::Result<()> {
+        todo!()
+    }
+
+    async fn save_access_key_changes(
+        &self,
+        _state_changes: &Vec<crate::models::StateChangesAccessKey>,
+    ) -> anyhow::Result<()>{
+        todo!()
+    }
+
+    async fn save_account_changes(
+        &self,
+        _state_changes: &Vec<crate::models::StateChangesAccount>,
+    ) -> anyhow::Result<()>{
+        todo!()
+    }
+
+    async fn save_contract_changes(
+        &self,
+        _state_changes: &Vec<crate::models::StateChangesContract>,
+    ) -> anyhow::Result<()> {
+        todo!()
+    }
+
+    async fn save_chunks(
+        &self,
+        _chunks: &Vec<crate::models::Chunk>,
+    ) -> anyhow::Result<()> {
+        todo!()
+    }
+
+    async fn save_blocks(
+        &self,
+        _blocks: &Vec<crate::models::Block>,
+    ) -> anyhow::Result<()> {
+        todo!()
+    }
+
     async fn delete_state_changes(
         &self,
         account_id: near_indexer_primitives::types::AccountId,

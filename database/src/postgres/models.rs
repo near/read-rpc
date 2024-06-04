@@ -26,6 +26,20 @@ impl StateChangesData {
         Ok(())
     }
 
+    pub async fn bulk_insert_or_ignore(
+        mut conn: crate::postgres::PgAsyncConn,
+        state_changes: &Vec<Self>,
+    ) -> anyhow::Result<()> {
+        if state_changes.is_empty() {
+            return Ok(());
+        }
+        diesel::insert_into(state_changes_data::table)
+            .values(state_changes)
+            .execute(&mut conn)
+            .await?;
+        Ok(())
+    }
+
     pub async fn get_state_key_value(
         mut conn: crate::postgres::PgAsyncConn,
         account_id: &str,
@@ -63,6 +77,20 @@ impl StateChangesAccessKey {
         diesel::insert_into(state_changes_access_key::table)
             .values(self)
             .on_conflict_do_nothing()
+            .execute(&mut conn)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn bulk_insert_or_ignore(
+        mut conn: crate::postgres::PgAsyncConn,
+        state_changes: &Vec<Self>,
+    ) -> anyhow::Result<()> {
+        if state_changes.is_empty() {
+            return Ok(());
+        }
+        diesel::insert_into(state_changes_access_key::table)
+            .values(state_changes)
             .execute(&mut conn)
             .await?;
         Ok(())
@@ -153,6 +181,20 @@ impl StateChangesContract {
         Ok(())
     }
 
+    pub async fn bulk_insert_or_ignore(
+        mut conn: crate::postgres::PgAsyncConn,
+        state_changes: &Vec<Self>,
+    ) -> anyhow::Result<()> {
+        if state_changes.is_empty() {
+            return Ok(());
+        }
+        diesel::insert_into(state_changes_contract::table)
+            .values(state_changes)
+            .execute(&mut conn)
+            .await?;
+        Ok(())
+    }
+
     pub async fn get_contract(
         mut conn: crate::postgres::PgAsyncConn,
         account_id: &str,
@@ -189,6 +231,20 @@ impl StateChangesAccount {
         diesel::insert_into(state_changes_account::table)
             .values(self)
             .on_conflict_do_nothing()
+            .execute(&mut conn)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn bulk_insert_or_ignore(
+        mut conn: crate::postgres::PgAsyncConn,
+        state_changes: &Vec<Self>,
+    ) -> anyhow::Result<()> {
+        if state_changes.is_empty() {
+            return Ok(());
+        }
+        diesel::insert_into(state_changes_account::table)
+            .values(state_changes)
             .execute(&mut conn)
             .await?;
         Ok(())
@@ -232,6 +288,21 @@ impl Block {
             .await?;
         Ok(())
     }
+
+    pub async fn bulk_insert_or_ignore(
+        mut conn: crate::postgres::PgAsyncConn,
+        state_changes: &Vec<Self>,
+    ) -> anyhow::Result<()> {
+        if state_changes.is_empty() {
+            return Ok(());
+        }
+        diesel::insert_into(block::table)
+            .values(state_changes)
+            .execute(&mut conn)
+            .await?;
+        Ok(())
+    }
+    
     pub async fn get_block_height_by_hash(
         mut conn: crate::postgres::PgAsyncConn,
         block_hash: near_primitives::hash::CryptoHash,
@@ -268,6 +339,20 @@ impl Chunk {
         Ok(())
     }
 
+    pub async fn bulk_insert_or_ignore(
+        mut conn: crate::postgres::PgAsyncConn,
+        state_changes: &Vec<Self>,
+    ) -> anyhow::Result<()> {
+        if state_changes.is_empty() {
+            return Ok(());
+        }
+        diesel::insert_into(chunk::table)
+            .values(state_changes)
+            .execute(&mut conn)
+            .await?;
+        Ok(())
+    }
+
     pub async fn get_block_height_by_chunk_hash(
         mut conn: crate::postgres::PgAsyncConn,
         chunk_hash: near_primitives::hash::CryptoHash,
@@ -296,116 +381,116 @@ impl Chunk {
     }
 }
 
-#[derive(borsh::BorshSerialize, borsh::BorshDeserialize, Clone, Debug)]
-struct PageState {
-    page_size: i64,
-    offset: i64,
-}
+// #[derive(borsh::BorshSerialize, borsh::BorshDeserialize, Clone, Debug)]
+// struct PageState {
+//     page_size: i64,
+//     offset: i64,
+// }
+// 
+// impl PageState {
+//     fn new(page_size: i64) -> Self {
+//         Self {
+//             page_size,
+//             offset: 0,
+//         }
+//     }
+// 
+//     fn next_page(&self) -> Self {
+//         Self {
+//             page_size: self.page_size,
+//             offset: self.offset + self.page_size,
+//         }
+//     }
+// }
 
-impl PageState {
-    fn new(page_size: i64) -> Self {
-        Self {
-            page_size,
-            offset: 0,
-        }
-    }
-
-    fn next_page(&self) -> Self {
-        Self {
-            page_size: self.page_size,
-            offset: self.offset + self.page_size,
-        }
-    }
-}
-
-#[derive(Insertable, Queryable, Selectable)]
-#[diesel(table_name = account_state)]
-pub struct AccountState {
-    pub account_id: String,
-    pub data_key: String,
-}
-
-impl AccountState {
-    pub async fn insert_or_ignore(
-        &self,
-        mut conn: crate::postgres::PgAsyncConn,
-    ) -> anyhow::Result<()> {
-        diesel::insert_into(account_state::table)
-            .values(self)
-            .on_conflict_do_nothing()
-            .execute(&mut conn)
-            .await?;
-        Ok(())
-    }
-
-    pub async fn get_state_keys_all(
-        mut conn: crate::postgres::PgAsyncConn,
-        account_id: &str,
-    ) -> anyhow::Result<Vec<String>> {
-        let response = account_state::table
-            .filter(account_state::account_id.eq(account_id))
-            .select(Self::as_select())
-            .limit(25000)
-            .load(&mut conn)
-            .await?;
-
-        Ok(response
-            .into_iter()
-            .map(|account_state_key| account_state_key.data_key)
-            .collect())
-    }
-
-    pub async fn get_state_keys_by_page(
-        mut conn: crate::postgres::PgAsyncConn,
-        account_id: &str,
-        page_token: crate::PageToken,
-    ) -> anyhow::Result<(Vec<String>, crate::PageToken)> {
-        let page_state = if let Some(page_state_token) = page_token {
-            borsh::from_slice::<PageState>(&hex::decode(page_state_token)?)?
-        } else {
-            PageState::new(1000)
-        };
-        let response = account_state::table
-            .filter(account_state::account_id.eq(account_id))
-            .select(Self::as_select())
-            .limit(page_state.page_size)
-            .offset(page_state.offset)
-            .load(&mut conn)
-            .await?;
-
-        let state_keys = response
-            .into_iter()
-            .map(|account_state_key| account_state_key.data_key)
-            .collect::<Vec<String>>();
-
-        if state_keys.len() < page_state.page_size as usize {
-            Ok((state_keys, None))
-        } else {
-            Ok((
-                state_keys,
-                Some(hex::encode(borsh::to_vec(&page_state.next_page())?)),
-            ))
-        }
-    }
-
-    pub async fn get_state_keys_by_prefix(
-        mut conn: crate::postgres::PgAsyncConn,
-        account_id: &str,
-        prefix: String,
-    ) -> anyhow::Result<Vec<String>> {
-        let response = account_state::table
-            .filter(account_state::account_id.eq(account_id))
-            .filter(account_state::data_key.like(format!("{}%", prefix)))
-            .select(Self::as_select())
-            .load(&mut conn)
-            .await?;
-
-        Ok(response
-            .into_iter()
-            .map(|account_state_key| account_state_key.data_key)
-            .collect())
-    }
-}
+// #[derive(Insertable, Queryable, Selectable)]
+// #[diesel(table_name = account_state)]
+// pub struct AccountState {
+//     pub account_id: String,
+//     pub data_key: String,
+// }
+//
+// impl AccountState {
+//     pub async fn insert_or_ignore(
+//         &self,
+//         mut conn: crate::postgres::PgAsyncConn,
+//     ) -> anyhow::Result<()> {
+//         diesel::insert_into(account_state::table)
+//             .values(self)
+//             .on_conflict_do_nothing()
+//             .execute(&mut conn)
+//             .await?;
+//         Ok(())
+//     }
+//
+//     pub async fn get_state_keys_all(
+//         mut conn: crate::postgres::PgAsyncConn,
+//         account_id: &str,
+//     ) -> anyhow::Result<Vec<String>> {
+//         let response = account_state::table
+//             .filter(account_state::account_id.eq(account_id))
+//             .select(Self::as_select())
+//             .limit(25000)
+//             .load(&mut conn)
+//             .await?;
+//
+//         Ok(response
+//             .into_iter()
+//             .map(|account_state_key| account_state_key.data_key)
+//             .collect())
+//     }
+//
+//     pub async fn get_state_keys_by_page(
+//         mut conn: crate::postgres::PgAsyncConn,
+//         account_id: &str,
+//         page_token: crate::PageToken,
+//     ) -> anyhow::Result<(Vec<String>, crate::PageToken)> {
+//         let page_state = if let Some(page_state_token) = page_token {
+//             borsh::from_slice::<PageState>(&hex::decode(page_state_token)?)?
+//         } else {
+//             PageState::new(1000)
+//         };
+//         let response = account_state::table
+//             .filter(account_state::account_id.eq(account_id))
+//             .select(Self::as_select())
+//             .limit(page_state.page_size)
+//             .offset(page_state.offset)
+//             .load(&mut conn)
+//             .await?;
+//
+//         let state_keys = response
+//             .into_iter()
+//             .map(|account_state_key| account_state_key.data_key)
+//             .collect::<Vec<String>>();
+//
+//         if state_keys.len() < page_state.page_size as usize {
+//             Ok((state_keys, None))
+//         } else {
+//             Ok((
+//                 state_keys,
+//                 Some(hex::encode(borsh::to_vec(&page_state.next_page())?)),
+//             ))
+//         }
+//     }
+//
+//     pub async fn get_state_keys_by_prefix(
+//         mut conn: crate::postgres::PgAsyncConn,
+//         account_id: &str,
+//         prefix: String,
+//     ) -> anyhow::Result<Vec<String>> {
+//         let response = account_state::table
+//             .filter(account_state::account_id.eq(account_id))
+//             .filter(account_state::data_key.like(format!("{}%", prefix)))
+//             .select(Self::as_select())
+//             .load(&mut conn)
+//             .await?;
+//
+//         Ok(response
+//             .into_iter()
+//             .map(|account_state_key| account_state_key.data_key)
+//             .collect())
+//     }
+// }
 /// Tx-indexer tables
 
 #[derive(Insertable, Queryable, Selectable)]

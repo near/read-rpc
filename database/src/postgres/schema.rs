@@ -1,13 +1,6 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
-    account_state (account_id, data_key) {
-        account_id -> Text,
-        data_key -> Text,
-    }
-}
-
-diesel::table! {
     block (block_hash) {
         block_height -> Numeric,
         block_hash -> Text,
@@ -27,6 +20,16 @@ diesel::table! {
     meta (indexer_id) {
         indexer_id -> Text,
         last_processed_block_height -> Numeric,
+    }
+}
+
+diesel::table! {
+    protocol_configs (epoch_id) {
+        epoch_id -> Text,
+        epoch_height -> Numeric,
+        epoch_start_height -> Numeric,
+        epoch_end_height -> Nullable<Numeric>,
+        protocol_config -> Jsonb,
     }
 }
 
@@ -122,31 +125,3 @@ diesel::table! {
         validators_info -> Jsonb,
     }
 }
-
-diesel::table! {
-    protocol_configs (epoch_id) {
-        epoch_id -> Text,
-        epoch_height -> Numeric,
-        epoch_start_height -> Numeric,
-        epoch_end_height -> Nullable<Numeric>,
-        protocol_config -> Jsonb,
-    }
-}
-
-diesel::allow_tables_to_appear_in_same_query!(
-    account_state,
-    block,
-    chunk,
-    meta,
-    receipt_map,
-    receipt_outcome,
-    state_changes_access_key,
-    state_changes_access_keys,
-    state_changes_account,
-    state_changes_contract,
-    state_changes_data,
-    transaction_cache,
-    transaction_detail,
-    validators,
-    protocol_configs,
-);

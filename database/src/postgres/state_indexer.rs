@@ -40,14 +40,81 @@ impl crate::StateIndexerDbManager for PostgresDBManager {
             data_value: Some(value.to_vec()),
         }
         .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
-        .await?;
-        crate::models::AccountState {
-            account_id: account_id.to_string(),
-            data_key: hex::encode(key).to_string(),
-        }
-        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
+        .await
+        // crate::models::AccountState {
+        //     account_id: account_id.to_string(),
+        //     data_key: hex::encode(key).to_string(),
+        // }
+        // .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
+        // .await
+    }
+
+    async fn save_state_changes(
+        &self,
+        state_changes: &Vec<crate::models::StateChangesData>,
+    ) -> anyhow::Result<()> {
+        crate::models::StateChangesData::bulk_insert_or_ignore(
+            Self::get_connection(&self.pg_pool).await?,
+            state_changes,
+        )
         .await
     }
+
+    async fn save_access_key_changes(
+        &self,
+        state_changes: &Vec<crate::models::StateChangesAccessKey>,
+    ) -> anyhow::Result<()> {
+        crate::models::StateChangesAccessKey::bulk_insert_or_ignore(
+            Self::get_connection(&self.pg_pool).await?,
+            state_changes,
+        )
+            .await
+    }
+
+    async fn save_account_changes(
+        &self,
+        state_changes: &Vec<crate::models::StateChangesAccount>,
+    ) -> anyhow::Result<()> {
+        crate::models::StateChangesAccount::bulk_insert_or_ignore(
+            Self::get_connection(&self.pg_pool).await?,
+            state_changes,
+        )
+            .await
+    }
+
+    async fn save_contract_changes(
+        &self,
+        state_changes: &Vec<crate::models::StateChangesContract>,
+    ) -> anyhow::Result<()> {
+        crate::models::StateChangesContract::bulk_insert_or_ignore(
+            Self::get_connection(&self.pg_pool).await?,
+            state_changes,
+        )
+            .await
+    }
+
+    async fn save_chunks(
+        &self,
+        chunks: &Vec<crate::models::Chunk>,
+    ) -> anyhow::Result<()> {
+        crate::models::Chunk::bulk_insert_or_ignore(
+            Self::get_connection(&self.pg_pool).await?,
+            chunks,
+        )
+            .await
+    }
+
+    async fn save_blocks(
+        &self,
+        blocks: &Vec<crate::models::Block>,
+    ) -> anyhow::Result<()> {
+        crate::models::Block::bulk_insert_or_ignore(
+            Self::get_connection(&self.pg_pool).await?,
+            blocks,
+        )
+            .await
+    }
+    
 
     async fn delete_state_changes(
         &self,

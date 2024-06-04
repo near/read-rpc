@@ -7036,6 +7036,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "scylla-indexer"
+version = "0.2.8"
+dependencies = [
+ "anyhow",
+ "bigdecimal",
+ "borsh 1.5.0",
+ "clap",
+ "configuration",
+ "database",
+ "futures",
+ "hex",
+ "num-bigint 0.4.5",
+ "num-traits",
+ "scylla",
+ "tokio",
+]
+
+[[package]]
 name = "scylla-macros"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

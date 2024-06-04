@@ -64,54 +64,57 @@ impl crate::ReaderDbManager for PostgresDBManager {
 
     async fn get_state_keys_all(
         &self,
-        account_id: &near_primitives::types::AccountId,
+        _account_id: &near_primitives::types::AccountId,
         _method_name: &str,
     ) -> anyhow::Result<Vec<readnode_primitives::StateKey>> {
-        let result = crate::models::AccountState::get_state_keys_all(
-            Self::get_connection(&self.pg_pool).await?,
-            account_id.as_str(),
-        )
-        .await?
-        .into_iter()
-        .filter_map(|key| hex::decode(key).ok());
-        Ok(result.collect())
+        todo!()
+        // let result = crate::models::AccountState::get_state_keys_all(
+        //     Self::get_connection(&self.pg_pool).await?,
+        //     account_id.as_str(),
+        // )
+        // .await?
+        // .into_iter()
+        // .filter_map(|key| hex::decode(key).ok());
+        // Ok(result.collect())
     }
 
     async fn get_state_keys_by_prefix(
         &self,
-        account_id: &near_primitives::types::AccountId,
-        prefix: &[u8],
+        _account_id: &near_primitives::types::AccountId,
+        _prefix: &[u8],
         _method_name: &str,
     ) -> anyhow::Result<Vec<readnode_primitives::StateKey>> {
-        let hex_str_prefix = hex::encode(prefix);
-        let result = crate::models::AccountState::get_state_keys_by_prefix(
-            Self::get_connection(&self.pg_pool).await?,
-            account_id.as_str(),
-            hex_str_prefix,
-        )
-        .await?
-        .into_iter()
-        .filter_map(|key| hex::decode(key).ok());
-        Ok(result.collect())
+        todo!()
+        // let hex_str_prefix = hex::encode(prefix);
+        // let result = crate::models::AccountState::get_state_keys_by_prefix(
+        //     Self::get_connection(&self.pg_pool).await?,
+        //     account_id.as_str(),
+        //     hex_str_prefix,
+        // )
+        // .await?
+        // .into_iter()
+        // .filter_map(|key| hex::decode(key).ok());
+        // Ok(result.collect())
     }
 
     async fn get_state_keys_by_page(
         &self,
-        account_id: &near_primitives::types::AccountId,
-        page_token: crate::PageToken,
+        _account_id: &near_primitives::types::AccountId,
+        _page_token: crate::PageToken,
         _method_name: &str,
     ) -> anyhow::Result<(Vec<readnode_primitives::StateKey>, crate::PageToken)> {
-        let (state_keys, next_page_token) = crate::models::AccountState::get_state_keys_by_page(
-            Self::get_connection(&self.pg_pool).await?,
-            account_id.as_str(),
-            page_token,
-        )
-        .await?;
-
-        let keys = state_keys
-            .into_iter()
-            .filter_map(|key| hex::decode(key).ok());
-        Ok((keys.collect(), next_page_token))
+        todo!()
+        // let (state_keys, next_page_token) = crate::models::AccountState::get_state_keys_by_page(
+        //     Self::get_connection(&self.pg_pool).await?,
+        //     account_id.as_str(),
+        //     page_token,
+        // )
+        // .await?;
+        //
+        // let keys = state_keys
+        //     .into_iter()
+        //     .filter_map(|key| hex::decode(key).ok());
+        // Ok((keys.collect(), next_page_token))
     }
 
     async fn get_state_key_value(

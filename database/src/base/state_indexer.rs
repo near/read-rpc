@@ -9,6 +9,36 @@ pub trait StateIndexerDbManager {
         value: &[u8],
     ) -> anyhow::Result<()>;
 
+    async fn save_state_changes(
+        &self,
+        state_changes: &Vec<crate::models::StateChangesData>,
+    ) -> anyhow::Result<()>;
+
+    async fn save_access_key_changes(
+        &self,
+        state_changes: &Vec<crate::models::StateChangesAccessKey>,
+    ) -> anyhow::Result<()>;
+
+    async fn save_account_changes(
+        &self,
+        state_changes: &Vec<crate::models::StateChangesAccount>,
+    ) -> anyhow::Result<()>;
+
+    async fn save_contract_changes(
+        &self,
+        state_changes: &Vec<crate::models::StateChangesContract>,
+    ) -> anyhow::Result<()>;
+
+    async fn save_chunks(
+        &self,
+        chunks: &Vec<crate::models::Chunk>,
+    ) -> anyhow::Result<()>;
+
+    async fn save_blocks(
+        &self,
+        blocks: &Vec<crate::models::Block>,
+    ) -> anyhow::Result<()>;
+
     async fn delete_state_changes(
         &self,
         account_id: near_indexer_primitives::types::AccountId,
