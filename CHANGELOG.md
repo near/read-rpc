@@ -5,7 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased](https://github.com/near/read-rpc/compare/v0.2.8...HEAD)
+## [Unreleased](https://github.com/near/read-rpc/compare/v0.2.9...HEAD)
+
+## [0.2.9](https://github.com/near/read-rpc/releases/tag/v0.2.8)
+### Supported Nearcore Version
+- nearcore v1.39.1
+- rust v1.77.0
+
+### What's Changed
+* Refactoring, extending and improving the metrics
+* Refactoring and improving query.function_call
+* Added `view_receipt_record` rpc endpoint
+
+
 
 ## [0.2.8](https://github.com/near/read-rpc/releases/tag/v0.2.8)
 ### Supported Nearcore Version
