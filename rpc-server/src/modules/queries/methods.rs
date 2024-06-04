@@ -109,7 +109,28 @@ async fn query_call(
             account_id,
             method_name,
             args,
-        } => function_call(data, block, account_id, method_name, args, is_optimistic).await,
+        } => {
+            // TODO: Temporary solution to proxy for poolv1.near
+            // It should be removed after migration to the postgres db
+            if account_id.to_string().ends_with("poolv1.near") {
+                let final_block = data.blocks_info_by_finality.final_cache_block().await;
+                // `expected_earliest_available_block` calculated by formula:
+                // `final_block_height` - `node_epoch_count` * `epoch_length`
+                // Now near store 5 epochs, it can be changed in the future
+                // epoch_length = 43200 blocks
+                let expected_earliest_available_block =
+                    final_block.block_height - 5 * data.genesis_info.genesis_config.epoch_length;
+                return if block.block_height > expected_earliest_available_block {
+                    // Proxy to regular rpc if the block is available
+                    Ok(data.near_rpc_client.call(query_request).await?)
+                } else {
+                    // Proxy to archival rpc if the block garbage collected
+                    Ok(data.near_rpc_client.archival_call(query_request).await?)
+                };
+            } else {
+                function_call(data, block, account_id, method_name, args, is_optimistic).await
+            }
+        }
         #[allow(unused_variables)]
         // `account_id` is used in the `#[cfg(feature = "account_access_keys")]` branch.
         near_primitives::views::QueryRequest::ViewAccessKeyList { account_id } => {
