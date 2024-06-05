@@ -29,10 +29,7 @@ pub async fn next_light_client_block(
         near_jsonrpc::primitives::types::light_client::RpcLightClientNextBlockRequest::parse(
             params,
         )?;
-    crate::metrics::REQUESTS_COUNTER
-        .with_label_values(&["archive_proxy_next_light_client_block"])
-        .inc();
-    match data.near_rpc_client.archival_call(request).await? {
+    match data.near_rpc_client.call(request).await? {
         Some(light_client_block) => Ok(
             near_jsonrpc::primitives::types::light_client::RpcLightClientNextBlockResponse {
                 light_client_block: Some(std::sync::Arc::new(light_client_block)),
