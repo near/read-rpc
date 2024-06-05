@@ -14,7 +14,9 @@ pub async fn light_client_proof(
         near_jsonrpc::primitives::types::light_client::RpcLightClientExecutionProofRequest::parse(
             params,
         )?;
-    crate::metrics::ARCHIVAL_PROXY_LIGHT_CLIENT_PROOF.inc();
+    crate::metrics::REQUESTS_COUNTER
+        .with_label_values(&["archive_proxy_light_client_proof"])
+        .inc();
     Ok(data.near_rpc_client.archival_call(request).await?)
 }
 
@@ -27,8 +29,7 @@ pub async fn next_light_client_block(
         near_jsonrpc::primitives::types::light_client::RpcLightClientNextBlockRequest::parse(
             params,
         )?;
-    crate::metrics::ARCHIVAL_PROXY_NEXT_LIGHT_CLIENT_BLOCK.inc();
-    match data.near_rpc_client.archival_call(request).await? {
+    match data.near_rpc_client.call(request).await? {
         Some(light_client_block) => Ok(
             near_jsonrpc::primitives::types::light_client::RpcLightClientNextBlockResponse {
                 light_client_block: Some(std::sync::Arc::new(light_client_block)),

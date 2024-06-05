@@ -6,24 +6,29 @@ use futures::StreamExt;
     feature = "tracing-instrumentation",
     tracing::instrument(skip(db_manager))
 )]
-pub async fn get_state_keys_from_db_paginated(
+pub async fn get_state_from_db_paginated(
     db_manager: &std::sync::Arc<Box<dyn database::ReaderDbManager + Sync + Send + 'static>>,
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
     page_token: database::PageToken,
 ) -> crate::modules::state::PageStateValues {
     tracing::debug!(
-        "`get_state_keys_from_db_paginated` call. AccountId {}, block {}, page_token {:?}",
+        "`get_state_from_db_paginated` call. AccountId {}, block {}, page_token {:?}",
         account_id,
         block_height,
         page_token,
     );
     if let Ok((state_keys, next_page_token)) = db_manager
-        .get_state_keys_by_page(account_id, page_token)
+        .get_state_keys_by_page(account_id, page_token, "view_state_paginated")
         .await
     {
         let futures = state_keys.iter().map(|state_key| {
-            db_manager.get_state_key_value(account_id, block_height, state_key.clone())
+            db_manager.get_state_key_value(
+                account_id,
+                block_height,
+                state_key.clone(),
+                "view_state_paginated",
+            )
         });
         let mut tasks = futures::stream::FuturesUnordered::from_iter(futures);
         let mut data: HashMap<readnode_primitives::StateKey, readnode_primitives::StateValue> =

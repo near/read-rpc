@@ -29,6 +29,7 @@ impl crate::ReaderDbManager for PostgresDBManager {
     async fn get_block_by_hash(
         &self,
         block_hash: near_indexer_primitives::CryptoHash,
+        _method_name: &str,
     ) -> anyhow::Result<u64> {
         let block_height = crate::models::Block::get_block_height_by_hash(
             Self::get_connection(&self.pg_pool).await?,
@@ -43,6 +44,7 @@ impl crate::ReaderDbManager for PostgresDBManager {
     async fn get_block_by_chunk_hash(
         &self,
         chunk_hash: near_indexer_primitives::CryptoHash,
+        _method_name: &str,
     ) -> anyhow::Result<readnode_primitives::BlockHeightShardId> {
         let block_height_shard_id = crate::models::Chunk::get_block_height_by_chunk_hash(
             Self::get_connection(&self.pg_pool).await?,
@@ -63,6 +65,7 @@ impl crate::ReaderDbManager for PostgresDBManager {
     async fn get_state_keys_all(
         &self,
         account_id: &near_primitives::types::AccountId,
+        _method_name: &str,
     ) -> anyhow::Result<Vec<readnode_primitives::StateKey>> {
         let result = crate::models::AccountState::get_state_keys_all(
             Self::get_connection(&self.pg_pool).await?,
@@ -78,6 +81,7 @@ impl crate::ReaderDbManager for PostgresDBManager {
         &self,
         account_id: &near_primitives::types::AccountId,
         prefix: &[u8],
+        _method_name: &str,
     ) -> anyhow::Result<Vec<readnode_primitives::StateKey>> {
         let hex_str_prefix = hex::encode(prefix);
         let result = crate::models::AccountState::get_state_keys_by_prefix(
@@ -95,6 +99,7 @@ impl crate::ReaderDbManager for PostgresDBManager {
         &self,
         account_id: &near_primitives::types::AccountId,
         page_token: crate::PageToken,
+        _method_name: &str,
     ) -> anyhow::Result<(Vec<readnode_primitives::StateKey>, crate::PageToken)> {
         let (state_keys, next_page_token) = crate::models::AccountState::get_state_keys_by_page(
             Self::get_connection(&self.pg_pool).await?,
@@ -114,6 +119,7 @@ impl crate::ReaderDbManager for PostgresDBManager {
         account_id: &near_primitives::types::AccountId,
         block_height: near_primitives::types::BlockHeight,
         key_data: readnode_primitives::StateKey,
+        _method_name: &str,
     ) -> (
         readnode_primitives::StateKey,
         readnode_primitives::StateValue,
@@ -142,6 +148,7 @@ impl crate::ReaderDbManager for PostgresDBManager {
         &self,
         account_id: &near_primitives::types::AccountId,
         request_block_height: near_primitives::types::BlockHeight,
+        _method_name: &str,
     ) -> anyhow::Result<readnode_primitives::QueryData<near_primitives::account::Account>> {
         let account_data = crate::models::StateChangesAccount::get_account(
             Self::get_connection(&self.pg_pool).await?,
@@ -172,6 +179,7 @@ impl crate::ReaderDbManager for PostgresDBManager {
         &self,
         account_id: &near_primitives::types::AccountId,
         request_block_height: near_primitives::types::BlockHeight,
+        _method_name: &str,
     ) -> anyhow::Result<readnode_primitives::QueryData<Vec<u8>>> {
         let contract_data = crate::models::StateChangesContract::get_contract(
             Self::get_connection(&self.pg_pool).await?,
@@ -203,6 +211,7 @@ impl crate::ReaderDbManager for PostgresDBManager {
         account_id: &near_primitives::types::AccountId,
         request_block_height: near_primitives::types::BlockHeight,
         public_key: near_crypto::PublicKey,
+        _method_name: &str,
     ) -> anyhow::Result<readnode_primitives::QueryData<near_primitives::account::AccessKey>> {
         let key_data = borsh::to_vec(&public_key)?;
         let access_key_data = crate::models::StateChangesAccessKey::get_access_key(
@@ -237,6 +246,7 @@ impl crate::ReaderDbManager for PostgresDBManager {
         &self,
         account_id: &near_primitives::types::AccountId,
         block_height: near_primitives::types::BlockHeight,
+        _method_name: &str,
     ) -> anyhow::Result<std::collections::HashMap<String, Vec<u8>>> {
         let active_access_keys = crate::models::StateChangesAccessKeys::get_active_access_keys(
             Self::get_connection(&self.pg_pool).await?,
@@ -257,6 +267,7 @@ impl crate::ReaderDbManager for PostgresDBManager {
     async fn get_receipt_by_id(
         &self,
         receipt_id: near_indexer_primitives::CryptoHash,
+        _method_name: &str,
     ) -> anyhow::Result<readnode_primitives::ReceiptRecord> {
         let receipt = crate::models::ReceiptMap::get_receipt_by_id(
             Self::get_connection(&self.pg_pool).await?,
@@ -274,11 +285,15 @@ impl crate::ReaderDbManager for PostgresDBManager {
     async fn get_transaction_by_hash(
         &self,
         transaction_hash: &str,
+        method_name: &str,
     ) -> anyhow::Result<readnode_primitives::TransactionDetails> {
-        if let Ok(transaction) = self.get_indexed_transaction_by_hash(transaction_hash).await {
+        if let Ok(transaction) = self
+            .get_indexed_transaction_by_hash(transaction_hash, method_name)
+            .await
+        {
             Ok(transaction)
         } else {
-            self.get_indexing_transaction_by_hash(transaction_hash)
+            self.get_indexing_transaction_by_hash(transaction_hash, method_name)
                 .await
         }
     }
@@ -286,6 +301,7 @@ impl crate::ReaderDbManager for PostgresDBManager {
     async fn get_indexed_transaction_by_hash(
         &self,
         transaction_hash: &str,
+        _method_name: &str,
     ) -> anyhow::Result<readnode_primitives::TransactionDetails> {
         let transaction_data = crate::models::TransactionDetail::get_transaction_by_hash(
             Self::get_connection(&self.pg_pool).await?,
@@ -298,6 +314,7 @@ impl crate::ReaderDbManager for PostgresDBManager {
     async fn get_indexing_transaction_by_hash(
         &self,
         transaction_hash: &str,
+        _method_name: &str,
     ) -> anyhow::Result<readnode_primitives::TransactionDetails> {
         let data_value = crate::models::TransactionCache::get_transaction_by_hash(
             Self::get_connection(&self.pg_pool).await?,
@@ -332,6 +349,7 @@ impl crate::ReaderDbManager for PostgresDBManager {
         &self,
         block_height: near_primitives::types::BlockHeight,
         shard_id: near_primitives::types::ShardId,
+        _method_name: &str,
     ) -> anyhow::Result<readnode_primitives::BlockHeightShardId> {
         let block_height_shard_id = crate::models::Chunk::get_stored_block_height(
             Self::get_connection(&self.pg_pool).await?,
@@ -354,6 +372,7 @@ impl crate::ReaderDbManager for PostgresDBManager {
     async fn get_validators_by_epoch_id(
         &self,
         epoch_id: near_indexer_primitives::CryptoHash,
+        _method_name: &str,
     ) -> anyhow::Result<readnode_primitives::EpochValidatorsInfo> {
         let epoch = crate::models::Validators::get_validators(
             Self::get_connection(&self.pg_pool).await?,
@@ -382,6 +401,7 @@ impl crate::ReaderDbManager for PostgresDBManager {
     async fn get_validators_by_end_block_height(
         &self,
         block_height: near_primitives::types::BlockHeight,
+        _method_name: &str,
     ) -> anyhow::Result<readnode_primitives::EpochValidatorsInfo> {
         let epoch = crate::models::Validators::get_validators_epoch_end_height(
             Self::get_connection(&self.pg_pool).await?,
@@ -412,6 +432,7 @@ impl crate::ReaderDbManager for PostgresDBManager {
     async fn get_protocol_config_by_epoch_id(
         &self,
         epoch_id: near_indexer_primitives::CryptoHash,
+        _method_name: &str,
     ) -> anyhow::Result<near_chain_configs::ProtocolConfigView> {
         let protocol_config = crate::models::ProtocolConfig::get_protocol_config(
             Self::get_connection(&self.pg_pool).await?,

@@ -23,13 +23,15 @@ pub async fn block(
         near_primitives::types::Finality::None,
     ) = &block_request.block_reference
     {
-        // Increase the OPTIMISTIC_REQUESTS_TOTAL metric
-        // if the request has optimistic finality
-        crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
         if crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
-            // Increase the PROXY_OPTIMISTIC_REQUESTS_TOTAL metric
-            // if optimistic not updating and proxy to near-rpc
-            crate::metrics::PROXY_OPTIMISTIC_REQUESTS_TOTAL.inc();
+            // increase metrics before proxy request
+            crate::metrics::increase_request_category_metrics(
+                &data,
+                &block_request.block_reference,
+                None,
+            )
+            .await;
+            // Proxy if the optimistic updating is not working
             let block_view = data.near_rpc_client.call(block_request).await?;
             return Ok(near_jsonrpc::primitives::types::blocks::RpcBlockResponse { block_view });
         }
@@ -45,22 +47,17 @@ pub async fn chunk(
 ) -> Result<near_jsonrpc::primitives::types::chunks::RpcChunkResponse, RPCError> {
     tracing::debug!("`chunk` called with parameters: {:?}", params);
     let chunk_request = near_jsonrpc::primitives::types::chunks::RpcChunkRequest::parse(params)?;
-    crate::metrics::CHUNK_REQUESTS_TOTAL.inc();
     let result = fetch_chunk(&data, chunk_request.chunk_reference.clone()).await;
     #[cfg(feature = "shadow_data_consistency")]
     {
-        if let Some(err_code) = crate::utils::shadow_compare_results_handler(
-            crate::metrics::CHUNK_REQUESTS_TOTAL.get(),
+        crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
             &result,
             data.near_rpc_client.clone(),
             chunk_request,
-            "CHUNK",
+            "chunk",
         )
-        .await
-        {
-            crate::utils::capture_shadow_consistency_error!(err_code, "CHUNK")
-        };
+        .await;
     }
     Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)
 }
@@ -83,13 +80,15 @@ pub async fn changes_in_block_by_type(
         near_primitives::types::Finality::None,
     ) = &changes_in_block_request.block_reference
     {
-        // Increase the OPTIMISTIC_REQUESTS_TOTAL metric
-        // if the request has optimistic finality
-        crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
         if crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
-            // Increase the PROXY_OPTIMISTIC_REQUESTS_TOTAL metric
-            // if optimistic not updating and proxy to near-rpc
-            crate::metrics::PROXY_OPTIMISTIC_REQUESTS_TOTAL.inc();
+            // increase metrics before proxy request
+            crate::metrics::increase_request_category_metrics(
+                &data,
+                &changes_in_block_request.block_reference,
+                None,
+            )
+            .await;
+            // Proxy if the optimistic updating is not working
             return Ok(data.near_rpc_client.call(changes_in_block_request).await?);
         }
     };
@@ -114,13 +113,15 @@ pub async fn changes_in_block(
         near_primitives::types::Finality::None,
     ) = &changes_in_block_request.block_reference
     {
-        // Increase the OPTIMISTIC_REQUESTS_TOTAL metric
-        // if the request has optimistic finality
-        crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
         if crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
-            // Increase the PROXY_OPTIMISTIC_REQUESTS_TOTAL metric
-            // if optimistic not updating and proxy to near-rpc
-            crate::metrics::PROXY_OPTIMISTIC_REQUESTS_TOTAL.inc();
+            // increase metrics before proxy request
+            crate::metrics::increase_request_category_metrics(
+                &data,
+                &changes_in_block_request.block_reference,
+                None,
+            )
+            .await;
+            // Proxy if the optimistic updating is not working
             return Ok(data.near_rpc_client.call(changes_in_block_request).await?);
         }
     };
@@ -136,8 +137,19 @@ async fn block_call(
     mut block_request: near_jsonrpc::primitives::types::blocks::RpcBlockRequest,
 ) -> Result<near_jsonrpc::primitives::types::blocks::RpcBlockResponse, RPCError> {
     tracing::debug!("`block` called with parameters: {:?}", block_request);
-    crate::metrics::BLOCK_REQUESTS_TOTAL.inc();
-    let result = fetch_block(&data, block_request.block_reference.clone()).await;
+    let result = match fetch_block(&data, &block_request.block_reference, "block").await {
+        Ok(block) => {
+            // increase block category metrics
+            crate::metrics::increase_request_category_metrics(
+                &data,
+                &block_request.block_reference,
+                Some(block.block_view.header.height),
+            )
+            .await;
+            Ok(block)
+        }
+        Err(err) => Err(err),
+    };
 
     #[cfg(feature = "shadow_data_consistency")]
     {
@@ -151,18 +163,14 @@ async fn block_call(
             }
         };
 
-        if let Some(err_code) = crate::utils::shadow_compare_results_handler(
-            crate::metrics::BLOCK_REQUESTS_TOTAL.get(),
+        crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
             &result,
             data.near_rpc_client.clone(),
             block_request,
-            "BLOCK",
+            "block",
         )
-        .await
-        {
-            crate::utils::capture_shadow_consistency_error!(err_code, "BLOCK")
-        };
+        .await;
     };
 
     Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)
@@ -176,10 +184,22 @@ async fn changes_in_block_call(
     mut params: near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockRequest,
 ) -> Result<near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockByTypeResponse, RPCError>
 {
-    crate::metrics::CHNGES_IN_BLOCK_REQUESTS_TOTAL.inc();
-    let cache_block = fetch_block_from_cache_or_get(&data, params.block_reference.clone())
-        .await
-        .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
+    let cache_block = fetch_block_from_cache_or_get(
+        &data,
+        &params.block_reference,
+        "EXPERIMENTAL_changes_in_block",
+    )
+    .await
+    .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
+
+    // increase block category metrics
+    crate::metrics::increase_request_category_metrics(
+        &data,
+        &params.block_reference,
+        Some(cache_block.block_height),
+    )
+    .await;
+
     let result = fetch_changes_in_block(&data, cache_block, &params.block_reference).await;
     #[cfg(feature = "shadow_data_consistency")]
     {
@@ -188,18 +208,14 @@ async fn changes_in_block_call(
                 near_primitives::types::BlockId::Height(cache_block.block_height),
             )
         }
-        if let Some(err_code) = crate::utils::shadow_compare_results_handler(
-            crate::metrics::CHNGES_IN_BLOCK_REQUESTS_TOTAL.get(),
+        crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
             &result,
             data.near_rpc_client.clone(),
             params,
-            "CHANGES_IN_BLOCK",
+            "EXPERIMENTAL_changes_in_block",
         )
-        .await
-        {
-            crate::utils::capture_shadow_consistency_error!(err_code, "CHANGES_IN_BLOCK")
-        };
+        .await;
     }
 
     Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)
@@ -212,10 +228,19 @@ async fn changes_in_block_by_type_call(
     data: Data<ServerContext>,
     mut params: near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockByTypeRequest,
 ) -> Result<near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockResponse, RPCError> {
-    crate::metrics::CHNGES_IN_BLOCK_BY_TYPE_REQUESTS_TOTAL.inc();
-    let cache_block = fetch_block_from_cache_or_get(&data, params.block_reference.clone())
-        .await
-        .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
+    let cache_block =
+        fetch_block_from_cache_or_get(&data, &params.block_reference, "EXPERIMENTAL_changes")
+            .await
+            .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
+
+    // increase block category metrics
+    crate::metrics::increase_request_category_metrics(
+        &data,
+        &params.block_reference,
+        Some(cache_block.block_height),
+    )
+    .await;
+
     let result = fetch_changes_in_block_by_type(
         &data,
         cache_block,
@@ -231,18 +256,14 @@ async fn changes_in_block_by_type_call(
                 near_primitives::types::BlockId::Height(cache_block.block_height),
             )
         }
-        if let Some(err_code) = crate::utils::shadow_compare_results_handler(
-            crate::metrics::CHNGES_IN_BLOCK_BY_TYPE_REQUESTS_TOTAL.get(),
+        crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
             &result,
             data.near_rpc_client.clone(),
             params,
-            "CHANGES_IN_BLOCK_BY_TYPE",
+            "EXPERIMENTAL_changes",
         )
-        .await
-        {
-            crate::utils::capture_shadow_consistency_error!(err_code, "CHANGES_IN_BLOCK_BY_TYPE")
-        };
+        .await;
     }
 
     Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)
@@ -251,7 +272,8 @@ async fn changes_in_block_by_type_call(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn fetch_block(
     data: &Data<ServerContext>,
-    block_reference: near_primitives::types::BlockReference,
+    block_reference: &near_primitives::types::BlockReference,
+    method_name: &str,
 ) -> Result<
     near_jsonrpc::primitives::types::blocks::RpcBlockResponse,
     near_jsonrpc::primitives::types::blocks::RpcBlockError,
@@ -259,9 +281,13 @@ pub async fn fetch_block(
     tracing::debug!("`fetch_block` call");
     let block_height = match block_reference {
         near_primitives::types::BlockReference::BlockId(block_id) => match block_id {
-            near_primitives::types::BlockId::Height(block_height) => Ok(block_height),
+            near_primitives::types::BlockId::Height(block_height) => Ok(*block_height),
             near_primitives::types::BlockId::Hash(block_hash) => {
-                match data.db_manager.get_block_by_hash(block_hash).await {
+                match data
+                    .db_manager
+                    .get_block_by_hash(*block_hash, method_name)
+                    .await
+                {
                     Ok(block_height) => Ok(block_height),
                     Err(err) => {
                         tracing::error!("Failed to fetch block by hash: {}", err);
@@ -336,7 +362,7 @@ pub async fn fetch_chunk(
         } => match block_id {
             near_primitives::types::BlockId::Height(block_height) => data
                 .db_manager
-                .get_block_by_height_and_shard_id(block_height, shard_id)
+                .get_block_by_height_and_shard_id(block_height, shard_id, "chunk")
                 .await
                 .map_err(|_err| {
                     near_jsonrpc::primitives::types::chunks::RpcChunkError::InvalidShardId {
@@ -347,7 +373,7 @@ pub async fn fetch_chunk(
             near_primitives::types::BlockId::Hash(block_hash) => {
                 let block_height = data
                     .db_manager
-                    .get_block_by_hash(block_hash)
+                    .get_block_by_hash(block_hash, "chunk")
                     .await
                     .map_err(|err| {
                         tracing::error!("Failed to fetch block by hash: {}", err);
@@ -360,7 +386,7 @@ pub async fn fetch_chunk(
         },
         near_jsonrpc::primitives::types::chunks::ChunkReference::ChunkHash { chunk_id } => data
             .db_manager
-            .get_block_by_chunk_hash(chunk_id)
+            .get_block_by_chunk_hash(chunk_id, "chunk")
             .await
             .map_err(
                 |_err| near_jsonrpc::primitives::types::chunks::RpcChunkError::UnknownChunk {

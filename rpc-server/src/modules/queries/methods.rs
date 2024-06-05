@@ -2,11 +2,13 @@ use crate::config::ServerContext;
 use crate::errors::RPCError;
 use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
 use crate::modules::blocks::CacheBlock;
-#[cfg(feature = "account_access_keys")]
-use crate::modules::queries::utils::fetch_list_access_keys_from_db;
-use crate::modules::queries::utils::{get_state_keys_from_db, run_contract, RunContractResponse};
 use jsonrpc_v2::{Data, Params};
 use near_jsonrpc::RpcRequest;
+
+use super::contract_runner;
+#[cfg(feature = "account_access_keys")]
+use super::utils::fetch_list_access_keys_from_db;
+use super::utils::get_state_from_db;
 
 /// `query` rpc method implementation
 /// calls proxy_rpc_call to get `query` from near-rpc if request parameters not supported by read-rpc
@@ -23,13 +25,15 @@ pub async fn query(
         near_primitives::types::Finality::None,
     ) = &query_request.block_reference
     {
-        // Increase the OPTIMISTIC_REQUESTS_TOTAL metric
-        // if the request has optimistic finality
-        crate::metrics::OPTIMISTIC_REQUESTS_TOTAL.inc();
         return if crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
-            // Increase the PROXY_OPTIMISTIC_REQUESTS_TOTAL metric
-            // if optimistic not updating and proxy to near-rpc
-            crate::metrics::PROXY_OPTIMISTIC_REQUESTS_TOTAL.inc();
+            // increase metrics before proxy request
+            crate::metrics::increase_request_category_metrics(
+                &data,
+                &query_request.block_reference,
+                None,
+            )
+            .await;
+            // Proxy if the optimistic updating is not working
             Ok(data.near_rpc_client.call(query_request).await?)
         } else {
             // query_call with optimistic block
@@ -50,31 +54,33 @@ async fn query_call(
 ) -> Result<near_jsonrpc::primitives::types::query::RpcQueryResponse, RPCError> {
     tracing::debug!("`query` call. Params: {:?}", query_request,);
 
-    let block = fetch_block_from_cache_or_get(data, query_request.block_reference.clone())
+    let block = fetch_block_from_cache_or_get(data, &query_request.block_reference, "query")
         .await
         .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
+
+    // increase block category metrics
+    crate::metrics::increase_request_category_metrics(
+        data,
+        &query_request.block_reference,
+        Some(block.block_height),
+    )
+    .await;
     let result = match &query_request.request {
         near_primitives::views::QueryRequest::ViewAccount { account_id } => {
-            crate::metrics::QUERY_VIEW_ACCOUNT_REQUESTS_TOTAL.inc();
             view_account(data, block, account_id, is_optimistic).await
         }
         near_primitives::views::QueryRequest::ViewCode { account_id } => {
-            crate::metrics::QUERY_VIEW_CODE_REQUESTS_TOTAL.inc();
             view_code(data, block, account_id, is_optimistic).await
         }
         near_primitives::views::QueryRequest::ViewAccessKey {
             account_id,
             public_key,
-        } => {
-            crate::metrics::QUERY_VIEW_ACCESS_KEY_REQUESTS_TOTAL.inc();
-            view_access_key(data, block, account_id, public_key, is_optimistic).await
-        }
+        } => view_access_key(data, block, account_id, public_key, is_optimistic).await,
         near_primitives::views::QueryRequest::ViewState {
             account_id,
             prefix,
             include_proof,
         } => {
-            crate::metrics::QUERY_VIEW_STATE_REQUESTS_TOTAL.inc();
             if *include_proof {
                 // TODO: We can calculate the proof for state only on regular or archival nodes.
                 let final_block = data.blocks_info_by_finality.final_cache_block().await;
@@ -89,7 +95,9 @@ async fn query_call(
                     Ok(data.near_rpc_client.call(query_request).await?)
                 } else {
                     // Increase the QUERY_VIEW_STATE_INCLUDE_PROOFS metric if we proxy to archival rpc
-                    crate::metrics::ARCHIVAL_PROXY_QUERY_VIEW_STATE_WITH_INCLUDE_PROOFS.inc();
+                    crate::metrics::REQUESTS_COUNTER
+                        .with_label_values(&["archive_proxy_view_state_proofs"])
+                        .inc();
                     // Proxy to archival rpc if the block garbage collected
                     Ok(data.near_rpc_client.archival_call(query_request).await?)
                 };
@@ -102,13 +110,30 @@ async fn query_call(
             method_name,
             args,
         } => {
-            crate::metrics::QUERY_FUNCTION_CALL_REQUESTS_TOTAL.inc();
-            function_call(data, block, account_id, method_name, args, is_optimistic).await
+            // TODO: Temporary solution to proxy for poolv1.near
+            // It should be removed after migration to the postgres db
+            if account_id.to_string().ends_with("poolv1.near") {
+                let final_block = data.blocks_info_by_finality.final_cache_block().await;
+                // `expected_earliest_available_block` calculated by formula:
+                // `final_block_height` - `node_epoch_count` * `epoch_length`
+                // Now near store 5 epochs, it can be changed in the future
+                // epoch_length = 43200 blocks
+                let expected_earliest_available_block =
+                    final_block.block_height - 5 * data.genesis_info.genesis_config.epoch_length;
+                return if block.block_height > expected_earliest_available_block {
+                    // Proxy to regular rpc if the block is available
+                    Ok(data.near_rpc_client.call(query_request).await?)
+                } else {
+                    // Proxy to archival rpc if the block garbage collected
+                    Ok(data.near_rpc_client.archival_call(query_request).await?)
+                };
+            } else {
+                function_call(data, block, account_id, method_name, args, is_optimistic).await
+            }
         }
         #[allow(unused_variables)]
         // `account_id` is used in the `#[cfg(feature = "account_access_keys")]` branch.
         near_primitives::views::QueryRequest::ViewAccessKeyList { account_id } => {
-            crate::metrics::QUERY_VIEW_ACCESS_KEYS_LIST_REQUESTS_TOTAL.inc();
             #[cfg(not(feature = "account_access_keys"))]
             {
                 let final_block = data.blocks_info_by_finality.final_cache_block().await;
@@ -135,7 +160,7 @@ async fn query_call(
 
     #[cfg(feature = "shadow_data_consistency")]
     {
-        let request_copy = query_request.request.clone();
+        // let request_copy = query_request.request.clone();
 
         // Since we do queries with the clause WHERE block_height <= X, we need to
         // make sure that the block we are doing a shadow data consistency check for
@@ -156,98 +181,24 @@ async fn query_call(
         // are not proxying the requests anymore and respond with the error to the client.
         // Since we already have the dashboard using these metric names, we don't want to
         // change them and reuse them for the observability of the shadow data consistency checks.
-        match request_copy {
-            near_primitives::views::QueryRequest::ViewAccount { .. } => {
-                if let Some(err_code) = crate::utils::shadow_compare_results_handler(
-                    crate::metrics::QUERY_VIEW_ACCOUNT_REQUESTS_TOTAL.get(),
-                    data.shadow_data_consistency_rate,
-                    &result,
-                    data.near_rpc_client.clone(),
-                    query_request,
-                    "QUERY_VIEW_ACCOUNT",
-                )
-                .await
-                {
-                    crate::utils::capture_shadow_consistency_error!(err_code, "QUERY_VIEW_ACCOUNT")
-                };
-            }
-            near_primitives::views::QueryRequest::ViewCode { .. } => {
-                if let Some(err_code) = crate::utils::shadow_compare_results_handler(
-                    crate::metrics::QUERY_VIEW_CODE_REQUESTS_TOTAL.get(),
-                    data.shadow_data_consistency_rate,
-                    &result,
-                    data.near_rpc_client.clone(),
-                    query_request,
-                    "QUERY_VIEW_CODE",
-                )
-                .await
-                {
-                    crate::utils::capture_shadow_consistency_error!(err_code, "QUERY_VIEW_CODE")
-                };
-            }
-            near_primitives::views::QueryRequest::ViewAccessKey { .. } => {
-                if let Some(err_code) = crate::utils::shadow_compare_results_handler(
-                    crate::metrics::QUERY_VIEW_ACCESS_KEY_REQUESTS_TOTAL.get(),
-                    data.shadow_data_consistency_rate,
-                    &result,
-                    data.near_rpc_client.clone(),
-                    query_request,
-                    "QUERY_VIEW_ACCESS_KEY",
-                )
-                .await
-                {
-                    crate::utils::capture_shadow_consistency_error!(
-                        err_code,
-                        "QUERY_VIEW_ACCESS_KEY"
-                    )
-                };
-            }
-            near_primitives::views::QueryRequest::ViewState { .. } => {
-                if let Some(err_code) = crate::utils::shadow_compare_results_handler(
-                    crate::metrics::QUERY_VIEW_STATE_REQUESTS_TOTAL.get(),
-                    data.shadow_data_consistency_rate,
-                    &result,
-                    data.near_rpc_client.clone(),
-                    query_request,
-                    "QUERY_VIEW_STATE",
-                )
-                .await
-                {
-                    crate::utils::capture_shadow_consistency_error!(err_code, "QUERY_VIEW_STATE")
-                };
-            }
-            near_primitives::views::QueryRequest::CallFunction { .. } => {
-                if let Some(err_code) = crate::utils::shadow_compare_results_handler(
-                    crate::metrics::QUERY_FUNCTION_CALL_REQUESTS_TOTAL.get(),
-                    data.shadow_data_consistency_rate,
-                    &result,
-                    data.near_rpc_client.clone(),
-                    query_request,
-                    "QUERY_FUNCTION_CALL",
-                )
-                .await
-                {
-                    crate::utils::capture_shadow_consistency_error!(err_code, "QUERY_FUNCTION_CALL")
-                };
-            }
+        let method_name = match &query_request.request {
+            near_primitives::views::QueryRequest::ViewAccount { .. } => "query_view_account",
+            near_primitives::views::QueryRequest::ViewCode { .. } => "query_view_code",
+            near_primitives::views::QueryRequest::ViewAccessKey { .. } => "query_view_access_key",
+            near_primitives::views::QueryRequest::ViewState { .. } => "query_view_state",
+            near_primitives::views::QueryRequest::CallFunction { .. } => "query_call_function",
             near_primitives::views::QueryRequest::ViewAccessKeyList { .. } => {
-                if let Some(err_code) = crate::utils::shadow_compare_results_handler(
-                    crate::metrics::QUERY_VIEW_ACCESS_KEYS_LIST_REQUESTS_TOTAL.get(),
-                    data.shadow_data_consistency_rate,
-                    &result,
-                    data.near_rpc_client.clone(),
-                    query_request,
-                    "QUERY_VIEW_ACCESS_KEY_LIST",
-                )
-                .await
-                {
-                    crate::utils::capture_shadow_consistency_error!(
-                        err_code,
-                        "QUERY_VIEW_ACCESS_KEY_LIST"
-                    )
-                };
+                "query_view_access_key_list"
             }
         };
+        crate::utils::shadow_compare_results_handler(
+            data.shadow_data_consistency_rate,
+            &result,
+            data.near_rpc_client.clone(),
+            query_request,
+            method_name,
+        )
+        .await;
     }
 
     Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)
@@ -270,9 +221,9 @@ async fn view_account(
         is_optimistic
     );
     let account_view = if is_optimistic {
-        optimistic_view_account(data, block, account_id).await?
+        optimistic_view_account(data, block, account_id, "query_view_account").await?
     } else {
-        database_view_account(data, block, account_id).await?
+        database_view_account(data, block, account_id, "query_view_account").await?
     };
     Ok(near_jsonrpc::primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc::primitives::types::query::QueryResponseKind::ViewAccount(account_view),
@@ -286,6 +237,7 @@ async fn optimistic_view_account(
     data: &Data<ServerContext>,
     block: CacheBlock,
     account_id: &near_primitives::types::AccountId,
+    method_name: &str,
 ) -> Result<
     near_primitives::views::AccountView,
     near_jsonrpc::primitives::types::query::RpcQueryError,
@@ -307,7 +259,7 @@ async fn optimistic_view_account(
             )
         }
     } else {
-        database_view_account(data, block, account_id).await
+        database_view_account(data, block, account_id, method_name).await
     }
 }
 
@@ -316,13 +268,14 @@ async fn database_view_account(
     data: &Data<ServerContext>,
     block: CacheBlock,
     account_id: &near_primitives::types::AccountId,
+    method_name: &str,
 ) -> Result<
     near_primitives::views::AccountView,
     near_jsonrpc::primitives::types::query::RpcQueryError,
 > {
     let account = data
         .db_manager
-        .get_account(account_id, block.block_height)
+        .get_account(account_id, block.block_height, method_name)
         .await
         .map_err(
             |_err| near_jsonrpc::primitives::types::query::RpcQueryError::UnknownAccount {
@@ -353,13 +306,13 @@ async fn view_code(
     );
     let (code, account) = if is_optimistic {
         tokio::try_join!(
-            optimistic_view_code(data, block, account_id),
-            optimistic_view_account(data, block, account_id),
+            optimistic_view_code(data, block, account_id, "query_view_code"),
+            optimistic_view_account(data, block, account_id, "query_view_code"),
         )?
     } else {
         tokio::try_join!(
-            database_view_code(data, block, account_id),
-            database_view_account(data, block, account_id),
+            database_view_code(data, block, account_id, "query_view_code"),
+            database_view_account(data, block, account_id, "query_view_code"),
         )?
     };
 
@@ -380,6 +333,7 @@ async fn optimistic_view_code(
     data: &Data<ServerContext>,
     block: CacheBlock,
     account_id: &near_primitives::types::AccountId,
+    method_name: &str,
 ) -> Result<Vec<u8>, near_jsonrpc::primitives::types::query::RpcQueryError> {
     let contract_code = if let Ok(result) = data
         .blocks_info_by_finality
@@ -398,7 +352,7 @@ async fn optimistic_view_code(
             );
         }
     } else {
-        database_view_code(data, block, account_id).await?
+        database_view_code(data, block, account_id, method_name).await?
     };
     Ok(contract_code)
 }
@@ -408,10 +362,11 @@ async fn database_view_code(
     data: &Data<ServerContext>,
     block: CacheBlock,
     account_id: &near_primitives::types::AccountId,
+    method_name: &str,
 ) -> Result<Vec<u8>, near_jsonrpc::primitives::types::query::RpcQueryError> {
     Ok(data
         .db_manager
-        .get_contract_code(account_id, block.block_height)
+        .get_contract_code(account_id, block.block_height, method_name)
         .await
         .map_err(
             |_err| near_jsonrpc::primitives::types::query::RpcQueryError::NoContractCode {
@@ -444,11 +399,30 @@ async fn function_call(
         is_optimistic,
     );
 
-    let call_results = if is_optimistic {
-        optimistic_function_call(data, block, account_id, method_name, args).await
+    // Depending on the optimistic flag we need to run the contract with the optimistic
+    // state changes or not.
+    let maybe_optimistic_data = if is_optimistic {
+        data.blocks_info_by_finality
+            .optimistic_state_changes_in_block(account_id, &[])
+            .await
     } else {
-        database_function_call(data, block, account_id, method_name, args).await
+        Default::default()
     };
+
+    let call_results = contract_runner::run_contract(
+        account_id,
+        method_name,
+        args,
+        &data.db_manager,
+        &data.compiled_contract_code_cache,
+        &data.contract_code_cache,
+        &data.blocks_info_by_finality,
+        block,
+        data.max_gas_burnt,
+        maybe_optimistic_data,
+    )
+    .await;
+
     let call_results =
         call_results.map_err(|err| err.to_rpc_query_error(block.block_height, block.block_hash))?;
     Ok(near_jsonrpc::primitives::types::query::RpcQueryResponse {
@@ -461,56 +435,6 @@ async fn function_call(
         block_height: block.block_height,
         block_hash: block.block_hash,
     })
-}
-
-#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
-async fn optimistic_function_call(
-    data: &Data<ServerContext>,
-    block: CacheBlock,
-    account_id: &near_primitives::types::AccountId,
-    method_name: &str,
-    args: &near_primitives::types::FunctionArgs,
-) -> Result<RunContractResponse, crate::errors::FunctionCallError> {
-    let optimistic_data = data
-        .blocks_info_by_finality
-        .optimistic_state_changes_in_block(account_id, &[])
-        .await;
-    run_contract(
-        account_id,
-        method_name,
-        args,
-        &data.db_manager,
-        &data.compiled_contract_code_cache,
-        &data.contract_code_cache,
-        &data.blocks_info_by_finality,
-        block,
-        data.max_gas_burnt,
-        optimistic_data, // run contract with optimistic data
-    )
-    .await
-}
-
-#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
-async fn database_function_call(
-    data: &Data<ServerContext>,
-    block: CacheBlock,
-    account_id: &near_primitives::types::AccountId,
-    method_name: &str,
-    args: &near_primitives::types::FunctionArgs,
-) -> Result<RunContractResponse, crate::errors::FunctionCallError> {
-    run_contract(
-        account_id,
-        method_name,
-        args,
-        &data.db_manager,
-        &data.compiled_contract_code_cache,
-        &data.contract_code_cache,
-        &data.blocks_info_by_finality,
-        block,
-        data.max_gas_burnt,
-        Default::default(), // run contract with empty optimistic data
-    )
-    .await
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
@@ -564,8 +488,14 @@ async fn optimistic_view_state(
         .blocks_info_by_finality
         .optimistic_state_changes_in_block(account_id, prefix)
         .await;
-    let state_from_db =
-        get_state_keys_from_db(&data.db_manager, account_id, block.block_height, prefix).await;
+    let state_from_db = get_state_from_db(
+        &data.db_manager,
+        account_id,
+        block.block_height,
+        prefix,
+        "query_view_state",
+    )
+    .await;
     if state_from_db.is_empty() && optimistic_data.is_empty() {
         Err(
             near_jsonrpc::primitives::types::query::RpcQueryError::UnknownAccount {
@@ -615,8 +545,14 @@ async fn database_view_state(
     Vec<near_primitives::views::StateItem>,
     near_jsonrpc::primitives::types::query::RpcQueryError,
 > {
-    let state_from_db =
-        get_state_keys_from_db(&data.db_manager, account_id, block.block_height, prefix).await;
+    let state_from_db = get_state_from_db(
+        &data.db_manager,
+        account_id,
+        block.block_height,
+        prefix,
+        "query_view_state",
+    )
+    .await;
     if state_from_db.is_empty() {
         Err(
             near_jsonrpc::primitives::types::query::RpcQueryError::UnknownAccount {
@@ -710,7 +646,12 @@ async fn database_view_access_key(
 > {
     let access_key = data
         .db_manager
-        .get_access_key(account_id, block.block_height, public_key.clone())
+        .get_access_key(
+            account_id,
+            block.block_height,
+            public_key.clone(),
+            "query_view_access_key",
+        )
         .await
         .map_err(
             |_err| near_jsonrpc::primitives::types::query::RpcQueryError::UnknownAccessKey {

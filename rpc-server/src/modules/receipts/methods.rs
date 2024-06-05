@@ -13,27 +13,39 @@ pub async fn receipt(
     tracing::debug!("`receipt` call. Params: {:?}", params);
     let receipt_request =
         near_jsonrpc::primitives::types::receipts::RpcReceiptRequest::parse(params)?;
-    crate::metrics::RECEIPT_REQUESTS_TOTAL.inc();
 
     let result = fetch_receipt(&data, &receipt_request).await;
 
     #[cfg(feature = "shadow_data_consistency")]
     {
-        if let Some(err_code) = crate::utils::shadow_compare_results_handler(
-            crate::metrics::RECEIPT_REQUESTS_TOTAL.get(),
+        crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
             &result,
             data.near_rpc_client.clone(),
             receipt_request,
-            "RECEIPT",
+            "EXPERIMENTAL_receipt",
         )
-        .await
-        {
-            crate::utils::capture_shadow_consistency_error!(err_code, "RECEIPT")
-        };
+        .await;
     }
 
     Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)
+}
+
+/// Fetches a receipt record by it's ID
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
+pub async fn view_receipt_record(
+    data: Data<ServerContext>,
+    Params(params): Params<serde_json::Value>,
+) -> Result<crate::modules::receipts::RpcReceiptRecordResponse, RPCError> {
+    tracing::debug!("`view_receipt_record` call. Params: {:?}", params);
+    let receipt_request =
+        near_jsonrpc::primitives::types::receipts::RpcReceiptRequest::parse(params)?;
+
+    let result = fetch_receipt_record(&data, &receipt_request, "view_receipt_record").await;
+
+    Ok(result
+        .map_err(near_jsonrpc::primitives::errors::RpcError::from)?
+        .into())
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
@@ -46,21 +58,15 @@ async fn fetch_receipt(
 > {
     let receipt_id = request.receipt_reference.receipt_id;
 
-    let receipt_record = data
-        .db_manager
-        .get_receipt_by_id(receipt_id)
-        .await
-        .map_err(|err| {
-            tracing::warn!("Error in `receipt` call: {:?}", err);
-            near_jsonrpc::primitives::types::receipts::RpcReceiptError::UnknownReceipt {
-                receipt_id,
-            }
-        })?;
+    let receipt_record = fetch_receipt_record(data, request, "EXPERIMENTAL_receipt").await?;
 
     // Getting the raw Vec<u8> of the TransactionDetails from ScyllaDB
     let transaction_details = data
         .db_manager
-        .get_transaction_by_hash(&receipt_record.parent_transaction_hash.to_string())
+        .get_transaction_by_hash(
+            &receipt_record.parent_transaction_hash.to_string(),
+            "EXPERIMENTAL_receipt",
+        )
         .await
         .map_err(|err| {
             tracing::warn!("Error in `receipt` call: {:?}", err);
@@ -86,4 +92,26 @@ async fn fetch_receipt(
         })?;
 
     Ok(near_jsonrpc::primitives::types::receipts::RpcReceiptResponse { receipt_view })
+}
+
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
+async fn fetch_receipt_record(
+    data: &Data<ServerContext>,
+    request: &near_jsonrpc::primitives::types::receipts::RpcReceiptRequest,
+    method_name: &str,
+) -> Result<
+    readnode_primitives::ReceiptRecord,
+    near_jsonrpc::primitives::types::receipts::RpcReceiptError,
+> {
+    let receipt_id = request.receipt_reference.receipt_id;
+
+    data.db_manager
+        .get_receipt_by_id(receipt_id, method_name)
+        .await
+        .map_err(|err| {
+            tracing::warn!("Error in `{}` call: {:?}", method_name, err);
+            near_jsonrpc::primitives::types::receipts::RpcReceiptError::UnknownReceipt {
+                receipt_id,
+            }
+        })
 }

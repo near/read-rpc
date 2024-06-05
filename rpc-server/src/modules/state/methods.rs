@@ -1,7 +1,7 @@
 use crate::config::ServerContext;
 use crate::errors::RPCError;
 use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
-use crate::modules::state::utils::get_state_keys_from_db_paginated;
+use crate::modules::state::utils::get_state_from_db_paginated;
 use jsonrpc_v2::{Data, Params};
 
 pub async fn view_state_paginated(
@@ -9,11 +9,11 @@ pub async fn view_state_paginated(
     Params(params): Params<crate::modules::state::RpcViewStatePaginatedRequest>,
 ) -> Result<crate::modules::state::RpcViewStatePaginatedResponse, RPCError> {
     let block_reference = near_primitives::types::BlockReference::BlockId(params.block_id.clone());
-    let block = fetch_block_from_cache_or_get(&data, block_reference)
+    let block = fetch_block_from_cache_or_get(&data, &block_reference, "view_state_paginated")
         .await
         .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
 
-    let state_values = get_state_keys_from_db_paginated(
+    let state_values = get_state_from_db_paginated(
         &data.db_manager,
         &params.account_id,
         block.block_height,

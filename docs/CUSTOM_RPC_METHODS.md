@@ -85,3 +85,34 @@ Next page response:
 ```
 In the last page response `next_page_token` field will be `null`.
 
+# view_receipt_record
+
+The `view_receipt_record` method is a custom method that allows you to view the record of the receipt by its ID.
+
+## How to use it
+### Example
+
+Request:
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "dontcare",
+  "method": "view_receipt_record",
+  "params": {
+    "receipt_id": "6aB1XxfnhuQ83FWHb5xyqssGnaD5CUQgxHpbAVJFRrPe"
+  }
+}
+```
+Response:
+```json
+{
+  "id": "dontcare",
+  "jsonrpc": "2.0",
+  "result": {
+    "block_height": 118875440,
+    "parent_transaction_hash": "6iJgcM5iZrWuhG4ZpUyX6ivtMQUho2S1JRdBYdY7Y7vX",
+    "receipt_id": "6aB1XxfnhuQ83FWHb5xyqssGnaD5CUQgxHpbAVJFRrPe",
+    "shard_id": 0
+  }
+}
+```

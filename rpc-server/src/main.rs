@@ -1,4 +1,3 @@
-use actix_web::dev::Service;
 use jsonrpc_v2::{Data, Server};
 use mimalloc::MiMalloc;
 
@@ -13,6 +12,7 @@ mod config;
 mod errors;
 mod health;
 mod metrics;
+mod middlewares;
 mod modules;
 mod utils;
 
@@ -90,6 +90,10 @@ async fn main() -> anyhow::Result<()> {
         .with_method(
             "view_state_paginated",
             modules::state::methods::view_state_paginated,
+        )
+        .with_method(
+            "view_receipt_record",
+            modules::receipts::methods::view_receipt_record,
         )
         // requests methods
         .with_method("query", modules::queries::methods::query)
@@ -169,12 +173,7 @@ async fn main() -> anyhow::Result<()> {
             .wrap(cors)
             .wrap(tracing_actix_web::TracingLogger::default())
             // wrapper to count rpc total requests
-            .wrap_fn(|request, service| {
-                if request.path() == "/" {
-                    metrics::TOTAL_REQUESTS_COUNTER.inc();
-                };
-                service.call(request)
-            })
+            .wrap(middlewares::RequestsCounters)
             .app_data(actix_web::web::Data::new(server_context.clone()))
             .service(
                 actix_web::web::service("/")
