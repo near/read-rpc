@@ -26,15 +26,11 @@ pub async fn query(
     ) = &query_request.block_reference
     {
         return if crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
-            // increase metrics before proxy request
-            crate::metrics::increase_request_category_metrics(
-                &data,
-                &query_request.block_reference,
-                None,
-            )
-            .await;
             // Proxy if the optimistic updating is not working
-            Ok(data.near_rpc_client.call(query_request).await?)
+            Ok(data
+                .near_rpc_client
+                .call(query_request, Some("optimistic"))
+                .await?)
         } else {
             // query_call with optimistic block
             query_call(&data, query_request, true).await
@@ -53,18 +49,25 @@ async fn query_call(
     is_optimistic: bool,
 ) -> Result<near_jsonrpc::primitives::types::query::RpcQueryResponse, RPCError> {
     tracing::debug!("`query` call. Params: {:?}", query_request,);
-
-    let block = fetch_block_from_cache_or_get(data, &query_request.block_reference, "query")
+    // When the data check fails, we want to emit the log message and increment the
+    // corresponding metric. Despite the metrics have "proxies" in their names, we
+    // are not proxying the requests anymore and respond with the error to the client.
+    // Since we already have the dashboard using these metric names, we don't want to
+    // change them and reuse them for the observability of the shadow data consistency checks.
+    let method_name = match &query_request.request {
+        near_primitives::views::QueryRequest::ViewAccount { .. } => "query_view_account",
+        near_primitives::views::QueryRequest::ViewCode { .. } => "query_view_code",
+        near_primitives::views::QueryRequest::ViewAccessKey { .. } => "query_view_access_key",
+        near_primitives::views::QueryRequest::ViewState { .. } => "query_view_state",
+        near_primitives::views::QueryRequest::CallFunction { .. } => "query_call_function",
+        near_primitives::views::QueryRequest::ViewAccessKeyList { .. } => {
+            "query_view_access_key_list"
+        }
+    };
+    let block = fetch_block_from_cache_or_get(data, &query_request.block_reference, method_name)
         .await
         .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
 
-    // increase block category metrics
-    crate::metrics::increase_request_category_metrics(
-        data,
-        &query_request.block_reference,
-        Some(block.block_height),
-    )
-    .await;
     let result = match &query_request.request {
         near_primitives::views::QueryRequest::ViewAccount { account_id } => {
             view_account(data, block, account_id, is_optimistic).await
@@ -92,14 +95,16 @@ async fn query_call(
                     final_block.block_height - 5 * data.genesis_info.genesis_config.epoch_length;
                 return if block.block_height > expected_earliest_available_block {
                     // Proxy to regular rpc if the block is available
-                    Ok(data.near_rpc_client.call(query_request).await?)
+                    Ok(data
+                        .near_rpc_client
+                        .call(query_request, Some("query_view_state_proofs"))
+                        .await?)
                 } else {
-                    // Increase the QUERY_VIEW_STATE_INCLUDE_PROOFS metric if we proxy to archival rpc
-                    crate::metrics::REQUESTS_COUNTER
-                        .with_label_values(&["archive_proxy_view_state_proofs"])
-                        .inc();
                     // Proxy to archival rpc if the block garbage collected
-                    Ok(data.near_rpc_client.archival_call(query_request).await?)
+                    Ok(data
+                        .near_rpc_client
+                        .archival_call(query_request, Some("query_view_state_proofs"))
+                        .await?)
                 };
             } else {
                 view_state(data, block, account_id, prefix, is_optimistic).await
@@ -113,6 +118,14 @@ async fn query_call(
             // TODO: Temporary solution to proxy for poolv1.near
             // It should be removed after migration to the postgres db
             if account_id.to_string().ends_with("poolv1.near") {
+                // increase block category metrics
+                crate::metrics::increase_request_category_metrics(
+                    data,
+                    &query_request.block_reference,
+                    "poolv1.near",
+                    Some(block.block_height),
+                )
+                .await;
                 let final_block = data.blocks_info_by_finality.final_cache_block().await;
                 // `expected_earliest_available_block` calculated by formula:
                 // `final_block_height` - `node_epoch_count` * `epoch_length`
@@ -122,10 +135,16 @@ async fn query_call(
                     final_block.block_height - 5 * data.genesis_info.genesis_config.epoch_length;
                 return if block.block_height > expected_earliest_available_block {
                     // Proxy to regular rpc if the block is available
-                    Ok(data.near_rpc_client.call(query_request).await?)
+                    Ok(data
+                        .near_rpc_client
+                        .call(query_request, Some("poolv1.near"))
+                        .await?)
                 } else {
                     // Proxy to archival rpc if the block garbage collected
-                    Ok(data.near_rpc_client.archival_call(query_request).await?)
+                    Ok(data
+                        .near_rpc_client
+                        .archival_call(query_request, Some("poolv1.near"))
+                        .await?)
                 };
             } else {
                 function_call(data, block, account_id, method_name, args, is_optimistic).await
@@ -145,10 +164,16 @@ async fn query_call(
                     final_block.block_height - 5 * data.genesis_info.genesis_config.epoch_length;
                 return if block.block_height > expected_earliest_available_block {
                     // Proxy to regular rpc if the block is available
-                    Ok(data.near_rpc_client.call(query_request).await?)
+                    Ok(data
+                        .near_rpc_client
+                        .call(query_request, Some("query_view_access_key_list"))
+                        .await?)
                 } else {
                     // Proxy to archival rpc if the block garbage collected
-                    Ok(data.near_rpc_client.archival_call(query_request).await?)
+                    Ok(data
+                        .near_rpc_client
+                        .archival_call(query_request, Some("query_view_access_key_list"))
+                        .await?)
                 };
             }
             #[cfg(feature = "account_access_keys")]
@@ -176,21 +201,6 @@ async fn query_call(
             near_primitives::types::BlockId::Height(block_height),
         );
 
-        // When the data check fails, we want to emit the log message and increment the
-        // corresponding metric. Despite the metrics have "proxies" in their names, we
-        // are not proxying the requests anymore and respond with the error to the client.
-        // Since we already have the dashboard using these metric names, we don't want to
-        // change them and reuse them for the observability of the shadow data consistency checks.
-        let method_name = match &query_request.request {
-            near_primitives::views::QueryRequest::ViewAccount { .. } => "query_view_account",
-            near_primitives::views::QueryRequest::ViewCode { .. } => "query_view_code",
-            near_primitives::views::QueryRequest::ViewAccessKey { .. } => "query_view_access_key",
-            near_primitives::views::QueryRequest::ViewState { .. } => "query_view_state",
-            near_primitives::views::QueryRequest::CallFunction { .. } => "query_call_function",
-            near_primitives::views::QueryRequest::ViewAccessKeyList { .. } => {
-                "query_view_access_key_list"
-            }
-        };
         crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
             &result,

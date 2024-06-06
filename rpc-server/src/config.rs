@@ -26,6 +26,7 @@ impl GenesisInfo {
         let genesis_config = near_rpc_client
             .call(
                 near_jsonrpc_client::methods::EXPERIMENTAL_genesis_config::RpcGenesisConfigRequest,
+                None,
             )
             .await
             .expect("Error to get genesis config");

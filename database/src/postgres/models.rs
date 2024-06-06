@@ -433,14 +433,14 @@ impl TransactionDetail {
     pub async fn get_transaction_by_hash(
         mut conn: crate::postgres::PgAsyncConn,
         transaction_hash: &str,
-    ) -> anyhow::Result<Vec<u8>> {
+    ) -> anyhow::Result<(bigdecimal::BigDecimal, Vec<u8>)> {
         let response = transaction_detail::table
             .filter(transaction_detail::transaction_hash.eq(transaction_hash))
             .select(Self::as_select())
             .first(&mut conn)
             .await?;
 
-        Ok(response.transaction_details)
+        Ok((response.block_height, response.transaction_details))
     }
 }
 

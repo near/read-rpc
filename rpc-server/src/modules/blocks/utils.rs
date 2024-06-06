@@ -122,16 +122,25 @@ pub async fn fetch_block_from_cache_or_get(
             Some(data.genesis_info.genesis_block_cache)
         }
     };
-    match block {
-        Some(block) => Ok(block),
+    let cache_block = match block {
+        Some(block) => block,
         None => {
             let block_from_s3 = fetch_block(data, block_reference, method_name).await?;
             let block = CacheBlock::from(&block_from_s3.block_view);
 
             data.blocks_cache.put(block.block_height, block).await;
-            Ok(block)
+            block
         }
-    }
+    };
+    // increase block category metrics
+    crate::metrics::increase_request_category_metrics(
+        data,
+        block_reference,
+        method_name,
+        Some(cache_block.block_height),
+    )
+    .await;
+    Ok(cache_block)
 }
 
 /// Determines whether a given `StateChangeWithCauseView` object matches a set of criteria

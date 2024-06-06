@@ -61,7 +61,7 @@ async fn fetch_receipt(
     let receipt_record = fetch_receipt_record(data, request, "EXPERIMENTAL_receipt").await?;
 
     // Getting the raw Vec<u8> of the TransactionDetails from ScyllaDB
-    let transaction_details = data
+    let (_, transaction_details) = data
         .db_manager
         .get_transaction_by_hash(
             &receipt_record.parent_transaction_hash.to_string(),
@@ -104,8 +104,8 @@ async fn fetch_receipt_record(
     near_jsonrpc::primitives::types::receipts::RpcReceiptError,
 > {
     let receipt_id = request.receipt_reference.receipt_id;
-
-    data.db_manager
+    let result = data
+        .db_manager
         .get_receipt_by_id(receipt_id, method_name)
         .await
         .map_err(|err| {
@@ -113,5 +113,18 @@ async fn fetch_receipt_record(
             near_jsonrpc::primitives::types::receipts::RpcReceiptError::UnknownReceipt {
                 receipt_id,
             }
-        })
+        });
+    if let Ok(receipt_record) = &result {
+        // increase block category metrics
+        crate::metrics::increase_request_category_metrics(
+            data,
+            &near_primitives::types::BlockReference::BlockId(
+                near_primitives::types::BlockId::Height(receipt_record.block_height),
+            ),
+            method_name,
+            Some(receipt_record.block_height),
+        )
+        .await;
+    };
+    result
 }

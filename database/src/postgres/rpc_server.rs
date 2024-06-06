@@ -286,7 +286,7 @@ impl crate::ReaderDbManager for PostgresDBManager {
         &self,
         transaction_hash: &str,
         method_name: &str,
-    ) -> anyhow::Result<readnode_primitives::TransactionDetails> {
+    ) -> anyhow::Result<(u64, readnode_primitives::TransactionDetails)> {
         if let Ok(transaction) = self
             .get_indexed_transaction_by_hash(transaction_hash, method_name)
             .await
@@ -302,20 +302,26 @@ impl crate::ReaderDbManager for PostgresDBManager {
         &self,
         transaction_hash: &str,
         _method_name: &str,
-    ) -> anyhow::Result<readnode_primitives::TransactionDetails> {
-        let transaction_data = crate::models::TransactionDetail::get_transaction_by_hash(
-            Self::get_connection(&self.pg_pool).await?,
-            transaction_hash,
-        )
-        .await?;
-        Ok(borsh::from_slice::<readnode_primitives::TransactionDetails>(&transaction_data)?)
+    ) -> anyhow::Result<(u64, readnode_primitives::TransactionDetails)> {
+        let (block_height, transaction_data) =
+            crate::models::TransactionDetail::get_transaction_by_hash(
+                Self::get_connection(&self.pg_pool).await?,
+                transaction_hash,
+            )
+            .await?;
+        Ok((
+            block_height
+                .to_u64()
+                .expect("Failed to parse `block_height` to u64"),
+            borsh::from_slice::<readnode_primitives::TransactionDetails>(&transaction_data)?,
+        ))
     }
 
     async fn get_indexing_transaction_by_hash(
         &self,
         transaction_hash: &str,
         _method_name: &str,
-    ) -> anyhow::Result<readnode_primitives::TransactionDetails> {
+    ) -> anyhow::Result<(u64, readnode_primitives::TransactionDetails)> {
         let data_value = crate::models::TransactionCache::get_transaction_by_hash(
             Self::get_connection(&self.pg_pool).await?,
             transaction_hash,
@@ -342,7 +348,7 @@ impl crate::ReaderDbManager for PostgresDBManager {
                 .push(execution_outcome)
         }
 
-        Ok(transaction_details.into())
+        Ok((transaction_details.block_height, transaction_details.into()))
     }
 
     async fn get_block_by_height_and_shard_id(
