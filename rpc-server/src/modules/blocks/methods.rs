@@ -24,15 +24,11 @@ pub async fn block(
     ) = &block_request.block_reference
     {
         if crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
-            // increase metrics before proxy request
-            crate::metrics::increase_request_category_metrics(
-                &data,
-                &block_request.block_reference,
-                None,
-            )
-            .await;
             // Proxy if the optimistic updating is not working
-            let block_view = data.near_rpc_client.call(block_request).await?;
+            let block_view = data
+                .near_rpc_client
+                .call(block_request, Some("optimistic"))
+                .await?;
             return Ok(near_jsonrpc::primitives::types::blocks::RpcBlockResponse { block_view });
         }
     };
@@ -81,15 +77,11 @@ pub async fn changes_in_block_by_type(
     ) = &changes_in_block_request.block_reference
     {
         if crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
-            // increase metrics before proxy request
-            crate::metrics::increase_request_category_metrics(
-                &data,
-                &changes_in_block_request.block_reference,
-                None,
-            )
-            .await;
             // Proxy if the optimistic updating is not working
-            return Ok(data.near_rpc_client.call(changes_in_block_request).await?);
+            return Ok(data
+                .near_rpc_client
+                .call(changes_in_block_request, Some("optimistic"))
+                .await?);
         }
     };
 
@@ -114,15 +106,11 @@ pub async fn changes_in_block(
     ) = &changes_in_block_request.block_reference
     {
         if crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
-            // increase metrics before proxy request
-            crate::metrics::increase_request_category_metrics(
-                &data,
-                &changes_in_block_request.block_reference,
-                None,
-            )
-            .await;
             // Proxy if the optimistic updating is not working
-            return Ok(data.near_rpc_client.call(changes_in_block_request).await?);
+            return Ok(data
+                .near_rpc_client
+                .call(changes_in_block_request, Some("optimistic"))
+                .await?);
         }
     };
 
@@ -143,6 +131,7 @@ async fn block_call(
             crate::metrics::increase_request_category_metrics(
                 &data,
                 &block_request.block_reference,
+                "block",
                 Some(block.block_view.header.height),
             )
             .await;
@@ -192,14 +181,6 @@ async fn changes_in_block_call(
     .await
     .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
 
-    // increase block category metrics
-    crate::metrics::increase_request_category_metrics(
-        &data,
-        &params.block_reference,
-        Some(cache_block.block_height),
-    )
-    .await;
-
     let result = fetch_changes_in_block(&data, cache_block, &params.block_reference).await;
     #[cfg(feature = "shadow_data_consistency")]
     {
@@ -232,14 +213,6 @@ async fn changes_in_block_by_type_call(
         fetch_block_from_cache_or_get(&data, &params.block_reference, "EXPERIMENTAL_changes")
             .await
             .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
-
-    // increase block category metrics
-    crate::metrics::increase_request_category_metrics(
-        &data,
-        &params.block_reference,
-        Some(cache_block.block_height),
-    )
-    .await;
 
     let result = fetch_changes_in_block_by_type(
         &data,
@@ -402,6 +375,16 @@ pub async fn fetch_chunk(
         shard_id,
     )
     .await?;
+    // increase block category metrics
+    crate::metrics::increase_request_category_metrics(
+        data,
+        &near_primitives::types::BlockReference::BlockId(near_primitives::types::BlockId::Height(
+            block_height,
+        )),
+        "chunk",
+        Some(block_height),
+    )
+    .await;
 
     Ok(near_jsonrpc::primitives::types::chunks::RpcChunkResponse { chunk_view })
 }

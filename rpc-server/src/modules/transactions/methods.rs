@@ -11,7 +11,7 @@ pub async fn send_tx(
     Params(params): Params<serde_json::Value>,
 ) -> Result<near_jsonrpc::primitives::types::transactions::RpcTransactionResponse, RPCError> {
     let request = near_jsonrpc_client::methods::send_tx::RpcSendTransactionRequest::parse(params)?;
-    Ok(data.near_rpc_client.call(request).await?)
+    Ok(data.near_rpc_client.call(request, Some("send_tx")).await?)
 }
 
 /// Queries status of a transaction by hash and returns the final transaction result.
@@ -104,7 +104,11 @@ pub async fn broadcast_tx_async(
             near_jsonrpc_client::methods::broadcast_tx_async::RpcBroadcastTxAsyncRequest {
                 signed_transaction: tx_async_request.signed_transaction,
             };
-        match data.near_rpc_client.call(proxy_params).await {
+        match data
+            .near_rpc_client
+            .call(proxy_params, Some("broadcast_tx_async"))
+            .await
+        {
             Ok(resp) => Ok(resp),
             Err(err) => Err(RPCError::internal_error(&err.to_string())),
         }
@@ -130,7 +134,10 @@ pub async fn broadcast_tx_commit(
             near_jsonrpc_client::methods::broadcast_tx_commit::RpcBroadcastTxCommitRequest {
                 signed_transaction: tx_commit_request.signed_transaction,
             };
-        let result = data.near_rpc_client.call(proxy_params).await?;
+        let result = data
+            .near_rpc_client
+            .call(proxy_params, Some("broadcast_tx_commit"))
+            .await?;
         Ok(
             near_jsonrpc::primitives::types::transactions::RpcTransactionResponse {
                 final_execution_outcome: Some(FinalExecutionOutcome(result)),
@@ -168,7 +175,7 @@ async fn tx_status_common(
         } => *tx_hash,
     };
 
-    let transaction_details = data
+    let (block_height, transaction_details) = data
         .db_manager
         .get_transaction_by_hash(&tx_hash.to_string(), method_name)
         .await
@@ -177,6 +184,17 @@ async fn tx_status_common(
                 requested_transaction_hash: tx_hash,
             }
         })?;
+
+    // increase block category metrics
+    crate::metrics::increase_request_category_metrics(
+        data,
+        &near_primitives::types::BlockReference::BlockId(near_primitives::types::BlockId::Height(
+            block_height,
+        )),
+        method_name,
+        Some(block_height),
+    )
+    .await;
 
     if fetch_receipt {
         Ok(

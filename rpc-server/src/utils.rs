@@ -61,14 +61,17 @@ impl JsonRpcClient {
     pub async fn call<M>(
         &self,
         params: M,
+        method_name: Option<&str>,
     ) -> near_jsonrpc_client::MethodCallResult<M::Response, M::Error>
     where
         M: near_jsonrpc_client::methods::RpcMethod + std::fmt::Debug,
     {
         tracing::debug!("PROXY call. {:?}", params);
-        crate::metrics::REQUESTS_COUNTER
-            .with_label_values(&["regular_proxy"])
-            .inc();
+        if let Some(method_name) = method_name {
+            crate::metrics::TOTAL_REQUESTS_COUNTER
+                .with_label_values(&[method_name, "proxy"])
+                .inc();
+        }
         self.rpc_call(params, false).await
     }
 
@@ -76,14 +79,17 @@ impl JsonRpcClient {
     pub async fn archival_call<M>(
         &self,
         params: M,
+        method_name: Option<&str>,
     ) -> near_jsonrpc_client::MethodCallResult<M::Response, M::Error>
     where
         M: near_jsonrpc_client::methods::RpcMethod + std::fmt::Debug,
     {
         tracing::debug!("ARCHIVAL PROXY call. {:?}", params);
-        crate::metrics::REQUESTS_COUNTER
-            .with_label_values(&["archive_proxy"])
-            .inc();
+        if let Some(method_name) = method_name {
+            crate::metrics::TOTAL_REQUESTS_COUNTER
+                .with_label_values(&[method_name, "archive_proxy"])
+                .inc();
+        }
         self.rpc_call(params, true).await
     }
 
@@ -112,7 +118,7 @@ pub async fn get_final_block(
             near_primitives::types::Finality::Final
         }),
     };
-    let block_view = near_rpc_client.call(block_request_method).await?;
+    let block_view = near_rpc_client.call(block_request_method, None).await?;
 
     // Updating the metric to expose the block height considered as final by the server
     // this metric can be used to calculate the lag between the server and the network
@@ -138,7 +144,7 @@ pub async fn get_current_validators(
     let params = near_jsonrpc_client::methods::validators::RpcValidatorRequest {
         epoch_reference: near_primitives::types::EpochReference::Latest,
     };
-    Ok(near_rpc_client.call(params).await?)
+    Ok(near_rpc_client.call(params, None).await?)
 }
 
 pub async fn get_current_epoch_config(
@@ -150,7 +156,7 @@ pub async fn get_current_epoch_config(
                 near_primitives::types::Finality::Final,
             ),
         };
-    let protocol_config_view = near_rpc_client.call(params).await?;
+    let protocol_config_view = near_rpc_client.call(params, None).await?;
     Ok(epoch_config_from_protocol_config_view(protocol_config_view).await)
 }
 
