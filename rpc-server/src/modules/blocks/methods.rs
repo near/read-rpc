@@ -27,7 +27,7 @@ pub async fn block(
             // Proxy if the optimistic updating is not working
             let block_view = data
                 .near_rpc_client
-                .call(block_request, Some("optimistic"))
+                .call(block_request, Some("block"))
                 .await?;
             return Ok(near_jsonrpc::primitives::types::blocks::RpcBlockResponse { block_view });
         }
@@ -80,7 +80,7 @@ pub async fn changes_in_block_by_type(
             // Proxy if the optimistic updating is not working
             return Ok(data
                 .near_rpc_client
-                .call(changes_in_block_request, Some("optimistic"))
+                .call(changes_in_block_request, Some("EXPERIMENTAL_changes"))
                 .await?);
         }
     };
@@ -109,7 +109,10 @@ pub async fn changes_in_block(
             // Proxy if the optimistic updating is not working
             return Ok(data
                 .near_rpc_client
-                .call(changes_in_block_request, Some("optimistic"))
+                .call(
+                    changes_in_block_request,
+                    Some("EXPERIMENTAL_changes_in_block"),
+                )
                 .await?);
         }
     };
