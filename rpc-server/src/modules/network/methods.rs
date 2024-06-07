@@ -89,7 +89,10 @@ pub async fn network_info(
 ) -> Result<near_jsonrpc::primitives::types::network_info::RpcNetworkInfoResponse, RPCError> {
     Ok(data
         .near_rpc_client
-        .call(near_jsonrpc_client::methods::network_info::RpcNetworkInfoRequest)
+        .call(
+            near_jsonrpc_client::methods::network_info::RpcNetworkInfoRequest,
+            Some("network_info"),
+        )
         .await?)
 }
 
@@ -101,7 +104,10 @@ pub async fn validators(
     tracing::debug!("`validators` called with parameters: {:?}", request);
     // Latest epoch validators fetches from the Near RPC node
     if let near_primitives::types::EpochReference::Latest = &request.epoch_reference {
-        let validator_info = data.near_rpc_client.call(request).await?;
+        let validator_info = data
+            .near_rpc_client
+            .call(request, Some("validators"))
+            .await?;
         return Ok(
             near_jsonrpc::primitives::types::validator::RpcValidatorResponse { validator_info },
         );
@@ -116,7 +122,10 @@ pub async fn validators(
             .epoch_id
             == epoch_id.0
         {
-            let validator_info = data.near_rpc_client.call(request).await?;
+            let validator_info = data
+                .near_rpc_client
+                .call(request, Some("validators"))
+                .await?;
             return Ok(
                 near_jsonrpc::primitives::types::validator::RpcValidatorResponse { validator_info },
             );
@@ -170,16 +179,38 @@ pub async fn validators_ordered(
                 final_block.block_height - 5 * data.genesis_info.genesis_config.epoch_length;
             if block.block_height > expected_earliest_available_block {
                 // Proxy to regular rpc if the block is available
-                Ok(data.near_rpc_client.call(request).await?)
+                Ok(data
+                    .near_rpc_client
+                    .call(request, Some("EXPERIMENTAL_validators_ordered"))
+                    .await?)
             } else {
                 // Proxy to archival rpc if the block garbage collected
-                Ok(data.near_rpc_client.archival_call(request).await?)
+                Ok(data
+                    .near_rpc_client
+                    .archival_call(request, Some("EXPERIMENTAL_validators_ordered"))
+                    .await?)
             }
         } else {
-            Ok(data.near_rpc_client.call(request).await?)
+            Ok(data
+                .near_rpc_client
+                .call(request, Some("EXPERIMENTAL_validators_ordered"))
+                .await?)
         }
     } else {
-        Ok(data.near_rpc_client.call(request).await?)
+        // increase block category metrics
+        crate::metrics::increase_request_category_metrics(
+            &data,
+            &near_primitives::types::BlockReference::Finality(
+                near_primitives::types::Finality::Final,
+            ),
+            "EXPERIMENTAL_validators_ordered",
+            None,
+        )
+        .await;
+        Ok(data
+            .near_rpc_client
+            .call(request, Some("EXPERIMENTAL_validators_ordered"))
+            .await?)
     }
 }
 
@@ -231,13 +262,26 @@ async fn validators_call(
     near_jsonrpc::primitives::types::validator::RpcValidatorError,
 > {
     let validators = match &validator_request.epoch_reference {
-        near_primitives::types::EpochReference::EpochId(epoch_id) => data
-            .db_manager
-            .get_validators_by_epoch_id(epoch_id.0, "validators")
-            .await
-            .map_err(|_err| {
-                near_jsonrpc::primitives::types::validator::RpcValidatorError::UnknownEpoch
-            })?,
+        near_primitives::types::EpochReference::EpochId(epoch_id) => {
+            let validators = data
+                .db_manager
+                .get_validators_by_epoch_id(epoch_id.0, "validators")
+                .await
+                .map_err(|_err| {
+                    near_jsonrpc::primitives::types::validator::RpcValidatorError::UnknownEpoch
+                })?;
+            // increase block category metrics
+            crate::metrics::increase_request_category_metrics(
+                data,
+                &near_primitives::types::BlockReference::BlockId(
+                    near_primitives::types::BlockId::Height(validators.epoch_start_height),
+                ),
+                "validators",
+                Some(validators.epoch_start_height),
+            )
+            .await;
+            validators
+        }
         near_primitives::types::EpochReference::BlockId(block_id) => {
             let block_reference = near_primitives::types::BlockReference::BlockId(block_id.clone());
             let block = fetch_block_from_cache_or_get(data, &block_reference, "validators")

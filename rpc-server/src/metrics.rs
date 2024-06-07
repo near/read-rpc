@@ -96,10 +96,10 @@ lazy_static! {
         &["method_name"] // This declares a label named `method name`
     ).unwrap();
 
-    pub(crate) static ref REQUESTS_COUNTER: IntCounterVec = register_int_counter_vec(
-        "requests_counter",
-        "Total number of requests",
-        &["request_type"] // This declares a label named `request_type`
+    pub(crate) static ref TOTAL_REQUESTS_COUNTER: IntCounterVec = register_int_counter_vec(
+        "total_requests_counter",
+        "Total number of method requests by type",
+        &["method_name", "request_type"] // This declares a label named `method_name` and `request_type`
     ).unwrap();
 
     pub(crate) static ref OPTIMISTIC_STATUS: IntGauge = try_create_int_gauge(
@@ -128,6 +128,7 @@ lazy_static! {
 pub async fn increase_request_category_metrics(
     data: &jsonrpc_v2::Data<crate::config::ServerContext>,
     block_reference: &near_primitives::types::BlockReference,
+    method_name: &str,
     block_height: Option<u64>,
 ) {
     match block_reference {
@@ -135,38 +136,49 @@ pub async fn increase_request_category_metrics(
             let final_block = data.blocks_info_by_finality.final_cache_block().await;
             let expected_earliest_available_block =
                 final_block.block_height - 5 * data.genesis_info.genesis_config.epoch_length;
-            if block_height.unwrap_or_default() > expected_earliest_available_block {
+            // By default, all requests should be historical, therefore
+            // if block_height is None we use `genesis.block_height` by default
+            if block_height.unwrap_or(data.genesis_info.genesis_block_cache.block_height)
+                > expected_earliest_available_block
+            {
                 // This is request to regular nodes which includes 5 last epochs
-                REQUESTS_COUNTER.with_label_values(&["regular"]).inc();
+                TOTAL_REQUESTS_COUNTER
+                    .with_label_values(&[method_name, "regular"])
+                    .inc();
             } else {
                 // This is a request to archival nodes which include blocks from genesis (later than 5 epochs ago)
-                REQUESTS_COUNTER.with_label_values(&["historical"]).inc();
+                TOTAL_REQUESTS_COUNTER
+                    .with_label_values(&[method_name, "historical"])
+                    .inc();
             }
         }
         near_primitives::types::BlockReference::Finality(finality) => {
+            // All Finality is requests to regular nodes which includes 5 last epochs
+            TOTAL_REQUESTS_COUNTER
+                .with_label_values(&[method_name, "regular"])
+                .inc();
             match finality {
-                // Increase the REQUESTS_COUNTER `final` metric
+                // Increase the TOTAL_REQUESTS_COUNTER `final` metric
                 // if the request has final finality
                 near_primitives::types::Finality::DoomSlug
                 | near_primitives::types::Finality::Final => {
-                    REQUESTS_COUNTER.with_label_values(&["final"]).inc();
+                    TOTAL_REQUESTS_COUNTER
+                        .with_label_values(&[method_name, "final"])
+                        .inc();
                 }
-                // Increase the REQUESTS_COUNTER `optimistic` metric
+                // Increase the TOTAL_REQUESTS_COUNTER `optimistic` metric
                 // if the request has optimistic finality
                 near_primitives::types::Finality::None => {
-                    REQUESTS_COUNTER.with_label_values(&["optimistic"]).inc();
-                    // Increase the REQUESTS_COUNTER `proxy_optimistic` metric
-                    // if the optimistic is not updating and proxy to native JSON-RPC
-                    if crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
-                        REQUESTS_COUNTER
-                            .with_label_values(&["proxy_optimistic"])
-                            .inc();
-                    }
+                    TOTAL_REQUESTS_COUNTER
+                        .with_label_values(&[method_name, "optimistic"])
+                        .inc();
                 }
             }
         }
         near_primitives::types::BlockReference::SyncCheckpoint(_) => {
-            REQUESTS_COUNTER.with_label_values(&["historical"]).inc();
+            TOTAL_REQUESTS_COUNTER
+                .with_label_values(&[method_name, "historical"])
+                .inc();
         }
     }
 }

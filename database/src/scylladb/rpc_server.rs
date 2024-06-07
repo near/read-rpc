@@ -124,7 +124,7 @@ impl ScyllaStorageManager for ScyllaDBManager {
             // ref: https://github.com/near/near-indexer-for-explorer/issues/84
             get_transaction_by_hash: Self::prepare_read_query(
                 &scylla_db_session,
-                "SELECT transaction_details FROM tx_indexer.transactions_details WHERE transaction_hash = ? LIMIT 1",
+                "SELECT block_height, transaction_details FROM tx_indexer.transactions_details WHERE transaction_hash = ? LIMIT 1",
             ).await?,
             get_indexing_transaction_by_hash: Self::prepare_read_query(
                 &scylla_db_session,
@@ -485,7 +485,7 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         &self,
         transaction_hash: &str,
         method_name: &str,
-    ) -> anyhow::Result<readnode_primitives::TransactionDetails> {
+    ) -> anyhow::Result<(u64, readnode_primitives::TransactionDetails)> {
         if let Ok(transaction) = self
             .get_indexed_transaction_by_hash(transaction_hash, method_name)
             .await
@@ -503,20 +503,20 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         &self,
         transaction_hash: &str,
         method_name: &str,
-    ) -> anyhow::Result<readnode_primitives::TransactionDetails> {
+    ) -> anyhow::Result<(u64, readnode_primitives::TransactionDetails)> {
         crate::metrics::DATABASE_READ_QUERIES
             .with_label_values(&[method_name, "tx_indexer.transactions_details"])
             .inc();
-        let (data_value,) = Self::execute_prepared_query(
+        let (block_height, data_value) = Self::execute_prepared_query(
             &self.scylla_session,
             &self.get_transaction_by_hash,
             (transaction_hash.to_string(),),
         )
         .await?
         .single_row()?
-        .into_typed::<(Vec<u8>,)>()?;
+        .into_typed::<(num_bigint::BigInt, Vec<u8>)>()?;
         match borsh::from_slice::<readnode_primitives::TransactionDetails>(&data_value) {
-            Ok(tx) => Ok(tx),
+            Ok(tx) => Ok((u64::try_from(block_height)?, tx)),
             Err(e) => {
                 tracing::warn!(
                     "Failed tx_details borsh deserialize: TX_HASH - {}, ERROR: {:?}",
@@ -534,7 +534,7 @@ impl crate::ReaderDbManager for ScyllaDBManager {
         &self,
         transaction_hash: &str,
         method_name: &str,
-    ) -> anyhow::Result<readnode_primitives::TransactionDetails> {
+    ) -> anyhow::Result<(u64, readnode_primitives::TransactionDetails)> {
         crate::metrics::DATABASE_READ_QUERIES
             .with_label_values(&[method_name, "tx_indexer_cache.transactions"])
             .inc();
@@ -574,7 +574,7 @@ impl crate::ReaderDbManager for ScyllaDBManager {
                 .push(execution_outcome);
         }
 
-        Ok(transaction_details.into())
+        Ok((transaction_details.block_height, transaction_details.into()))
     }
 
     /// Returns the block height and shard id by the given block height
