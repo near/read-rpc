@@ -98,14 +98,8 @@ lazy_static! {
 
     pub(crate) static ref TOTAL_REQUESTS_COUNTER: IntCounterVec = register_int_counter_vec(
         "total_requests_counter",
-        "Total number of requests",
-        &["request_type"] // This declares a label named `request_type`
-    ).unwrap();
-
-    pub(crate) static ref TIMELINE_METHOD_REQUESTS_COUNTER: IntCounterVec = register_int_counter_vec(
-        "timeline_method_requests_counter",
-        "Total number of method requests by timeline",
-        &["method_name", "timeline"] // This declares a label named `timeline` and `method_name`
+        "Total number of method requests by type",
+        &["method_name", "request_type"] // This declares a label named `method_name` and `request_type`
     ).unwrap();
 
     pub(crate) static ref OPTIMISTIC_STATUS: IntGauge = try_create_int_gauge(
@@ -148,30 +142,27 @@ pub async fn increase_request_category_metrics(
                 > expected_earliest_available_block
             {
                 // This is request to regular nodes which includes 5 last epochs
-                TOTAL_REQUESTS_COUNTER.with_label_values(&["regular"]).inc();
-                TIMELINE_METHOD_REQUESTS_COUNTER
+                TOTAL_REQUESTS_COUNTER
                     .with_label_values(&[method_name, "regular"])
                     .inc();
             } else {
                 // This is a request to archival nodes which include blocks from genesis (later than 5 epochs ago)
                 TOTAL_REQUESTS_COUNTER
-                    .with_label_values(&["historical"])
-                    .inc();
-                TIMELINE_METHOD_REQUESTS_COUNTER
                     .with_label_values(&[method_name, "historical"])
                     .inc();
             }
         }
         near_primitives::types::BlockReference::Finality(finality) => {
             // All Finality is requests to regular nodes which includes 5 last epochs
-            TOTAL_REQUESTS_COUNTER.with_label_values(&["regular"]).inc();
+            TOTAL_REQUESTS_COUNTER
+                .with_label_values(&[method_name, "regular"])
+                .inc();
             match finality {
                 // Increase the TOTAL_REQUESTS_COUNTER `final` metric
                 // if the request has final finality
                 near_primitives::types::Finality::DoomSlug
                 | near_primitives::types::Finality::Final => {
-                    TOTAL_REQUESTS_COUNTER.with_label_values(&["final"]).inc();
-                    TIMELINE_METHOD_REQUESTS_COUNTER
+                    TOTAL_REQUESTS_COUNTER
                         .with_label_values(&[method_name, "final"])
                         .inc();
                 }
@@ -179,9 +170,6 @@ pub async fn increase_request_category_metrics(
                 // if the request has optimistic finality
                 near_primitives::types::Finality::None => {
                     TOTAL_REQUESTS_COUNTER
-                        .with_label_values(&["optimistic"])
-                        .inc();
-                    TIMELINE_METHOD_REQUESTS_COUNTER
                         .with_label_values(&[method_name, "optimistic"])
                         .inc();
                 }
@@ -189,9 +177,6 @@ pub async fn increase_request_category_metrics(
         }
         near_primitives::types::BlockReference::SyncCheckpoint(_) => {
             TOTAL_REQUESTS_COUNTER
-                .with_label_values(&["historical"])
-                .inc();
-            TIMELINE_METHOD_REQUESTS_COUNTER
                 .with_label_values(&[method_name, "historical"])
                 .inc();
         }

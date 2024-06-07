@@ -1,4 +1,4 @@
-use crate::metrics::{METHOD_CALLS_COUNTER, TOTAL_REQUESTS_COUNTER};
+use crate::metrics::METHOD_CALLS_COUNTER;
 use actix_web::dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform};
 use futures::future::LocalBoxFuture;
 use futures::StreamExt;
@@ -52,8 +52,6 @@ where
             if request.path() != "/" {
                 return service_clone.call(request).await;
             }
-
-            TOTAL_REQUESTS_COUNTER.with_label_values(&["total"]).inc();
 
             let (req, mut payload) = request.into_parts();
             let mut body = actix_web::web::BytesMut::new();

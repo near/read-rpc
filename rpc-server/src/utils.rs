@@ -69,10 +69,7 @@ impl JsonRpcClient {
         tracing::debug!("PROXY call. {:?}", params);
         if let Some(method_name) = method_name {
             crate::metrics::TOTAL_REQUESTS_COUNTER
-                .with_label_values(&["total_regular_proxy"])
-                .inc();
-            crate::metrics::TOTAL_REQUESTS_COUNTER
-                .with_label_values(&[&format!("proxy_{}", method_name)])
+                .with_label_values(&[method_name, "proxy"])
                 .inc();
         }
         self.rpc_call(params, false).await
@@ -90,10 +87,7 @@ impl JsonRpcClient {
         tracing::debug!("ARCHIVAL PROXY call. {:?}", params);
         if let Some(method_name) = method_name {
             crate::metrics::TOTAL_REQUESTS_COUNTER
-                .with_label_values(&["total_archive_proxy"])
-                .inc();
-            crate::metrics::TOTAL_REQUESTS_COUNTER
-                .with_label_values(&[&format!("archive_proxy_{}", method_name)])
+                .with_label_values(&[method_name, "archive_proxy"])
                 .inc();
         }
         self.rpc_call(params, true).await
