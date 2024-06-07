@@ -21,34 +21,6 @@ pub async fn query(
 ) -> Result<near_jsonrpc::primitives::types::query::RpcQueryResponse, RPCError> {
     let query_request = near_jsonrpc::primitives::types::query::RpcQueryRequest::parse(params)?;
 
-    if let near_primitives::types::BlockReference::Finality(
-        near_primitives::types::Finality::None,
-    ) = &query_request.block_reference
-    {
-        return if crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
-            // Proxy if the optimistic updating is not working
-            Ok(data
-                .near_rpc_client
-                .call(query_request, Some("optimistic"))
-                .await?)
-        } else {
-            // query_call with optimistic block
-            query_call(&data, query_request, true).await
-        };
-    };
-
-    query_call(&data, query_request, false).await
-}
-
-/// fetch query result from read-rpc
-#[allow(unused_mut)]
-#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
-async fn query_call(
-    data: &Data<ServerContext>,
-    mut query_request: near_jsonrpc::primitives::types::query::RpcQueryRequest,
-    is_optimistic: bool,
-) -> Result<near_jsonrpc::primitives::types::query::RpcQueryResponse, RPCError> {
-    tracing::debug!("`query` call. Params: {:?}", query_request,);
     // When the data check fails, we want to emit the log message and increment the
     // corresponding metric. Despite the metrics have "proxies" in their names, we
     // are not proxying the requests anymore and respond with the error to the client.
@@ -64,6 +36,36 @@ async fn query_call(
             "query_view_access_key_list"
         }
     };
+
+    if let near_primitives::types::BlockReference::Finality(
+        near_primitives::types::Finality::None,
+    ) = &query_request.block_reference
+    {
+        return if crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
+            // Proxy if the optimistic updating is not working
+            Ok(data
+                .near_rpc_client
+                .call(query_request, Some(method_name))
+                .await?)
+        } else {
+            // query_call with optimistic block
+            query_call(&data, query_request, method_name, true).await
+        };
+    };
+
+    query_call(&data, query_request, method_name, false).await
+}
+
+/// fetch query result from read-rpc
+#[allow(unused_mut)]
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
+async fn query_call(
+    data: &Data<ServerContext>,
+    mut query_request: near_jsonrpc::primitives::types::query::RpcQueryRequest,
+    method_name: &str,
+    is_optimistic: bool,
+) -> Result<near_jsonrpc::primitives::types::query::RpcQueryResponse, RPCError> {
+    tracing::debug!("`query` call. Params: {:?}", query_request,);
     let block = fetch_block_from_cache_or_get(data, &query_request.block_reference, method_name)
         .await
         .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
