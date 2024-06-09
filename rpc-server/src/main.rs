@@ -44,9 +44,14 @@ async fn main() -> anyhow::Result<()> {
     let blocks_info_by_finality_clone =
         std::sync::Arc::clone(&server_context.blocks_info_by_finality);
     let near_rpc_client_clone = near_rpc_client.clone();
+
     let redis_client = redis::Client::open(rpc_server_config.general.redis_url.clone())?
         .get_connection_manager()
-        .await?;
+        .await
+        .map_err(|err| {
+            tracing::error!("Failed to connect to Redis: {:?}", err);
+            err
+        })?;
     let redis_client_clone = redis_client.clone();
 
     // We need to update final block from Redis and Lake
