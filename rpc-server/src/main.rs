@@ -49,6 +49,7 @@ async fn main() -> anyhow::Result<()> {
         .get_connection_manager()
         .await
         .map_err(|err| {
+            crate::metrics::OPTIMISTIC_UPDATING.set_not_working();
             tracing::warn!("Failed to connect to Redis: {:?}", err);
         })
         .ok();
