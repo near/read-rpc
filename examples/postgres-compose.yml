@@ -2,6 +2,7 @@ version: '3.7'
 
 x-common-variables: &common-variables
   CHAIN_ID: mainnet
+  REDIS_URL: redis://redis:6379/
   DATABASE_URL: postgres:5432
   DATABASE_USER: postgres
   DATABASE_PASSWORD: password
@@ -29,6 +30,7 @@ services:
       - 8000:8000
     depends_on:
       - postgres
+      - redis
     restart: on-failure
 
   state-indexer:
@@ -45,6 +47,7 @@ services:
       - 8080:8080
     depends_on:
       - postgres
+      - redis
     restart: on-failure
 
   tx-indexer:
@@ -61,6 +64,7 @@ services:
       - 8081:8081
     depends_on:
       - postgres
+      - redis
     restart: on-failure
 
   postgres:
@@ -72,3 +76,9 @@ services:
       POSTGRES_PASSWORD: password
     ports:
       - 5432:5432
+
+  redis:
+    image: redis/redis-stack-server:latest
+    restart: always
+    ports:
+      - 6379:6379
