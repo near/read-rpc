@@ -278,7 +278,7 @@ pub async fn update_final_block_regularly_from_redis(
                 }
             }
             Err(err) => {
-                tracing::error!("Error to get final block from redis: {:?}", err);
+                tracing::warn!("Error to get final block from redis: {:?}", err);
             }
         }
     }
@@ -319,7 +319,7 @@ pub async fn update_optimistic_block_regularly(
                 }
             }
             Err(err) => {
-                tracing::error!("Error to get optimistic block from redis: {:?}", err);
+                tracing::warn!("Error to get optimistic block from redis: {:?}", err);
             }
         }
 
