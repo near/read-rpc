@@ -89,6 +89,10 @@ This feature flag enables the shadow data consistency checks. With this feature 
 
 We encountered a problem with the design of the table `account_access_keys` and overall design of the logic around it. We had to disable the table and proxy the calls of the `query.access_key_list` method to the real NEAR RPC. However, we still aren't ready to get rid of the code and that's why we hid it under the feature flag. We are planning to remove the code in the future and remove the feature flag.
 
+## Redis (Optional)
+
+Redis is used as an optional dependency when paired with the near_state_indexer feature. To use Redis, you need to specify the REDIS_URL in the .env file and set up a server using docker or `redis-server` command. Redis can be used to cache the state data indexed by the near_state_indexer for faster retrieval and reduced load on the database.
+
 ## Metrics (Prometheus)
 
 The read-rpc-server exposes Prometheus-compatible metrics at the `/metrics` endpoint.
