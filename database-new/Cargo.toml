@@ -1,0 +1,25 @@
+[package]
+name = "database-new"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.86"
+async-trait = "0.1.66"
+borsh = "1.3.1"
+futures = "0.3.5"
+sqlx = { version = "0.7.1", features = ["runtime-tokio-native-tls", "postgres", "migrate"] }
+
+configuration.workspace = true
+readnode-primitives.workspace = true
+
+near-chain-configs.workspace = true
+near-primitives.workspace = true
+near-crypto.workspace = true
+near-indexer-primitives.workspace = true

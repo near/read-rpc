@@ -104,18 +104,18 @@ impl ServerContext {
             std::sync::Arc::new(BlocksInfoByFinality::new(&near_rpc_client, &blocks_cache).await);
 
         let s3_client = rpc_server_config.lake_config.lake_s3_client().await;
-
-        #[cfg(feature = "scylla_db")]
+        println!("rpc_server_config.database: {:?}", &rpc_server_config.database);
+        // #[cfg(feature = "scylla_db")]
         let db_manager = database::prepare_db_manager::<
-            database::scylladb::rpc_server::ScyllaDBManager,
+            database::PostgresDBManager,
         >(&rpc_server_config.database)
         .await?;
 
-        #[cfg(all(feature = "postgres_db", not(feature = "scylla_db")))]
-        let db_manager = database::prepare_db_manager::<
-            database::postgres::rpc_server::PostgresDBManager,
-        >(&rpc_server_config.database)
-        .await?;
+        // #[cfg(all(feature = "postgres_db", not(feature = "scylla_db")))]
+        // let db_manager = database::prepare_db_manager::<
+        //     database::postgres::rpc_server::PostgresDBManager,
+        // >(&rpc_server_config.database)
+        // .await?;
 
         let tx_details_storage = tx_details_storage::TxDetailsStorage::new(
             rpc_server_config.tx_details_storage.storage_client().await,
