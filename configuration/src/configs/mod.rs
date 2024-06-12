@@ -104,7 +104,7 @@ impl Config for RpcServerConfig {
         Self {
             general: common_config.general.into(),
             lake_config: common_config.lake_config.into(),
-            database: database::DatabaseRpcServerConfig::from(common_config.database).into(),
+            database: database::DatabaseConfig::from(common_config.database),
             tx_details_storage: tx_details_storage::TxDetailsStorageConfig::from(
                 common_config.tx_details_storage,
             ),
@@ -136,7 +136,7 @@ impl Config for TxIndexerConfig {
             general: common_config.general.into(),
             rightsizing: common_config.rightsizing.into(),
             lake_config: common_config.lake_config.into(),
-            database: database::DatabaseTxIndexerConfig::from(common_config.database).into(),
+            database: database::DatabaseConfig::from(common_config.database),
             tx_details_storage: tx_details_storage::TxDetailsStorageConfig::from(
                 common_config.tx_details_storage,
             ),
@@ -164,7 +164,7 @@ impl Config for StateIndexerConfig {
             general: common_config.general.into(),
             rightsizing: common_config.rightsizing.into(),
             lake_config: common_config.lake_config.into(),
-            database: database::DatabaseStateIndexerConfig::from(common_config.database).into(),
+            database: database::DatabaseConfig::from(common_config.database),
         }
     }
 }
@@ -187,7 +187,7 @@ impl Config for NearStateIndexerConfig {
         Self {
             general: common_config.general.into(),
             rightsizing: common_config.rightsizing.into(),
-            database: database::DatabaseStateIndexerConfig::from(common_config.database).into(),
+            database: database::DatabaseConfig::from(common_config.database),
         }
     }
 }
@@ -204,7 +204,7 @@ impl Config for EpochIndexerConfig {
         Self {
             general: common_config.general.into(),
             lake_config: common_config.lake_config.into(),
-            database: database::DatabaseStateIndexerConfig::from(common_config.database).into(),
+            database: database::DatabaseConfig::from(common_config.database),
         }
     }
 }
