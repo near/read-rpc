@@ -44,10 +44,10 @@ pub trait ReaderDbManager {
         block_height: near_primitives::types::BlockHeight,
         key_data: readnode_primitives::StateKey,
         method_name: &str,
-    ) -> (
+    ) -> anyhow::Result<(
         readnode_primitives::StateKey,
         readnode_primitives::StateValue,
-    );
+    )>;
 
     /// Returns the near_primitives::account::Account at the given block height
     async fn get_account(

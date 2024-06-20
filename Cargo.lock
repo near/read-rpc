@@ -1089,6 +1089,17 @@ checksum = "8c3c1a368f70d6cf7302d78f8f7093da241fb8e8807c05cc9e51a125895a6d5b"
 
 [[package]]
 name = "bigdecimal"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a6773ddc0eafc0e509fb60e48dff7f450f8e674a0686ae8605e8d9901bd5eefa"
+dependencies = [
+ "num-bigint 0.4.6",
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
+name = "bigdecimal"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51d712318a27c7150326677b321a5fa91b55f6d9034ffd67f20319e147d40cee"
@@ -2100,7 +2111,7 @@ version = "0.2.12"
 dependencies = [
  "anyhow",
  "async-trait",
- "bigdecimal",
+ "bigdecimal 0.4.5",
  "borsh 1.5.1",
  "bytes",
  "configuration",
@@ -2134,14 +2145,19 @@ version = "0.2.12"
 dependencies = [
  "anyhow",
  "async-trait",
+ "bigdecimal 0.3.1",
  "borsh 1.5.1",
  "configuration",
  "futures",
+ "hex",
+ "lazy_static",
  "near-chain-configs 2.0.0",
  "near-crypto 2.0.0",
  "near-indexer-primitives",
  "near-primitives 2.0.0",
+ "prometheus",
  "readnode-primitives",
+ "serde_json",
  "sqlx",
 ]
 
@@ -2276,7 +2292,7 @@ version = "2.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff236accb9a5069572099f0b350a92e9560e8e63a9b8d546162f4a5e03026bb2"
 dependencies = [
- "bigdecimal",
+ "bigdecimal 0.4.5",
  "bitflags 2.6.0",
  "byteorder",
  "diesel_derives",
@@ -8575,7 +8591,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "345626c0dd5d9624c413daaba854685bba6a65cff4eb5ea0fb0366df16901f67"
 dependencies = [
  "async-trait",
- "bigdecimal",
+ "bigdecimal 0.4.5",
  "byteorder",
  "bytes",
  "chrono",
@@ -9112,6 +9128,7 @@ checksum = "24ba59a9342a3d9bab6c56c118be528b27c9b60e490080e9711a04dccac83ef6"
 dependencies = [
  "ahash 0.8.11",
  "atoi",
+ "bigdecimal 0.3.1",
  "byteorder",
  "bytes",
  "crc",
@@ -9191,6 +9208,7 @@ checksum = "1ed31390216d20e538e447a7a9b959e06ed9fc51c37b514b46eb758016ecd418"
 dependencies = [
  "atoi",
  "base64 0.21.7",
+ "bigdecimal 0.3.1",
  "bitflags 2.6.0",
  "byteorder",
  "bytes",
@@ -9233,6 +9251,7 @@ checksum = "7c824eb80b894f926f89a0b9da0c7f435d27cdd35b8c655b114e58223918577e"
 dependencies = [
  "atoi",
  "base64 0.21.7",
+ "bigdecimal 0.3.1",
  "bitflags 2.6.0",
  "byteorder",
  "crc",
@@ -9250,6 +9269,7 @@ dependencies = [
  "log",
  "md-5",
  "memchr",
+ "num-bigint 0.4.6",
  "once_cell",
  "rand 0.8.5",
  "serde",
@@ -9301,7 +9321,7 @@ dependencies = [
  "borsh 1.5.1",
  "clap",
  "configuration",
- "database",
+ "database-new",
  "epoch-indexer",
  "futures",
  "hex",
