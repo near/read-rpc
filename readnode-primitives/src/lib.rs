@@ -181,7 +181,9 @@ pub struct QueryData<T: borsh::BorshDeserialize> {
 pub struct ReceiptRecord {
     pub receipt_id: CryptoHash,
     pub parent_transaction_hash: CryptoHash,
+    pub receiver_id: near_indexer_primitives::types::AccountId,
     pub block_height: near_indexer_primitives::types::BlockHeight,
+    pub block_hash: CryptoHash,
     pub shard_id: near_indexer_primitives::types::ShardId,
 }
 
@@ -264,13 +266,13 @@ where
     }
 }
 
-impl<T> TryFrom<(String, String, T, T)> for ReceiptRecord
+impl<T> TryFrom<(String, String, String, T, String, T)> for ReceiptRecord
 where
     T: ToPrimitive,
 {
     type Error = anyhow::Error;
 
-    fn try_from(value: (String, String, T, T)) -> Result<Self, Self::Error> {
+    fn try_from(value: (String, String, String, T, String, T)) -> Result<Self, Self::Error> {
         let receipt_id = CryptoHash::from_str(&value.0).map_err(|err| {
             anyhow::anyhow!("Failed to parse `receipt_id` to CryptoHash: {}", err)
         })?;
@@ -280,19 +282,28 @@ where
                 err
             )
         })?;
+        let receiver_id =
+            near_indexer_primitives::types::AccountId::from_str(&value.2).map_err(|err| {
+                anyhow::anyhow!("Failed to parse `receiver_id` to AccountId: {}", err)
+            })?;
         let block_height = value
-            .2
+            .3
             .to_u64()
             .ok_or_else(|| anyhow::anyhow!("Failed to parse `block_height` to u64"))?;
+        let block_hash = CryptoHash::from_str(&value.4).map_err(|err| {
+            anyhow::anyhow!("Failed to parse `block_hash` to CryptoHash: {}", err)
+        })?;
         let shard_id = value
-            .3
+            .5
             .to_u64()
             .ok_or_else(|| anyhow::anyhow!("Failed to parse `shard_id` to u64"))?;
 
         Ok(ReceiptRecord {
             receipt_id,
             parent_transaction_hash,
+            receiver_id,
             block_height,
+            block_hash,
             shard_id,
         })
     }

@@ -34,14 +34,12 @@ pub trait StateIndexerDbManager {
         public_key: &[u8],
     ) -> anyhow::Result<()>;
 
-    #[cfg(feature = "account_access_keys")]
     async fn get_access_keys(
         &self,
         account_id: near_indexer_primitives::types::AccountId,
         block_height: u64,
     ) -> anyhow::Result<std::collections::HashMap<String, Vec<u8>>>;
 
-    #[cfg(feature = "account_access_keys")]
     async fn add_account_access_keys(
         &self,
         account_id: near_indexer_primitives::types::AccountId,
@@ -50,7 +48,6 @@ pub trait StateIndexerDbManager {
         access_key: Option<&[u8]>,
     ) -> anyhow::Result<()>;
 
-    #[cfg(feature = "account_access_keys")]
     async fn update_account_access_keys(
         &self,
         account_id: String,
@@ -107,6 +104,7 @@ pub trait StateIndexerDbManager {
     async fn get_block_by_hash(
         &self,
         block_hash: near_primitives::hash::CryptoHash,
+        method_name: &str,
     ) -> anyhow::Result<u64>;
 
     async fn update_meta(&self, indexer_id: &str, block_height: u64) -> anyhow::Result<()>;

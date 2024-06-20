@@ -21,8 +21,8 @@ $ mkdir -p src/postgres/migrations/meta_db
 
 ### Create Migration Files for Each Database
 ```
-sqlx migrate add --source src/postgres/migrations/shard_db <migration_name>
-sqlx migrate add --source src/postgres/migrations/meta_db <migration_name>
+sqlx migrate add -r --source src/postgres/migrations/shard_db <migration_name>
+sqlx migrate add -r --source src/postgres/migrations/meta_db <migration_name>
 ```
 #### Migration automatically applies to the database when the service starts
 
