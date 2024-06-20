@@ -1,3 +1,5 @@
+extern crate database_new as database;
+
 use clap::Parser;
 use futures::StreamExt;
 
@@ -190,18 +192,27 @@ async fn main() -> anyhow::Result<()> {
     let indexer_config = configuration::read_configuration::<configuration::StateIndexerConfig>().await?;
     let opts: Opts = Opts::parse();
 
-    #[cfg(feature = "scylla_db")]
-    let db_manager =
-        database::prepare_db_manager::<database::scylladb::state_indexer::ScyllaDBManager>(&indexer_config.database)
-            .await?;
+    // #[cfg(feature = "scylla_db")]
+    // let db_manager =
+    //     database::prepare_db_manager::<database::scylladb::state_indexer::ScyllaDBManager>(&indexer_config.database)
+    //         .await?;
 
-    #[cfg(all(feature = "postgres_db", not(feature = "scylla_db")))]
-    let db_manager =
-        database::prepare_db_manager::<database::postgres::state_indexer::PostgresDBManager>(&indexer_config.database)
-            .await?;
+    // #[cfg(all(feature = "postgres_db", not(feature = "scylla_db")))]
 
     let rpc_client = near_jsonrpc_client::JsonRpcClient::connect(&indexer_config.general.near_rpc_url)
         .header(("Referer", indexer_config.general.referer_header_value.clone()))?;
+
+    let protocol_config_view = rpc_client
+        .call(near_jsonrpc_client::methods::EXPERIMENTAL_protocol_config::RpcProtocolConfigRequest {
+            block_reference: near_primitives::types::BlockReference::Finality(near_primitives::types::Finality::Final),
+        })
+        .await?;
+
+    let db_manager = database::prepare_db_manager::<database::PostgresDBManager>(
+        &indexer_config.database,
+        protocol_config_view.shard_layout,
+    )
+    .await?;
     let start_block_height = configs::get_start_block_height(
         &rpc_client,
         &db_manager,

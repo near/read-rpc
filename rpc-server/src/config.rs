@@ -104,11 +104,12 @@ impl ServerContext {
             std::sync::Arc::new(BlocksInfoByFinality::new(&near_rpc_client, &blocks_cache).await);
 
         let s3_client = rpc_server_config.lake_config.lake_s3_client().await;
-        println!("rpc_server_config.database: {:?}", &rpc_server_config.database);
+
         // #[cfg(feature = "scylla_db")]
-        let db_manager = database::prepare_db_manager::<
-            database::PostgresDBManager,
-        >(&rpc_server_config.database)
+        let db_manager = database::prepare_db_manager::<database::PostgresDBManager>(
+            &rpc_server_config.database,
+            blocks_info_by_finality.epoch_config().await.shard_layout,
+        )
         .await?;
 
         // #[cfg(all(feature = "postgres_db", not(feature = "scylla_db")))]
