@@ -6557,6 +6557,7 @@ dependencies = [
  "lazy_static",
  "lru 0.12.3",
  "mimalloc",
+ "near-async",
  "near-chain-configs 1.40.0",
  "near-crypto 1.40.0",
  "near-indexer-primitives",

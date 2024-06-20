@@ -196,18 +196,6 @@ impl near_vm_runner::logic::External for CodeStorage {
         Ok(self.validators.values().sum())
     }
 
-    fn create_receipt(
-        &mut self,
-        _receipt_indices: Vec<near_vm_runner::logic::types::ReceiptIndex>,
-        _receiver_id: near_primitives::types::AccountId,
-    ) -> Result<near_vm_runner::logic::types::ReceiptIndex> {
-        Err(near_vm_runner::logic::VMLogicError::HostError(
-            near_vm_runner::logic::HostError::ProhibitedInView {
-                method_name: String::from("create_receipt"),
-            },
-        ))
-    }
-
     fn append_action_create_account(
         &mut self,
         _receipt_index: near_vm_runner::logic::types::ReceiptIndex,
@@ -291,5 +279,31 @@ impl near_vm_runner::logic::External for CodeStorage {
         _receipt_index: near_vm_runner::logic::types::ReceiptIndex,
     ) -> &near_primitives::types::AccountId {
         panic!("Prohibited in view. `get_receipt_receiver`");
+    }
+
+    fn create_action_receipt(
+        &mut self,
+        _receipt_indices: Vec<near_vm_runner::logic::types::ReceiptIndex>,
+        _receiver_id: near_primitives::types::AccountId,
+    ) -> Result<near_vm_runner::logic::types::ReceiptIndex> {
+        panic!("Prohibited in view. `create_action_receipt`");
+    }
+
+    fn create_promise_yield_receipt(
+        &mut self,
+        _receiver_id: near_primitives::types::AccountId,
+    ) -> Result<(
+        near_vm_runner::logic::types::ReceiptIndex,
+        near_indexer_primitives::CryptoHash,
+    )> {
+        panic!("Prohibited in view. `create_promise_yield_receipt`");
+    }
+
+    fn submit_promise_resume_data(
+        &mut self,
+        _data_id: near_indexer_primitives::CryptoHash,
+        _data: Vec<u8>,
+    ) -> Result<bool> {
+        panic!("Prohibited in view. `submit_promise_resume_data`");
     }
 }

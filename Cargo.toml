@@ -40,6 +40,7 @@ readnode-primitives = { path = "readnode-primitives" }
 epoch-indexer = { path = "epoch-indexer" }
 
 # Please, update the supported nearcore version in .cargo/config.toml file
+near-async = { git = 'https://github.com/kobayurii/nearcore.git', branch = "1.40.0-fork" }
 near-indexer = { git = 'https://github.com/kobayurii/nearcore.git', branch = "1.40.0-fork" }
 near-client = { git = 'https://github.com/kobayurii/nearcore.git', branch = "1.40.0-fork" }
 near-o11y = { git = 'https://github.com/kobayurii/nearcore.git', branch = "1.40.0-fork" }
