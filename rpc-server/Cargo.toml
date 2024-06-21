@@ -43,6 +43,7 @@ configuration.workspace = true
 database.workspace = true
 readnode-primitives.workspace = true
 
+near-async.workspace = true
 near-chain-configs.workspace = true
 near-crypto.workspace = true
 near-jsonrpc.workspace = true

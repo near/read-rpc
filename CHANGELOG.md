@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased](https://github.com/near/read-rpc/compare/main...develop)
 
+## [0.2.10](https://github.com/near/read-rpc/releases/tag/v0.2.10)
+### Supported Nearcore Version
+- nearcore v1.40.0
+- rust v1.77.0
+
 ## [0.2.9](https://github.com/near/read-rpc/releases/tag/v0.2.9)
 ### Supported Nearcore Version
 - nearcore v1.39.1

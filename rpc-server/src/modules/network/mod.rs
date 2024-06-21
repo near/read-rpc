@@ -24,6 +24,8 @@ pub async fn epoch_config_from_protocol_config_view(
             num_chunk_only_producer_seats: protocol_config_view.num_chunk_only_producer_seats,
             minimum_validators_per_shard: protocol_config_view.minimum_validators_per_shard,
             minimum_stake_ratio: protocol_config_view.minimum_stake_ratio,
+            shuffle_shard_assignment_for_chunk_producers: protocol_config_view
+                .shuffle_shard_assignment_for_chunk_producers,
         },
         validator_max_kickout_stake_perc: protocol_config_view.max_kickout_stake_perc,
     }
