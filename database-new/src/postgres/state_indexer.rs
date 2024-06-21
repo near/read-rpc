@@ -1,114 +1,59 @@
 use bigdecimal::ToPrimitive;
 
+impl crate::PostgresDBManager {
+    async fn save_state_changes_data_to_shard(
+        &self,
+        shard_id: near_primitives::types::ShardId,
+        state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
+        block_height: u64,
+        block_hash: near_indexer_primitives::CryptoHash,
+    ) -> anyhow::Result<()> {
+        let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
+            "INSERT INTO state_changes_data (account_id, block_height, block_hash, data_key, data_value) ",
+        );
+        query_builder.push_values(state_changes.iter(), |mut values, state_change| {
+            match &state_change.value {
+                near_primitives::views::StateChangeValueView::DataUpdate {
+                    account_id,
+                    key,
+                    value,
+                } => {
+                    let data_key: &[u8] = key.as_ref();
+                    let data_value: &[u8] = value.as_ref();
+                    values
+                        .push_bind(account_id.to_string())
+                        .push_bind(bigdecimal::BigDecimal::from(block_height))
+                        .push_bind(block_hash.to_string())
+                        .push_bind(hex::encode(&data_key).to_string())
+                        .push_bind(data_value);
+                }
+                near_primitives::views::StateChangeValueView::DataDeletion { account_id, key } => {
+                    let data_key: &[u8] = key.as_ref();
+                    let data_value: Option<&[u8]> = None;
+                    values
+                        .push_bind(account_id.to_string())
+                        .push_bind(bigdecimal::BigDecimal::from(block_height))
+                        .push_bind(block_hash.to_string())
+                        .push_bind(hex::encode(data_key).to_string())
+                        .push_bind(data_value);
+                }
+                _ => {}
+            }
+        });
+        query_builder
+            .build()
+            .execute(
+                self.shards_pool
+                    .get(&shard_id)
+                    .ok_or(anyhow::anyhow!("Shard not found"))?,
+            )
+            .await?;
+        Ok(())
+    }
+}
+
 #[async_trait::async_trait]
 impl crate::StateIndexerDbManager for crate::PostgresDBManager {
-    async fn add_state_changes(
-        &self,
-        account_id: near_primitives::types::AccountId,
-        block_height: u64,
-        block_hash: near_indexer_primitives::CryptoHash,
-        key: &[u8],
-        value: &[u8],
-    ) -> anyhow::Result<()> {
-        todo!()
-    }
-
-    async fn delete_state_changes(
-        &self,
-        account_id: near_primitives::types::AccountId,
-        block_height: u64,
-        block_hash: near_indexer_primitives::CryptoHash,
-        key: &[u8],
-    ) -> anyhow::Result<()> {
-        todo!()
-    }
-
-    async fn add_access_key(
-        &self,
-        account_id: near_primitives::types::AccountId,
-        block_height: u64,
-        block_hash: near_indexer_primitives::CryptoHash,
-        public_key: &[u8],
-        access_key: &[u8],
-    ) -> anyhow::Result<()> {
-        todo!()
-    }
-
-    async fn delete_access_key(
-        &self,
-        account_id: near_primitives::types::AccountId,
-        block_height: u64,
-        block_hash: near_indexer_primitives::CryptoHash,
-        public_key: &[u8],
-    ) -> anyhow::Result<()> {
-        todo!()
-    }
-
-    async fn get_access_keys(
-        &self,
-        account_id: near_primitives::types::AccountId,
-        block_height: u64,
-    ) -> anyhow::Result<std::collections::HashMap<String, Vec<u8>>> {
-        todo!()
-    }
-
-    async fn add_account_access_keys(
-        &self,
-        account_id: near_primitives::types::AccountId,
-        block_height: u64,
-        public_key: &[u8],
-        access_key: Option<&[u8]>,
-    ) -> anyhow::Result<()> {
-        todo!()
-    }
-
-    async fn update_account_access_keys(
-        &self,
-        account_id: String,
-        block_height: u64,
-        account_keys: std::collections::HashMap<String, Vec<u8>>,
-    ) -> anyhow::Result<()> {
-        todo!()
-    }
-
-    async fn add_contract_code(
-        &self,
-        account_id: near_primitives::types::AccountId,
-        block_height: u64,
-        block_hash: near_indexer_primitives::CryptoHash,
-        code: &[u8],
-    ) -> anyhow::Result<()> {
-        todo!()
-    }
-
-    async fn delete_contract_code(
-        &self,
-        account_id: near_primitives::types::AccountId,
-        block_height: u64,
-        block_hash: near_indexer_primitives::CryptoHash,
-    ) -> anyhow::Result<()> {
-        todo!()
-    }
-
-    async fn add_account(
-        &self,
-        account_id: near_primitives::types::AccountId,
-        block_height: u64,
-        block_hash: near_indexer_primitives::CryptoHash,
-        account: Vec<u8>,
-    ) -> anyhow::Result<()> {
-        todo!()
-    }
-
-    async fn delete_account(
-        &self,
-        account_id: near_primitives::types::AccountId,
-        block_height: u64,
-        block_hash: near_indexer_primitives::CryptoHash,
-    ) -> anyhow::Result<()> {
-        todo!()
-    }
-
     async fn add_block(
         &self,
         block_height: u64,
@@ -136,22 +81,22 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
             crate::primitives::HeightIncluded,
         )>,
     ) -> anyhow::Result<()> {
-        let mut query = sqlx::query(
-            "
-            INSERT INTO chunks (block_height, chunk_hash, shard_id, height_included)
-            VALUES
-            ",
+        let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
+            "INSERT INTO chunks (block_height, chunk_hash, shard_id, height_included) ",
         );
-        for (chunk_hash, shard_id, height_included) in chunks {
-            query = query
-                .bind(bigdecimal::BigDecimal::from(block_height))
-                .bind(chunk_hash.to_string())
-                .bind(bigdecimal::BigDecimal::from(shard_id))
-                .bind(bigdecimal::BigDecimal::from(height_included))
-                .bind(", ");
-        }
-        query = query.bind(";");
-        query.execute(&self.meta_db_pool).await?;
+
+        query_builder.push_values(
+            chunks.into_iter(),
+            |mut values, (chunk_hash, shard_id, height_included)| {
+                values
+                    .push_bind(bigdecimal::BigDecimal::from(block_height))
+                    .push_bind(chunk_hash.to_string())
+                    .push_bind(bigdecimal::BigDecimal::from(shard_id))
+                    .push_bind(bigdecimal::BigDecimal::from(height_included));
+            },
+        );
+
+        query_builder.build().execute(&self.meta_db_pool).await?;
         Ok(())
     }
 
@@ -288,5 +233,67 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
 
         futures::try_join!(updated_validators_future, updated_protocol_config_future)?;
         Ok(())
+    }
+
+    async fn save_state_changes_data(
+        &self,
+        state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
+        block_height: u64,
+        block_hash: near_indexer_primitives::CryptoHash,
+    ) -> anyhow::Result<()> {
+        let mut state_changes_by_shards: std::collections::HashMap<
+            u64,
+            Vec<near_primitives::views::StateChangeWithCauseView>,
+        > = std::collections::HashMap::new();
+        for state_change in state_changes {
+            match &state_change.value {
+                near_primitives::views::StateChangeValueView::DataUpdate { account_id, .. } | 
+                near_primitives::views::StateChangeValueView::DataDeletion { account_id, .. } => {
+                    let shard_id = near_primitives::shard_layout::account_id_to_shard_id(
+                        account_id,
+                        &self.shard_layout,
+                    );
+                    state_changes_by_shards
+                        .entry(shard_id)
+                        .or_insert_with(Vec::new)
+                        .push(state_change);
+                }
+                _ => {}
+            }
+        }
+        let futures = state_changes_by_shards
+            .into_iter()
+            .map(|(shard_id, changes)| {
+                self.save_state_changes_data_to_shard(shard_id, changes, block_height, block_hash)
+            });
+        futures::future::try_join_all(futures).await?;
+        Ok(())
+    }
+
+    async fn save_state_changes_access_key(
+        &self,
+        state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
+        block_height: u64,
+        block_hash: near_indexer_primitives::CryptoHash,
+    ) -> anyhow::Result<()> {
+        todo!()
+    }
+
+    async fn save_state_changes_contract(
+        &self,
+        state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
+        block_height: u64,
+        block_hash: near_indexer_primitives::CryptoHash,
+    ) -> anyhow::Result<()> {
+        todo!()
+    }
+
+    async fn save_state_changes_account(
+        &self,
+        state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
+        block_height: u64,
+        block_hash: near_indexer_primitives::CryptoHash,
+    ) -> anyhow::Result<()> {
+        todo!()
     }
 }

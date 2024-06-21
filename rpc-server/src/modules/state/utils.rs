@@ -33,9 +33,11 @@ pub async fn get_state_from_db_paginated(
         let mut tasks = futures::stream::FuturesUnordered::from_iter(futures);
         let mut data: HashMap<readnode_primitives::StateKey, readnode_primitives::StateValue> =
             HashMap::new();
-        while let Some((state_key, state_value)) = tasks.next().await {
-            if !state_value.is_empty() {
-                data.insert(state_key, state_value);
+        while let Some(result) = tasks.next().await {
+            if let Ok((state_key, state_value)) = result {
+                if !state_value.is_empty() {
+                    data.insert(state_key, state_value);
+                }
             }
         }
         let values = data
