@@ -19,9 +19,14 @@ pub async fn get_state_key_value_from_db(
     readnode_primitives::StateKey,
     readnode_primitives::StateValue,
 ) {
-    db_manager
-        .get_state_key_value(account_id, block_height, key_data, method_name)
+    if let Ok(result) = db_manager
+        .get_state_key_value(account_id, block_height, key_data.clone(), method_name)
         .await
+    {
+        result
+    } else {
+        (key_data, readnode_primitives::StateValue::default())
+    }
 }
 
 // Function to get state keys from the database
