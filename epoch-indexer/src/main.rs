@@ -1,3 +1,5 @@
+extern crate database_new as database;
+
 use crate::config::{Opts, StartOptions};
 use clap::Parser;
 use database::StateIndexerDbManager;
@@ -52,17 +54,16 @@ async fn main() -> anyhow::Result<()> {
 
     let opts: Opts = Opts::parse();
 
-    #[cfg(feature = "scylla_db")]
-    let db_manager = database::prepare_db_manager::<
-        database::scylladb::state_indexer::ScyllaDBManager,
-    >(&indexer_config.database)
-    .await?;
+    // #[cfg(feature = "scylla_db")]
+    let db_manager =
+        database::prepare_db_manager::<database::PostgresDBManager>(&indexer_config.database)
+            .await?;
 
-    #[cfg(all(feature = "postgres_db", not(feature = "scylla_db")))]
-    let db_manager = database::prepare_db_manager::<
-        database::postgres::state_indexer::PostgresDBManager,
-    >(&indexer_config.database)
-    .await?;
+    // #[cfg(all(feature = "postgres_db", not(feature = "scylla_db")))]
+    // let db_manager = database::prepare_db_manager::<
+    //     database::postgres::state_indexer::PostgresDBManager,
+    // >(&indexer_config.database)
+    // .await?;
 
     let indexer_id = &indexer_config.general.indexer_id;
     let s3_client = indexer_config.lake_config.lake_s3_client().await;

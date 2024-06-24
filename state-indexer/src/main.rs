@@ -134,22 +134,22 @@ async fn handle_state_changes(
     indexer_config: &configuration::StateIndexerConfig,
 ) -> anyhow::Result<()> {
     let mut state_changes_data_to_store =
-        std::collections::HashMap::<String, &near_indexer_primitives::views::StateChangeWithCauseView>::new();
+        std::collections::HashMap::<String, near_indexer_primitives::views::StateChangeWithCauseView>::new();
     let mut state_changes_access_key_to_store =
-        std::collections::HashMap::<String, &near_indexer_primitives::views::StateChangeWithCauseView>::new();
+        std::collections::HashMap::<String, near_indexer_primitives::views::StateChangeWithCauseView>::new();
     let mut state_changes_contract_to_store =
-        std::collections::HashMap::<String, &near_indexer_primitives::views::StateChangeWithCauseView>::new();
+        std::collections::HashMap::<String, near_indexer_primitives::views::StateChangeWithCauseView>::new();
     let mut state_changes_account_to_store =
-        std::collections::HashMap::<String, &near_indexer_primitives::views::StateChangeWithCauseView>::new();
+        std::collections::HashMap::<String, near_indexer_primitives::views::StateChangeWithCauseView>::new();
 
     let initial_state_changes = streamer_message
         .shards
         .iter()
-        .flat_map(|shard| shard.state_changes.iter());
+        .flat_map(|shard| shard.clone().state_changes.into_iter());
 
     // Collecting a unique list of StateChangeWithCauseView for account_id + change kind + suffix
     // by overwriting the records in the HashMap
-    for state_change in initial_state_changes {
+    for state_change in initial_state_changes.into_iter() {
         if !indexer_config.state_should_be_indexed(&state_change.value) {
             continue;
         };
@@ -158,7 +158,8 @@ async fn handle_state_changes(
             | StateChangeValueView::DataDeletion { account_id, key } => {
                 // returning a hex-encoded key to ensure we store data changes to the key
                 // (if there is more than one change to the same key)
-                let key = format!("{}_data_{}", account_id.as_str(), hex::encode(key.as_ref()));
+                let data_key: &[u8] = key.as_ref();
+                let key = format!("{}_data_{}", account_id.as_str(), hex::encode(data_key));
                 // This will override the previous record for this account_id + state change kind + suffix
                 state_changes_data_to_store.insert(key, state_change);
             }
@@ -189,20 +190,23 @@ async fn handle_state_changes(
     }
 
     // Asynchronous storing of StateChangeWithCauseView into the storage.
-    let futures_save_state_data =
-        db_manager.save_state_changes_data(state_changes_data_to_store.values().collect(), block_height, block_hash);
+    let futures_save_state_data = db_manager.save_state_changes_data(
+        state_changes_data_to_store.values().cloned().collect(),
+        block_height,
+        block_hash,
+    );
     let futures_save_state_access_key = db_manager.save_state_changes_access_key(
-        state_changes_access_key_to_store.values().collect(),
+        state_changes_access_key_to_store.values().cloned().collect(),
         block_height,
         block_hash,
     );
     let futures_save_state_contract = db_manager.save_state_changes_contract(
-        state_changes_contract_to_store.values().collect(),
+        state_changes_contract_to_store.values().cloned().collect(),
         block_height,
         block_hash,
     );
     let futures_save_state_account = db_manager.save_state_changes_account(
-        state_changes_account_to_store.values().collect(),
+        state_changes_account_to_store.values().cloned().collect(),
         block_height,
         block_hash,
     );
@@ -241,6 +245,9 @@ async fn main() -> anyhow::Result<()> {
             block_reference: near_primitives::types::BlockReference::Finality(near_primitives::types::Finality::Final),
         })
         .await?;
+    let arch_url = indexer_config.general.near_archival_rpc_url.clone();
+    let rpc_client = near_jsonrpc_client::JsonRpcClient::connect(&arch_url.unwrap())
+        .header(("Referer", indexer_config.general.referer_header_value.clone()))?;
 
     let db_manager = database::prepare_db_manager::<database::PostgresDBManager>(
         &indexer_config.database,

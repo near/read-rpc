@@ -1,3 +1,5 @@
+extern crate database_new as database;
+
 use clap::Parser;
 use futures::StreamExt;
 
@@ -22,24 +24,20 @@ async fn main() -> anyhow::Result<()> {
     let opts = config::Opts::parse();
 
     tracing::info!(target: INDEXER, "Connecting to db...");
-    #[cfg(feature = "scylla_db")]
-    let db_manager: std::sync::Arc<
-        Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>,
-    > = std::sync::Arc::new(Box::new(
-        database::prepare_db_manager::<database::scylladb::tx_indexer::ScyllaDBManager>(
-            &indexer_config.database,
-        )
-        .await?,
-    ));
-    #[cfg(all(feature = "postgres_db", not(feature = "scylla_db")))]
-    let db_manager: std::sync::Arc<
-        Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>,
-    > = std::sync::Arc::new(Box::new(
-        database::prepare_db_manager::<database::postgres::tx_indexer::PostgresDBManager>(
-            &indexer_config.database,
-        )
-        .await?,
-    ));
+    // #[cfg(feature = "scylla_db")]
+    let db_manager: std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>> =
+        std::sync::Arc::new(Box::new(
+            database::prepare_db_manager::<database::PostgresDBManager>(&indexer_config.database).await?,
+        ));
+    // #[cfg(all(feature = "postgres_db", not(feature = "scylla_db")))]
+    // let db_manager: std::sync::Arc<
+    //     Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>,
+    // > = std::sync::Arc::new(Box::new(
+    //     database::prepare_db_manager::<database::postgres::tx_indexer::PostgresDBManager>(
+    //         &indexer_config.database,
+    //     )
+    //     .await?,
+    // ));
 
     let rpc_client =
         near_jsonrpc_client::JsonRpcClient::connect(&indexer_config.general.near_rpc_url);
@@ -63,7 +61,7 @@ async fn main() -> anyhow::Result<()> {
             db_manager.clone(),
             start_block_height,
             indexer_config.general.cache_restore_blocks_range,
-            indexer_config.database.max_db_parallel_queries,
+            144, // harcoded for now
         )
         .await?,
     );
