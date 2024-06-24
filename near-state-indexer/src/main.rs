@@ -1,3 +1,5 @@
+extern crate database_new as database;
+
 use clap::Parser;
 use futures::StreamExt;
 use near_indexer::near_primitives;
@@ -274,16 +276,15 @@ async fn run(home_dir: std::path::PathBuf) -> anyhow::Result<()> {
         configuration::read_configuration::<configuration::NearStateIndexerConfig>().await?;
 
     tracing::info!(target: INDEXER, "Connecting to db...");
-    #[cfg(feature = "scylla_db")]
-    let db_manager = database::prepare_db_manager::<
-        database::scylladb::state_indexer::ScyllaDBManager,
-    >(&state_indexer_config.database)
-    .await?;
-    #[cfg(all(feature = "postgres_db", not(feature = "scylla_db")))]
-    let db_manager = database::prepare_db_manager::<
-        database::postgres::state_indexer::PostgresDBManager,
-    >(&state_indexer_config.database)
-    .await?;
+    // #[cfg(feature = "scylla_db")]
+    let db_manager =
+        database::prepare_db_manager::<database::PostgresDBManager>(&state_indexer_config.database)
+            .await?;
+    // #[cfg(all(feature = "postgres_db", not(feature = "scylla_db")))]
+    // let db_manager = database::prepare_db_manager::<
+    //     database::postgres::state_indexer::PostgresDBManager,
+    // >(&state_indexer_config.database)
+    // .await?;
 
     tracing::info!(target: INDEXER, "Connecting to redis...");
     let redis_client = redis::Client::open(state_indexer_config.general.redis_url.clone())?

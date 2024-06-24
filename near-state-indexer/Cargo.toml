@@ -34,7 +34,7 @@ tokio-stream = "0.1"
 tracing = "0.1.34"
 
 configuration.workspace = true
-database.workspace = true
+database-new.workspace = true
 
 near-o11y.workspace = true
 near-chain-configs.workspace = true
@@ -42,9 +42,9 @@ near-client.workspace = true
 near-indexer.workspace = true
 
 [features]
-default = ["scylla_db"]
+#default = ["scylla_db"]
 tracing-instrumentation = ["configuration/tracing-instrumentation"]
-postgres_db = ["database/postgres_db"]
-scylla_db = ["database/scylla_db"]
-scylla_db_tracing = ["database/scylla_db_tracing", "scylla_db"]
-account_access_keys = ["database/account_access_keys"]
+#postgres_db = ["database/postgres_db"]
+#scylla_db = ["database/scylla_db"]
+#scylla_db_tracing = ["database/scylla_db_tracing", "scylla_db"]
+#account_access_keys = ["database/account_access_keys"]

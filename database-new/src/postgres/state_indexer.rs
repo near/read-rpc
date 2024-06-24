@@ -212,7 +212,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
         sqlx::query(
             "
             INSERT INTO blocks (block_height, block_hash)
-            VALUES (?, ?)
+            VALUES ($1, $2)
             ",
         )
         .bind(bigdecimal::BigDecimal::from(block_height))
@@ -231,22 +231,50 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
             crate::primitives::HeightIncluded,
         )>,
     ) -> anyhow::Result<()> {
-        let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
-            "INSERT INTO chunks (block_height, chunk_hash, shard_id, height_included) ",
-        );
+        let chunks_uniq = chunks
+            .iter()
+            .filter(|(_chunk_hash, _shard_id, height_included)| height_included == &block_height)
+            .collect::<Vec<_>>();
 
-        query_builder.push_values(
-            chunks.into_iter(),
-            |mut values, (chunk_hash, shard_id, height_included)| {
-                values
-                    .push_bind(bigdecimal::BigDecimal::from(block_height))
-                    .push_bind(chunk_hash.to_string())
-                    .push_bind(bigdecimal::BigDecimal::from(shard_id))
-                    .push_bind(bigdecimal::BigDecimal::from(height_included));
-            },
-        );
+        if !chunks_uniq.is_empty() {
+            let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> =
+                sqlx::QueryBuilder::new("INSERT INTO chunks (chunk_hash, block_height, shard_id) ");
 
-        query_builder.build().execute(&self.meta_db_pool).await?;
+            query_builder.push_values(
+                chunks_uniq.iter(),
+                |mut values, (chunk_hash, shard_id, height_included)| {
+                    values
+                        .push_bind(chunk_hash.to_string())
+                        .push_bind(bigdecimal::BigDecimal::from(height_included.clone()))
+                        .push_bind(bigdecimal::BigDecimal::from(shard_id.clone()));
+                },
+            );
+
+            query_builder.build().execute(&self.meta_db_pool).await?;
+        }
+
+        let chunks_duplicate = chunks
+            .iter()
+            .filter(|(_chunk_hash, _shard_id, height_included)| height_included != &block_height)
+            .collect::<Vec<_>>();
+        if !chunks_duplicate.is_empty() {
+            let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> =
+                sqlx::QueryBuilder::new("INSERT INTO chunks_duplicate (chunk_hash, block_height, shard_id, included_in_block_height) ");
+
+            query_builder.push_values(
+                chunks.iter(),
+                |mut values, (chunk_hash, shard_id, height_included)| {
+                    values
+                        .push_bind(chunk_hash.to_string())
+                        .push_bind(bigdecimal::BigDecimal::from(block_height))
+                        .push_bind(bigdecimal::BigDecimal::from(shard_id.clone()))
+                        .push_bind(bigdecimal::BigDecimal::from(height_included.clone()));
+                },
+            );
+
+            query_builder.build().execute(&self.meta_db_pool).await?;
+        }
+
         Ok(())
     }
 
@@ -262,8 +290,8 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
             "
                 SELECT block_height
                 FROM blocks
-                WHERE block_hash = ?
-                LIMIT 1
+                WHERE block_hash = $1
+                LIMIT 1;
                 ",
         )
         .bind(block_hash.to_string())
@@ -277,13 +305,14 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
     async fn update_meta(&self, indexer_id: &str, block_height: u64) -> anyhow::Result<()> {
         sqlx::query(
             "
-            UPDATE meta
-            SET last_processed_block_height = ?
-            WHERE indexer_id = ?
+            INSERT INTO meta (indexer_id, last_processed_block_height)
+            VALUES ($1, $2)
+            ON CONFLICT (indexer_id)
+            DO UPDATE SET last_processed_block_height = $2;
             ",
         )
-        .bind(bigdecimal::BigDecimal::from(block_height))
         .bind(indexer_id)
+        .bind(bigdecimal::BigDecimal::from(block_height))
         .execute(&self.meta_db_pool)
         .await?;
         Ok(())
@@ -295,7 +324,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
             SELECT last_processed_block_height
             FROM meta
             WHERE indexer_id = ?
-            LIMIT 1
+            LIMIT 1;
             ",
         )
         .bind(indexer_id)
@@ -316,7 +345,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
         sqlx::query(
             "
             INSERT INTO validators (epoch_id, epoch_height, epoch_start_height, epoch_end_height, protocol_config)
-            VALUES (?, ?, ?, NULL, ?)
+            VALUES (?, ?, ?, NULL, ?);
             "
         )
             .bind(&epoch_id.to_string())
@@ -338,7 +367,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
         sqlx::query(
             "
             INSERT INTO protocol_configs (epoch_id, epoch_height, epoch_start_height, epoch_end_height, protocol_config)
-            VALUES (?, ?, ?, NULL, ?)
+            VALUES (?, ?, ?, NULL, ?);
             "
         )
             .bind(&epoch_id.to_string())
@@ -363,7 +392,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
             "
             UPDATE validators
             SET epoch_end_height = ?
-            WHERE epoch_id = ?
+            WHERE epoch_id = ?;
             ",
         )
         .bind(bigdecimal::BigDecimal::from(block_height))
@@ -374,7 +403,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
             "
             UPDATE protocol_configs
             SET epoch_end_height = ?
-            WHERE epoch_id = ?
+            WHERE epoch_id = ?;
             ",
         )
         .bind(bigdecimal::BigDecimal::from(block_height))
