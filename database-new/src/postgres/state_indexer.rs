@@ -1,211 +1,4 @@
 use bigdecimal::ToPrimitive;
-
-impl crate::PostgresDBManager {
-    async fn save_state_changes_data_to_shard(
-        &self,
-        shard_id: near_primitives::types::ShardId,
-        state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
-        block_height: u64,
-        block_hash: near_indexer_primitives::CryptoHash,
-    ) -> anyhow::Result<()> {
-        let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
-            "INSERT INTO state_changes_data (account_id, block_height, block_hash, data_key, data_value) ",
-        );
-        query_builder.push_values(state_changes.iter(), |mut values, state_change| {
-            match &state_change.value {
-                near_primitives::views::StateChangeValueView::DataUpdate {
-                    account_id,
-                    key,
-                    value,
-                } => {
-                    let data_key: &[u8] = key.as_ref();
-                    let data_value: &[u8] = value.as_ref();
-                    values
-                        .push_bind(account_id.to_string())
-                        .push_bind(bigdecimal::BigDecimal::from(block_height))
-                        .push_bind(block_hash.to_string())
-                        .push_bind(hex::encode(&data_key).to_string())
-                        .push_bind(data_value);
-                }
-                near_primitives::views::StateChangeValueView::DataDeletion { account_id, key } => {
-                    let data_key: &[u8] = key.as_ref();
-                    let data_value: Option<&[u8]> = None;
-                    values
-                        .push_bind(account_id.to_string())
-                        .push_bind(bigdecimal::BigDecimal::from(block_height))
-                        .push_bind(block_hash.to_string())
-                        .push_bind(hex::encode(data_key).to_string())
-                        .push_bind(data_value);
-                }
-                _ => {}
-            }
-        });
-        query_builder.push(" ON CONFLICT DO NOTHING;");
-        query_builder
-            .build()
-            .execute(
-                self.shards_pool
-                    .get(&shard_id)
-                    .ok_or(anyhow::anyhow!("Shard not found"))?,
-            )
-            .await?;
-        Ok(())
-    }
-
-    async fn save_state_changes_access_key_to_shard(
-        &self,
-        shard_id: near_primitives::types::ShardId,
-        state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
-        block_height: u64,
-        block_hash: near_indexer_primitives::CryptoHash,
-    ) -> anyhow::Result<()> {
-        let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
-            "INSERT INTO state_changes_access_key (account_id, block_height, block_hash, data_key, data_value) ",
-        );
-        query_builder.push_values(state_changes.iter(), |mut values, state_change| {
-            match &state_change.value {
-                near_primitives::views::StateChangeValueView::AccessKeyUpdate {
-                    account_id,
-                    public_key,
-                    access_key,
-                } => {
-                    let data_key =
-                        borsh::to_vec(public_key).expect("Failed to borsh serialize public key");
-                    let data_value =
-                        borsh::to_vec(access_key).expect("Failed to borsh serialize access key");
-                    values
-                        .push_bind(account_id.to_string())
-                        .push_bind(bigdecimal::BigDecimal::from(block_height))
-                        .push_bind(block_hash.to_string())
-                        .push_bind(hex::encode(&data_key).to_string())
-                        .push_bind(data_value);
-                }
-                near_primitives::views::StateChangeValueView::AccessKeyDeletion {
-                    account_id,
-                    public_key,
-                } => {
-                    let data_key =
-                        borsh::to_vec(public_key).expect("Failed to borsh serialize public key");
-                    let data_value: Option<&[u8]> = None;
-                    values
-                        .push_bind(account_id.to_string())
-                        .push_bind(bigdecimal::BigDecimal::from(block_height))
-                        .push_bind(block_hash.to_string())
-                        .push_bind(hex::encode(data_key).to_string())
-                        .push_bind(data_value);
-                }
-                _ => {}
-            }
-        });
-        query_builder.push(" ON CONFLICT DO NOTHING;");
-        query_builder
-            .build()
-            .execute(
-                self.shards_pool
-                    .get(&shard_id)
-                    .ok_or(anyhow::anyhow!("Shard not found"))?,
-            )
-            .await?;
-        Ok(())
-    }
-
-    async fn save_state_changes_contract_to_shard(
-        &self,
-        shard_id: near_primitives::types::ShardId,
-        state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
-        block_height: u64,
-        block_hash: near_indexer_primitives::CryptoHash,
-    ) -> anyhow::Result<()> {
-        let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
-            "INSERT INTO state_changes_contract (account_id, block_height, block_hash, data_value) ",
-        );
-        query_builder.push_values(state_changes.iter(), |mut values, state_change| {
-            match &state_change.value {
-                near_primitives::views::StateChangeValueView::ContractCodeUpdate {
-                    account_id,
-                    code,
-                } => {
-                    let data_value: &[u8] = code.as_ref();
-                    values
-                        .push_bind(account_id.to_string())
-                        .push_bind(bigdecimal::BigDecimal::from(block_height))
-                        .push_bind(block_hash.to_string())
-                        .push_bind(data_value);
-                }
-                near_primitives::views::StateChangeValueView::ContractCodeDeletion {
-                    account_id,
-                } => {
-                    let data_value: Option<&[u8]> = None;
-                    values
-                        .push_bind(account_id.to_string())
-                        .push_bind(bigdecimal::BigDecimal::from(block_height))
-                        .push_bind(block_hash.to_string())
-                        .push_bind(data_value);
-                }
-                _ => {}
-            }
-        });
-        query_builder.push(" ON CONFLICT DO NOTHING;");
-        query_builder
-            .build()
-            .execute(
-                self.shards_pool
-                    .get(&shard_id)
-                    .ok_or(anyhow::anyhow!("Shard not found"))?,
-            )
-            .await?;
-        Ok(())
-    }
-
-    async fn save_state_changes_account_to_shard(
-        &self,
-        shard_id: near_primitives::types::ShardId,
-        state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
-        block_height: u64,
-        block_hash: near_indexer_primitives::CryptoHash,
-    ) -> anyhow::Result<()> {
-        let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
-            "INSERT INTO state_changes_account (account_id, block_height, block_hash, data_value) ",
-        );
-        query_builder.push_values(state_changes.iter(), |mut values, state_change| {
-            match &state_change.value {
-                near_primitives::views::StateChangeValueView::AccountUpdate {
-                    account_id,
-                    account,
-                } => {
-                    let data_value =
-                        borsh::to_vec(&near_primitives::account::Account::from(account))
-                            .expect("Failed to borsh serialize account");
-                    values
-                        .push_bind(account_id.to_string())
-                        .push_bind(bigdecimal::BigDecimal::from(block_height))
-                        .push_bind(block_hash.to_string())
-                        .push_bind(data_value);
-                }
-                near_primitives::views::StateChangeValueView::AccountDeletion { account_id } => {
-                    let data_value: Option<&[u8]> = None;
-                    values
-                        .push_bind(account_id.to_string())
-                        .push_bind(bigdecimal::BigDecimal::from(block_height))
-                        .push_bind(block_hash.to_string())
-                        .push_bind(data_value);
-                }
-                _ => {}
-            }
-        });
-        query_builder.push(" ON CONFLICT DO NOTHING;");
-        query_builder
-            .build()
-            .execute(
-                self.shards_pool
-                    .get(&shard_id)
-                    .ok_or(anyhow::anyhow!("Shard not found"))?,
-            )
-            .await?;
-        Ok(())
-    }
-}
-
 #[async_trait::async_trait]
 impl crate::StateIndexerDbManager for crate::PostgresDBManager {
     async fn add_block(
@@ -368,175 +161,205 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
 
     async fn save_state_changes_data(
         &self,
+        shard_id: near_primitives::types::ShardId,
         state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
         block_height: u64,
         block_hash: near_indexer_primitives::CryptoHash,
     ) -> anyhow::Result<()> {
-        let mut state_changes_by_shards: std::collections::HashMap<
-            u64,
-            Vec<near_primitives::views::StateChangeWithCauseView>,
-        > = std::collections::HashMap::new();
-        for state_change in state_changes {
+        let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
+            "INSERT INTO state_changes_data (account_id, block_height, block_hash, data_key, data_value) ",
+        );
+        query_builder.push_values(state_changes.iter(), |mut values, state_change| {
             match &state_change.value {
-                near_primitives::views::StateChangeValueView::DataUpdate { account_id, .. }
-                | near_primitives::views::StateChangeValueView::DataDeletion {
-                    account_id, ..
+                near_primitives::views::StateChangeValueView::DataUpdate {
+                    account_id,
+                    key,
+                    value,
                 } => {
-                    let shard_id = near_primitives::shard_layout::account_id_to_shard_id(
-                        account_id,
-                        &self.shard_layout,
-                    );
-                    state_changes_by_shards
-                        .entry(shard_id)
-                        .or_insert_with(Vec::new)
-                        .push(state_change);
+                    let data_key: &[u8] = key.as_ref();
+                    let data_value: &[u8] = value.as_ref();
+                    values
+                        .push_bind(account_id.to_string())
+                        .push_bind(bigdecimal::BigDecimal::from(block_height))
+                        .push_bind(block_hash.to_string())
+                        .push_bind(hex::encode(&data_key).to_string())
+                        .push_bind(data_value);
+                }
+                near_primitives::views::StateChangeValueView::DataDeletion { account_id, key } => {
+                    let data_key: &[u8] = key.as_ref();
+                    let data_value: Option<&[u8]> = None;
+                    values
+                        .push_bind(account_id.to_string())
+                        .push_bind(bigdecimal::BigDecimal::from(block_height))
+                        .push_bind(block_hash.to_string())
+                        .push_bind(hex::encode(data_key).to_string())
+                        .push_bind(data_value);
                 }
                 _ => {}
             }
-        }
-        let futures = state_changes_by_shards
-            .into_iter()
-            .map(|(shard_id, changes)| {
-                self.save_state_changes_data_to_shard(shard_id, changes, block_height, block_hash)
-            });
-        futures::future::try_join_all(futures).await?;
+        });
+        query_builder.push(" ON CONFLICT DO NOTHING;");
+        query_builder
+            .build()
+            .execute(
+                self.shards_pool
+                    .get(&shard_id)
+                    .ok_or(anyhow::anyhow!("Shard not found"))?,
+            )
+            .await?;
         Ok(())
     }
 
     async fn save_state_changes_access_key(
         &self,
+        shard_id: near_primitives::types::ShardId,
         state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
         block_height: u64,
         block_hash: near_indexer_primitives::CryptoHash,
     ) -> anyhow::Result<()> {
-        let mut state_changes_by_shards: std::collections::HashMap<
-            u64,
-            Vec<near_primitives::views::StateChangeWithCauseView>,
-        > = std::collections::HashMap::new();
-        for state_change in state_changes {
+        let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
+            "INSERT INTO state_changes_access_key (account_id, block_height, block_hash, data_key, data_value) ",
+        );
+        query_builder.push_values(state_changes.iter(), |mut values, state_change| {
             match &state_change.value {
                 near_primitives::views::StateChangeValueView::AccessKeyUpdate {
                     account_id,
-                    ..
-                }
-                | near_primitives::views::StateChangeValueView::AccessKeyDeletion {
-                    account_id,
-                    ..
+                    public_key,
+                    access_key,
                 } => {
-                    let shard_id = near_primitives::shard_layout::account_id_to_shard_id(
-                        account_id,
-                        &self.shard_layout,
-                    );
-                    state_changes_by_shards
-                        .entry(shard_id)
-                        .or_insert_with(Vec::new)
-                        .push(state_change);
+                    let data_key =
+                        borsh::to_vec(public_key).expect("Failed to borsh serialize public key");
+                    let data_value =
+                        borsh::to_vec(access_key).expect("Failed to borsh serialize access key");
+                    values
+                        .push_bind(account_id.to_string())
+                        .push_bind(bigdecimal::BigDecimal::from(block_height))
+                        .push_bind(block_hash.to_string())
+                        .push_bind(hex::encode(&data_key).to_string())
+                        .push_bind(data_value);
+                }
+                near_primitives::views::StateChangeValueView::AccessKeyDeletion {
+                    account_id,
+                    public_key,
+                } => {
+                    let data_key =
+                        borsh::to_vec(public_key).expect("Failed to borsh serialize public key");
+                    let data_value: Option<&[u8]> = None;
+                    values
+                        .push_bind(account_id.to_string())
+                        .push_bind(bigdecimal::BigDecimal::from(block_height))
+                        .push_bind(block_hash.to_string())
+                        .push_bind(hex::encode(data_key).to_string())
+                        .push_bind(data_value);
                 }
                 _ => {}
             }
-        }
-        let futures = state_changes_by_shards
-            .into_iter()
-            .map(|(shard_id, changes)| {
-                self.save_state_changes_access_key_to_shard(
-                    shard_id,
-                    changes,
-                    block_height,
-                    block_hash,
-                )
-            });
-        futures::future::try_join_all(futures).await?;
+        });
+        query_builder.push(" ON CONFLICT DO NOTHING;");
+        query_builder
+            .build()
+            .execute(
+                self.shards_pool
+                    .get(&shard_id)
+                    .ok_or(anyhow::anyhow!("Shard not found"))?,
+            )
+            .await?;
         Ok(())
     }
 
     async fn save_state_changes_contract(
         &self,
+        shard_id: near_primitives::types::ShardId,
         state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
         block_height: u64,
         block_hash: near_indexer_primitives::CryptoHash,
     ) -> anyhow::Result<()> {
-        let mut state_changes_by_shards: std::collections::HashMap<
-            u64,
-            Vec<near_primitives::views::StateChangeWithCauseView>,
-        > = std::collections::HashMap::new();
-        for state_change in state_changes {
+        let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
+            "INSERT INTO state_changes_contract (account_id, block_height, block_hash, data_value) ",
+        );
+        query_builder.push_values(state_changes.iter(), |mut values, state_change| {
             match &state_change.value {
                 near_primitives::views::StateChangeValueView::ContractCodeUpdate {
                     account_id,
-                    ..
-                }
-                | near_primitives::views::StateChangeValueView::ContractCodeDeletion {
-                    account_id,
-                    ..
+                    code,
                 } => {
-                    let shard_id = near_primitives::shard_layout::account_id_to_shard_id(
-                        account_id,
-                        &self.shard_layout,
-                    );
-                    state_changes_by_shards
-                        .entry(shard_id)
-                        .or_insert_with(Vec::new)
-                        .push(state_change);
+                    let data_value: &[u8] = code.as_ref();
+                    values
+                        .push_bind(account_id.to_string())
+                        .push_bind(bigdecimal::BigDecimal::from(block_height))
+                        .push_bind(block_hash.to_string())
+                        .push_bind(data_value);
+                }
+                near_primitives::views::StateChangeValueView::ContractCodeDeletion {
+                    account_id,
+                } => {
+                    let data_value: Option<&[u8]> = None;
+                    values
+                        .push_bind(account_id.to_string())
+                        .push_bind(bigdecimal::BigDecimal::from(block_height))
+                        .push_bind(block_hash.to_string())
+                        .push_bind(data_value);
                 }
                 _ => {}
             }
-        }
-        let futures = state_changes_by_shards
-            .into_iter()
-            .map(|(shard_id, changes)| {
-                self.save_state_changes_contract_to_shard(
-                    shard_id,
-                    changes,
-                    block_height,
-                    block_hash,
-                )
-            });
-        futures::future::try_join_all(futures).await?;
+        });
+        query_builder.push(" ON CONFLICT DO NOTHING;");
+        query_builder
+            .build()
+            .execute(
+                self.shards_pool
+                    .get(&shard_id)
+                    .ok_or(anyhow::anyhow!("Shard not found"))?,
+            )
+            .await?;
         Ok(())
     }
 
     async fn save_state_changes_account(
         &self,
+        shard_id: near_primitives::types::ShardId,
         state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
         block_height: u64,
         block_hash: near_indexer_primitives::CryptoHash,
     ) -> anyhow::Result<()> {
-        let mut state_changes_by_shards: std::collections::HashMap<
-            u64,
-            Vec<near_primitives::views::StateChangeWithCauseView>,
-        > = std::collections::HashMap::new();
-        for state_change in state_changes {
+        let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
+            "INSERT INTO state_changes_account (account_id, block_height, block_hash, data_value) ",
+        );
+        query_builder.push_values(state_changes.iter(), |mut values, state_change| {
             match &state_change.value {
                 near_primitives::views::StateChangeValueView::AccountUpdate {
-                    account_id, ..
-                }
-                | near_primitives::views::StateChangeValueView::AccountDeletion {
                     account_id,
-                    ..
+                    account,
                 } => {
-                    let shard_id = near_primitives::shard_layout::account_id_to_shard_id(
-                        account_id,
-                        &self.shard_layout,
-                    );
-                    state_changes_by_shards
-                        .entry(shard_id)
-                        .or_insert_with(Vec::new)
-                        .push(state_change);
+                    let data_value =
+                        borsh::to_vec(&near_primitives::account::Account::from(account))
+                            .expect("Failed to borsh serialize account");
+                    values
+                        .push_bind(account_id.to_string())
+                        .push_bind(bigdecimal::BigDecimal::from(block_height))
+                        .push_bind(block_hash.to_string())
+                        .push_bind(data_value);
+                }
+                near_primitives::views::StateChangeValueView::AccountDeletion { account_id } => {
+                    let data_value: Option<&[u8]> = None;
+                    values
+                        .push_bind(account_id.to_string())
+                        .push_bind(bigdecimal::BigDecimal::from(block_height))
+                        .push_bind(block_hash.to_string())
+                        .push_bind(data_value);
                 }
                 _ => {}
             }
-        }
-        let futures = state_changes_by_shards
-            .into_iter()
-            .map(|(shard_id, changes)| {
-                self.save_state_changes_account_to_shard(
-                    shard_id,
-                    changes,
-                    block_height,
-                    block_hash,
-                )
-            });
-        futures::future::try_join_all(futures).await?;
+        });
+        query_builder.push(" ON CONFLICT DO NOTHING;");
+        query_builder
+            .build()
+            .execute(
+                self.shards_pool
+                    .get(&shard_id)
+                    .ok_or(anyhow::anyhow!("Shard not found"))?,
+            )
+            .await?;
         Ok(())
     }
 }
