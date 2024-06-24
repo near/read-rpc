@@ -27,9 +27,6 @@ pub struct ScyllaDBManager {
     add_chunk: PreparedStatement,
 
     add_validators: PreparedStatement,
-    add_protocol_config: PreparedStatement,
-    update_validators_epoch_end_height: PreparedStatement,
-    update_protocol_config_epoch_end_height: PreparedStatement,
 
     add_account_state: PreparedStatement,
 
@@ -372,24 +369,7 @@ impl ScyllaStorageManager for ScyllaDBManager {
                 &scylla_db_session,
                 "INSERT INTO state_indexer.validators
                     (epoch_id, epoch_height, epoch_start_height, epoch_end_height, validators_info)
-                    VALUES (?, ?, ?, NULL, ?)",
-            )
-            .await?,
-            add_protocol_config: Self::prepare_write_query(
-                &scylla_db_session,
-                "INSERT INTO state_indexer.protocol_configs
-                    (epoch_id, epoch_height, epoch_start_height, epoch_end_height, protocol_config)
-                    VALUES (?, ?, ?, NULL, ?)",
-            )
-            .await?,
-            update_validators_epoch_end_height: Self::prepare_write_query(
-                &scylla_db_session,
-                "UPDATE state_indexer.validators SET epoch_end_height = ? WHERE epoch_id = ?",
-            )
-            .await?,
-            update_protocol_config_epoch_end_height: Self::prepare_write_query(
-                &scylla_db_session,
-                "UPDATE state_indexer.protocol_configs SET epoch_end_height = ? WHERE epoch_id = ?",
+                    VALUES (?, ?, ?, ?, ?)",
             )
             .await?,
             add_account_state: Self::prepare_write_query(
@@ -751,7 +731,9 @@ impl crate::StateIndexerDbManager for ScyllaDBManager {
         epoch_height: u64,
         epoch_start_height: u64,
         validators_info: &near_primitives::views::EpochValidatorInfo,
+        epoch_end_block_hash: near_indexer_primitives::CryptoHash,
     ) -> anyhow::Result<()> {
+        let epoch_end_height = self.get_block_by_hash(epoch_end_block_hash).await?;
         Self::execute_prepared_query(
             &self.scylla_session,
             &self.add_validators,
@@ -759,57 +741,11 @@ impl crate::StateIndexerDbManager for ScyllaDBManager {
                 epoch_id.to_string(),
                 num_bigint::BigInt::from(epoch_height),
                 num_bigint::BigInt::from(epoch_start_height),
+                num_bigint::BigInt::from(epoch_end_height),
                 serde_json::to_string(validators_info)?,
             ),
         )
         .await?;
-        Ok(())
-    }
-
-    async fn add_protocol_config(
-        &self,
-        epoch_id: near_indexer_primitives::CryptoHash,
-        epoch_height: u64,
-        epoch_start_height: u64,
-        protocol_config: &near_chain_configs::ProtocolConfigView,
-    ) -> anyhow::Result<()> {
-        Self::execute_prepared_query(
-            &self.scylla_session,
-            &self.add_protocol_config,
-            (
-                epoch_id.to_string(),
-                num_bigint::BigInt::from(epoch_height),
-                num_bigint::BigInt::from(epoch_start_height),
-                serde_json::to_string(protocol_config)?,
-            ),
-        )
-        .await?;
-        Ok(())
-    }
-
-    async fn update_epoch_end_height(
-        &self,
-        epoch_id: near_indexer_primitives::CryptoHash,
-        epoch_end_block_hash: near_indexer_primitives::CryptoHash,
-    ) -> anyhow::Result<()> {
-        let epoch_end_height = self.get_block_by_hash(epoch_end_block_hash).await?;
-        let validators_future = Self::execute_prepared_query(
-            &self.scylla_session,
-            &self.update_validators_epoch_end_height,
-            (
-                num_bigint::BigInt::from(epoch_end_height),
-                epoch_id.to_string(),
-            ),
-        );
-        let protocol_config_future = Self::execute_prepared_query(
-            &self.scylla_session,
-            &self.update_protocol_config_epoch_end_height,
-            (
-                num_bigint::BigInt::from(epoch_end_height),
-                epoch_id.to_string(),
-            ),
-        );
-        futures::future::try_join(validators_future, protocol_config_future).await?;
         Ok(())
     }
 }

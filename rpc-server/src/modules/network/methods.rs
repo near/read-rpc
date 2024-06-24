@@ -1,5 +1,6 @@
 use jsonrpc_v2::{Data, Params};
 use near_jsonrpc::RpcRequest;
+use near_primitives::epoch_manager::{AllEpochConfig, EpochConfig};
 
 use crate::config::ServerContext;
 use crate::errors::RPCError;
@@ -324,71 +325,67 @@ async fn protocol_config_call(
                     error_message: err.to_string(),
                 }
             })?;
+    // Stores runtime config for each protocol version
+    // Create store of runtime configs for the given chain id.
+    //
+    // For mainnet and other chains except testnet we don't need to override runtime config for
+    // first protocol versions.
+    // For testnet, runtime config for genesis block was (incorrectly) different, that's why we
+    // need to override it specifically to preserve compatibility.
+    let store = near_parameters::RuntimeConfigStore::for_chain_id(
+        &data.genesis_info.genesis_config.chain_id,
+    );
+    let runtime_config = store.get_config(block.latest_protocol_version);
 
-    let protocol_config = if data
-        .blocks_info_by_finality
-        .final_cache_block()
-        .await
-        .epoch_id
-        == block.epoch_id
-    {
-        let store = near_parameters::RuntimeConfigStore::for_chain_id(
-            &data.genesis_info.genesis_config.chain_id,
-        );
-        let runtime_config = store.get_config(block.latest_protocol_version);
+    // get default epoch config for genesis config
+    let default_epoch_config = EpochConfig::from(&data.genesis_info.genesis_config);
+    // AllEpochConfig manages protocol configs that might be changing throughout epochs (hence EpochConfig).
+    // The main function in AllEpochConfig is ::for_protocol_version which takes a protocol version
+    // and returns the EpochConfig that should be used for this protocol version.
+    let all_epoch_config = AllEpochConfig::new(
+        true,
+        default_epoch_config,
+        &data.genesis_info.genesis_config.chain_id,
+    );
+    let epoch_config = all_epoch_config.for_protocol_version(block.latest_protocol_version);
 
-        // Looks strange, but we follow the same logic as in nearcore
-        // nearcore/src/runtime/mod.rs:1203
-        let mut genesis_config = data.genesis_info.genesis_config.clone();
-        genesis_config.protocol_version = block.latest_protocol_version;
+    // Looks strange, but we follow the same logic as in nearcore
+    // nearcore/src/runtime/mod.rs:1203
+    let mut genesis_config = data.genesis_info.genesis_config.clone();
+    genesis_config.protocol_version = block.latest_protocol_version;
 
-        let epoch_config = data.blocks_info_by_finality.epoch_config().await;
-        genesis_config.epoch_length = epoch_config.epoch_length;
-        genesis_config.num_block_producer_seats = epoch_config.num_block_producer_seats;
-        genesis_config.num_block_producer_seats_per_shard =
-            epoch_config.num_block_producer_seats_per_shard;
-        genesis_config.avg_hidden_validator_seats_per_shard =
-            epoch_config.avg_hidden_validator_seats_per_shard;
-        genesis_config.block_producer_kickout_threshold =
-            epoch_config.block_producer_kickout_threshold;
-        genesis_config.chunk_producer_kickout_threshold =
-            epoch_config.chunk_producer_kickout_threshold;
-        genesis_config.max_kickout_stake_perc = epoch_config.validator_max_kickout_stake_perc;
-        genesis_config.online_min_threshold = epoch_config.online_min_threshold;
-        genesis_config.online_max_threshold = epoch_config.online_max_threshold;
-        genesis_config.fishermen_threshold = epoch_config.fishermen_threshold;
-        genesis_config.minimum_stake_divisor = epoch_config.minimum_stake_divisor;
-        genesis_config.protocol_upgrade_stake_threshold =
-            epoch_config.protocol_upgrade_stake_threshold;
-        genesis_config.shard_layout = epoch_config.shard_layout;
-        genesis_config.num_chunk_only_producer_seats = epoch_config
-            .validator_selection_config
-            .num_chunk_only_producer_seats;
-        genesis_config.minimum_validators_per_shard = epoch_config
-            .validator_selection_config
-            .minimum_validators_per_shard;
-        genesis_config.minimum_stake_ratio =
-            epoch_config.validator_selection_config.minimum_stake_ratio;
+    genesis_config.epoch_length = epoch_config.epoch_length;
+    genesis_config.num_block_producer_seats = epoch_config.num_block_producer_seats;
+    genesis_config.num_block_producer_seats_per_shard =
+        epoch_config.num_block_producer_seats_per_shard;
+    genesis_config.avg_hidden_validator_seats_per_shard =
+        epoch_config.avg_hidden_validator_seats_per_shard;
+    genesis_config.block_producer_kickout_threshold = epoch_config.block_producer_kickout_threshold;
+    genesis_config.chunk_producer_kickout_threshold = epoch_config.chunk_producer_kickout_threshold;
+    genesis_config.max_kickout_stake_perc = epoch_config.validator_max_kickout_stake_perc;
+    genesis_config.online_min_threshold = epoch_config.online_min_threshold;
+    genesis_config.online_max_threshold = epoch_config.online_max_threshold;
+    genesis_config.fishermen_threshold = epoch_config.fishermen_threshold;
+    genesis_config.minimum_stake_divisor = epoch_config.minimum_stake_divisor;
+    genesis_config.protocol_upgrade_stake_threshold = epoch_config.protocol_upgrade_stake_threshold;
+    genesis_config.shard_layout = epoch_config.shard_layout;
+    genesis_config.num_chunk_only_producer_seats = epoch_config
+        .validator_selection_config
+        .num_chunk_only_producer_seats;
+    genesis_config.minimum_validators_per_shard = epoch_config
+        .validator_selection_config
+        .minimum_validators_per_shard;
+    genesis_config.minimum_stake_ratio =
+        epoch_config.validator_selection_config.minimum_stake_ratio;
 
-        let protocol_config = near_chain_configs::ProtocolConfig {
-            genesis_config,
-            runtime_config: near_parameters::RuntimeConfig {
-                fees: runtime_config.fees.clone(),
-                wasm_config: runtime_config.wasm_config.clone(),
-                account_creation_config: runtime_config.account_creation_config.clone(),
-                storage_proof_size_soft_limit: runtime_config.storage_proof_size_soft_limit,
-            },
-        };
-        protocol_config.into()
-    } else {
-        data.db_manager
-            .get_protocol_config_by_epoch_id(block.epoch_id, "EXPERIMENTAL_protocol_config")
-            .await
-            .map_err(|err| {
-                near_jsonrpc::primitives::types::config::RpcProtocolConfigError::InternalError {
-                    error_message: err.to_string(),
-                }
-            })?
+    let protocol_config = near_chain_configs::ProtocolConfig {
+        genesis_config,
+        runtime_config: near_parameters::RuntimeConfig {
+            fees: runtime_config.fees.clone(),
+            wasm_config: runtime_config.wasm_config.clone(),
+            account_creation_config: runtime_config.account_creation_config.clone(),
+            storage_proof_size_soft_limit: runtime_config.storage_proof_size_soft_limit,
+        },
     };
-    Ok(protocol_config)
+    Ok(protocol_config.into())
 }
