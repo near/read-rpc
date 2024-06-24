@@ -325,13 +325,23 @@ async fn protocol_config_call(
                     error_message: err.to_string(),
                 }
             })?;
-
+    // Stores runtime config for each protocol version
+    // Create store of runtime configs for the given chain id.
+    //
+    // For mainnet and other chains except testnet we don't need to override runtime config for
+    // first protocol versions.
+    // For testnet, runtime config for genesis block was (incorrectly) different, that's why we
+    // need to override it specifically to preserve compatibility.
     let store = near_parameters::RuntimeConfigStore::for_chain_id(
         &data.genesis_info.genesis_config.chain_id,
     );
     let runtime_config = store.get_config(block.latest_protocol_version);
-
+    
+    // get default epoch config for genesis config
     let default_epoch_config = EpochConfig::from(&data.genesis_info.genesis_config);
+    // AllEpochConfig manages protocol configs that might be changing throughout epochs (hence EpochConfig).
+    // The main function in AllEpochConfig is ::for_protocol_version which takes a protocol version
+    // and returns the EpochConfig that should be used for this protocol version.
     let all_epoch_config = AllEpochConfig::new(
         true,
         default_epoch_config,
