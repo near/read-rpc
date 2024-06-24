@@ -203,9 +203,7 @@ pub struct IndexedEpochInfo {
     pub epoch_id: CryptoHash,
     pub epoch_height: u64,
     pub epoch_start_height: u64,
-    pub epoch_end_height: Option<u64>,
     pub validators_info: views::EpochValidatorInfo,
-    pub protocol_config: near_chain_configs::ProtocolConfigView,
 }
 
 #[derive(Debug)]

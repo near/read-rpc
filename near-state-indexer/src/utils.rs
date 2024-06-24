@@ -19,19 +19,6 @@ pub(crate) async fn fetch_epoch_validators_info(
         .await??)
 }
 
-pub(crate) async fn fetch_epoch_protocol_config(
-    client: &actix::Addr<near_client::ViewClientActor>,
-) -> anyhow::Result<near_chain_configs::ProtocolConfigView> {
-    Ok(client
-        .send(
-            near_client::GetProtocolConfig(near_primitives::types::BlockReference::Finality(
-                near_primitives::types::Finality::Final,
-            ))
-            .with_span_context(),
-        )
-        .await??)
-}
-
 /// Fetches the status to retrieve `latest_block_height` to determine if we need to fetch
 /// entire block or we already fetched this block.
 pub(crate) async fn fetch_latest_block(
