@@ -1,3 +1,6 @@
+use itertools::Itertools;
+use std::collections::HashMap;
+
 extern crate database_new as database;
 
 use clap::Parser;
@@ -15,6 +18,23 @@ extern crate lazy_static;
 
 // Categories for logging
 pub(crate) const INDEXER: &str = "state_indexer";
+type AccountId = String;
+
+#[derive(Debug)]
+struct StateChangesToStore {
+    data: HashMap<AccountId, ShardedStateChangesWithCause>,
+    access_key: HashMap<AccountId, ShardedStateChangesWithCause>,
+    contract: HashMap<AccountId, ShardedStateChangesWithCause>,
+    account: HashMap<AccountId, ShardedStateChangesWithCause>,
+}
+
+/// Wrapper around Statechanges with cause to store shard_id
+/// based on the account_id and ShardLayout settings
+#[derive(Debug)]
+struct ShardedStateChangesWithCause {
+    shard_id: u64,
+    state_change: near_indexer_primitives::views::StateChangeWithCauseView,
+}
 
 #[cfg_attr(
     feature = "tracing-instrumentation",
@@ -26,6 +46,7 @@ async fn handle_streamer_message(
     rpc_client: &near_jsonrpc_client::JsonRpcClient,
     indexer_config: configuration::StateIndexerConfig,
     stats: std::sync::Arc<tokio::sync::RwLock<metrics::Stats>>,
+    shard_layout: &near_primitives::shard_layout::ShardLayout,
 ) -> anyhow::Result<()> {
     let block_height = streamer_message.block.header.height;
     let block_hash = streamer_message.block.header.hash;
@@ -56,7 +77,7 @@ async fn handle_streamer_message(
             .collect(),
     );
     let handle_state_change_future =
-        handle_state_changes(&streamer_message, db_manager, block_height, block_hash, &indexer_config);
+        handle_state_changes(&streamer_message, db_manager, block_height, block_hash, &indexer_config, &shard_layout);
 
     let update_meta_future = db_manager.update_meta(&indexer_config.general.indexer_id, block_height);
 
@@ -99,20 +120,14 @@ async fn handle_epoch(
     db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
 ) -> anyhow::Result<()> {
     if let Some(stats_epoch_id) = stats_current_epoch_id {
-        if stats_epoch_id == current_epoch_id {
-            // If epoch didn't change, we don't need handle it
-            Ok(())
-        } else {
+        if stats_epoch_id != current_epoch_id {
             // If epoch changed, we need to save epoch info and update epoch_end_height
             let epoch_info = epoch_indexer::get_epoch_info_by_id(stats_epoch_id, rpc_client).await?;
             epoch_indexer::save_epoch_info(&epoch_info, db_manager, Some(stats_current_epoch_height), next_epoch_id)
                 .await?;
-            Ok(())
         }
-    } else {
-        // If stats_current_epoch_id is None, we don't need handle it
-        Ok(())
     }
+    Ok(())
 }
 
 /// This function will iterate over all StateChangesWithCauseViews in order to collect
@@ -132,15 +147,14 @@ async fn handle_state_changes(
     block_height: u64,
     block_hash: CryptoHash,
     indexer_config: &configuration::StateIndexerConfig,
+    shard_layout: &near_primitives::shard_layout::ShardLayout,
 ) -> anyhow::Result<()> {
-    let mut state_changes_data_to_store =
-        std::collections::HashMap::<String, near_indexer_primitives::views::StateChangeWithCauseView>::new();
-    let mut state_changes_access_key_to_store =
-        std::collections::HashMap::<String, near_indexer_primitives::views::StateChangeWithCauseView>::new();
-    let mut state_changes_contract_to_store =
-        std::collections::HashMap::<String, near_indexer_primitives::views::StateChangeWithCauseView>::new();
-    let mut state_changes_account_to_store =
-        std::collections::HashMap::<String, near_indexer_primitives::views::StateChangeWithCauseView>::new();
+    let mut state_changes_to_store = StateChangesToStore {
+        data: HashMap::new(),
+        access_key: HashMap::new(),
+        contract: HashMap::new(),
+        account: HashMap::new(),
+    };
 
     let initial_state_changes = streamer_message
         .shards
@@ -149,6 +163,9 @@ async fn handle_state_changes(
 
     // Collecting a unique list of StateChangeWithCauseView for account_id + change kind + suffix
     // by overwriting the records in the HashMap
+    // TODO: Refactor to add shard_id to the value, perhaps we need to create a separate wrapper structure
+    // TODO: move the logic from the database to the state-indexer to handle the saving data to a specific shard
+    // TODO: otherwise there is an implicit spawn of a bunch of futures that are not controlled
     for state_change in initial_state_changes.into_iter() {
         if !indexer_config.state_should_be_indexed(&state_change.value) {
             continue;
@@ -156,67 +173,104 @@ async fn handle_state_changes(
         match &state_change.value {
             StateChangeValueView::DataUpdate { account_id, key, .. }
             | StateChangeValueView::DataDeletion { account_id, key } => {
+                let shard_id = near_primitives::shard_layout::account_id_to_shard_id(account_id, shard_layout);
                 // returning a hex-encoded key to ensure we store data changes to the key
                 // (if there is more than one change to the same key)
                 let data_key: &[u8] = key.as_ref();
                 let key = format!("{}_data_{}", account_id.as_str(), hex::encode(data_key));
                 // This will override the previous record for this account_id + state change kind + suffix
-                state_changes_data_to_store.insert(key, state_change);
+                state_changes_to_store
+                    .data
+                    .insert(key, ShardedStateChangesWithCause { shard_id, state_change });
             }
             StateChangeValueView::AccessKeyUpdate {
                 account_id, public_key, ..
             }
             | StateChangeValueView::AccessKeyDeletion { account_id, public_key } => {
+                let shard_id = near_primitives::shard_layout::account_id_to_shard_id(account_id, shard_layout);
                 // returning a hex-encoded key to ensure we store data changes to the key
                 // (if there is more than one change to the same key)
                 let key = format!("{}_access_key_{}", account_id.as_str(), hex::encode(borsh::to_vec(&public_key)?));
                 // This will override the previous record for this account_id + state change kind + suffix
-                state_changes_access_key_to_store.insert(key, state_change);
+                state_changes_to_store
+                    .access_key
+                    .insert(key, ShardedStateChangesWithCause { shard_id, state_change });
             }
             // ContractCode and Account changes is not separate-able by any key, we can omit the suffix
             StateChangeValueView::ContractCodeUpdate { account_id, .. }
             | StateChangeValueView::ContractCodeDeletion { account_id } => {
+                let shard_id = near_primitives::shard_layout::account_id_to_shard_id(account_id, shard_layout);
                 let key = format!("{}_contract", account_id.as_str());
                 // This will override the previous record for this account_id + state change kind + suffix
-                state_changes_contract_to_store.insert(key, state_change);
+                state_changes_to_store
+                    .contract
+                    .insert(key, ShardedStateChangesWithCause { shard_id, state_change });
             }
             StateChangeValueView::AccountUpdate { account_id, .. }
             | StateChangeValueView::AccountDeletion { account_id } => {
+                let shard_id = near_primitives::shard_layout::account_id_to_shard_id(account_id, shard_layout);
                 let key = format!("{}_account", account_id.as_str());
                 // This will override the previous record for this account_id + state change kind + suffix
-                state_changes_account_to_store.insert(key, state_change);
+                state_changes_to_store
+                    .account
+                    .insert(key, ShardedStateChangesWithCause { shard_id, state_change });
             }
         };
     }
 
-    // Asynchronous storing of StateChangeWithCauseView into the storage.
-    let futures_save_state_data = db_manager.save_state_changes_data(
-        state_changes_data_to_store.values().cloned().collect(),
-        block_height,
-        block_hash,
-    );
-    let futures_save_state_access_key = db_manager.save_state_changes_access_key(
-        state_changes_access_key_to_store.values().cloned().collect(),
-        block_height,
-        block_hash,
-    );
-    let futures_save_state_contract = db_manager.save_state_changes_contract(
-        state_changes_contract_to_store.values().cloned().collect(),
-        block_height,
-        block_hash,
-    );
-    let futures_save_state_account = db_manager.save_state_changes_account(
-        state_changes_account_to_store.values().cloned().collect(),
-        block_height,
-        block_hash,
-    );
+    let futures = futures::stream::FuturesUnordered::new();
 
-    futures::try_join!(
-        futures_save_state_data,
-        futures_save_state_access_key,
-        futures_save_state_contract,
-        futures_save_state_account
-    )?;
+    // Unpack the state_changes_to_store into futures split by shard_id
+    // and store them asynchronously using try_join!
+    state_changes_to_store
+        .data
+        .values()
+        .chunk_by(|sharded_state_change| sharded_state_change.shard_id)
+        .into_iter()
+        .for_each(|(shard_id, sharded_state_changes)| {
+            let state_changes = sharded_state_changes
+                .map(|sharded_state_change| sharded_state_change.state_change.clone())
+                .collect();
+            futures.push(db_manager.save_state_changes_data(shard_id, state_changes, block_height, block_hash));
+        });
+
+    state_changes_to_store
+        .access_key
+        .values()
+        .chunk_by(|sharded_state_change| sharded_state_change.shard_id)
+        .into_iter()
+        .for_each(|(shard_id, sharded_state_changes)| {
+            let state_changes = sharded_state_changes
+                .map(|sharded_state_change| sharded_state_change.state_change.clone())
+                .collect();
+            futures.push(db_manager.save_state_changes_access_key(shard_id, state_changes, block_height, block_hash))
+        });
+
+    state_changes_to_store
+        .contract
+        .values()
+        .chunk_by(|sharded_state_change| sharded_state_change.shard_id)
+        .into_iter()
+        .for_each(|(shard_id, sharded_state_changes)| {
+            let state_changes = sharded_state_changes
+                .map(|sharded_state_change| sharded_state_change.state_change.clone())
+                .collect();
+            futures.push(db_manager.save_state_changes_contract(shard_id, state_changes, block_height, block_hash))
+        });
+
+    state_changes_to_store
+        .account
+        .values()
+        .chunk_by(|sharded_state_change| sharded_state_change.shard_id)
+        .into_iter()
+        .for_each(|(shard_id, sharded_state_changes)| {
+            let state_changes = sharded_state_changes
+                .map(|sharded_state_change| sharded_state_change.state_change.clone())
+                .collect();
+            futures.push(db_manager.save_state_changes_account(shard_id, state_changes, block_height, block_hash))
+        });
+
+    futures::future::try_join_all(futures).await?;
     Ok(())
 }
 
@@ -248,7 +302,7 @@ async fn main() -> anyhow::Result<()> {
 
     let db_manager = database::prepare_db_manager::<database::PostgresDBManager>(
         &indexer_config.database,
-        protocol_config_view.shard_layout,
+        protocol_config_view.shard_layout.clone(),
     )
     .await?;
     let start_block_height = configs::get_start_block_height(
@@ -278,6 +332,7 @@ async fn main() -> anyhow::Result<()> {
                 &rpc_client,
                 indexer_config.clone(),
                 std::sync::Arc::clone(&stats),
+                &protocol_config_view.shard_layout,
             )
         })
         .buffer_unordered(indexer_config.general.concurrency);
