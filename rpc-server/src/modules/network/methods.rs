@@ -336,7 +336,7 @@ async fn protocol_config_call(
         &data.genesis_info.genesis_config.chain_id,
     );
     let runtime_config = store.get_config(block.latest_protocol_version);
-    
+
     // get default epoch config for genesis config
     let default_epoch_config = EpochConfig::from(&data.genesis_info.genesis_config);
     // AllEpochConfig manages protocol configs that might be changing throughout epochs (hence EpochConfig).
