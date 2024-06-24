@@ -1,3 +1,5 @@
+extern crate database_new as database;
+
 use near_indexer_primitives::{near_primitives, CryptoHash};
 
 pub async fn get_epoch_validators(
