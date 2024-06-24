@@ -53,8 +53,8 @@ near-parameters = { git = 'https://github.com/kobayurii/nearcore.git', branch = 
 near-vm-runner = { git = 'https://github.com/kobayurii/nearcore.git', branch = "1.40.0-fork", features = [
     "wasmer0_vm",
     "wasmer2_vm",
-    "near_vm",
     "wasmtime_vm",
+    "near_vm",
 ] }
 
 near-lake-framework = { git = 'https://github.com/kobayurii/near-lake-framework-rs.git', branch = '0.7.14' }

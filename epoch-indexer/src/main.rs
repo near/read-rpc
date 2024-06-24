@@ -27,19 +27,15 @@ async fn index_epochs(
                 }
             };
 
-        if let Err(e) =
-            epoch_indexer::save_epoch_info(&epoch_info.epoch_info, &db_manager, None).await
-        {
-            tracing::warn!("Error saving epoch info: {:?}", e);
-        }
-        if let Err(e) = epoch_indexer::update_epoch_end_height(
+        if let Err(e) = epoch_indexer::save_epoch_info(
+            &epoch.epoch_info,
             &db_manager,
-            epoch_info.previous_epoch_id,
+            None,
             epoch_info.next_epoch_id,
         )
         .await
         {
-            tracing::warn!("Error update epoch_end_height: {:?}", e);
+            tracing::warn!("Error saving epoch info: {:?}", e);
         }
         db_manager
             .update_meta(indexer_id, epoch.epoch_info.epoch_start_height)
@@ -96,7 +92,6 @@ async fn main() -> anyhow::Result<()> {
             .await?
         }
     };
-    epoch_indexer::save_epoch_info(&epoch.epoch_info, &db_manager, None).await?;
 
     index_epochs(
         &s3_client,

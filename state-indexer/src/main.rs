@@ -103,8 +103,8 @@ async fn handle_epoch(
         } else {
             // If epoch changed, we need to save epoch info and update epoch_end_height
             let epoch_info = epoch_indexer::get_epoch_info_by_id(stats_epoch_id, rpc_client).await?;
-            epoch_indexer::save_epoch_info(&epoch_info, db_manager, Some(stats_current_epoch_height)).await?;
-            epoch_indexer::update_epoch_end_height(db_manager, Some(stats_epoch_id), next_epoch_id).await?;
+            epoch_indexer::save_epoch_info(&epoch_info, db_manager, Some(stats_current_epoch_height), next_epoch_id)
+                .await?;
             Ok(())
         }
     } else {
