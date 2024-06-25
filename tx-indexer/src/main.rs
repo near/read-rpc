@@ -27,7 +27,8 @@ async fn main() -> anyhow::Result<()> {
     // #[cfg(feature = "scylla_db")]
     let db_manager: std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>> =
         std::sync::Arc::new(Box::new(
-            database::prepare_db_manager::<database::PostgresDBManager>(&indexer_config.database).await?,
+            database::prepare_db_manager::<database::PostgresDBManager>(&indexer_config.database)
+                .await?,
         ));
     // #[cfg(all(feature = "postgres_db", not(feature = "scylla_db")))]
     // let db_manager: std::sync::Arc<

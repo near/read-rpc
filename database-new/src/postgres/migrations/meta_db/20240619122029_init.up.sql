@@ -66,17 +66,6 @@ CREATE TABLE IF NOT EXISTS validators (
     validators_info jsonb NOT NULL
 );
 
-
--- Create protocol_configs table to store protocol config for each epoch
-CREATE TABLE IF NOT EXISTS protocol_configs (
-    epoch_id text NOT NULL PRIMARY KEY,
-    epoch_height numeric(20,0) NOT NULL,
-    epoch_start_height numeric(20,0) NOT NULL,
-    epoch_end_height numeric(20,0) NULL,
-    protocol_config jsonb NOT NULL
-);
-
-
 -- Create meta table to store last processed block height for each indexer
 CREATE TABLE IF NOT EXISTS meta (
     indexer_id text NOT NULL PRIMARY KEY,

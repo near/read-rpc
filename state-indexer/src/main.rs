@@ -245,9 +245,6 @@ async fn main() -> anyhow::Result<()> {
             block_reference: near_primitives::types::BlockReference::Finality(near_primitives::types::Finality::Final),
         })
         .await?;
-    let arch_url = indexer_config.general.near_archival_rpc_url.clone();
-    let rpc_client = near_jsonrpc_client::JsonRpcClient::connect(&arch_url.unwrap())
-        .header(("Referer", indexer_config.general.referer_header_value.clone()))?;
 
     let db_manager = database::prepare_db_manager::<database::PostgresDBManager>(
         &indexer_config.database,

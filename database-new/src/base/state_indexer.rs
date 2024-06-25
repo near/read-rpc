@@ -32,19 +32,6 @@ pub trait StateIndexerDbManager {
         epoch_height: u64,
         epoch_start_height: u64,
         validators_info: &near_primitives::views::EpochValidatorInfo,
-    ) -> anyhow::Result<()>;
-
-    async fn add_protocol_config(
-        &self,
-        epoch_id: near_indexer_primitives::CryptoHash,
-        epoch_height: u64,
-        epoch_start_height: u64,
-        protocol_config: &near_chain_configs::ProtocolConfigView,
-    ) -> anyhow::Result<()>;
-
-    async fn update_epoch_end_height(
-        &self,
-        epoch_id: near_indexer_primitives::CryptoHash,
         epoch_end_block_hash: near_indexer_primitives::CryptoHash,
     ) -> anyhow::Result<()>;
 

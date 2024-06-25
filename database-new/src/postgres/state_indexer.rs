@@ -40,6 +40,7 @@ impl crate::PostgresDBManager {
                 _ => {}
             }
         });
+        query_builder.push(" ON CONFLICT DO NOTHING;");
         query_builder
             .build()
             .execute(
@@ -96,6 +97,7 @@ impl crate::PostgresDBManager {
                 _ => {}
             }
         });
+        query_builder.push(" ON CONFLICT DO NOTHING;");
         query_builder
             .build()
             .execute(
@@ -143,6 +145,7 @@ impl crate::PostgresDBManager {
                 _ => {}
             }
         });
+        query_builder.push(" ON CONFLICT DO NOTHING;");
         query_builder
             .build()
             .execute(
@@ -190,6 +193,7 @@ impl crate::PostgresDBManager {
                 _ => {}
             }
         });
+        query_builder.push(" ON CONFLICT DO NOTHING;");
         query_builder
             .build()
             .execute(
@@ -212,7 +216,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
         sqlx::query(
             "
             INSERT INTO blocks (block_height, block_hash)
-            VALUES ($1, $2)
+            VALUES ($1, $2) ON CONFLICT DO NOTHING;
             ",
         )
         .bind(bigdecimal::BigDecimal::from(block_height))
@@ -231,17 +235,17 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
             crate::primitives::HeightIncluded,
         )>,
     ) -> anyhow::Result<()> {
-        let chunks_uniq = chunks
+        let unique_chunks = chunks
             .iter()
             .filter(|(_chunk_hash, _shard_id, height_included)| height_included == &block_height)
             .collect::<Vec<_>>();
 
-        if !chunks_uniq.is_empty() {
+        if !unique_chunks.is_empty() {
             let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> =
                 sqlx::QueryBuilder::new("INSERT INTO chunks (chunk_hash, block_height, shard_id) ");
 
             query_builder.push_values(
-                chunks_uniq.iter(),
+                unique_chunks.iter(),
                 |mut values, (chunk_hash, shard_id, height_included)| {
                     values
                         .push_bind(chunk_hash.to_string())
@@ -249,7 +253,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                         .push_bind(bigdecimal::BigDecimal::from(shard_id.clone()));
                 },
             );
-
+            query_builder.push(" ON CONFLICT DO NOTHING;");
             query_builder.build().execute(&self.meta_db_pool).await?;
         }
 
@@ -271,7 +275,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                         .push_bind(bigdecimal::BigDecimal::from(height_included.clone()));
                 },
             );
-
+            query_builder.push(" ON CONFLICT DO NOTHING;");
             query_builder.build().execute(&self.meta_db_pool).await?;
         }
 
@@ -323,7 +327,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
             "
             SELECT last_processed_block_height
             FROM meta
-            WHERE indexer_id = ?
+            WHERE indexer_id = $1
             LIMIT 1;
             ",
         )
@@ -341,76 +345,24 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
         epoch_height: u64,
         epoch_start_height: u64,
         validators_info: &near_primitives::views::EpochValidatorInfo,
-    ) -> anyhow::Result<()> {
-        sqlx::query(
-            "
-            INSERT INTO validators (epoch_id, epoch_height, epoch_start_height, epoch_end_height, protocol_config)
-            VALUES (?, ?, ?, NULL, ?);
-            "
-        )
-            .bind(&epoch_id.to_string())
-            .bind(bigdecimal::BigDecimal::from(epoch_height))
-            .bind(bigdecimal::BigDecimal::from(epoch_start_height))
-            .bind(&serde_json::to_string(validators_info)?)
-            .execute(&self.meta_db_pool)
-            .await?;
-        Ok(())
-    }
-
-    async fn add_protocol_config(
-        &self,
-        epoch_id: near_indexer_primitives::CryptoHash,
-        epoch_height: u64,
-        epoch_start_height: u64,
-        protocol_config: &near_chain_configs::ProtocolConfigView,
-    ) -> anyhow::Result<()> {
-        sqlx::query(
-            "
-            INSERT INTO protocol_configs (epoch_id, epoch_height, epoch_start_height, epoch_end_height, protocol_config)
-            VALUES (?, ?, ?, NULL, ?);
-            "
-        )
-            .bind(&epoch_id.to_string())
-            .bind(bigdecimal::BigDecimal::from(epoch_height))
-            .bind(bigdecimal::BigDecimal::from(epoch_start_height))
-            .bind(&serde_json::to_string(protocol_config)?)
-            .execute(&self.meta_db_pool)
-            .await?;
-        Ok(())
-    }
-
-    async fn update_epoch_end_height(
-        &self,
-        epoch_id: near_indexer_primitives::CryptoHash,
         epoch_end_block_hash: near_indexer_primitives::CryptoHash,
     ) -> anyhow::Result<()> {
-        let block_height = self
-            .get_block_by_hash(epoch_end_block_hash, "update_epoch_end_height")
+        let epoch_end_block_height = self
+            .get_block_by_hash(epoch_end_block_hash, "add_validators")
             .await?;
-        let epoch_id_str = epoch_id.to_string();
-        let updated_validators_future = sqlx::query(
+        sqlx::query(
             "
-            UPDATE validators
-            SET epoch_end_height = ?
-            WHERE epoch_id = ?;
-            ",
-        )
-        .bind(bigdecimal::BigDecimal::from(block_height))
-        .bind(&epoch_id_str)
-        .execute(&self.meta_db_pool);
-
-        let updated_protocol_config_future = sqlx::query(
+            INSERT INTO validators (epoch_id, epoch_height, epoch_start_height, epoch_end_height, validators_info)
+            VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING;
             "
-            UPDATE protocol_configs
-            SET epoch_end_height = ?
-            WHERE epoch_id = ?;
-            ",
         )
-        .bind(bigdecimal::BigDecimal::from(block_height))
-        .bind(&epoch_id_str)
-        .execute(&self.meta_db_pool);
-
-        futures::try_join!(updated_validators_future, updated_protocol_config_future)?;
+            .bind(&epoch_id.to_string())
+            .bind(bigdecimal::BigDecimal::from(epoch_height))
+            .bind(bigdecimal::BigDecimal::from(epoch_start_height))
+            .bind(bigdecimal::BigDecimal::from(epoch_end_block_height))
+            .bind(&serde_json::to_value(validators_info)?)
+            .execute(&self.meta_db_pool)
+            .await?;
         Ok(())
     }
 
