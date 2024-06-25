@@ -132,11 +132,4 @@ pub trait ReaderDbManager {
         block_height: near_primitives::types::BlockHeight,
         method_name: &str,
     ) -> anyhow::Result<readnode_primitives::EpochValidatorsInfo>;
-
-    /// Return protocol config by the given epoch id
-    async fn get_protocol_config_by_epoch_id(
-        &self,
-        epoch_id: near_primitives::hash::CryptoHash,
-        method_name: &str,
-    ) -> anyhow::Result<near_chain_configs::ProtocolConfigView>;
 }
