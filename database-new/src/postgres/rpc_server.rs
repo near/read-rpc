@@ -16,7 +16,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
             "
                 SELECT block_height
                 FROM blocks
-                WHERE block_hash = ?
+                WHERE block_hash = $1
                 LIMIT 1
                 ",
         )
@@ -40,7 +40,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
             "
                 SELECT block_height, shard_id
                 FROM chunks
-                WHERE chunk_hash = ?
+                WHERE chunk_hash = $1
                 LIMIT 1
                 ",
         )
@@ -98,7 +98,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
             "
                 SELECT data_value 
                 FROM state_changes_data
-                WHERE account_id = ? AND key_data = ? AND block_height <= ?
+                WHERE account_id = $1 AND key_data = $2 AND block_height <= $3
                 ORDER BY block_height DESC
                 LIMIT 1
                 ",
@@ -130,7 +130,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 "
                 SELECT block_height, block_hash, data_value 
                 FROM state_changes_account
-                WHERE account_id = ? AND block_height <= ?
+                WHERE account_id = $1 AND block_height <= $2
                 ORDER BY block_height DESC
                 LIMIT 1
                 ",
@@ -166,7 +166,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 "
                 SELECT block_height, block_hash, data_value
                 FROM state_changes_contract
-                WHERE account_id = ? AND block_height <= ?
+                WHERE account_id = $1 AND block_height <= $2
                 ORDER BY block_height DESC
                 LIMIT 1
                 ",
@@ -204,7 +204,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 "
                 SELECT block_height, block_hash, data_value
                 FROM state_changes_access_key
-                WHERE account_id = ? AND data_key = ? AND block_height <= ?
+                WHERE account_id = $1 AND data_key = $2 AND block_height <= $3
                 ORDER BY block_height DESC
                 LIMIT 1
                 ",
@@ -239,7 +239,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 "
                 SELECT receipt_id, parent_transaction_hash, receiver_id, block_height, block_hash, shard_id
                 FROM receipts_map
-                WHERE receipt_id = ?
+                WHERE receipt_id = $1
                 LIMIT 1
                 ",
             )
@@ -292,7 +292,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
             "
                 SELECT included_in_block_height, shard_id
                 FROM chunks_duplicate
-                WHERE block_height = ? AND shard_id = ?
+                WHERE block_height = $1 AND shard_id = $2
                 LIMIT 1
                 ",
         )
@@ -311,19 +311,20 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         crate::metrics::META_DATABASE_READ_QUERIES
             .with_label_values(&[method_name, "validators"])
             .inc();
-        let (epoch_height, validators_info): (bigdecimal::BigDecimal, String) = sqlx::query_as(
-            "
+        let (epoch_height, validators_info): (bigdecimal::BigDecimal, serde_json::Value) =
+            sqlx::query_as(
+                "
                 SELECT epoch_height, validators_info
                 FROM validators
-                WHERE epoch_id = ?
+                WHERE epoch_id = $1
                 LIMIT 1
                 ",
-        )
-        .bind(epoch_id.to_string())
-        .fetch_one(&self.meta_db_pool)
-        .await?;
+            )
+            .bind(epoch_id.to_string())
+            .fetch_one(&self.meta_db_pool)
+            .await?;
         let validators_info: near_primitives::views::EpochValidatorInfo =
-            serde_json::from_str(&validators_info)?;
+            serde_json::from_value(validators_info)?;
         Ok(readnode_primitives::EpochValidatorsInfo {
             epoch_id,
             epoch_height: epoch_height
@@ -342,22 +343,25 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         crate::metrics::META_DATABASE_READ_QUERIES
             .with_label_values(&[method_name, "validators"])
             .inc();
-        let (epoch_id, epoch_height, validators_info): (String, bigdecimal::BigDecimal, String) =
-            sqlx::query_as(
-                "
+        let (epoch_id, epoch_height, validators_info): (
+            String,
+            bigdecimal::BigDecimal,
+            serde_json::Value,
+        ) = sqlx::query_as(
+            "
                 SELECT epoch_id, epoch_height, validators_info
                 FROM validators
-                WHERE epoch_end_height = ?
+                WHERE epoch_end_height = $1
                 LIMIT 1
                 ",
-            )
-            .bind(bigdecimal::BigDecimal::from(block_height))
-            .fetch_one(&self.meta_db_pool)
-            .await?;
+        )
+        .bind(bigdecimal::BigDecimal::from(block_height))
+        .fetch_one(&self.meta_db_pool)
+        .await?;
         let epoch_id = near_indexer_primitives::CryptoHash::from_str(&epoch_id)
             .map_err(|err| anyhow::anyhow!("Failed to parse `epoch_id` to CryptoHash: {}", err))?;
         let validators_info: near_primitives::views::EpochValidatorInfo =
-            serde_json::from_str(&validators_info)?;
+            serde_json::from_value(validators_info)?;
         Ok(readnode_primitives::EpochValidatorsInfo {
             epoch_id,
             epoch_height: epoch_height
@@ -366,30 +370,5 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
             epoch_start_height: validators_info.epoch_start_height,
             validators_info,
         })
-    }
-
-    async fn get_protocol_config_by_epoch_id(
-        &self,
-        epoch_id: near_indexer_primitives::CryptoHash,
-        method_name: &str,
-    ) -> anyhow::Result<near_chain_configs::ProtocolConfigView> {
-        crate::metrics::META_DATABASE_READ_QUERIES
-            .with_label_values(&[method_name, "protocol_configs"])
-            .inc();
-        let (protocol_config,): (String,) = sqlx::query_as(
-            "
-                SELECT protocol_config
-                FROM protocol_configs
-                WHERE epoch_id = ?
-                LIMIT 1
-                ",
-        )
-        .bind(epoch_id.to_string())
-        .fetch_one(&self.meta_db_pool)
-        .await?;
-        let protocol_config: near_chain_configs::ProtocolConfigView =
-            serde_json::from_str(&protocol_config)?;
-
-        Ok(protocol_config)
     }
 }
