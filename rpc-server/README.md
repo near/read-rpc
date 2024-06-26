@@ -56,38 +56,15 @@ https://docs.near.org/api/rpc/introduction
 
 ## Feature flags
 
-### `send_tx_methods` (default: `true`)
-
-This feature flag enabled the methods for sending transactions to the network. This includes the following methods:
-
-- `broadcast_tx_commit`
-- `broadcast_tx_async`
-
-Might be useful to disable if you want to run a totally read-only node that doesn't even proxies transactions to the network.
-
-**Note** the methods will be still available in the API, but will return an error if the feature flag is disabled.
-
 ### `tracing-instrumentation` (default: `false`)
 
 This feature flag enables the tracing instrumentation for the RPC server. See the [Logging](#logging) section for more details.
-
-### `scylla_db` (default: `true`)
-
-See the [documentation here](../database/README.md)
-
-### `scylla_db_tracing` (default: `false`)
-
-This feature flag enables the tracing instrumentation for the ScyllaDB client ([`database` crate](../database)). Database tracing means additional debug-level logs for all the database queries.
 
 ### `shadow_data_consistency` (default: `false`)
 
 This feature flag enables the shadow data consistency checks. With this feature on, all the queries to the read-rpc-server will be executed twice: once against the main database, and once against the real NEAR RPC. If the results are different, warning-level logs are emitted. **Note** we've decided that read-rpc-server will return its own response if the results are incorrect to make the debugging easier.
 
 **Warning** This feature is created for the early-stage of lunching the read-rpc-server to catch all the bugs and inconsistencies. You don't need this feature if you are not a contributor to the read-rpc-server.
-
-### `account_access_keys` (default: `false`)
-
-We encountered a problem with the design of the table `account_access_keys` and overall design of the logic around it. We had to disable the table and proxy the calls of the `query.access_key_list` method to the real NEAR RPC. However, we still aren't ready to get rid of the code and that's why we hid it under the feature flag. We are planning to remove the code in the future and remove the feature flag.
 
 ## Redis (Optional)
 

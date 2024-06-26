@@ -1,5 +1,3 @@
-extern crate database_new as database;
-
 use clap::Parser;
 use futures::StreamExt;
 use near_indexer::near_primitives;
@@ -275,17 +273,6 @@ async fn run(home_dir: std::path::PathBuf) -> anyhow::Result<()> {
     let state_indexer_config =
         configuration::read_configuration::<configuration::NearStateIndexerConfig>().await?;
 
-    tracing::info!(target: INDEXER, "Connecting to db...");
-    // #[cfg(feature = "scylla_db")]
-    let db_manager =
-        database::prepare_db_manager::<database::PostgresDBManager>(&state_indexer_config.database)
-            .await?;
-    // #[cfg(all(feature = "postgres_db", not(feature = "scylla_db")))]
-    // let db_manager = database::prepare_db_manager::<
-    //     database::postgres::state_indexer::PostgresDBManager,
-    // >(&state_indexer_config.database)
-    // .await?;
-
     tracing::info!(target: INDEXER, "Connecting to redis...");
     let redis_client = redis::Client::open(state_indexer_config.general.redis_url.clone())?
         .get_connection_manager()
@@ -304,6 +291,16 @@ async fn run(home_dir: std::path::PathBuf) -> anyhow::Result<()> {
     tracing::info!(target: INDEXER, "Instantiating the stream...");
     let stream = indexer.streamer();
     let (view_client, client) = indexer.client_actors();
+
+    tracing::info!(target: INDEXER, "Fetching protocol config...");
+    let protocol_config = utils::fetch_protocol_config(&view_client).await?;
+
+    tracing::info!(target: INDEXER, "Connecting to db...");
+    let db_manager = database::prepare_db_manager::<database::PostgresDBManager>(
+        &state_indexer_config.database,
+        protocol_config.shard_layout,
+    )
+    .await?;
 
     let stats = std::sync::Arc::new(tokio::sync::RwLock::new(metrics::Stats::new()));
     tokio::spawn(metrics::state_logger(

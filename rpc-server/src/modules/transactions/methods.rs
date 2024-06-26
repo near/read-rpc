@@ -95,27 +95,19 @@ pub async fn broadcast_tx_async(
     Params(params): Params<serde_json::Value>,
 ) -> Result<near_primitives::hash::CryptoHash, RPCError> {
     tracing::debug!("`broadcast_tx_async` call. Params: {:?}", params);
-    if cfg!(feature = "send_tx_methods") {
-        let tx_async_request =
-            near_jsonrpc::primitives::types::transactions::RpcSendTransactionRequest::parse(
-                params,
-            )?;
-        let proxy_params =
-            near_jsonrpc_client::methods::broadcast_tx_async::RpcBroadcastTxAsyncRequest {
-                signed_transaction: tx_async_request.signed_transaction,
-            };
-        match data
-            .near_rpc_client
-            .call(proxy_params, Some("broadcast_tx_async"))
-            .await
-        {
-            Ok(resp) => Ok(resp),
-            Err(err) => Err(RPCError::internal_error(&err.to_string())),
-        }
-    } else {
-        Err(RPCError::internal_error(
-            "This method is not available because the `send_tx_methods` feature flag is disabled",
-        ))
+    let tx_async_request =
+        near_jsonrpc::primitives::types::transactions::RpcSendTransactionRequest::parse(params)?;
+    let proxy_params =
+        near_jsonrpc_client::methods::broadcast_tx_async::RpcBroadcastTxAsyncRequest {
+            signed_transaction: tx_async_request.signed_transaction,
+        };
+    match data
+        .near_rpc_client
+        .call(proxy_params, Some("broadcast_tx_async"))
+        .await
+    {
+        Ok(resp) => Ok(resp),
+        Err(err) => Err(RPCError::internal_error(&err.to_string())),
     }
 }
 
@@ -125,30 +117,22 @@ pub async fn broadcast_tx_commit(
     Params(params): Params<serde_json::Value>,
 ) -> Result<near_jsonrpc::primitives::types::transactions::RpcTransactionResponse, RPCError> {
     tracing::debug!("`broadcast_tx_commit` call. Params: {:?}", params);
-    if cfg!(feature = "send_tx_methods") {
-        let tx_commit_request =
-            near_jsonrpc::primitives::types::transactions::RpcSendTransactionRequest::parse(
-                params,
-            )?;
-        let proxy_params =
-            near_jsonrpc_client::methods::broadcast_tx_commit::RpcBroadcastTxCommitRequest {
-                signed_transaction: tx_commit_request.signed_transaction,
-            };
-        let result = data
-            .near_rpc_client
-            .call(proxy_params, Some("broadcast_tx_commit"))
-            .await?;
-        Ok(
-            near_jsonrpc::primitives::types::transactions::RpcTransactionResponse {
-                final_execution_outcome: Some(FinalExecutionOutcome(result)),
-                final_execution_status: near_primitives::views::TxExecutionStatus::Final,
-            },
-        )
-    } else {
-        Err(RPCError::internal_error(
-            "This method is not available because the `send_tx_methods` feature flag is disabled",
-        ))
-    }
+    let tx_commit_request =
+        near_jsonrpc::primitives::types::transactions::RpcSendTransactionRequest::parse(params)?;
+    let proxy_params =
+        near_jsonrpc_client::methods::broadcast_tx_commit::RpcBroadcastTxCommitRequest {
+            signed_transaction: tx_commit_request.signed_transaction,
+        };
+    let result = data
+        .near_rpc_client
+        .call(proxy_params, Some("broadcast_tx_commit"))
+        .await?;
+    Ok(
+        near_jsonrpc::primitives::types::transactions::RpcTransactionResponse {
+            final_execution_outcome: Some(FinalExecutionOutcome(result)),
+            final_execution_status: near_primitives::views::TxExecutionStatus::Final,
+        },
+    )
 }
 
 #[cfg_attr(

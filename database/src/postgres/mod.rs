@@ -1,55 +1,83 @@
-use diesel::Connection;
-use diesel_migrations::MigrationHarness;
+mod rpc_server;
+mod state_indexer;
+mod tx_indexer;
 
-pub mod models;
-pub mod rpc_server;
-pub mod schema;
-pub mod state_indexer;
-pub mod tx_indexer;
+static META_DB_MIGRATOR: sqlx::migrate::Migrator =
+    sqlx::migrate!("src/postgres/migrations/meta_db");
+static SHARD_DB_MIGRATOR: sqlx::migrate::Migrator =
+    sqlx::migrate!("src/postgres/migrations/shard_db");
 
-pub type PgAsyncPool =
-    diesel_async::pooled_connection::deadpool::Pool<diesel_async::AsyncPgConnection>;
-pub type PgAsyncConn =
-    diesel_async::pooled_connection::deadpool::Object<diesel_async::AsyncPgConnection>;
+pub struct ShardIdPool<'a> {
+    shard_id: near_primitives::types::ShardId,
+    pool: &'a sqlx::Pool<sqlx::Postgres>,
+}
 
-pub const MIGRATIONS: diesel_migrations::EmbeddedMigrations =
-    diesel_migrations::embed_migrations!("src/postgres/migrations");
+pub struct PostgresDBManager {
+    shard_layout: near_primitives::shard_layout::ShardLayout,
+    shards_pool:
+        std::collections::HashMap<near_primitives::types::ShardId, sqlx::Pool<sqlx::Postgres>>,
+    meta_db_pool: sqlx::Pool<sqlx::Postgres>,
+}
 
-#[async_trait::async_trait]
-pub trait PostgresStorageManager {
-    async fn create_pool(
-        database_url: &str,
-        database_user: Option<&str>,
-        database_password: Option<&str>,
-        database_name: Option<&str>,
-    ) -> anyhow::Result<PgAsyncPool> {
-        let connection_string = if database_url.starts_with("postgres://") {
-            database_url.to_string()
-        } else {
-            format!(
-                "postgres://{}:{}@{}/{}",
-                database_user.unwrap(),
-                database_password.unwrap(),
-                database_url,
-                database_name.unwrap()
-            )
-        };
-        Self::run_migrations(connection_string.clone()).await?;
-        let config = diesel_async::pooled_connection::AsyncDieselConnectionManager::<
-            diesel_async::AsyncPgConnection,
-        >::new(connection_string);
-        let pool = diesel_async::pooled_connection::deadpool::Pool::builder(config).build()?;
+impl PostgresDBManager {
+    async fn create_meta_db_pool(database_url: &str) -> anyhow::Result<sqlx::Pool<sqlx::Postgres>> {
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .connect(database_url)
+            .await?;
+        Self::run_migrations(&META_DB_MIGRATOR, &pool).await?;
         Ok(pool)
     }
 
-    async fn get_connection(pool: &PgAsyncPool) -> anyhow::Result<PgAsyncConn> {
-        Ok(pool.get().await?)
+    async fn create_shard_db_pool(
+        database_url: &str,
+    ) -> anyhow::Result<sqlx::Pool<sqlx::Postgres>> {
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .connect(database_url)
+            .await?;
+        Self::run_migrations(&SHARD_DB_MIGRATOR, &pool).await?;
+        Ok(pool)
     }
 
-    async fn run_migrations(connection_string: String) -> anyhow::Result<()> {
-        let mut conn = diesel::PgConnection::establish(&connection_string)?;
-        conn.run_pending_migrations(MIGRATIONS)
-            .map_err(|err| anyhow::anyhow!("Failed to run migrations: {:?}", err))?;
+    async fn get_shard_connection(
+        &self,
+        account_id: &near_primitives::types::AccountId,
+    ) -> anyhow::Result<ShardIdPool> {
+        let shard_id =
+            near_primitives::shard_layout::account_id_to_shard_id(account_id, &self.shard_layout);
+        Ok(ShardIdPool {
+            shard_id,
+            pool: self
+                .shards_pool
+                .get(&shard_id)
+                .ok_or(anyhow::anyhow!("Shard not found"))?,
+        })
+    }
+
+    async fn run_migrations(
+        migrator: &sqlx::migrate::Migrator,
+        pool: &sqlx::Pool<sqlx::Postgres>,
+    ) -> anyhow::Result<()> {
+        migrator.run(pool).await?;
         Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl crate::BaseDbManager for PostgresDBManager {
+    async fn new(
+        config: &configuration::DatabaseConfig,
+        shard_layout: near_primitives::shard_layout::ShardLayout,
+    ) -> anyhow::Result<Box<Self>> {
+        let mut shards_pool = std::collections::HashMap::new();
+        for (shard_id, database_url) in &config.shards_config {
+            let pool = Self::create_shard_db_pool(database_url).await?;
+            shards_pool.insert(*shard_id, pool);
+        }
+        let meta_db_pool = Self::create_meta_db_pool(&config.database_url).await?;
+        Ok(Box::new(Self {
+            shard_layout,
+            shards_pool,
+            meta_db_pool,
+        }))
     }
 }

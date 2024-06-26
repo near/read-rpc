@@ -6,30 +6,43 @@ Set up local PostgresDB
 ```
 $ docker run --name some-postgres -p 5432:5432 --hostname some-postgres -e POSTGRES_PASSWORD=password -d postgres
 ```
-## Install diesel cli
+or
 ```
-$ cargo install diesel_cli --no-default-features  --features postgres --locked
-```
-
-## Create database
-```
-$ cd database
-$ diesel setup --database-url postgres://postgres:password@localhost/near_data
+docker-compose -f database/src/postgres/docker-compose-postgres.yml up -d
 ```
 
-## Run migrations
+### Install `sqlx-cli`
 ```
-$ diesel migration redo --database-url postgres://postgres:password@localhost/near_data
+$ cargo install sqlx-cli --no-default-features --features postgres
 ```
+
+### Create separate migration directories for each database:
+```
+$ mkdir -p src/postgres/migrations/shard_db
+$ mkdir -p src/postgres/migrations/meta_db
+```
+
+### Create Migration Files for Each Database
+```
+sqlx migrate add -r --source src/postgres/migrations/shard_db <migration_name>
+sqlx migrate add -r --source src/postgres/migrations/meta_db <migration_name>
+```
+#### Migration automatically applies to the database when the service starts
 
 ### psql
 ```
-$ docker exec -it some-postgres psql -U postgres -d near_data
+$ docker exec -it some-postgres psql -U postgres -d shard_<id>
+$ docker exec -it some-postgres psql -U postgres -d meta
+```
+or
+```
+$ docker exec -it shard_<id> psql -U postgres -d near_data
+$ docker exec -it metadata psql -U postgres -d near_data
 ```
 
 ### Additional postgres db options
 Put into `.env` file in the service root
 ```
-DATABASE_URL=postgres://postgres:password@localhost/near_data
-DATABASE_NAME = "near_data"
+DATABASE_META_URL = postgres://postgres:password@localhost:<port>/meta
+DATABASE_SHARD_<id>_URL = postgres://postgres:password@localhost:<port>/shard_<id>
 ```

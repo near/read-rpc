@@ -3,6 +3,19 @@ use near_o11y::WithSpanContextExt;
 
 const INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
 
+pub(crate) async fn fetch_protocol_config(
+    client: &actix::Addr<near_client::ViewClientActor>,
+) -> anyhow::Result<near_chain_configs::ProtocolConfigView> {
+    Ok(client
+        .send(
+            near_client::GetProtocolConfig(near_primitives::types::BlockReference::Finality(
+                near_primitives::types::Finality::Final,
+            ))
+            .with_span_context(),
+        )
+        .await??)
+}
+
 pub(crate) async fn fetch_epoch_validators_info(
     epoch_id: near_primitives::hash::CryptoHash,
     client: &actix::Addr<near_client::ViewClientActor>,
