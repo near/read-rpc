@@ -1,8 +1,6 @@
 use itertools::Itertools;
 use std::collections::HashMap;
 
-extern crate database_new as database;
-
 use clap::Parser;
 use futures::StreamExt;
 
@@ -283,13 +281,6 @@ async fn main() -> anyhow::Result<()> {
     configuration::init_tracing(INDEXER).await?;
     let indexer_config = configuration::read_configuration::<configuration::StateIndexerConfig>().await?;
     let opts: Opts = Opts::parse();
-
-    // #[cfg(feature = "scylla_db")]
-    // let db_manager =
-    //     database::prepare_db_manager::<database::scylladb::state_indexer::ScyllaDBManager>(&indexer_config.database)
-    //         .await?;
-
-    // #[cfg(all(feature = "postgres_db", not(feature = "scylla_db")))]
 
     let rpc_client = near_jsonrpc_client::JsonRpcClient::connect(&indexer_config.general.near_rpc_url)
         .header(("Referer", indexer_config.general.referer_header_value.clone()))?;

@@ -1,5 +1,3 @@
-extern crate database_new as database;
-
 use crate::config::{Opts, StartOptions};
 use clap::Parser;
 use database::StateIndexerDbManager;
@@ -54,22 +52,28 @@ async fn main() -> anyhow::Result<()> {
 
     let opts: Opts = Opts::parse();
 
-    // #[cfg(feature = "scylla_db")]
-    let db_manager =
-        database::prepare_db_manager::<database::PostgresDBManager>(&indexer_config.database)
-            .await?;
-
-    // #[cfg(all(feature = "postgres_db", not(feature = "scylla_db")))]
-    // let db_manager = database::prepare_db_manager::<
-    //     database::postgres::state_indexer::PostgresDBManager,
-    // >(&indexer_config.database)
-    // .await?;
-
     let indexer_id = &indexer_config.general.indexer_id;
     let s3_client = indexer_config.lake_config.lake_s3_client().await;
     let rpc_client =
         near_jsonrpc_client::JsonRpcClient::connect(&indexer_config.general.near_rpc_url)
             .header(("Referer", indexer_config.general.referer_header_value))?;
+
+    let protocol_config_view = rpc_client
+        .call(
+            near_jsonrpc_client::methods::EXPERIMENTAL_protocol_config::RpcProtocolConfigRequest {
+                block_reference:
+                    near_indexer_primitives::near_primitives::types::BlockReference::Finality(
+                        near_indexer_primitives::near_primitives::types::Finality::Final,
+                    ),
+            },
+        )
+        .await?;
+
+    let db_manager = database::prepare_db_manager::<database::PostgresDBManager>(
+        &indexer_config.database,
+        protocol_config_view.shard_layout,
+    )
+    .await?;
 
     let epoch = match opts.start_options {
         StartOptions::FromGenesis => {

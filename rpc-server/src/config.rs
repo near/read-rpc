@@ -1,6 +1,7 @@
 use std::string::ToString;
 
 use futures::executor::block_on;
+use near_primitives::epoch_manager::{AllEpochConfig, EpochConfig};
 
 use crate::modules::blocks::{BlocksInfoByFinality, CacheBlock};
 
@@ -105,30 +106,37 @@ impl ServerContext {
 
         let s3_client = rpc_server_config.lake_config.lake_s3_client().await;
 
-        // #[cfg(feature = "scylla_db")]
-        let db_manager = database::prepare_db_manager::<database::PostgresDBManager>(
-            &rpc_server_config.database,
-            blocks_info_by_finality.epoch_config().await.shard_layout,
-        )
-        .await?;
-
-        // #[cfg(all(feature = "postgres_db", not(feature = "scylla_db")))]
-        // let db_manager = database::prepare_db_manager::<
-        //     database::postgres::rpc_server::PostgresDBManager,
-        // >(&rpc_server_config.database)
-        // .await?;
-
         let tx_details_storage = tx_details_storage::TxDetailsStorage::new(
             rpc_server_config.tx_details_storage.storage_client().await,
             rpc_server_config.tx_details_storage.aws_bucket_name.clone(),
         );
-
+        
         let genesis_info = GenesisInfo::get(
             &near_rpc_client,
             &s3_client,
             &rpc_server_config.lake_config.aws_bucket_name,
         )
         .await;
+
+        let default_epoch_config = EpochConfig::from(&genesis_info.genesis_config);
+        let all_epoch_config = AllEpochConfig::new(
+            true,
+            default_epoch_config,
+            &genesis_info.genesis_config.chain_id,
+        );
+        let epoch_config = all_epoch_config.for_protocol_version(
+            blocks_info_by_finality
+                .final_cache_block()
+                .await
+                .latest_protocol_version,
+        );
+
+        let db_manager = database::prepare_db_manager::<database::PostgresDBManager>(
+            &rpc_server_config.database,
+            epoch_config.shard_layout,
+        )
+        .await?;
+
         let compiled_contract_code_cache =
             std::sync::Arc::new(CompiledCodeCache::new(contract_code_cache_size_in_bytes));
 
