@@ -40,7 +40,7 @@ sysinfo = "0.30.5"
 
 
 configuration.workspace = true
-database-new.workspace = true
+database.workspace = true
 readnode-primitives.workspace = true
 
 near-async.workspace = true
@@ -55,12 +55,5 @@ near-parameters.workspace = true
 near-vm-runner.workspace = true
 
 [features]
-#default = ["send_tx_methods", "scylla_db"]
-default = ["send_tx_methods"]
-send_tx_methods = []
 tracing-instrumentation = ["configuration/tracing-instrumentation"]
-#postgres_db = ["database/postgres_db"]
-#scylla_db = ["database/scylla_db"]
-#scylla_db_tracing = ["database/scylla_db_tracing", "scylla_db"]
 shadow_data_consistency = ["dep:assert-json-diff"]
-#account_access_keys = ["database/account_access_keys"]

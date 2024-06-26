@@ -2062,7 +2062,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "database-new"
+name = "database"
 version = "0.2.10"
 dependencies = [
  "anyhow",
@@ -2446,7 +2446,7 @@ dependencies = [
  "anyhow",
  "clap",
  "configuration",
- "database-new",
+ "database",
  "futures",
  "near-chain-configs 1.40.0",
  "near-indexer-primitives",
@@ -4806,7 +4806,7 @@ dependencies = [
  "borsh 1.5.1",
  "clap",
  "configuration",
- "database-new",
+ "database",
  "futures",
  "hex",
  "humantime",
@@ -6414,7 +6414,7 @@ dependencies = [
  "borsh 1.5.1",
  "chrono",
  "configuration",
- "database-new",
+ "database",
  "erased-serde",
  "futures",
  "futures-locks",
@@ -7627,7 +7627,7 @@ dependencies = [
  "borsh 1.5.1",
  "clap",
  "configuration",
- "database-new",
+ "database",
  "epoch-indexer",
  "futures",
  "hex",
@@ -8425,7 +8425,7 @@ dependencies = [
  "borsh 1.5.1",
  "clap",
  "configuration",
- "database-new",
+ "database",
  "futures",
  "futures-locks",
  "humantime",

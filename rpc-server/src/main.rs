@@ -1,5 +1,3 @@
-extern crate database_new as database;
-
 use jsonrpc_v2::{Data, Server};
 use mimalloc::MiMalloc;
 

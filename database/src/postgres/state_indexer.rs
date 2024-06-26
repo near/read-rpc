@@ -1,252 +1,25 @@
-use crate::postgres::PostgresStorageManager;
 use bigdecimal::ToPrimitive;
-
-pub struct PostgresDBManager {
-    pg_pool: crate::postgres::PgAsyncPool,
-}
-
 #[async_trait::async_trait]
-impl crate::BaseDbManager for PostgresDBManager {
-    async fn new(config: &configuration::DatabaseConfig) -> anyhow::Result<Box<Self>> {
-        let pg_pool = Self::create_pool(
-            &config.database_url,
-            config.database_user.as_deref(),
-            config.database_password.as_deref(),
-            config.database_name.as_deref(),
-        )
-        .await?;
-        Ok(Box::new(Self { pg_pool }))
-    }
-}
-
-#[async_trait::async_trait]
-impl PostgresStorageManager for PostgresDBManager {}
-
-#[async_trait::async_trait]
-impl crate::StateIndexerDbManager for PostgresDBManager {
-    async fn add_state_changes(
-        &self,
-        account_id: near_primitives::types::AccountId,
-        block_height: u64,
-        block_hash: near_indexer_primitives::CryptoHash,
-        key: &[u8],
-        value: &[u8],
-    ) -> anyhow::Result<()> {
-        crate::models::StateChangesData {
-            account_id: account_id.to_string(),
-            block_height: bigdecimal::BigDecimal::from(block_height),
-            block_hash: block_hash.to_string(),
-            data_key: hex::encode(key).to_string(),
-            data_value: Some(value.to_vec()),
-        }
-        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
-        .await?;
-        crate::models::AccountState {
-            account_id: account_id.to_string(),
-            data_key: hex::encode(key).to_string(),
-        }
-        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
-        .await
-    }
-
-    async fn delete_state_changes(
-        &self,
-        account_id: near_primitives::types::AccountId,
-        block_height: u64,
-        block_hash: near_indexer_primitives::CryptoHash,
-        key: &[u8],
-    ) -> anyhow::Result<()> {
-        crate::models::StateChangesData {
-            account_id: account_id.to_string(),
-            block_height: bigdecimal::BigDecimal::from(block_height),
-            block_hash: block_hash.to_string(),
-            data_key: hex::encode(key).to_string(),
-            data_value: None,
-        }
-        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
-        .await
-    }
-
-    async fn add_access_key(
-        &self,
-        account_id: near_primitives::types::AccountId,
-        block_height: u64,
-        block_hash: near_indexer_primitives::CryptoHash,
-        public_key: &[u8],
-        access_key: &[u8],
-    ) -> anyhow::Result<()> {
-        crate::models::StateChangesAccessKey {
-            account_id: account_id.to_string(),
-            block_height: bigdecimal::BigDecimal::from(block_height),
-            block_hash: block_hash.to_string(),
-            data_key: hex::encode(public_key).to_string(),
-            data_value: Some(access_key.to_vec()),
-        }
-        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
-        .await
-    }
-
-    async fn delete_access_key(
-        &self,
-        account_id: near_primitives::types::AccountId,
-        block_height: u64,
-        block_hash: near_indexer_primitives::CryptoHash,
-        public_key: &[u8],
-    ) -> anyhow::Result<()> {
-        crate::models::StateChangesAccessKey {
-            account_id: account_id.to_string(),
-            block_height: bigdecimal::BigDecimal::from(block_height),
-            block_hash: block_hash.to_string(),
-            data_key: hex::encode(public_key).to_string(),
-            data_value: None,
-        }
-        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
-        .await
-    }
-
-    #[cfg(feature = "account_access_keys")]
-    async fn get_access_keys(
-        &self,
-        account_id: near_primitives::types::AccountId,
-        block_height: u64,
-    ) -> anyhow::Result<std::collections::HashMap<String, Vec<u8>>> {
-        let active_access_keys = crate::models::StateChangesAccessKeys::get_active_access_keys(
-            Self::get_connection(&self.pg_pool).await?,
-            account_id.as_str(),
-            block_height,
-        )
-        .await?;
-
-        if let Some(active_access_keys_value) = active_access_keys {
-            let active_access_keys: std::collections::HashMap<String, Vec<u8>> =
-                serde_json::from_value(active_access_keys_value)?;
-            Ok(active_access_keys)
-        } else {
-            Ok(std::collections::HashMap::new())
-        }
-    }
-
-    #[cfg(feature = "account_access_keys")]
-    async fn add_account_access_keys(
-        &self,
-        account_id: near_primitives::types::AccountId,
-        block_height: u64,
-        public_key: &[u8],
-        access_key: Option<&[u8]>,
-    ) -> anyhow::Result<()> {
-        let public_key_hex = hex::encode(public_key).to_string();
-
-        let mut account_keys = match self.get_access_keys(account_id.clone(), block_height).await {
-            Ok(account_keys) => account_keys,
-            Err(_) => std::collections::HashMap::new(),
-        };
-        match access_key {
-            Some(access_key) => {
-                account_keys.insert(public_key_hex, access_key.to_vec());
-            }
-            None => {
-                account_keys.remove(&public_key_hex);
-            }
-        }
-        self.update_account_access_keys(account_id.to_string(), block_height, account_keys)
-            .await?;
-        Ok(())
-    }
-
-    #[cfg(feature = "account_access_keys")]
-    async fn update_account_access_keys(
-        &self,
-        account_id: String,
-        block_height: u64,
-        account_keys: std::collections::HashMap<String, Vec<u8>>,
-    ) -> anyhow::Result<()> {
-        crate::models::StateChangesAccessKeys {
-            account_id: account_id.to_string(),
-            block_height: bigdecimal::BigDecimal::from(block_height),
-            block_hash: "".to_string(),
-            active_access_keys: Some(serde_json::to_value(account_keys)?),
-        }
-        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
-        .await
-    }
-
-    async fn add_contract_code(
-        &self,
-        account_id: near_primitives::types::AccountId,
-        block_height: u64,
-        block_hash: near_indexer_primitives::CryptoHash,
-        code: &[u8],
-    ) -> anyhow::Result<()> {
-        crate::models::StateChangesContract {
-            account_id: account_id.to_string(),
-            block_height: bigdecimal::BigDecimal::from(block_height),
-            block_hash: block_hash.to_string(),
-            data_value: Some(code.to_vec()),
-        }
-        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
-        .await
-    }
-
-    async fn delete_contract_code(
-        &self,
-        account_id: near_primitives::types::AccountId,
-        block_height: u64,
-        block_hash: near_indexer_primitives::CryptoHash,
-    ) -> anyhow::Result<()> {
-        crate::models::StateChangesContract {
-            account_id: account_id.to_string(),
-            block_height: bigdecimal::BigDecimal::from(block_height),
-            block_hash: block_hash.to_string(),
-            data_value: None,
-        }
-        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
-        .await
-    }
-
-    async fn add_account(
-        &self,
-        account_id: near_primitives::types::AccountId,
-        block_height: u64,
-        block_hash: near_indexer_primitives::CryptoHash,
-        account: Vec<u8>,
-    ) -> anyhow::Result<()> {
-        crate::models::StateChangesAccount {
-            account_id: account_id.to_string(),
-            block_height: bigdecimal::BigDecimal::from(block_height),
-            block_hash: block_hash.to_string(),
-            data_value: Some(account),
-        }
-        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
-        .await
-    }
-
-    async fn delete_account(
-        &self,
-        account_id: near_primitives::types::AccountId,
-        block_height: u64,
-        block_hash: near_indexer_primitives::CryptoHash,
-    ) -> anyhow::Result<()> {
-        crate::models::StateChangesAccount {
-            account_id: account_id.to_string(),
-            block_height: bigdecimal::BigDecimal::from(block_height),
-            block_hash: block_hash.to_string(),
-            data_value: None,
-        }
-        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
-        .await
-    }
-
+impl crate::StateIndexerDbManager for crate::PostgresDBManager {
     async fn add_block(
         &self,
         block_height: u64,
         block_hash: near_indexer_primitives::CryptoHash,
     ) -> anyhow::Result<()> {
-        crate::models::Block {
-            block_height: bigdecimal::BigDecimal::from(block_height),
-            block_hash: block_hash.to_string(),
-        }
-        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
-        .await
+        crate::metrics::META_DATABASE_WRITE_QUERIES
+            .with_label_values(&["add_block", "blocks"])
+            .inc();
+        sqlx::query(
+            "
+            INSERT INTO blocks (block_height, block_hash)
+            VALUES ($1, $2) ON CONFLICT DO NOTHING;
+            ",
+        )
+        .bind(bigdecimal::BigDecimal::from(block_height))
+        .bind(block_hash.to_string())
+        .execute(&self.meta_db_pool)
+        .await?;
+        Ok(())
     }
 
     async fn add_chunks(
@@ -258,29 +31,77 @@ impl crate::StateIndexerDbManager for PostgresDBManager {
             crate::primitives::HeightIncluded,
         )>,
     ) -> anyhow::Result<()> {
-        let new_chunks = chunks
+        let unique_chunks = chunks
             .iter()
-            .map(
-                |(chunk_hash, shard_id, height_included)| crate::models::Chunk {
-                    chunk_hash: chunk_hash.to_string(),
-                    block_height: bigdecimal::BigDecimal::from(block_height),
-                    shard_id: bigdecimal::BigDecimal::from(*shard_id),
-                    stored_at_block_height: bigdecimal::BigDecimal::from(*height_included),
+            .filter(|(_chunk_hash, _shard_id, height_included)| height_included == &block_height)
+            .collect::<Vec<_>>();
+
+        if !unique_chunks.is_empty() {
+            crate::metrics::META_DATABASE_WRITE_QUERIES
+                .with_label_values(&["add_chunks", "chunks"])
+                .inc();
+            let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> =
+                sqlx::QueryBuilder::new("INSERT INTO chunks (chunk_hash, block_height, shard_id) ");
+
+            query_builder.push_values(
+                unique_chunks.iter(),
+                |mut values, (chunk_hash, shard_id, height_included)| {
+                    values
+                        .push_bind(chunk_hash.to_string())
+                        .push_bind(bigdecimal::BigDecimal::from(height_included.clone()))
+                        .push_bind(bigdecimal::BigDecimal::from(shard_id.clone()));
                 },
-            )
-            .collect();
-        crate::models::Chunk::bulk_insert(new_chunks, Self::get_connection(&self.pg_pool).await?)
-            .await
+            );
+            query_builder.push(" ON CONFLICT DO NOTHING;");
+            query_builder.build().execute(&self.meta_db_pool).await?;
+        }
+
+        let chunks_duplicate = chunks
+            .iter()
+            .filter(|(_chunk_hash, _shard_id, height_included)| height_included != &block_height)
+            .collect::<Vec<_>>();
+        if !chunks_duplicate.is_empty() {
+            crate::metrics::META_DATABASE_WRITE_QUERIES
+                .with_label_values(&["add_chunks", "chunks_duplicate"])
+                .inc();
+            let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> =
+                sqlx::QueryBuilder::new("INSERT INTO chunks_duplicate (chunk_hash, block_height, shard_id, included_in_block_height) ");
+
+            query_builder.push_values(
+                chunks.iter(),
+                |mut values, (chunk_hash, shard_id, height_included)| {
+                    values
+                        .push_bind(chunk_hash.to_string())
+                        .push_bind(bigdecimal::BigDecimal::from(block_height))
+                        .push_bind(bigdecimal::BigDecimal::from(shard_id.clone()))
+                        .push_bind(bigdecimal::BigDecimal::from(height_included.clone()));
+                },
+            );
+            query_builder.push(" ON CONFLICT DO NOTHING;");
+            query_builder.build().execute(&self.meta_db_pool).await?;
+        }
+
+        Ok(())
     }
 
     async fn get_block_by_hash(
         &self,
         block_hash: near_indexer_primitives::CryptoHash,
+        method_name: &str,
     ) -> anyhow::Result<u64> {
-        let block_height = crate::models::Block::get_block_height_by_hash(
-            Self::get_connection(&self.pg_pool).await?,
-            block_hash,
+        crate::metrics::META_DATABASE_READ_QUERIES
+            .with_label_values(&[method_name, "blocks"])
+            .inc();
+        let (block_height,): (bigdecimal::BigDecimal,) = sqlx::query_as(
+            "
+                SELECT block_height
+                FROM blocks
+                WHERE block_hash = $1
+                LIMIT 1;
+                ",
         )
+        .bind(block_hash.to_string())
+        .fetch_one(&self.meta_db_pool)
         .await?;
         block_height
             .to_u64()
@@ -288,24 +109,44 @@ impl crate::StateIndexerDbManager for PostgresDBManager {
     }
 
     async fn update_meta(&self, indexer_id: &str, block_height: u64) -> anyhow::Result<()> {
-        crate::models::Meta {
-            indexer_id: indexer_id.to_string(),
-            last_processed_block_height: bigdecimal::BigDecimal::from(block_height),
-        }
-        .insert_or_update(Self::get_connection(&self.pg_pool).await?)
-        .await
+        crate::metrics::META_DATABASE_WRITE_QUERIES
+            .with_label_values(&["update_meta", "meta"])
+            .inc();
+        sqlx::query(
+            "
+            INSERT INTO meta (indexer_id, last_processed_block_height)
+            VALUES ($1, $2)
+            ON CONFLICT (indexer_id)
+            DO UPDATE SET last_processed_block_height = $2;
+            ",
+        )
+        .bind(indexer_id)
+        .bind(bigdecimal::BigDecimal::from(block_height))
+        .execute(&self.meta_db_pool)
+        .await?;
+        Ok(())
     }
 
     async fn get_last_processed_block_height(&self, indexer_id: &str) -> anyhow::Result<u64> {
-        let block_height = crate::models::Meta::get_last_processed_block_height(
-            Self::get_connection(&self.pg_pool).await?,
-            indexer_id,
+        crate::metrics::META_DATABASE_READ_QUERIES
+            .with_label_values(&["get_last_processed_block_height", "meta"])
+            .inc();
+        let (last_processed_block_height,): (bigdecimal::BigDecimal,) = sqlx::query_as(
+            "
+            SELECT last_processed_block_height
+            FROM meta
+            WHERE indexer_id = $1
+            LIMIT 1;
+            ",
         )
+        .bind(indexer_id)
+        .fetch_one(&self.meta_db_pool)
         .await?;
-        block_height
+        last_processed_block_height
             .to_u64()
-            .ok_or_else(|| anyhow::anyhow!("Failed to parse `block_height` to u64"))
+            .ok_or_else(|| anyhow::anyhow!("Failed to parse `last_processed_block_height` to u64"))
     }
+
     async fn add_validators(
         &self,
         epoch_id: near_indexer_primitives::CryptoHash,
@@ -314,16 +155,257 @@ impl crate::StateIndexerDbManager for PostgresDBManager {
         validators_info: &near_primitives::views::EpochValidatorInfo,
         epoch_end_block_hash: near_indexer_primitives::CryptoHash,
     ) -> anyhow::Result<()> {
-        let epoch_end_height = self.get_block_by_hash(epoch_end_block_hash).await?;
-        crate::models::Validators {
-            epoch_id: epoch_id.to_string(),
-            epoch_height: bigdecimal::BigDecimal::from(epoch_height),
-            epoch_start_height: bigdecimal::BigDecimal::from(epoch_start_height),
-            epoch_end_height: Some(bigdecimal::BigDecimal::from(epoch_end_height)),
-            validators_info: serde_json::to_value(validators_info)?,
-        }
-        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
-        .await?;
+        crate::metrics::META_DATABASE_WRITE_QUERIES
+            .with_label_values(&["add_validators", "validators"])
+            .inc();
+        let epoch_end_block_height = self
+            .get_block_by_hash(epoch_end_block_hash, "add_validators")
+            .await?;
+        sqlx::query(
+            "
+            INSERT INTO validators (epoch_id, epoch_height, epoch_start_height, epoch_end_height, validators_info)
+            VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING;
+            "
+        )
+            .bind(&epoch_id.to_string())
+            .bind(bigdecimal::BigDecimal::from(epoch_height))
+            .bind(bigdecimal::BigDecimal::from(epoch_start_height))
+            .bind(bigdecimal::BigDecimal::from(epoch_end_block_height))
+            .bind(&serde_json::to_value(validators_info)?)
+            .execute(&self.meta_db_pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn save_state_changes_data(
+        &self,
+        shard_id: near_primitives::types::ShardId,
+        state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
+        block_height: u64,
+        block_hash: near_indexer_primitives::CryptoHash,
+    ) -> anyhow::Result<()> {
+        crate::metrics::SHARD_DATABASE_WRITE_QUERIES
+            .with_label_values(&[
+                &shard_id.to_string(),
+                "save_state_changes_data",
+                "state_changes_data",
+            ])
+            .inc();
+        let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
+            "INSERT INTO state_changes_data (account_id, block_height, block_hash, data_key, data_value) ",
+        );
+        query_builder.push_values(state_changes.iter(), |mut values, state_change| {
+            match &state_change.value {
+                near_primitives::views::StateChangeValueView::DataUpdate {
+                    account_id,
+                    key,
+                    value,
+                } => {
+                    let data_key: &[u8] = key.as_ref();
+                    let data_value: &[u8] = value.as_ref();
+                    values
+                        .push_bind(account_id.to_string())
+                        .push_bind(bigdecimal::BigDecimal::from(block_height))
+                        .push_bind(block_hash.to_string())
+                        .push_bind(hex::encode(&data_key).to_string())
+                        .push_bind(data_value);
+                }
+                near_primitives::views::StateChangeValueView::DataDeletion { account_id, key } => {
+                    let data_key: &[u8] = key.as_ref();
+                    let data_value: Option<&[u8]> = None;
+                    values
+                        .push_bind(account_id.to_string())
+                        .push_bind(bigdecimal::BigDecimal::from(block_height))
+                        .push_bind(block_hash.to_string())
+                        .push_bind(hex::encode(data_key).to_string())
+                        .push_bind(data_value);
+                }
+                _ => {}
+            }
+        });
+        query_builder.push(" ON CONFLICT DO NOTHING;");
+        query_builder
+            .build()
+            .execute(
+                self.shards_pool
+                    .get(&shard_id)
+                    .ok_or(anyhow::anyhow!("Shard not found"))?,
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn save_state_changes_access_key(
+        &self,
+        shard_id: near_primitives::types::ShardId,
+        state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
+        block_height: u64,
+        block_hash: near_indexer_primitives::CryptoHash,
+    ) -> anyhow::Result<()> {
+        crate::metrics::SHARD_DATABASE_WRITE_QUERIES
+            .with_label_values(&[
+                &shard_id.to_string(),
+                "save_state_changes_access_key",
+                "state_changes_access_key",
+            ])
+            .inc();
+        let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
+            "INSERT INTO state_changes_access_key (account_id, block_height, block_hash, data_key, data_value) ",
+        );
+        query_builder.push_values(state_changes.iter(), |mut values, state_change| {
+            match &state_change.value {
+                near_primitives::views::StateChangeValueView::AccessKeyUpdate {
+                    account_id,
+                    public_key,
+                    access_key,
+                } => {
+                    let data_key =
+                        borsh::to_vec(public_key).expect("Failed to borsh serialize public key");
+                    let data_value =
+                        borsh::to_vec(access_key).expect("Failed to borsh serialize access key");
+                    values
+                        .push_bind(account_id.to_string())
+                        .push_bind(bigdecimal::BigDecimal::from(block_height))
+                        .push_bind(block_hash.to_string())
+                        .push_bind(hex::encode(&data_key).to_string())
+                        .push_bind(data_value);
+                }
+                near_primitives::views::StateChangeValueView::AccessKeyDeletion {
+                    account_id,
+                    public_key,
+                } => {
+                    let data_key =
+                        borsh::to_vec(public_key).expect("Failed to borsh serialize public key");
+                    let data_value: Option<&[u8]> = None;
+                    values
+                        .push_bind(account_id.to_string())
+                        .push_bind(bigdecimal::BigDecimal::from(block_height))
+                        .push_bind(block_hash.to_string())
+                        .push_bind(hex::encode(data_key).to_string())
+                        .push_bind(data_value);
+                }
+                _ => {}
+            }
+        });
+        query_builder.push(" ON CONFLICT DO NOTHING;");
+        query_builder
+            .build()
+            .execute(
+                self.shards_pool
+                    .get(&shard_id)
+                    .ok_or(anyhow::anyhow!("Shard not found"))?,
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn save_state_changes_contract(
+        &self,
+        shard_id: near_primitives::types::ShardId,
+        state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
+        block_height: u64,
+        block_hash: near_indexer_primitives::CryptoHash,
+    ) -> anyhow::Result<()> {
+        crate::metrics::SHARD_DATABASE_WRITE_QUERIES
+            .with_label_values(&[
+                &shard_id.to_string(),
+                "save_state_changes_contract",
+                "state_changes_contract",
+            ])
+            .inc();
+        let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
+            "INSERT INTO state_changes_contract (account_id, block_height, block_hash, data_value) ",
+        );
+        query_builder.push_values(state_changes.iter(), |mut values, state_change| {
+            match &state_change.value {
+                near_primitives::views::StateChangeValueView::ContractCodeUpdate {
+                    account_id,
+                    code,
+                } => {
+                    let data_value: &[u8] = code.as_ref();
+                    values
+                        .push_bind(account_id.to_string())
+                        .push_bind(bigdecimal::BigDecimal::from(block_height))
+                        .push_bind(block_hash.to_string())
+                        .push_bind(data_value);
+                }
+                near_primitives::views::StateChangeValueView::ContractCodeDeletion {
+                    account_id,
+                } => {
+                    let data_value: Option<&[u8]> = None;
+                    values
+                        .push_bind(account_id.to_string())
+                        .push_bind(bigdecimal::BigDecimal::from(block_height))
+                        .push_bind(block_hash.to_string())
+                        .push_bind(data_value);
+                }
+                _ => {}
+            }
+        });
+        query_builder.push(" ON CONFLICT DO NOTHING;");
+        query_builder
+            .build()
+            .execute(
+                self.shards_pool
+                    .get(&shard_id)
+                    .ok_or(anyhow::anyhow!("Shard not found"))?,
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn save_state_changes_account(
+        &self,
+        shard_id: near_primitives::types::ShardId,
+        state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
+        block_height: u64,
+        block_hash: near_indexer_primitives::CryptoHash,
+    ) -> anyhow::Result<()> {
+        crate::metrics::SHARD_DATABASE_WRITE_QUERIES
+            .with_label_values(&[
+                &shard_id.to_string(),
+                "save_state_changes_account",
+                "state_changes_account",
+            ])
+            .inc();
+        let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
+            "INSERT INTO state_changes_account (account_id, block_height, block_hash, data_value) ",
+        );
+        query_builder.push_values(state_changes.iter(), |mut values, state_change| {
+            match &state_change.value {
+                near_primitives::views::StateChangeValueView::AccountUpdate {
+                    account_id,
+                    account,
+                } => {
+                    let data_value =
+                        borsh::to_vec(&near_primitives::account::Account::from(account))
+                            .expect("Failed to borsh serialize account");
+                    values
+                        .push_bind(account_id.to_string())
+                        .push_bind(bigdecimal::BigDecimal::from(block_height))
+                        .push_bind(block_hash.to_string())
+                        .push_bind(data_value);
+                }
+                near_primitives::views::StateChangeValueView::AccountDeletion { account_id } => {
+                    let data_value: Option<&[u8]> = None;
+                    values
+                        .push_bind(account_id.to_string())
+                        .push_bind(bigdecimal::BigDecimal::from(block_height))
+                        .push_bind(block_hash.to_string())
+                        .push_bind(data_value);
+                }
+                _ => {}
+            }
+        });
+        query_builder.push(" ON CONFLICT DO NOTHING;");
+        query_builder
+            .build()
+            .execute(
+                self.shards_pool
+                    .get(&shard_id)
+                    .ok_or(anyhow::anyhow!("Shard not found"))?,
+            )
+            .await?;
         Ok(())
     }
 }

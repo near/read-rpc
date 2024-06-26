@@ -10,8 +10,7 @@ license = "MIT OR Apache-2.0"
 resolver = "2"
 members = [
     "configuration",
-#    "database",
-    "database-new",
+    "database",
     "epoch-indexer",
     "near-state-indexer",
     "perf-testing",
@@ -36,8 +35,7 @@ members = [
 [workspace.dependencies]
 
 configuration = { path = "configuration" }
-#database = { path = "database" }
-database-new = { path = "database-new" }
+database = { path = "database" }
 readnode-primitives = { path = "readnode-primitives" }
 epoch-indexer = { path = "epoch-indexer" }
 
