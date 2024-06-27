@@ -270,10 +270,8 @@ async fn process_receipt_execution_outcome(
                 .receipt_ids
                 .iter()
                 .map(|receipt_id| {
-                    tx_collecting_storage.push_receipt_to_watching_list(
-                        receipt_id,
-                        transaction_key.clone(),
-                    )
+                    tx_collecting_storage
+                        .push_receipt_to_watching_list(receipt_id, transaction_key.clone())
                 }),
         );
         while let Some(result) = tasks.next().await {
@@ -456,7 +454,14 @@ async fn save_receipt(
         receipt_id,
     );
     db_manager
-        .save_receipt(receipt_id, parent_tx_hash, receiver_id, block_height, block_hash, shard_id)
+        .save_receipt(
+            receipt_id,
+            parent_tx_hash,
+            receiver_id,
+            block_height,
+            block_hash,
+            shard_id,
+        )
         .await
         .map_err(|err| {
             tracing::error!(

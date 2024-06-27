@@ -87,10 +87,7 @@ impl HashStorageWithDB {
                     .receipt_ids
                     .iter()
                     .map(|receipt_id| {
-                        self.push_receipt_to_watching_list(
-                            receipt_id,
-                            transaction_key.clone(),
-                        )
+                        self.push_receipt_to_watching_list(receipt_id, transaction_key.clone())
                     }),
             );
             while let Some(result) = tasks.next().await {
