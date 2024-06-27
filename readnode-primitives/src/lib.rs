@@ -7,12 +7,12 @@ use serde::{Deserialize, Serialize};
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 pub struct TransactionKey {
-    pub transaction_hash: String,
+    pub transaction_hash: CryptoHash,
     pub block_height: u64,
 }
 
 impl TransactionKey {
-    pub fn new(transaction_hash: String, block_height: u64) -> Self {
+    pub fn new(transaction_hash: CryptoHash, block_height: u64) -> Self {
         Self {
             transaction_hash,
             block_height,
@@ -42,7 +42,7 @@ impl CollectingTransactionDetails {
     /// Build unique transaction key based on transaction_hash and block_height
     /// Help to handle transaction hash collisions
     pub fn transaction_key(&self) -> TransactionKey {
-        TransactionKey::new(self.transaction.hash.clone().to_string(), self.block_height)
+        TransactionKey::new(self.transaction.hash.clone(), self.block_height)
     }
 
     pub fn final_status(&self) -> Option<views::FinalExecutionStatus> {

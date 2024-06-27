@@ -74,7 +74,7 @@ impl crate::BaseDbManager for PostgresDBManager {
             let database_url = config
                 .shards_config
                 .get(&shard_id)
-                .expect(&format!("Shard_{shard_id} - database config not found"));
+                .unwrap_or_else(|| panic!("Shard_{shard_id} - database config not found"));
             let pool = Self::create_shard_db_pool(database_url).await?;
             shards_pool.insert(shard_id, pool);
         }

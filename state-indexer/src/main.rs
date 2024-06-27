@@ -34,6 +34,128 @@ struct ShardedStateChangesWithCause {
     state_change: near_indexer_primitives::views::StateChangeWithCauseView,
 }
 
+impl StateChangesToStore {
+    // Unpack the state_changes_data into futures split by shard_id
+    // and store them asynchronously using try_join!
+    async fn save_data(
+        &self,
+        db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
+        block_height: u64,
+        block_hash: CryptoHash,
+    ) -> anyhow::Result<()> {
+        if !self.data.is_empty() {
+            let futures: Vec<_> = self
+                .data
+                .values()
+                .chunk_by(|sharded_state_change| sharded_state_change.shard_id)
+                .into_iter()
+                .map(|(shard_id, sharded_state_changes)| {
+                    let state_changes = sharded_state_changes
+                        .map(|sharded_state_change| sharded_state_change.state_change.clone())
+                        .collect();
+                    db_manager.save_state_changes_data(shard_id, state_changes, block_height, block_hash)
+                })
+                .collect();
+            println!("{block_height} save_data {:?}", futures.len());
+            futures::future::try_join_all(futures).await?;
+        }
+        Ok(())
+    }
+
+    // Unpack the state_changes_access_key into futures split by shard_id
+    // and store them asynchronously using try_join!
+    async fn save_access_key(
+        &self,
+        db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
+        block_height: u64,
+        block_hash: CryptoHash,
+    ) -> anyhow::Result<()> {
+        if !self.access_key.is_empty() {
+            let futures: Vec<_> = self
+                .access_key
+                .values()
+                .chunk_by(|sharded_state_change| sharded_state_change.shard_id)
+                .into_iter()
+                .map(|(shard_id, sharded_state_changes)| {
+                    let state_changes = sharded_state_changes
+                        .map(|sharded_state_change| sharded_state_change.state_change.clone())
+                        .collect();
+                    db_manager.save_state_changes_access_key(shard_id, state_changes, block_height, block_hash)
+                })
+                .collect();
+            println!("{block_height} save_access_key {:?}", futures.len());
+            futures::future::try_join_all(futures).await?;
+        }
+        Ok(())
+    }
+
+    // Unpack the state_changes_contract into futures split by shard_id
+    // and store them asynchronously using try_join!
+    async fn save_contract(
+        &self,
+        db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
+        block_height: u64,
+        block_hash: CryptoHash,
+    ) -> anyhow::Result<()> {
+        if !self.contract.is_empty() {
+            let futures: Vec<_> = self
+                .contract
+                .values()
+                .chunk_by(|sharded_state_change| sharded_state_change.shard_id)
+                .into_iter()
+                .map(|(shard_id, sharded_state_changes)| {
+                    let state_changes = sharded_state_changes
+                        .map(|sharded_state_change| sharded_state_change.state_change.clone())
+                        .collect();
+                    db_manager.save_state_changes_contract(shard_id, state_changes, block_height, block_hash)
+                })
+                .collect();
+            futures::future::try_join_all(futures).await?;
+        }
+        Ok(())
+    }
+
+    // Unpack the state_changes_account into futures split by shard_id
+    // and store them asynchronously using try_join!
+    async fn save_account(
+        &self,
+        db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
+        block_height: u64,
+        block_hash: CryptoHash,
+    ) -> anyhow::Result<()> {
+        if !self.account.is_empty() {
+            let futures: Vec<_> = self
+                .account
+                .values()
+                .chunk_by(|sharded_state_change| sharded_state_change.shard_id)
+                .into_iter()
+                .map(|(shard_id, sharded_state_changes)| {
+                    let state_changes = sharded_state_changes
+                        .map(|sharded_state_change| sharded_state_change.state_change.clone())
+                        .collect();
+                    db_manager.save_state_changes_account(shard_id, state_changes, block_height, block_hash)
+                })
+                .collect();
+            futures::future::try_join_all(futures).await?;
+        }
+        Ok(())
+    }
+
+    async fn save_state_changes(
+        &self,
+        db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
+        block_height: u64,
+        block_hash: CryptoHash,
+    ) -> anyhow::Result<()> {
+        let save_data_future = self.save_data(db_manager, block_height, block_hash);
+        let save_access_key_future = self.save_access_key(db_manager, block_height, block_hash);
+        let save_contract_future = self.save_contract(db_manager, block_height, block_hash);
+        let save_account_future = self.save_account(db_manager, block_height, block_hash);
+        futures::try_join!(save_data_future, save_access_key_future, save_contract_future, save_account_future)?;
+        Ok(())
+    }
+}
+
 #[cfg_attr(
     feature = "tracing-instrumentation",
     tracing::instrument(skip(streamer_message, db_manager))
@@ -64,7 +186,7 @@ async fn handle_streamer_message(
         rpc_client,
         db_manager,
     );
-    let handle_block_future = db_manager.save_block(
+    let handle_block_future = db_manager.save_block_with_chunks(
         block_height,
         block_hash,
         streamer_message
@@ -75,7 +197,7 @@ async fn handle_streamer_message(
             .collect(),
     );
     let handle_state_change_future =
-        handle_state_changes(&streamer_message, db_manager, block_height, block_hash, &indexer_config, &shard_layout);
+        handle_state_changes(&streamer_message, db_manager, block_height, block_hash, &indexer_config, shard_layout);
 
     let update_meta_future = db_manager.update_meta(&indexer_config.general.indexer_id, block_height);
 
@@ -216,60 +338,9 @@ async fn handle_state_changes(
         };
     }
 
-    let futures = futures::stream::FuturesUnordered::new();
-
-    // Unpack the state_changes_to_store into futures split by shard_id
-    // and store them asynchronously using try_join!
     state_changes_to_store
-        .data
-        .values()
-        .chunk_by(|sharded_state_change| sharded_state_change.shard_id)
-        .into_iter()
-        .for_each(|(shard_id, sharded_state_changes)| {
-            let state_changes = sharded_state_changes
-                .map(|sharded_state_change| sharded_state_change.state_change.clone())
-                .collect();
-            futures.push(db_manager.save_state_changes_data(shard_id, state_changes, block_height, block_hash));
-        });
-
-    state_changes_to_store
-        .access_key
-        .values()
-        .chunk_by(|sharded_state_change| sharded_state_change.shard_id)
-        .into_iter()
-        .for_each(|(shard_id, sharded_state_changes)| {
-            let state_changes = sharded_state_changes
-                .map(|sharded_state_change| sharded_state_change.state_change.clone())
-                .collect();
-            futures.push(db_manager.save_state_changes_access_key(shard_id, state_changes, block_height, block_hash))
-        });
-
-    state_changes_to_store
-        .contract
-        .values()
-        .chunk_by(|sharded_state_change| sharded_state_change.shard_id)
-        .into_iter()
-        .for_each(|(shard_id, sharded_state_changes)| {
-            let state_changes = sharded_state_changes
-                .map(|sharded_state_change| sharded_state_change.state_change.clone())
-                .collect();
-            futures.push(db_manager.save_state_changes_contract(shard_id, state_changes, block_height, block_hash))
-        });
-
-    state_changes_to_store
-        .account
-        .values()
-        .chunk_by(|sharded_state_change| sharded_state_change.shard_id)
-        .into_iter()
-        .for_each(|(shard_id, sharded_state_changes)| {
-            let state_changes = sharded_state_changes
-                .map(|sharded_state_change| sharded_state_change.state_change.clone())
-                .collect();
-            futures.push(db_manager.save_state_changes_account(shard_id, state_changes, block_height, block_hash))
-        });
-
-    futures::future::try_join_all(futures).await?;
-    Ok(())
+        .save_state_changes(db_manager, block_height, block_hash)
+        .await
 }
 
 #[tokio::main]
