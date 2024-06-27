@@ -2,9 +2,13 @@ version: '3.7'
 
 x-common-variables: &common-variables
   CHAIN_ID: mainnet
-  DATABASE_URL: scylla:9042
-  DATABASE_USER: ${DATABASE_USER}
-  DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+  META_DATABASE_URL: postgres://postgres:password@localhost:5422/near_data
+  SHARD_0_DATABASE_URL: postgres://postgres:password@localhost:5430/near_data
+  SHARD_1_DATABASE_URL: postgres://postgres:password@localhost:5431/near_data
+  SHARD_2_DATABASE_URL: postgres://postgres:password@localhost:5432/near_data
+  SHARD_3_DATABASE_URL: postgres://postgres:password@localhost:5433/near_data
+  SHARD_4_DATABASE_URL: postgres://postgres:password@localhost:5434/near_data
+  SHARD_5_DATABASE_URL: postgres://postgres:password@localhost:5435/near_data
   AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
   AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
   AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
@@ -22,7 +26,7 @@ services:
       context: .
       dockerfile: rpc-server/Dockerfile
       args:
-        features: "scylla_db,tracing-instrumentation,shadow_data_consistency"
+        features: "tracing-instrumentation,shadow_data_consistency"
     environment:
       <<: *common-variables
       SERVER_PORT: 8000
@@ -31,7 +35,13 @@ services:
     ports:
       - 8000:8000
     depends_on:
-      - scylla
+      - metadata_db
+      - shard_0_db
+      - shard_1_db
+      - shard_2_db
+      - shard_3_db
+      - shard_4_db
+      - shard_5_db
       - jaeger
 
   state-indexer:
@@ -39,7 +49,7 @@ services:
       context: .
       dockerfile: state-indexer/Dockerfile
       args:
-        features: "scylla_db,tracing-instrumentation"
+        features: "tracing-instrumentation"
     environment:
       <<: *common-variables
       STATE_INDEXER_ID: state-indexer-local
@@ -48,7 +58,13 @@ services:
     ports:
       - 8080:8080
     depends_on:
-      - scylla
+      - metadata_db
+      - shard_0_db
+      - shard_1_db
+      - shard_2_db
+      - shard_3_db
+      - shard_4_db
+      - shard_5_db
       - jaeger
     restart: on-failure
 
@@ -57,7 +73,7 @@ services:
       context: .
       dockerfile: tx-indexer/Dockerfile
       args:
-        features: "scylla_db,tracing-instrumentation"
+        features: "tracing-instrumentation"
     environment:
       <<: *common-variables
       TX_INDEXER_ID: tx-indexer-local
@@ -66,7 +82,13 @@ services:
     ports:
       - 8081:8081
     depends_on:
-      - scylla
+      - metadata_db
+      - shard_0_db
+      - shard_1_db
+      - shard_2_db
+      - shard_3_db
+      - shard_4_db
+      - shard_5_db
       - jaeger
     restart: on-failure
 
@@ -80,9 +102,73 @@ services:
       - 16686:16686
       - 14268:14268
       - 9411:9411
-
-  scylla:
-    image: scylladb/scylla
+      -
+  metadata_db:
+    image: postgres:15.5
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: near_data
+      POSTGRES_PASSWORD: password
     ports:
-      - 9042:9042
-    command: [ "--smp", "1" ]
+      - "5422:5432"
+
+  shard_0_db:
+    image: postgres:15.5
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: near_data
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5430:5432"
+
+  shard_1_db:
+    image: postgres:15.5
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: near_data
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5431:5432"
+
+  shard_2_db:
+    image: postgres:15.5
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: near_data
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+
+  shard_3_db:
+    image: postgres:15.5
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: near_data
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5433:5432"
+
+  shard_4_db:
+    image: postgres:15.5
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: near_data
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5434:5432"
+
+  shard_5_db:
+    image: postgres:15.5
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: near_data
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5435:5432"

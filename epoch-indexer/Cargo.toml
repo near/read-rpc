@@ -27,9 +27,3 @@ near-jsonrpc-client.workspace = true
 near-chain-configs.workspace = true
 near-indexer-primitives.workspace = true
 near-lake-framework.workspace = true
-
-#[features]
-#default = ["scylla_db"]
-#postgres_db = ["database/postgres_db"]
-#scylla_db = ["database/scylla_db"]
-#scylla_db_tracing = ["database/scylla_db_tracing", "scylla_db"]

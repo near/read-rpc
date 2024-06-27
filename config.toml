@@ -44,9 +44,6 @@ aws_bucket_name = "${AWS_BUCKET_NAME}"
 
 [database]
 database_url = "${META_DATABASE_URL}"
-#database_user = "${DATABASE_USER}"
-#database_password = "${DATABASE_PASSWORD}"
-#database_name = "${DATABASE_NAME}"
 
 [[database.shards]]
 shard_id = 0
@@ -71,20 +68,3 @@ database_url = "${SHARD_4_DATABASE_URL}"
 [[database.shards]]
 shard_id = 5
 database_url = "${SHARD_5_DATABASE_URL}"
-
-[database.rpc_server]
-preferred_dc = "${RPC_PREFERRED_DC}"
-max_retry = "${RPC_MAX_RETRY}"
-strict_mode = "${RPC_STRICT_MODE}"
-keepalive_interval = "${KEEPALIVE_INTERVAL}"
-
-[database.tx_indexer]
-preferred_dc = "${TX_PREFERRED_DC}"
-max_retry = "${TX_MAX_RETRY}"
-strict_mode = "${TX_STRICT_MODE}"
-max_db_parallel_queries = "${MAX_DB_PARALLEL_QUERIES}"
-
-[database.state_indexer]
-preferred_dc = "${STATE_PREFERRED_DC}"
-max_retry = "${STATE_MAX_RETRY}"
-strict_mode = "${STATE_STRICT_MODE}"

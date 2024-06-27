@@ -22,11 +22,6 @@ AWS_DEFAULT_REGION=eu-central-1
 ```
 
 ### Features
-```
-scylla_db - enables ScyllaDB support (default)
-```
-See the [documentation here](../database/README.md)
-
 
 ### Command to run
 
@@ -37,4 +32,4 @@ cargo run --release -- <chain_id> <start_options>
 - `chain_id` (\*) `testnet` or `mainnet`
 - `start_options`:
     - `from-genesis` start indexing epoch changes from the genesis block.
-    - `from-interruption ` is used to retrieve the `last_processed_block_height` from the Scylla database. This value is used as the starting point for processing blocks.
+    - `from-interruption ` is used to retrieve the `last_processed_block_height` from the database. This value is used as the starting point for processing blocks.

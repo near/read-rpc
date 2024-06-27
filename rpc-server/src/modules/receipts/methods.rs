@@ -60,7 +60,7 @@ async fn fetch_receipt(
 
     let receipt_record = fetch_receipt_record(data, request, "EXPERIMENTAL_receipt").await?;
 
-    // Getting the raw Vec<u8> of the TransactionDetails from ScyllaDB
+    // Getting the raw Vec<u8> of the TransactionDetails from database
     let (_, transaction_details) = data
         .db_manager
         .get_transaction_by_hash(

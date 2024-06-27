@@ -110,7 +110,7 @@ pub async fn run_contract(
         })
     };
 
-    // Init an external scylla interface for the Runtime logic
+    // Init an external database interface for the Runtime logic
     let code_storage = CodeStorage::init(
         db_manager.clone(),
         account_id.clone(),
