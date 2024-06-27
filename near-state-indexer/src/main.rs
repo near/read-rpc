@@ -47,7 +47,7 @@ async fn handle_streamer_message(
         db_manager,
         client,
     );
-    let handle_block_future = db_manager.save_block(
+    let handle_block_future = db_manager.save_block_with_chunks(
         block_height,
         block_hash,
         streamer_message
@@ -129,7 +129,7 @@ async fn handle_epoch(
                 utils::fetch_epoch_validators_info(stats_epoch_id, client).await?;
 
             db_manager
-                .add_validators(
+                .save_validators(
                     stats_epoch_id,
                     stats_current_epoch_height,
                     validators_info.epoch_start_height,

@@ -1,4 +1,5 @@
 use futures::StreamExt;
+use near_indexer_primitives::CryptoHash;
 
 pub const STORAGE: &str = "storage_tx";
 
@@ -68,9 +69,8 @@ impl HashStorageWithDB {
             .outcome
             .receipt_ids
             .first()
-            .expect("`receipt_ids` must contain one Receipt ID")
-            .to_string();
-        self.push_receipt_to_watching_list(receipt_id.clone(), transaction_key.clone())
+            .expect("`receipt_ids` must contain one Receipt ID");
+        self.push_receipt_to_watching_list(receipt_id, transaction_key.clone())
             .await?;
 
         for indexer_execution_outcome_with_receipt in self
@@ -88,7 +88,7 @@ impl HashStorageWithDB {
                     .iter()
                     .map(|receipt_id| {
                         self.push_receipt_to_watching_list(
-                            receipt_id.to_string(),
+                            receipt_id,
                             transaction_key.clone(),
                         )
                     }),
@@ -205,7 +205,7 @@ impl HashStorageWithDB {
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
     pub(crate) async fn push_receipt_to_watching_list(
         &self,
-        receipt_id: String,
+        receipt_id: &CryptoHash,
         transaction_key: readnode_primitives::TransactionKey,
     ) -> anyhow::Result<()> {
         crate::metrics::RECEIPTS_IN_MEMORY_CACHE.inc();
@@ -218,7 +218,7 @@ impl HashStorageWithDB {
         self.receipts_watching_list
             .write()
             .await
-            .insert(receipt_id.clone(), transaction_key.clone());
+            .insert(receipt_id.to_string(), transaction_key.clone());
         tracing::debug!(
             target: crate::storage::STORAGE,
             "+R {} - {}",
