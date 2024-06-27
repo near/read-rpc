@@ -68,12 +68,16 @@ impl crate::BaseDbManager for PostgresDBManager {
         config: &configuration::DatabaseConfig,
         shard_layout: near_primitives::shard_layout::ShardLayout,
     ) -> anyhow::Result<Box<Self>> {
-        let mut shards_pool = std::collections::HashMap::new();
-        for (shard_id, database_url) in &config.shards_config {
-            let pool = Self::create_shard_db_pool(database_url).await?;
-            shards_pool.insert(*shard_id, pool);
-        }
         let meta_db_pool = Self::create_meta_db_pool(&config.database_url).await?;
+        let mut shards_pool = std::collections::HashMap::new();
+        for shard_id in shard_layout.shard_ids() {
+            let database_url = config
+                .shards_config
+                .get(&shard_id)
+                .expect(&format!("Shard_{shard_id} - database config not found"));
+            let pool = Self::create_shard_db_pool(database_url).await?;
+            shards_pool.insert(shard_id, pool);
+        }
         Ok(Box::new(Self {
             shard_layout,
             shards_pool,

@@ -3,10 +3,13 @@ version: '3.7'
 x-common-variables: &common-variables
   CHAIN_ID: mainnet
   REDIS_URL: redis://redis:6379/
-  DATABASE_URL: postgres:5432
-  DATABASE_USER: postgres
-  DATABASE_PASSWORD: password
-  DATABASE_NAME: near_data
+  META_DATABASE_URL: postgres://postgres:password@localhost:5422/near_data
+  SHARD_0_DATABASE_URL: postgres://postgres:password@localhost:5430/near_data
+  SHARD_1_DATABASE_URL: postgres://postgres:password@localhost:5431/near_data
+  SHARD_2_DATABASE_URL: postgres://postgres:password@localhost:5432/near_data
+  SHARD_3_DATABASE_URL: postgres://postgres:password@localhost:5433/near_data
+  SHARD_4_DATABASE_URL: postgres://postgres:password@localhost:5434/near_data
+  SHARD_5_DATABASE_URL: postgres://postgres:password@localhost:5435/near_data
   AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
   AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
   AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
@@ -22,32 +25,40 @@ services:
     build:
       context: ../
       dockerfile: rpc-server/Dockerfile
-      args:
-        features: "postgres_db"
     environment:
       <<: *common-variables
       SERVER_PORT: 8000
     restart: on-failure
     ports:
-      - 8000:8000
+      - "8000:8000"
     depends_on:
-      - postgres
+      - metadata_db
+      - shard_0_db
+      - shard_1_db
+      - shard_2_db
+      - shard_3_db
+      - shard_4_db
+      - shard_5_db
       - redis
 
   state-indexer:
     build:
       context: ../
       dockerfile: state-indexer/Dockerfile
-      args:
-        features: "postgres_db"
     environment:
       <<: *common-variables
       STATE_INDEXER_ID: state-indexer-local
     command: [ "from-interruption" ]
     ports:
-      - 8080:8080
+      - "8080:8080"
     depends_on:
-      - postgres
+      - metadata_db
+      - shard_0_db
+      - shard_1_db
+      - shard_2_db
+      - shard_3_db
+      - shard_4_db
+      - shard_5_db
       - redis
     restart: on-failure
 
@@ -55,32 +66,96 @@ services:
     build:
       context: ../
       dockerfile: tx-indexer/Dockerfile
-      args:
-        features: "postgres_db"
     environment:
       <<: *common-variables
       TX_INDEXER_ID: tx-indexer-local
     command: [ "from-interruption" ]
     ports:
-      - 8081:8081
+      - "8081:8081"
     depends_on:
-      - postgres
+      - metadata_db
+      - shard_0_db
+      - shard_1_db
+      - shard_2_db
+      - shard_3_db
+      - shard_4_db
+      - shard_5_db
       - redis
     restart: on-failure
 
-  postgres:
-    image: postgres:14
+  redis:
+    image: redis/redis-stack-server:latest
+    container_name: redis-stack-server
+    ports:
+      - "6379:6379"
+    restart: always
+
+  metadata_db:
+    image: postgres:15.5
     restart: always
     environment:
       POSTGRES_USER: postgres
       POSTGRES_DB: near_data
       POSTGRES_PASSWORD: password
     ports:
-      - 5432:5432
+      - "5422:5432"
 
-  redis:
-    image: redis/redis-stack-server:latest
-    container_name: redis-stack-server
-    ports:
-      - 6379:6379
+  shard_0_db:
+    image: postgres:15.5
     restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: near_data
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5430:5432"
+
+  shard_1_db:
+    image: postgres:15.5
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: near_data
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5431:5432"
+
+  shard_2_db:
+    image: postgres:15.5
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: near_data
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+
+  shard_3_db:
+    image: postgres:15.5
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: near_data
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5433:5432"
+
+  shard_4_db:
+    image: postgres:15.5
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: near_data
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5434:5432"
+
+  shard_5_db:
+    image: postgres:15.5
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: near_data
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5435:5432"

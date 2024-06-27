@@ -163,111 +163,36 @@ aws_endpoint = "https://storage.googleapis.com"
 [database]
 
 ## Database connection string
-
-## Postgres Example:
 ## You can use database connection URL
 ## postgresql://{user}:{password}@localhost:5432/{db_name}
-## Or you can use split configuration
-## Put postgres database host and put credentials and db_name in database_user, database_password and database_name
-#database_url = "localhost:5432"
 database_url = "postgresql://postgres:password@localhost:5432/near-indexer"
 
-## Database user(login)
-## Optional database user
-#database_user = "postgres"
+## Database shards
+## You can use multiple database shards
+## Each shard should have a unique shard_id
+## You can use the same database_url for all shards
+## or use different database_url for each shard
+## If you use different database_url for each shard, you should create a separate database for each shard
+[[database.shards]]
+shard_id = 0
+database_url = "${SHARD_0_DATABASE_URL}"
 
-## Database password
-## Optional database password
-#database_password = "password"
+[[database.shards]]
+shard_id = 1
+database_url = "${SHARD_1_DATABASE_URL}"
 
-## Postgres database name
-## Optional database name
-#database_name = "near-indexer"
+[[database.shards]]
+shard_id = 2
+database_url = "${SHARD_2_DATABASE_URL}"
 
-## ScyllaDB Example:
-## ScyllaDB database connection URL
-#database_url = "127.0.0.1:9042"
+[[database.shards]]
+shard_id = 3
+database_url = "${SHARD_3_DATABASE_URL}"
 
-## Database user(login)
-## Optional database user
-#database_user = "cassandra"
+[[database.shards]]
+shard_id = 4
+database_url = "${SHARD_4_DATABASE_URL}"
 
-## Database password
-## Optional database password
-#database_password = "password"
-
-### Database configuration for rpc server
-[database.rpc_server]
-
-## ScyllaDB preferred DataCenter
-## Accepts the DC name of the ScyllaDB to filter the connection to that DC only (preferrably).
-## If you connect to multi-DC cluter, you might experience big latencies while working with the DB.
-## This is due to the fact that ScyllaDB driver tries to connect to any of the nodes in the cluster disregarding of the location of the DC.
-## This option allows to filter the connection to the DC you need.
-## Example: "DC1" where DC1 is located in the same region as the application.
-## Default value is None
-#preferred_dc = "DC1"
-
-## Max retry count for ScyllaDB if `strict_mode` is `false`
-## By default for rpc server we use 2
-#max_retry = 2
-
-## Attempts to store data in the database should be infinite to ensure no data is missing.
-## Disable it to perform a limited write attempts (`max_retry`)
-## before giving up, and moving to the next piece of data
-## By default for rpc server we use false
-#strict_mode = false
-
-## ScyllaDB keepalive interval
-## This parameter need only for ScyllaDB and only for rpc server
-## By default we use 60 seconds
-#keepalive_interval = 60
-
-### Database configuration for tx indexer
-[database.tx_indexer]
-
-## ScyllaDB preferred DataCenter
-## Accepts the DC name of the ScyllaDB to filter the connection to that DC only (preferrably).
-## If you connect to multi-DC cluter, you might experience big latencies while working with the DB.
-## This is due to the fact that ScyllaDB driver tries to connect to any of the nodes in the cluster disregarding of the location of the DC.
-## This option allows to filter the connection to the DC you need.
-## Example: "DC1" where DC1 is located in the same region as the application.
-## Default value is None
-#preferred_dc = "DC1"
-
-## Max retry count for ScyllaDB if `strict_mode` is `false`
-## For indexers we use 5 attempts by default
-#max_retry = 5
-
-## Attempts to store data in the database should be infinite to ensure no data is missing.
-## Disable it to perform a limited write attempts (`max_retry`)
-## before giving up, and moving to the next piece of data
-## For indexers we use true by default
-#strict_mode = true
-
-## Parallel queries = (nodes in cluster) ✕ (cores in node) ✕ 3
-## Current we have 6 - nodes with 8 - cpus
-## 6 ✕ 8 ✕ 3 = 144
-#max_db_parallel_queries = 144
-
-## Database configuration for state indexer
-[database.state_indexer]
-
-## ScyllaDB preferred DataCenter
-## Accepts the DC name of the ScyllaDB to filter the connection to that DC only (preferrably).
-## If you connect to multi-DC cluter, you might experience big latencies while working with the DB.
-## This is due to the fact that ScyllaDB driver tries to connect to any of the nodes in the cluster disregarding of the location of the DC.
-## This option allows to filter the connection to the DC you need.
-## Example: "DC1" where DC1 is located in the same region as the application.
-## Default value is None
-#preferred_dc = "DC1"
-
-## Max retry count for ScyllaDB if `strict_mode` is `false`
-## For indexers we use 5 attempts by default
-#max_retry = 5
-
-## Attempts to store data in the database should be infinite to ensure no data is missing.
-## Disable it to perform a limited write attempts (`max_retry`)
-## before giving up, and moving to the next piece of data
-## For indexers we use true by default
-#strict_mode = true
+[[database.shards]]
+shard_id = 5
+database_url = "${SHARD_5_DATABASE_URL}"
