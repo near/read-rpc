@@ -1,7 +1,7 @@
+use bigdecimal::ToPrimitive;
 use near_indexer_primitives::IndexerExecutionOutcomeWithReceipt;
 use readnode_primitives::{CollectingTransactionDetails, TransactionKey};
 use std::collections::HashMap;
-use bigdecimal::ToPrimitive;
 
 #[async_trait::async_trait]
 impl crate::TxIndexerDbManager for crate::PostgresDBManager {
@@ -69,10 +69,10 @@ impl crate::TxIndexerDbManager for crate::PostgresDBManager {
             DO UPDATE SET last_processed_block_height = $2;
             ",
         )
-            .bind(indexer_id)
-            .bind(bigdecimal::BigDecimal::from(block_height))
-            .execute(&self.meta_db_pool)
-            .await?;
+        .bind(indexer_id)
+        .bind(bigdecimal::BigDecimal::from(block_height))
+        .execute(&self.meta_db_pool)
+        .await?;
         Ok(())
     }
 
@@ -134,9 +134,9 @@ impl crate::TxIndexerDbManager for crate::PostgresDBManager {
             LIMIT 1;
             ",
         )
-            .bind(indexer_id)
-            .fetch_one(&self.meta_db_pool)
-            .await?;
+        .bind(indexer_id)
+        .fetch_one(&self.meta_db_pool)
+        .await?;
         last_processed_block_height
             .to_u64()
             .ok_or_else(|| anyhow::anyhow!("Failed to parse `last_processed_block_height` to u64"))
