@@ -20,7 +20,7 @@ pub struct CommonDatabaseConfig {
     #[serde(deserialize_with = "deserialize_data_or_env")]
     pub database_url: String,
     #[serde(default)]
-    pub shards: Option<Vec<ShardDatabaseConfig>>,
+    pub shards: Vec<ShardDatabaseConfig>,
 }
 
 impl From<CommonDatabaseConfig> for DatabaseConfig {
@@ -29,7 +29,6 @@ impl From<CommonDatabaseConfig> for DatabaseConfig {
             database_url: database_config.database_url,
             shards_config: database_config
                 .shards
-                .unwrap_or_default()
                 .into_iter()
                 .map(|shard| (shard.shard_id, shard.database_url))
                 .collect(),
