@@ -18,12 +18,14 @@ pub trait TxIndexerDbManager {
         tx_bytes: &[u8],
     ) -> anyhow::Result<bool>;
 
-    async fn add_receipt(
+    async fn save_receipt(
         &self,
-        receipt_id: &str,
-        parent_tx_hash: &str,
-        block_height: u64,
-        shard_id: u64,
+        receipt_id: &near_indexer_primitives::CryptoHash,
+        parent_tx_hash: &near_indexer_primitives::CryptoHash,
+        receiver_id: &near_primitives::types::AccountId,
+        block_height: near_primitives::types::BlockHeight,
+        block_hash: near_indexer_primitives::CryptoHash,
+        shard_id: crate::primitives::ShardId,
     ) -> anyhow::Result<()>;
 
     async fn update_meta(&self, indexer_id: &str, block_height: u64) -> anyhow::Result<()>;

@@ -1,28 +1,7 @@
 use bigdecimal::ToPrimitive;
-#[async_trait::async_trait]
-impl crate::StateIndexerDbManager for crate::PostgresDBManager {
-    async fn add_block(
-        &self,
-        block_height: u64,
-        block_hash: near_indexer_primitives::CryptoHash,
-    ) -> anyhow::Result<()> {
-        crate::metrics::META_DATABASE_WRITE_QUERIES
-            .with_label_values(&["add_block", "blocks"])
-            .inc();
-        sqlx::query(
-            "
-            INSERT INTO blocks (block_height, block_hash)
-            VALUES ($1, $2) ON CONFLICT DO NOTHING;
-            ",
-        )
-        .bind(bigdecimal::BigDecimal::from(block_height))
-        .bind(block_hash.to_string())
-        .execute(&self.meta_db_pool)
-        .await?;
-        Ok(())
-    }
 
-    async fn add_chunks(
+impl crate::PostgresDBManager {
+    async fn save_chunks_unique(
         &self,
         block_height: u64,
         chunks: Vec<(
@@ -38,7 +17,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
 
         if !unique_chunks.is_empty() {
             crate::metrics::META_DATABASE_WRITE_QUERIES
-                .with_label_values(&["add_chunks", "chunks"])
+                .with_label_values(&["save_chunks", "chunks"])
                 .inc();
             let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> =
                 sqlx::QueryBuilder::new("INSERT INTO chunks (chunk_hash, block_height, shard_id) ");
@@ -48,21 +27,32 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                 |mut values, (chunk_hash, shard_id, height_included)| {
                     values
                         .push_bind(chunk_hash.to_string())
-                        .push_bind(bigdecimal::BigDecimal::from(height_included.clone()))
-                        .push_bind(bigdecimal::BigDecimal::from(shard_id.clone()));
+                        .push_bind(bigdecimal::BigDecimal::from(*height_included))
+                        .push_bind(bigdecimal::BigDecimal::from(*shard_id));
                 },
             );
             query_builder.push(" ON CONFLICT DO NOTHING;");
             query_builder.build().execute(&self.meta_db_pool).await?;
         }
+        Ok(())
+    }
 
+    async fn save_chunks_duplicate(
+        &self,
+        block_height: u64,
+        chunks: Vec<(
+            crate::primitives::ChunkHash,
+            crate::primitives::ShardId,
+            crate::primitives::HeightIncluded,
+        )>,
+    ) -> anyhow::Result<()> {
         let chunks_duplicate = chunks
             .iter()
             .filter(|(_chunk_hash, _shard_id, height_included)| height_included != &block_height)
             .collect::<Vec<_>>();
         if !chunks_duplicate.is_empty() {
             crate::metrics::META_DATABASE_WRITE_QUERIES
-                .with_label_values(&["add_chunks", "chunks_duplicate"])
+                .with_label_values(&["save_chunks", "chunks_duplicate"])
                 .inc();
             let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> =
                 sqlx::QueryBuilder::new("INSERT INTO chunks_duplicate (chunk_hash, block_height, shard_id, included_in_block_height) ");
@@ -73,14 +63,51 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                     values
                         .push_bind(chunk_hash.to_string())
                         .push_bind(bigdecimal::BigDecimal::from(block_height))
-                        .push_bind(bigdecimal::BigDecimal::from(shard_id.clone()))
-                        .push_bind(bigdecimal::BigDecimal::from(height_included.clone()));
+                        .push_bind(bigdecimal::BigDecimal::from(*shard_id))
+                        .push_bind(bigdecimal::BigDecimal::from(*height_included));
                 },
             );
             query_builder.push(" ON CONFLICT DO NOTHING;");
             query_builder.build().execute(&self.meta_db_pool).await?;
         }
+        Ok(())
+    }
+}
+#[async_trait::async_trait]
+impl crate::StateIndexerDbManager for crate::PostgresDBManager {
+    async fn save_block(
+        &self,
+        block_height: u64,
+        block_hash: near_indexer_primitives::CryptoHash,
+    ) -> anyhow::Result<()> {
+        crate::metrics::META_DATABASE_WRITE_QUERIES
+            .with_label_values(&["save_block", "blocks"])
+            .inc();
+        sqlx::query(
+            "
+            INSERT INTO blocks (block_height, block_hash)
+            VALUES ($1, $2) ON CONFLICT DO NOTHING;
+            ",
+        )
+        .bind(bigdecimal::BigDecimal::from(block_height))
+        .bind(block_hash.to_string())
+        .execute(&self.meta_db_pool)
+        .await?;
+        Ok(())
+    }
 
+    async fn save_chunks(
+        &self,
+        block_height: u64,
+        chunks: Vec<(
+            crate::primitives::ChunkHash,
+            crate::primitives::ShardId,
+            crate::primitives::HeightIncluded,
+        )>,
+    ) -> anyhow::Result<()> {
+        let save_chunks_unique_future = self.save_chunks_unique(block_height, chunks.clone());
+        let save_chunks_duplicate_future = self.save_chunks_duplicate(block_height, chunks);
+        futures::try_join!(save_chunks_unique_future, save_chunks_duplicate_future)?;
         Ok(())
     }
 
@@ -147,7 +174,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
             .ok_or_else(|| anyhow::anyhow!("Failed to parse `last_processed_block_height` to u64"))
     }
 
-    async fn add_validators(
+    async fn save_validators(
         &self,
         epoch_id: near_indexer_primitives::CryptoHash,
         epoch_height: u64,
@@ -207,7 +234,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                         .push_bind(account_id.to_string())
                         .push_bind(bigdecimal::BigDecimal::from(block_height))
                         .push_bind(block_hash.to_string())
-                        .push_bind(hex::encode(&data_key).to_string())
+                        .push_bind(hex::encode(data_key).to_string())
                         .push_bind(data_value);
                 }
                 near_primitives::views::StateChangeValueView::DataDeletion { account_id, key } => {
@@ -267,7 +294,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                         .push_bind(account_id.to_string())
                         .push_bind(bigdecimal::BigDecimal::from(block_height))
                         .push_bind(block_hash.to_string())
-                        .push_bind(hex::encode(&data_key).to_string())
+                        .push_bind(hex::encode(data_key).to_string())
                         .push_bind(data_value);
                 }
                 near_primitives::views::StateChangeValueView::AccessKeyDeletion {

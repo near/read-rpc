@@ -1,12 +1,12 @@
 #[async_trait::async_trait]
 pub trait StateIndexerDbManager {
-    async fn add_block(
+    async fn save_block(
         &self,
         block_height: u64,
         block_hash: near_indexer_primitives::CryptoHash,
     ) -> anyhow::Result<()>;
 
-    async fn add_chunks(
+    async fn save_chunks(
         &self,
         block_height: u64,
         chunks: Vec<(
@@ -26,7 +26,7 @@ pub trait StateIndexerDbManager {
 
     async fn get_last_processed_block_height(&self, indexer_id: &str) -> anyhow::Result<u64>;
 
-    async fn add_validators(
+    async fn save_validators(
         &self,
         epoch_id: near_indexer_primitives::CryptoHash,
         epoch_height: u64,
@@ -35,7 +35,7 @@ pub trait StateIndexerDbManager {
         epoch_end_block_hash: near_indexer_primitives::CryptoHash,
     ) -> anyhow::Result<()>;
 
-    async fn save_block(
+    async fn save_block_with_chunks(
         &self,
         block_height: u64,
         block_hash: near_indexer_primitives::CryptoHash,
@@ -45,8 +45,8 @@ pub trait StateIndexerDbManager {
             crate::primitives::HeightIncluded,
         )>,
     ) -> anyhow::Result<()> {
-        let add_block_future = self.add_block(block_height, block_hash);
-        let add_chunks_future = self.add_chunks(block_height, chunks);
+        let add_block_future = self.save_block(block_height, block_hash);
+        let add_chunks_future = self.save_chunks(block_height, chunks);
 
         futures::try_join!(add_block_future, add_chunks_future)?;
         Ok(())

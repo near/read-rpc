@@ -147,7 +147,7 @@ pub async fn save_epoch_info(
     };
 
     db_manager
-        .add_validators(
+        .save_validators(
             epoch.epoch_id,
             epoch_height,
             epoch.epoch_start_height,
