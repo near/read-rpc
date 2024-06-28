@@ -1,11 +1,11 @@
 pub use clap::{Parser, Subcommand};
+use near_indexer_primitives::types::{BlockReference, Finality};
 use near_jsonrpc_client::{methods, JsonRpcClient};
-use near_lake_framework::near_indexer_primitives::types::{BlockReference, Finality};
 
 /// NEAR Indexer for Explorer
 /// Watches for stream of blocks from the chain
 #[derive(Parser, Debug)]
-pub(crate) struct Opts {
+pub struct Opts {
     #[clap(subcommand)]
     pub start_options: StartOptions,
 }

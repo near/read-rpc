@@ -3567,6 +3567,32 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "90ed8c1e510134f979dbc4f070f87d4313098b704861a105fe34231c70a3901c"
 
 [[package]]
+name = "logic-state-indexer"
+version = "0.2.10"
+dependencies = [
+ "actix-web",
+ "anyhow",
+ "borsh 1.5.1",
+ "clap",
+ "configuration",
+ "database-new",
+ "epoch-indexer",
+ "futures",
+ "hex",
+ "humantime",
+ "itertools 0.13.0",
+ "lazy_static",
+ "near-indexer-primitives",
+ "near-jsonrpc-client 0.9.0",
+ "near-primitives 1.40.0",
+ "openssl-probe",
+ "prometheus",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+]
+
+[[package]]
 name = "lru"
 version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7634,6 +7660,7 @@ dependencies = [
  "humantime",
  "itertools 0.13.0",
  "lazy_static",
+ "logic-state-indexer",
  "near-indexer-primitives",
  "near-jsonrpc-client 0.9.0",
  "near-lake-framework",

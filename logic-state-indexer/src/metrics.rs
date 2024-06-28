@@ -19,12 +19,12 @@ fn try_create_int_gauge(name: &str, help: &str) -> Result<IntGauge, prometheus::
 }
 
 lazy_static! {
-    pub(crate) static ref BLOCK_PROCESSED_TOTAL: IntCounter = try_create_int_counter(
+    pub static ref BLOCK_PROCESSED_TOTAL: IntCounter = try_create_int_counter(
         "total_blocks_processed",
         "Total number of blocks processed by indexer regardless of restarts. Used to calculate Block Processing Rate(BPS)"
     )
     .unwrap();
-    pub(crate) static ref LATEST_BLOCK_HEIGHT: IntGauge = try_create_int_gauge(
+    pub static ref LATEST_BLOCK_HEIGHT: IntGauge = try_create_int_gauge(
         "latest_block_height",
         "Last seen block height by indexer"
     )
@@ -49,7 +49,7 @@ async fn get_metrics() -> impl Responder {
     }
 }
 
-pub(crate) fn init_server(port: u16) -> anyhow::Result<actix_web::dev::Server> {
+pub fn init_server(port: u16) -> anyhow::Result<actix_web::dev::Server> {
     tracing::info!(target: crate::INDEXER, "Starting metrics server on http://0.0.0.0:{port}/metrics");
 
     Ok(HttpServer::new(|| App::new().service(get_metrics))
@@ -79,7 +79,10 @@ impl Stats {
     }
 }
 
-pub async fn state_logger(stats: std::sync::Arc<tokio::sync::RwLock<Stats>>, rpc_client: JsonRpcClient) {
+pub async fn state_logger(
+    stats: std::sync::Arc<tokio::sync::RwLock<Stats>>,
+    rpc_client: JsonRpcClient,
+) {
     let interval_secs = 10;
     let mut prev_blocks_processed_count: u64 = 0;
 
@@ -87,13 +90,15 @@ pub async fn state_logger(stats: std::sync::Arc<tokio::sync::RwLock<Stats>>, rpc
         tokio::time::sleep(std::time::Duration::from_secs(interval_secs)).await;
         let stats_lock = stats.read().await;
 
-        let block_processing_speed: f64 =
-            ((stats_lock.blocks_processed_count - prev_blocks_processed_count) as f64) / (interval_secs as f64);
+        let block_processing_speed: f64 = ((stats_lock.blocks_processed_count
+            - prev_blocks_processed_count) as f64)
+            / (interval_secs as f64);
 
         let time_to_catch_the_tip_duration = if block_processing_speed > 0.0 {
             if let Ok(block_height) = crate::configs::final_block_height(&rpc_client).await {
                 Some(std::time::Duration::from_millis(
-                    (((block_height - stats_lock.last_processed_block_height) as f64 / block_processing_speed)
+                    (((block_height - stats_lock.last_processed_block_height) as f64
+                        / block_processing_speed)
                         * 1000f64) as u64,
                 ))
             } else {

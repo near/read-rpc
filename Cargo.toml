@@ -12,10 +12,12 @@ members = [
     "configuration",
     "database",
     "epoch-indexer",
-    "near-state-indexer",
+    "logic-state-indexer",
     "perf-testing",
     "readnode-primitives",
     "rpc-server",
+    "logic-state-indexer",
+    "near-state-indexer",
     "state-indexer",
     "tx-indexer",
 ]
@@ -38,6 +40,7 @@ configuration = { path = "configuration" }
 database = { path = "database" }
 readnode-primitives = { path = "readnode-primitives" }
 epoch-indexer = { path = "epoch-indexer" }
+logic-state-indexer = { path = "logic-state-indexer" }
 
 # Please, update the supported nearcore version in .cargo/config.toml file
 near-async = { git = 'https://github.com/kobayurii/nearcore.git', branch = "1.40.0-fork" }
