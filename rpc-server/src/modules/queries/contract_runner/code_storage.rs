@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::modules::queries::utils;
 use crate::modules::queries::utils::get_state_key_value_from_db;
 use database::ReaderDbManager;
 use futures::executor::block_on;
@@ -12,9 +13,13 @@ pub struct CodeStorage {
     block_height: near_primitives::types::BlockHeight,
     validators: HashMap<near_primitives::types::AccountId, near_primitives::types::Balance>,
     data_count: u64,
+
     is_optimistic: bool,
     optimistic_data:
         HashMap<readnode_primitives::StateKey, Option<readnode_primitives::StateValue>>,
+
+    is_prefetch_state: bool,
+    prefetch_state_data: HashMap<readnode_primitives::StateKey, readnode_primitives::StateValue>,
 }
 
 pub struct StorageValuePtr {
@@ -32,7 +37,7 @@ impl near_vm_runner::logic::ValuePtr for StorageValuePtr {
 }
 
 impl CodeStorage {
-    pub fn init(
+    pub async fn init(
         db_manager: std::sync::Arc<Box<dyn ReaderDbManager + Sync + Send + 'static>>,
         account_id: near_primitives::types::AccountId,
         block_height: near_primitives::types::BlockHeight,
@@ -42,6 +47,19 @@ impl CodeStorage {
             Option<readnode_primitives::StateValue>,
         >,
     ) -> Self {
+        let prefetch_state_data = if account_id.to_string().ends_with("poolv1.near") {
+            utils::get_state_from_db(
+                &db_manager,
+                &account_id,
+                block_height,
+                &[],
+                "query_call_function",
+            )
+            .await
+        } else {
+            HashMap::new()
+        };
+
         Self {
             db_manager,
             account_id,
@@ -50,19 +68,28 @@ impl CodeStorage {
             data_count: Default::default(), // TODO: Using for generate_data_id
             is_optimistic: !optimistic_data.is_empty(),
             optimistic_data,
+            is_prefetch_state: !prefetch_state_data.is_empty(),
+            prefetch_state_data,
         }
     }
 
     fn get_state_key_data(&self, key: &[u8]) -> readnode_primitives::StateValue {
-        let get_db_data = get_state_key_value_from_db(
-            &self.db_manager,
-            &self.account_id,
-            self.block_height,
-            key.to_vec(),
-            "query_call_function",
-        );
-        let (_, data) = block_on(get_db_data);
-        data
+        if self.is_prefetch_state {
+            self.prefetch_state_data
+                .get(key)
+                .cloned()
+                .unwrap_or_default()
+        } else {
+            let get_db_data = get_state_key_value_from_db(
+                &self.db_manager,
+                &self.account_id,
+                self.block_height,
+                key.to_vec(),
+                "query_call_function",
+            );
+            let (_, data) = block_on(get_db_data);
+            data
+        }
     }
 
     fn optimistic_storage_get(

@@ -7,6 +7,28 @@ static META_DB_MIGRATOR: sqlx::migrate::Migrator =
 static SHARD_DB_MIGRATOR: sqlx::migrate::Migrator =
     sqlx::migrate!("src/postgres/migrations/shard_db");
 
+#[derive(borsh::BorshSerialize, borsh::BorshDeserialize, Clone, Debug)]
+struct PageState {
+    pub page_size: i64,
+    pub offset: i64,
+}
+
+impl PageState {
+    fn new(page_size: i64) -> Self {
+        Self {
+            page_size,
+            offset: 0,
+        }
+    }
+
+    fn next_page(&self) -> Self {
+        Self {
+            page_size: self.page_size,
+            offset: self.offset + self.page_size,
+        }
+    }
+}
+
 pub struct ShardIdPool<'a> {
     shard_id: near_primitives::types::ShardId,
     pool: &'a sqlx::Pool<sqlx::Postgres>,

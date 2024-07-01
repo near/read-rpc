@@ -117,7 +117,8 @@ pub async fn run_contract(
         block.block_height,
         validators,
         optimistic_data,
-    );
+    )
+    .await;
 
     // Execute the contract in the near VM
     let result = run_code_in_vm_runner(
