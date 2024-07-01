@@ -44,7 +44,7 @@ pub async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
     db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
     near_client: &impl NearClient,
-    indexer_config: configuration::StateIndexerConfig,
+    indexer_config: impl configuration::RightsizingConfig + configuration::IndexerConfig,
     stats: std::sync::Arc<tokio::sync::RwLock<metrics::Stats>>,
     shard_layout: &near_primitives::shard_layout::ShardLayout,
 ) -> anyhow::Result<()> {
@@ -96,7 +96,7 @@ pub async fn handle_streamer_message(
     );
 
     let update_meta_future =
-        db_manager.update_meta(&indexer_config.general.indexer_id, block_height);
+        db_manager.update_meta(indexer_config.indexer_id().as_ref(), block_height);
 
     futures::try_join!(
         handle_epoch_future,
@@ -176,7 +176,7 @@ async fn handle_state_changes(
     db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
     block_height: u64,
     block_hash: CryptoHash,
-    indexer_config: &configuration::StateIndexerConfig,
+    indexer_config: &impl configuration::RightsizingConfig,
     shard_layout: &near_primitives::shard_layout::ShardLayout,
 ) -> anyhow::Result<()> {
     let mut state_changes_to_store = StateChangesToStore {

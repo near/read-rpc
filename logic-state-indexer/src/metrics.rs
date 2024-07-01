@@ -1,5 +1,4 @@
 use actix_web::{get, App, HttpServer, Responder};
-use near_jsonrpc_client::JsonRpcClient;
 use prometheus::{Encoder, IntCounter, IntGauge, Opts};
 
 type Result<T, E> = std::result::Result<T, E>;

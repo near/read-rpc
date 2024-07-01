@@ -4841,6 +4841,7 @@ dependencies = [
  "near-chain-configs 1.40.0",
  "near-client",
  "near-indexer",
+ "near-indexer-primitives",
  "near-o11y 1.40.0",
  "once_cell",
  "openssl-probe",

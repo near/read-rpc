@@ -1,234 +1,17 @@
 use clap::Parser;
 use futures::StreamExt;
-use near_indexer::near_primitives;
 
 use crate::configs::Opts;
-use near_indexer::near_primitives::hash::CryptoHash;
-use near_indexer::near_primitives::views::{StateChangeValueView, StateChangeWithCauseView};
+
+use logic_state_indexer::{handle_streamer_message, NearClient, INDEXER};
 
 mod configs;
 mod metrics;
+mod near_client;
 mod utils;
 
 // Categories for logging
-pub(crate) const INDEXER: &str = "near_state_indexer";
-
-#[cfg_attr(
-    feature = "tracing-instrumentation",
-    tracing::instrument(skip(streamer_message, db_manager, redis_client))
-)]
-async fn handle_streamer_message(
-    streamer_message: near_indexer::StreamerMessage,
-    db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
-    redis_client: redis::aio::ConnectionManager,
-    client: &actix::Addr<near_client::ViewClientActor>,
-    indexer_config: configuration::NearStateIndexerConfig,
-    stats: std::sync::Arc<tokio::sync::RwLock<metrics::Stats>>,
-) -> anyhow::Result<()> {
-    let block_height = streamer_message.block.header.height;
-    let block_hash = streamer_message.block.header.hash;
-
-    let current_epoch_id = streamer_message.block.header.epoch_id;
-    let next_epoch_id = streamer_message.block.header.next_epoch_id;
-
-    tracing::debug!(target: INDEXER, "Block height {}", block_height,);
-
-    stats
-        .write()
-        .await
-        .block_heights_processing
-        .insert(block_height);
-
-    let handle_epoch_future = handle_epoch(
-        stats.read().await.current_epoch_id,
-        stats.read().await.current_epoch_height,
-        current_epoch_id,
-        next_epoch_id,
-        db_manager,
-        client,
-    );
-    let handle_block_future = db_manager.save_block_with_chunks(
-        block_height,
-        block_hash,
-        streamer_message
-            .block
-            .chunks
-            .iter()
-            .map(|chunk| {
-                (
-                    chunk.chunk_hash.to_string(),
-                    chunk.shard_id,
-                    chunk.height_included,
-                )
-            })
-            .collect(),
-    );
-    let handle_state_change_future = handle_state_changes(
-        &streamer_message,
-        db_manager,
-        block_height,
-        block_hash,
-        &indexer_config,
-    );
-
-    let update_block_streamer_message_future = utils::update_block_streamer_message(
-        near_primitives::types::Finality::Final,
-        &streamer_message,
-        redis_client,
-    );
-
-    futures::try_join!(
-        handle_epoch_future,
-        handle_block_future,
-        handle_state_change_future,
-        update_block_streamer_message_future,
-    )?;
-
-    let mut stats_lock = stats.write().await;
-    stats_lock.block_heights_processing.remove(&block_height);
-    stats_lock.blocks_processed_count += 1;
-    metrics::BLOCKS_DONE.inc();
-    stats_lock.last_processed_block_height = block_height;
-    if let Some(stats_epoch_id) = stats_lock.current_epoch_id {
-        if current_epoch_id != stats_epoch_id {
-            stats_lock.current_epoch_id = Some(current_epoch_id);
-            if stats_epoch_id == CryptoHash::default() {
-                stats_lock.current_epoch_height = 1;
-            } else {
-                stats_lock.current_epoch_height += 1;
-            }
-        }
-    } else {
-        // handle first indexing epoch
-        let epoch_info = utils::fetch_epoch_validators_info(current_epoch_id, client).await?;
-        stats_lock.current_epoch_id = Some(current_epoch_id);
-        stats_lock.current_epoch_height = epoch_info.epoch_height;
-    }
-    Ok(())
-}
-
-#[cfg_attr(
-    feature = "tracing-instrumentation",
-    tracing::instrument(skip(db_manager))
-)]
-async fn handle_epoch(
-    stats_current_epoch_id: Option<CryptoHash>,
-    stats_current_epoch_height: u64,
-    current_epoch_id: CryptoHash,
-    next_epoch_id: CryptoHash,
-    db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
-    client: &actix::Addr<near_client::ViewClientActor>,
-) -> anyhow::Result<()> {
-    if let Some(stats_epoch_id) = stats_current_epoch_id {
-        if stats_epoch_id == current_epoch_id {
-            // If epoch didn't change, we don't need to handle it
-            Ok(())
-        } else {
-            // If epoch changed, we need to save epoch info and update epoch_end_height
-            let validators_info =
-                utils::fetch_epoch_validators_info(stats_epoch_id, client).await?;
-
-            db_manager
-                .save_validators(
-                    stats_epoch_id,
-                    stats_current_epoch_height,
-                    validators_info.epoch_start_height,
-                    &validators_info,
-                    next_epoch_id,
-                )
-                .await?;
-
-            Ok(())
-        }
-    } else {
-        // If stats_current_epoch_id is None, we don't need handle it
-        Ok(())
-    }
-}
-
-/// This function will iterate over all StateChangesWithCauseViews in order to collect
-/// a single StateChangesWithCauseView for a unique account and unique change kind, and unique key.
-/// The reasoning behind this is that in a single Block (StreamerMessage) there might be a bunch of
-/// changes to the same change kind to the same account to the same key (state key or public key) and
-/// we want to ensure we store the very last of them.
-/// It's impossible to achieve it with handling all of them one by one asynchronously (they might be handled
-/// in any order) so it's easier for us to skip all the changes except the latest one.
-#[cfg_attr(
-    feature = "tracing-instrumentation",
-    tracing::instrument(skip(streamer_message, db_manager))
-)]
-async fn handle_state_changes(
-    streamer_message: &near_indexer::StreamerMessage,
-    db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
-    block_height: u64,
-    block_hash: CryptoHash,
-    indexer_config: &configuration::NearStateIndexerConfig,
-) -> anyhow::Result<Vec<()>> {
-    let mut state_changes_to_store =
-        std::collections::HashMap::<String, &StateChangeWithCauseView>::new();
-
-    let initial_state_changes = streamer_message
-        .shards
-        .iter()
-        .flat_map(|shard| shard.state_changes.iter());
-
-    // Collecting a unique list of StateChangeWithCauseView for account_id + change kind + suffix
-    // by overwriting the records in the HashMap
-    for state_change in initial_state_changes {
-        if !indexer_config.state_should_be_indexed(&state_change.value) {
-            continue;
-        };
-        let key = match &state_change.value {
-            StateChangeValueView::DataUpdate {
-                account_id, key, ..
-            }
-            | StateChangeValueView::DataDeletion { account_id, key } => {
-                // returning a hex-encoded key to ensure we store data changes to the key
-                // (if there is more than one change to the same key)
-                let key: &[u8] = key.as_ref();
-                format!("{}_data_{}", account_id.as_str(), hex::encode(key))
-            }
-            StateChangeValueView::AccessKeyUpdate {
-                account_id,
-                public_key,
-                ..
-            }
-            | StateChangeValueView::AccessKeyDeletion {
-                account_id,
-                public_key,
-            } => {
-                // returning a hex-encoded key to ensure we store data changes to the key
-                // (if there is more than one change to the same key)
-                let data_key = borsh::to_vec(&public_key)?;
-                format!(
-                    "{}_access_key_{}",
-                    account_id.as_str(),
-                    hex::encode(data_key)
-                )
-            }
-            // ContractCode and Account changes is not separate-able by any key, we can omit the suffix
-            StateChangeValueView::ContractCodeUpdate { account_id, .. }
-            | StateChangeValueView::ContractCodeDeletion { account_id } => {
-                format!("{}_contract", account_id.as_str())
-            }
-            StateChangeValueView::AccountUpdate { account_id, .. }
-            | StateChangeValueView::AccountDeletion { account_id } => {
-                format!("{}_account", account_id.as_str())
-            }
-        };
-        // This will override the previous record for this account_id + state change kind + suffix
-        state_changes_to_store.insert(key, state_change);
-    }
-
-    // Asynchronous storing of StateChangeWithCauseView into the storage.
-    let futures = state_changes_to_store
-        .into_values()
-        .map(|state_change_with_cause| {
-            db_manager.save_state_change(state_change_with_cause, block_height, block_hash)
-        });
-
-    futures::future::try_join_all(futures).await
-}
+// pub(crate) const INDEXER: &str = "near_state_indexer";
 
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
@@ -281,9 +64,12 @@ async fn run(home_dir: std::path::PathBuf) -> anyhow::Result<()> {
     tracing::info!(target: INDEXER, "Setup near_indexer...");
     let indexer_config = near_indexer::IndexerConfig {
         home_dir,
+        // TODO: consider making this configurable in the future
+        // For now, this near-indexer-based state-indexer is expected to run in addition to the Lake-based indexer(s)
+        // Since the main purpose of this one is to be in sync and provide the optimistic data, we tend to use the latest synced data
         sync_mode: near_indexer::SyncModeEnum::LatestSynced,
         await_for_node_synced: near_indexer::AwaitForNodeSyncedEnum::WaitForFullSync,
-        validate_genesis: true,
+        validate_genesis: false, // we don't want to validate genesis it takes too long and not necessary for this kind of node
     };
     let indexer = near_indexer::Indexer::new(indexer_config)?;
 
@@ -292,37 +78,48 @@ async fn run(home_dir: std::path::PathBuf) -> anyhow::Result<()> {
     let stream = indexer.streamer();
     let (view_client, client) = indexer.client_actors();
 
-    tracing::info!(target: INDEXER, "Fetching protocol config...");
-    let protocol_config = utils::fetch_protocol_config(&view_client).await?;
+    let near_client = near_client::NearViewClient::new(view_client.clone());
+    let protocol_config_view = near_client.protocol_config().await?;
 
     tracing::info!(target: INDEXER, "Connecting to db...");
     let db_manager = database::prepare_db_manager::<database::PostgresDBManager>(
         &state_indexer_config.database,
-        protocol_config.shard_layout,
+        protocol_config_view.shard_layout.clone(),
     )
     .await?;
 
     let stats = std::sync::Arc::new(tokio::sync::RwLock::new(metrics::Stats::new()));
     tokio::spawn(metrics::state_logger(
         std::sync::Arc::clone(&stats),
-        view_client.clone(),
+        near_client.clone(),
     ));
-    tokio::spawn(utils::optimistic_stream(
+
+    // Initiate the job of updating the optimistic blocks to Redis
+    tokio::spawn(utils::update_block_in_redis_by_finality(
         view_client.clone(),
         client.clone(),
         redis_client.clone(),
+        near_indexer_primitives::near_primitives::types::Finality::None,
+    ));
+    // And the same job for the final blocks
+    tokio::spawn(utils::update_block_in_redis_by_finality(
+        view_client.clone(),
+        client.clone(),
+        redis_client.clone(),
+        near_indexer_primitives::near_primitives::types::Finality::Final,
     ));
 
+    // ! Note that the `handle_streamer_message` doesn't interact with the Redis
     tracing::info!(target: INDEXER, "Starting near_state_indexer...");
     let mut handlers = tokio_stream::wrappers::ReceiverStream::new(stream)
         .map(|streamer_message| {
             handle_streamer_message(
                 streamer_message,
                 &db_manager,
-                redis_client.clone(),
-                &view_client,
+                &near_client,
                 state_indexer_config.clone(),
                 std::sync::Arc::clone(&stats),
+                &protocol_config_view.shard_layout,
             )
         })
         .buffer_unordered(state_indexer_config.general.concurrency);
