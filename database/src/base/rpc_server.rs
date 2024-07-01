@@ -14,28 +14,47 @@ pub trait ReaderDbManager {
         method_name: &str,
     ) -> anyhow::Result<readnode_primitives::BlockHeightShardId>;
 
-    /// Returns all state keys for the given account id
-    async fn get_state_keys_all(
+    /// Returns state for the given account id by page
+    async fn get_state_by_page(
         &self,
         account_id: &near_primitives::types::AccountId,
-        method_name: &str,
-    ) -> anyhow::Result<Vec<readnode_primitives::StateKey>>;
-
-    /// Returns state keys for the given account id by page
-    async fn get_state_keys_by_page(
-        &self,
-        account_id: &near_primitives::types::AccountId,
+        block_height: near_primitives::types::BlockHeight,
         page_token: crate::PageToken,
         method_name: &str,
-    ) -> anyhow::Result<(Vec<readnode_primitives::StateKey>, crate::PageToken)>;
+    ) -> anyhow::Result<(Vec<near_primitives::views::StateItem>, crate::PageToken)>;
 
     /// Returns state keys for the given account id filtered by the given prefix
-    async fn get_state_keys_by_prefix(
+    async fn get_state_by_key_prefix(
         &self,
         account_id: &near_primitives::types::AccountId,
+        block_height: near_primitives::types::BlockHeight,
         prefix: &[u8],
         method_name: &str,
-    ) -> anyhow::Result<Vec<readnode_primitives::StateKey>>;
+    ) -> anyhow::Result<Vec<near_primitives::views::StateItem>>;
+
+    /// Returns the state for the given account id at the given block height
+    async fn get_state(
+        &self,
+        account_id: &near_primitives::types::AccountId,
+        block_height: near_primitives::types::BlockHeight,
+        method_name: &str,
+    ) -> anyhow::Result<Vec<near_primitives::views::StateItem>>;
+
+    /// Returns the state for the given account id at the given block height
+    async fn get_account_state(
+        &self,
+        account_id: &near_primitives::types::AccountId,
+        block_height: near_primitives::types::BlockHeight,
+        prefix: &[u8],
+        method_name: &str,
+    ) -> anyhow::Result<Vec<near_primitives::views::StateItem>> {
+        if prefix.is_empty() {
+            self.get_state(account_id, block_height, method_name).await
+        } else {
+            self.get_state_by_key_prefix(account_id, block_height, prefix, method_name)
+                .await
+        }
+    }
 
     /// Returns the state value for the given key of the given account at the given block height
     async fn get_state_key_value(
@@ -74,13 +93,12 @@ pub trait ReaderDbManager {
         method_name: &str,
     ) -> anyhow::Result<readnode_primitives::QueryData<near_primitives::account::AccessKey>>;
 
-    #[cfg(feature = "account_access_keys")]
     async fn get_account_access_keys(
         &self,
         account_id: &near_primitives::types::AccountId,
         block_height: near_primitives::types::BlockHeight,
         method_name: &str,
-    ) -> anyhow::Result<std::collections::HashMap<String, Vec<u8>>>;
+    ) -> anyhow::Result<Vec<near_primitives::views::AccessKeyInfoView>>;
 
     /// Returns the near_primitives::views::ReceiptView at the given receipt_id
     async fn get_receipt_by_id(
