@@ -30,8 +30,9 @@ tracing = "0.1.34"
 
 configuration.workspace = true
 database-new.workspace = true
-epoch-indexer.workspace = true
+readnode-primitives.workspace = true
 
 near-primitives.workspace = true
 near-indexer-primitives.workspace = true
 near-jsonrpc-client.workspace = true
+near-chain-configs.workspace = true

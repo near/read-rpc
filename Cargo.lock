@@ -2440,6 +2440,7 @@ dependencies = [
 ]
 
 [[package]]
+<<<<<<< HEAD
 name = "epoch-indexer"
 version = "0.2.10"
 dependencies = [
@@ -2458,6 +2459,8 @@ dependencies = [
 ]
 
 [[package]]
+=======
+>>>>>>> 35b1f6b (refactor: Delete epoch-indexer, move the necessary logic to logic-state-indexer crate. Create train NearClient for state-indexers to switch between ViewClient and JsonRpcClient)
 name = "equivalent"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3576,17 +3579,18 @@ dependencies = [
  "clap",
  "configuration",
  "database-new",
- "epoch-indexer",
  "futures",
  "hex",
  "humantime",
  "itertools 0.13.0",
  "lazy_static",
+ "near-chain-configs 1.40.0",
  "near-indexer-primitives",
  "near-jsonrpc-client 0.9.0",
  "near-primitives 1.40.0",
  "openssl-probe",
  "prometheus",
+ "readnode-primitives",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -4829,13 +4833,11 @@ dependencies = [
  "actix",
  "actix-web",
  "anyhow",
- "borsh 1.5.1",
  "clap",
  "configuration",
  "database",
  "futures",
- "hex",
- "humantime",
+ "logic-state-indexer",
  "near-chain-configs 1.40.0",
  "near-client",
  "near-indexer",
@@ -7650,16 +7652,16 @@ version = "0.2.10"
 dependencies = [
  "actix-web",
  "anyhow",
- "borsh 1.5.1",
  "clap",
  "configuration",
+<<<<<<< HEAD
  "database",
  "epoch-indexer",
+=======
+ "database-new",
+>>>>>>> 35b1f6b (refactor: Delete epoch-indexer, move the necessary logic to logic-state-indexer crate. Create train NearClient for state-indexers to switch between ViewClient and JsonRpcClient)
  "futures",
- "hex",
- "humantime",
  "itertools 0.13.0",
- "lazy_static",
  "logic-state-indexer",
  "near-indexer-primitives",
  "near-jsonrpc-client 0.9.0",

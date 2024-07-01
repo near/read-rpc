@@ -1,6 +1,6 @@
-use itertools::Itertools;
 use std::collections::HashMap;
 
+use itertools::Itertools;
 use near_indexer_primitives::views::StateChangeValueView;
 use near_indexer_primitives::CryptoHash;
 
@@ -8,8 +8,12 @@ extern crate database_new as database;
 #[macro_use]
 extern crate lazy_static;
 
+pub use near_client::{NearClient, NearJsonRpc};
+
 pub mod configs;
+mod epoch;
 pub mod metrics;
+mod near_client;
 
 // Target for tracing logs
 pub const INDEXER: &str = "state_indexer";
@@ -39,7 +43,7 @@ struct ShardedStateChangesWithCause {
 pub async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
     db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
-    rpc_client: &near_jsonrpc_client::JsonRpcClient,
+    near_client: &impl NearClient,
     indexer_config: configuration::StateIndexerConfig,
     stats: std::sync::Arc<tokio::sync::RwLock<metrics::Stats>>,
     shard_layout: &near_primitives::shard_layout::ShardLayout,
@@ -63,7 +67,7 @@ pub async fn handle_streamer_message(
         stats.read().await.current_epoch_height,
         current_epoch_id,
         next_epoch_id,
-        rpc_client,
+        near_client,
         db_manager,
     );
     let handle_block_future = db_manager.save_block(
@@ -121,7 +125,7 @@ pub async fn handle_streamer_message(
         }
     } else {
         // handle first indexing epoch
-        let epoch_info = epoch_indexer::get_epoch_info_by_id(current_epoch_id, rpc_client).await?;
+        let epoch_info = epoch::get_epoch_info_by_id(current_epoch_id, near_client).await?;
         stats_lock.current_epoch_id = Some(current_epoch_id);
         stats_lock.current_epoch_height = epoch_info.epoch_height;
     }
@@ -137,15 +141,14 @@ async fn handle_epoch(
     stats_current_epoch_height: u64,
     current_epoch_id: CryptoHash,
     next_epoch_id: CryptoHash,
-    rpc_client: &near_jsonrpc_client::JsonRpcClient,
+    near_client: &impl NearClient,
     db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
 ) -> anyhow::Result<()> {
     if let Some(stats_epoch_id) = stats_current_epoch_id {
         if stats_epoch_id != current_epoch_id {
             // If epoch changed, we need to save epoch info and update epoch_end_height
-            let epoch_info =
-                epoch_indexer::get_epoch_info_by_id(stats_epoch_id, rpc_client).await?;
-            epoch_indexer::save_epoch_info(
+            let epoch_info = epoch::get_epoch_info_by_id(stats_epoch_id, near_client).await?;
+            epoch::save_epoch_info(
                 &epoch_info,
                 db_manager,
                 Some(stats_current_epoch_height),

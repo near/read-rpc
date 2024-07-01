@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use clap::Parser;
 use futures::StreamExt;
 
-use logic_state_indexer::{configs, handle_streamer_message, metrics, INDEXER};
+use logic_state_indexer::{configs, handle_streamer_message, metrics, NearClient, INDEXER};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -20,12 +20,9 @@ async fn main() -> anyhow::Result<()> {
     // we use the Referer header to ensure we take it from the native RPC node
     let rpc_client = near_jsonrpc_client::JsonRpcClient::connect(&indexer_config.general.near_rpc_url)
         .header(("Referer", indexer_config.general.referer_header_value.clone()))?;
+    let near_client = logic_state_indexer::NearJsonRpc::new(rpc_client);
 
-    let protocol_config_view = rpc_client
-        .call(near_jsonrpc_client::methods::EXPERIMENTAL_protocol_config::RpcProtocolConfigRequest {
-            block_reference: near_primitives::types::BlockReference::Finality(near_primitives::types::Finality::Final),
-        })
-        .await?;
+    let protocol_config_view = near_client.protocol_config().await?;
 
     let db_manager = database::prepare_db_manager::<database::PostgresDBManager>(
         &indexer_config.database,
@@ -33,7 +30,7 @@ async fn main() -> anyhow::Result<()> {
     )
     .await?;
     let start_block_height = configs::get_start_block_height(
-        &rpc_client,
+        &near_client,
         &db_manager,
         &opts.start_options,
         &indexer_config.general.indexer_id,
@@ -49,14 +46,14 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let stats = std::sync::Arc::new(tokio::sync::RwLock::new(metrics::Stats::new()));
-    tokio::spawn(metrics::state_logger(std::sync::Arc::clone(&stats), rpc_client.clone()));
+    tokio::spawn(metrics::state_logger(std::sync::Arc::clone(&stats), near_client.clone()));
 
     let mut handlers = tokio_stream::wrappers::ReceiverStream::new(stream)
         .map(|streamer_message| {
             handle_streamer_message(
                 streamer_message,
                 &db_manager,
-                &rpc_client,
+                &near_client,
                 indexer_config.clone(),
                 std::sync::Arc::clone(&stats),
                 &protocol_config_view.shard_layout,

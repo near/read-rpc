@@ -81,7 +81,7 @@ impl Stats {
 
 pub async fn state_logger(
     stats: std::sync::Arc<tokio::sync::RwLock<Stats>>,
-    rpc_client: JsonRpcClient,
+    near_client: impl crate::NearClient,
 ) {
     let interval_secs = 10;
     let mut prev_blocks_processed_count: u64 = 0;
@@ -95,7 +95,7 @@ pub async fn state_logger(
             / (interval_secs as f64);
 
         let time_to_catch_the_tip_duration = if block_processing_speed > 0.0 {
-            if let Ok(block_height) = crate::configs::final_block_height(&rpc_client).await {
+            if let Ok(block_height) = crate::configs::final_block_height(&near_client).await {
                 Some(std::time::Duration::from_millis(
                     (((block_height - stats_lock.last_processed_block_height) as f64
                         / block_processing_speed)
