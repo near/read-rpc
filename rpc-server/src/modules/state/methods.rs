@@ -4,6 +4,7 @@ use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
 use crate::modules::state::utils::get_state_from_db_paginated;
 use jsonrpc_v2::{Data, Params};
 
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn view_state_paginated(
     data: Data<ServerContext>,
     Params(params): Params<crate::modules::state::RpcViewStatePaginatedRequest>,
