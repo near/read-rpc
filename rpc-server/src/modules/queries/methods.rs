@@ -440,10 +440,14 @@ async fn optimistic_view_state(
         prefix,
         "query_view_state",
         tokio::time::Duration::from_secs(3),
-    ).await.map_err(|_| near_jsonrpc::primitives::types::query::RpcQueryError::TooLargeContractState {
-        contract_account_id: account_id.clone(),
-        block_height: block.block_height,
-        block_hash: block.block_hash,
+    )
+    .await
+    .map_err(|_| {
+        near_jsonrpc::primitives::types::query::RpcQueryError::TooLargeContractState {
+            contract_account_id: account_id.clone(),
+            block_height: block.block_height,
+            block_hash: block.block_hash,
+        }
     })?;
     if state_from_db.is_empty() && optimistic_data.is_empty() {
         Err(
@@ -501,10 +505,14 @@ async fn database_view_state(
         prefix,
         "query_view_state",
         tokio::time::Duration::from_secs(3),
-    ).await.map_err(|_| near_jsonrpc::primitives::types::query::RpcQueryError::TooLargeContractState {
-        contract_account_id: account_id.clone(),
-        block_height: block.block_height,
-        block_hash: block.block_hash,
+    )
+    .await
+    .map_err(|_| {
+        near_jsonrpc::primitives::types::query::RpcQueryError::TooLargeContractState {
+            contract_account_id: account_id.clone(),
+            block_height: block.block_height,
+            block_hash: block.block_hash,
+        }
     })?;
     if state_from_db.is_empty() {
         Err(
