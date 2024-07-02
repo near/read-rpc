@@ -1,7 +1,5 @@
 use near_indexer_primitives::{near_primitives, CryptoHash};
 
-use crate::database;
-
 pub async fn get_epoch_validators(
     epoch_id: CryptoHash,
     near_client: &impl crate::NearClient,
@@ -52,7 +50,7 @@ pub async fn save_epoch_info(
     };
 
     db_manager
-        .add_validators(
+        .save_validators(
             epoch.epoch_id,
             epoch_height,
             epoch.epoch_start_height,

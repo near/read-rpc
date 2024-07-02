@@ -4,16 +4,19 @@
 
 pub trait NearClient {
     /// Returns the final block height from the NEAR Protocol or an error if the call fails.
-    async fn final_block_height(&self) -> anyhow::Result<u64>;
+    fn final_block_height(&self) -> impl std::future::Future<Output = anyhow::Result<u64>> + Send;
 
     /// Returns the ProtocolConfigView from the NEAR Protocol or an error if the call fails.
-    async fn protocol_config(&self) -> anyhow::Result<near_chain_configs::ProtocolConfigView>;
+    fn protocol_config(
+        &self,
+    ) -> impl std::future::Future<Output = anyhow::Result<near_chain_configs::ProtocolConfigView>> + Send;
 
     /// Returns the current epoch information from the NEAR Protocol or an error if the call fails.
-    async fn validators_by_epoch_id(
+    fn validators_by_epoch_id(
         &self,
         epoch_id: near_indexer_primitives::CryptoHash,
-    ) -> anyhow::Result<near_primitives::views::EpochValidatorInfo>;
+    ) -> impl std::future::Future<Output = anyhow::Result<near_primitives::views::EpochValidatorInfo>>
+           + Send;
 }
 
 /// NEAR JSON-RPC Client is an implementation of the NearClient trait that uses the JSON-RPC calls
