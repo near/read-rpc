@@ -10,9 +10,6 @@ mod metrics;
 mod near_client;
 mod utils;
 
-// Categories for logging
-// pub(crate) const INDEXER: &str = "near_state_indexer";
-
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
     configuration::init_tracing(INDEXER).await?;

@@ -10,19 +10,7 @@ pub(crate) async fn fetch_block_by_finality(
     client: &actix::Addr<near_client::ViewClientActor>,
     finality: &near_primitives::types::Finality,
 ) -> anyhow::Result<near_primitives::views::BlockView> {
-    let block_reference = match finality {
-        near_primitives::types::Finality::Final => {
-            near_primitives::types::BlockReference::Finality(
-                near_primitives::types::Finality::Final,
-            )
-        }
-        near_primitives::types::Finality::None => {
-            near_primitives::types::BlockReference::Finality(near_primitives::types::Finality::None)
-        }
-        near_primitives::types::Finality::DoomSlug => {
-            unimplemented!("DoomSlug finality is not supported")
-        }
-    };
+    let block_reference = near_primitives::types::BlockReference::Finality(finality.clone());
     Ok(client
         .send(near_client::GetBlock(block_reference).with_span_context())
         .await??)

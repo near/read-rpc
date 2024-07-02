@@ -47,5 +47,5 @@ pub(crate) async fn final_block_height(
     near_client: &impl crate::NearClient,
 ) -> anyhow::Result<u64> {
     tracing::debug!(target: crate::INDEXER, "Fetching final block from NEAR RPC",);
-    Ok(near_client.final_block_height().await?)
+    near_client.final_block_height().await
 }

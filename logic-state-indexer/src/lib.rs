@@ -54,7 +54,6 @@ impl StateChangesToStore {
                     )
                 })
                 .collect();
-            println!("{block_height} save_data {:?}", futures.len());
             futures::future::try_join_all(futures).await?;
         }
         Ok(())
@@ -86,7 +85,6 @@ impl StateChangesToStore {
                     )
                 })
                 .collect();
-            println!("{block_height} save_access_key {:?}", futures.len());
             futures::future::try_join_all(futures).await?;
         }
         Ok(())

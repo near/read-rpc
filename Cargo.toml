@@ -6,12 +6,23 @@ rust-version = "1.77.0"
 repository = "https://github.com/near/read-rpc"
 license = "MIT OR Apache-2.0"
 
+[profile.release]
+opt-level = 3
+debug = false
+split-debuginfo = 'off'
+debug-assertions = false
+overflow-checks = false
+lto = true
+panic = 'unwind'
+incremental = false
+codegen-units = 1
+rpath = false
+
 [workspace]
 resolver = "2"
 members = [
     "configuration",
     "database",
-    "logic-state-indexer",
     "perf-testing",
     "readnode-primitives",
     "rpc-server",
