@@ -91,6 +91,26 @@ pub trait Config {
     fn from_common_config(common_config: CommonConfig) -> Self;
 }
 
+/// This trait is used to provide the methods for rightsizing feature,
+/// which determines the filters the setup of the ReadRPC needs to track
+pub trait RightsizingConfig {
+    /// Checks the `StateChangeValueView` against the rightsizing parameters
+    /// to return the `bool` whether the provided change should be indexed or ignored
+    fn state_should_be_indexed(&self, state_change_value: &StateChangeValueView) -> bool;
+    /// Checks the transaction agains the rightsizing parameters to return the `bool`
+    /// whether the provided transaction should be indexer or ignored
+    fn tx_should_be_indexed(
+        &self,
+        transaction: &near_indexer_primitives::IndexerTransactionWithOutcome,
+    ) -> bool;
+}
+
+/// This trait is used to provide the common methods for different indexer configs
+/// For instance, `indexer_id()` to get the id of the indexer
+pub trait IndexerConfig {
+    fn indexer_id(&self) -> &str;
+}
+
 #[derive(Debug, Clone)]
 pub struct RpcServerConfig {
     pub general: general::GeneralRpcServerConfig,
@@ -152,9 +172,23 @@ pub struct StateIndexerConfig {
     pub database: database::DatabaseConfig,
 }
 
-impl StateIndexerConfig {
-    pub fn state_should_be_indexed(&self, state_change_value: &StateChangeValueView) -> bool {
+impl IndexerConfig for StateIndexerConfig {
+    fn indexer_id(&self) -> &str {
+        &self.general.indexer_id
+    }
+}
+
+impl RightsizingConfig for StateIndexerConfig {
+    fn state_should_be_indexed(&self, state_change_value: &StateChangeValueView) -> bool {
         self.rightsizing.state_should_be_indexed(state_change_value)
+    }
+
+    fn tx_should_be_indexed(
+        &self,
+        _transaction: &near_indexer_primitives::IndexerTransactionWithOutcome,
+    ) -> bool {
+        // this method is not used by any of the state-indexers, no need to implement it
+        unimplemented!("StateIndexerConfig does not implement tx_should_be_indexed")
     }
 }
 
@@ -176,9 +210,27 @@ pub struct NearStateIndexerConfig {
     pub database: database::DatabaseConfig,
 }
 
-impl NearStateIndexerConfig {
-    pub fn state_should_be_indexed(&self, state_change_value: &StateChangeValueView) -> bool {
+impl IndexerConfig for NearStateIndexerConfig {
+    // indexer_id is used to store the data about last indexed block in the meta-table of
+    // the database. Since nearcore-based state-indexer doesn't read that database for
+    // `from-interruption` start option we hardcode the value to avoid complexity of if-statements
+    // around the `update_meta` function
+    fn indexer_id(&self) -> &str {
+        "near_state_indexer"
+    }
+}
+
+impl RightsizingConfig for NearStateIndexerConfig {
+    fn state_should_be_indexed(&self, state_change_value: &StateChangeValueView) -> bool {
         self.rightsizing.state_should_be_indexed(state_change_value)
+    }
+
+    fn tx_should_be_indexed(
+        &self,
+        _transaction: &near_indexer_primitives::IndexerTransactionWithOutcome,
+    ) -> bool {
+        // this method is not used by any of the state-indexers, no need to implement it
+        unimplemented!("NearStateIndexerConfig does not implement tx_should_be_indexed")
     }
 }
 
