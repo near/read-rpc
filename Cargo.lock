@@ -2442,24 +2442,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "epoch-indexer"
-version = "0.2.11"
-dependencies = [
- "anyhow",
- "clap",
- "configuration",
- "database",
- "futures",
- "near-chain-configs 1.40.0",
- "near-indexer-primitives",
- "near-jsonrpc-client 0.9.0",
- "near-lake-framework",
- "readnode-primitives",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "equivalent"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3716,6 +3698,33 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a7a70ba024b9dc04c27ea2f0c0548feb474ec5c54bba33a7f72f873a39d07b24"
 
 [[package]]
+name = "logic-state-indexer"
+version = "0.2.11"
+dependencies = [
+ "actix-web",
+ "anyhow",
+ "borsh 1.5.1",
+ "clap",
+ "configuration",
+ "database",
+ "futures",
+ "hex",
+ "humantime",
+ "itertools 0.13.0",
+ "lazy_static",
+ "near-chain-configs 1.40.0",
+ "near-indexer-primitives",
+ "near-jsonrpc-client 0.9.0",
+ "near-primitives 1.40.0",
+ "openssl-probe",
+ "prometheus",
+ "readnode-primitives",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+]
+
+[[package]]
 name = "lru"
 version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4952,16 +4961,15 @@ dependencies = [
  "actix",
  "actix-web",
  "anyhow",
- "borsh 1.5.1",
  "clap",
  "configuration",
  "database",
  "futures",
- "hex",
- "humantime",
+ "logic-state-indexer",
  "near-chain-configs 1.40.0",
  "near-client",
  "near-indexer",
+ "near-indexer-primitives",
  "near-o11y 1.40.0",
  "once_cell",
  "openssl-probe",
@@ -7870,16 +7878,12 @@ version = "0.2.11"
 dependencies = [
  "actix-web",
  "anyhow",
- "borsh 1.5.1",
  "clap",
  "configuration",
  "database",
- "epoch-indexer",
  "futures",
- "hex",
- "humantime",
  "itertools 0.13.0",
- "lazy_static",
+ "logic-state-indexer",
  "near-indexer-primitives",
  "near-jsonrpc-client 0.9.0",
  "near-lake-framework",
