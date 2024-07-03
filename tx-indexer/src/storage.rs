@@ -1,10 +1,55 @@
-use futures::StreamExt;
 use near_indexer_primitives::CryptoHash;
 
 pub const STORAGE: &str = "storage_tx";
 
-pub struct HashStorageWithDB {
-    db_manager: std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
+#[derive(Clone)]
+struct RedisStorage {
+    client: redis::aio::ConnectionManager,
+}
+
+impl RedisStorage {
+    async fn new(redis_url: String) -> anyhow::Result<Self> {
+        let redis_client = redis::Client::open(redis_url)?
+            .get_connection_manager()
+            .await?;
+        Ok(Self {
+            client: redis_client,
+        })
+    }
+
+    async fn del(
+        &self,
+        transaction_key: readnode_primitives::TransactionKey,
+    ) -> anyhow::Result<()> {
+        redis::cmd("DEL")
+            .arg(transaction_key.to_string())
+            .query_async::<redis::aio::ConnectionManager, String>(&mut self.client.clone())
+            .await?;
+        Ok(())
+    }
+
+    // async fn cache_add_transaction(&self, transaction_details: readnode_primitives::CollectingTransactionDetails) -> anyhow::Result<()> {
+    //     redis::cmd("HSET")
+    //         .arg(transaction_details.transaction_key().to_string())
+    //         .arg("tx_details")
+    //         .arg(borsh::to_vec(&transaction_details)?)
+    //         .query_async::<redis::aio::ConnectionManager, String>(&mut self.client.clone()).await?;
+    //     Ok(())
+    // }
+    //
+    // async fn cache_add_receipt(&self, transaction_key: readnode_primitives::TransactionKey, indexer_execution_outcome_with_receipt: near_indexer_primitives::IndexerExecutionOutcomeWithReceipt) -> anyhow::Result<()> {
+    //     redis::cmd("HSET")
+    //         .arg(transaction_key.to_string())
+    //         .arg(indexer_execution_outcome_with_receipt.receipt.receipt_id.to_string())
+    //         .arg("indexer_execution_outcome_with_receipt_json")
+    //         .query_async::<redis::aio::ConnectionManager, String>(&mut self.client.clone()).await?;
+    //     Ok(())
+    // }
+    //
+}
+
+pub struct CacheStorageWithRedis {
+    redis_storage: RedisStorage,
     transactions: futures_locks::RwLock<
         std::collections::HashMap<
             readnode_primitives::TransactionKey,
@@ -24,179 +69,19 @@ pub struct HashStorageWithDB {
     >,
 }
 
-impl HashStorageWithDB {
+impl CacheStorageWithRedis {
     /// Init storage without restore transactions with receipts after interruption
-    pub(crate) async fn init_storage(
-        db_manager: std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
-    ) -> Self {
+    pub(crate) async fn init_storage(redis_url: String) -> Self {
+        let redis_storage = RedisStorage::new(redis_url)
+            .await
+            .expect("Failed connecting to redis");
         Self {
-            db_manager,
+            redis_storage,
             transactions: futures_locks::RwLock::new(std::collections::HashMap::new()),
             receipts_counters: futures_locks::RwLock::new(std::collections::HashMap::new()),
             receipts_watching_list: futures_locks::RwLock::new(std::collections::HashMap::new()),
             transactions_to_save: futures_locks::RwLock::new(std::collections::HashMap::new()),
         }
-    }
-
-    /// Init storage with restore transactions with receipts after interruption
-    pub(crate) async fn init_with_restore(
-        db_manager: std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
-        start_block_height: u64,
-        cache_restore_blocks_range: u64,
-        max_db_parallel_queries: i64,
-    ) -> anyhow::Result<Self> {
-        let storage = Self::init_storage(db_manager).await;
-        storage
-            .restore_transactions_with_receipts_after_interruption(
-                start_block_height,
-                cache_restore_blocks_range,
-                max_db_parallel_queries,
-            )
-            .await?;
-        Ok(storage)
-    }
-
-    async fn restore_transaction_with_receipts(
-        &self,
-        transaction_key: &readnode_primitives::TransactionKey,
-        transaction_details: &readnode_primitives::CollectingTransactionDetails,
-    ) -> anyhow::Result<()> {
-        self.update_tx(transaction_details.clone()).await?;
-        let receipt_id = transaction_details
-            .execution_outcomes
-            .first()
-            .expect("No execution outcomes")
-            .outcome
-            .receipt_ids
-            .first()
-            .expect("`receipt_ids` must contain one Receipt ID");
-        self.push_receipt_to_watching_list(receipt_id, transaction_key.clone())
-            .await?;
-
-        for indexer_execution_outcome_with_receipt in self
-            .db_manager
-            .get_receipts_in_cache(transaction_key)
-            .await?
-            .iter()
-        {
-            let mut tasks = futures::stream::FuturesUnordered::new();
-            tasks.extend(
-                indexer_execution_outcome_with_receipt
-                    .execution_outcome
-                    .outcome
-                    .receipt_ids
-                    .iter()
-                    .map(|receipt_id| {
-                        self.push_receipt_to_watching_list(receipt_id, transaction_key.clone())
-                    }),
-            );
-            while let Some(result) = tasks.next().await {
-                let _ = result.map_err(|e| {
-                    tracing::debug!(
-                        target: crate::INDEXER,
-                        "Task encountered an error: {:#?}",
-                        e
-                    )
-                });
-            }
-
-            self.push_outcome_and_receipt_to_hash(
-                transaction_key,
-                indexer_execution_outcome_with_receipt.clone(),
-            )
-            .await?;
-        }
-        Ok(())
-    }
-
-    /// Restore transactions with receipts after interruption
-    async fn restore_transactions_with_receipts_after_interruption(
-        &self,
-        start_block_height: u64,
-        cache_restore_blocks_range: u64,
-        max_db_parallel_queries: i64,
-    ) -> anyhow::Result<()> {
-        for (transaction_key, transaction_details) in self
-            .db_manager
-            .get_transactions_to_cache(
-                start_block_height,
-                cache_restore_blocks_range,
-                max_db_parallel_queries,
-            )
-            .await?
-            .iter()
-        {
-            self.restore_transaction_with_receipts(transaction_key, transaction_details)
-                .await?;
-            tracing::info!(
-                target: crate::storage::STORAGE,
-                "Transaction collected from db {}",
-                transaction_key.transaction_hash,
-            );
-        }
-        Ok(())
-    }
-
-    async fn push_outcome_and_receipt_to_db(
-        &self,
-        transaction_key: readnode_primitives::TransactionKey,
-        indexer_execution_outcome_with_receipt: near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
-    ) {
-        let db_manager = self.db_manager.clone();
-        tokio::spawn(async move {
-            db_manager
-                .cache_add_receipt(transaction_key, indexer_execution_outcome_with_receipt)
-                .await
-        });
-    }
-
-    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
-    async fn push_outcome_and_receipt_to_hash(
-        &self,
-        transaction_key: &readnode_primitives::TransactionKey,
-        indexer_execution_outcome_with_receipt: near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
-    ) -> anyhow::Result<()> {
-        let mut transaction_details = self.get_tx(transaction_key).await?;
-        self.remove_receipt_from_watching_list(
-            &indexer_execution_outcome_with_receipt
-                .receipt
-                .receipt_id
-                .to_string(),
-        )
-        .await?;
-        transaction_details
-            .receipts
-            .push(indexer_execution_outcome_with_receipt.receipt);
-        transaction_details
-            .execution_outcomes
-            .push(indexer_execution_outcome_with_receipt.execution_outcome);
-        let transaction_receipts_watching_count = self
-            .receipts_transaction_hash_count(transaction_key)
-            .await?;
-        if transaction_receipts_watching_count == 0 {
-            self.move_tx_to_save(transaction_details.clone()).await?;
-        } else {
-            self.update_tx(transaction_details.clone()).await?;
-        }
-        Ok(())
-    }
-
-    pub(crate) async fn restore_transaction_by_receipt_id(
-        &self,
-        receipt_id: &str,
-    ) -> anyhow::Result<()> {
-        if let Ok(transaction_details) = self
-            .db_manager
-            .get_transaction_by_receipt_id(receipt_id)
-            .await
-        {
-            self.restore_transaction_with_receipts(
-                &transaction_details.transaction_key(),
-                &transaction_details,
-            )
-            .await?;
-        }
-        Ok(())
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
@@ -279,13 +164,6 @@ impl HashStorageWithDB {
         &self,
         transaction_details: readnode_primitives::CollectingTransactionDetails,
     ) -> anyhow::Result<()> {
-        let transaction_details_clone = transaction_details.clone();
-        let db_manager = self.db_manager.clone();
-        tokio::spawn(async move {
-            db_manager
-                .cache_add_transaction(transaction_details_clone)
-                .await
-        });
         let transaction_hash = transaction_details.transaction.hash.clone().to_string();
         self.update_tx(transaction_details).await?;
         tracing::debug!(target: crate::storage::STORAGE, "+T {}", transaction_hash,);
@@ -326,6 +204,15 @@ impl HashStorageWithDB {
             "-T {}",
             transaction_key.transaction_hash
         );
+        Ok(())
+    }
+
+    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
+    pub(crate) async fn remove_transaction_from_cache(
+        &self,
+        transaction_key: readnode_primitives::TransactionKey,
+    ) -> anyhow::Result<()> {
+        self.redis_storage.del(transaction_key).await?;
         Ok(())
     }
 
@@ -372,16 +259,28 @@ impl HashStorageWithDB {
         transaction_key: &readnode_primitives::TransactionKey,
         indexer_execution_outcome_with_receipt: near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
     ) -> anyhow::Result<()> {
-        self.push_outcome_and_receipt_to_db(
-            transaction_key.clone(),
-            indexer_execution_outcome_with_receipt.clone(),
-        )
-        .await;
-        self.push_outcome_and_receipt_to_hash(
-            transaction_key,
-            indexer_execution_outcome_with_receipt,
+        let mut transaction_details = self.get_tx(transaction_key).await?;
+        self.remove_receipt_from_watching_list(
+            &indexer_execution_outcome_with_receipt
+                .receipt
+                .receipt_id
+                .to_string(),
         )
         .await?;
+        transaction_details
+            .receipts
+            .push(indexer_execution_outcome_with_receipt.receipt);
+        transaction_details
+            .execution_outcomes
+            .push(indexer_execution_outcome_with_receipt.execution_outcome);
+        let transaction_receipts_watching_count = self
+            .receipts_transaction_hash_count(transaction_key)
+            .await?;
+        if transaction_receipts_watching_count == 0 {
+            self.move_tx_to_save(transaction_details.clone()).await?;
+        } else {
+            self.update_tx(transaction_details.clone()).await?;
+        }
         Ok(())
     }
 }

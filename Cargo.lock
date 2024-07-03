@@ -8699,6 +8699,7 @@ dependencies = [
  "near-lake-framework",
  "prometheus",
  "readnode-primitives",
+ "redis",
  "tokio",
  "tokio-stream",
  "tracing",

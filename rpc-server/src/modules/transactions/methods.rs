@@ -25,7 +25,7 @@ pub async fn tx(
     let tx_status_request =
         near_jsonrpc::primitives::types::transactions::RpcTransactionStatusRequest::parse(params)?;
 
-    let result = tx_status_common(&data, &tx_status_request.transaction_info, false, "tx").await;
+    let result = tx_status_common(&data, &tx_status_request.transaction_info, false).await;
 
     #[cfg(feature = "shadow_data_consistency")]
     {
@@ -60,13 +60,7 @@ pub async fn tx_status(
     let tx_status_request =
         near_jsonrpc::primitives::types::transactions::RpcTransactionStatusRequest::parse(params)?;
 
-    let result = tx_status_common(
-        &data,
-        &tx_status_request.transaction_info,
-        true,
-        "EXPERIMENTAL_tx_status",
-    )
-    .await;
+    let result = tx_status_common(&data, &tx_status_request.transaction_info, true).await;
 
     #[cfg(feature = "shadow_data_consistency")]
     {
@@ -143,7 +137,6 @@ async fn tx_status_common(
     data: &Data<ServerContext>,
     transaction_info: &near_jsonrpc::primitives::types::transactions::TransactionInfo,
     fetch_receipt: bool,
-    method_name: &str,
 ) -> Result<
     near_jsonrpc::primitives::types::transactions::RpcTransactionResponse,
     near_jsonrpc::primitives::types::transactions::RpcTransactionError,
@@ -159,21 +152,17 @@ async fn tx_status_common(
         } => *tx_hash,
     };
 
-    let transaction_details = super::try_get_transaction_details_by_hash(
-        data,
-        &tx_hash,
-        method_name,
-    )
-    .await
-    .map_err(|err| {
-        // logging the error at debug level since it's expected to see some "not found"
-        // errors in the logs that doesn't mean that something is really wrong, but want to
-        // keep track of them to see if there are any patterns
-        tracing::debug!("Error while fetching transaction details: {:?}", err);
-        near_jsonrpc::primitives::types::transactions::RpcTransactionError::UnknownTransaction {
-            requested_transaction_hash: tx_hash,
-        }
-    })?;
+    let transaction_details = super::try_get_transaction_details_by_hash(data, &tx_hash)
+        .await
+        .map_err(|err| {
+            // logging the error at debug level since it's expected to see some "not found"
+            // errors in the logs that doesn't mean that something is really wrong, but want to
+            // keep track of them to see if there are any patterns
+            tracing::debug!("Error while fetching transaction details: {:?}", err);
+            near_jsonrpc::primitives::types::transactions::RpcTransactionError::UnknownTransaction {
+                requested_transaction_hash: tx_hash,
+            }
+        })?;
 
     // TODO (@kobayurii): rewrite this since we support optimistic finalities already
     if fetch_receipt {

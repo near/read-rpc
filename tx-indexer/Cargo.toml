@@ -17,6 +17,7 @@ futures-locks = "0.7.1"
 humantime = "2.1.0"
 lazy_static = "1.4.0"
 prometheus = "0.13.1"
+redis = { version = "0.25.2", features = ["tokio-comp", "connection-manager"] }
 tokio = { version = "1.36.0", features = [
     "sync",
     "time",

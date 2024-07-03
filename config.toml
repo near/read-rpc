@@ -18,7 +18,6 @@ shadow_data_consistency_rate = "${SHADOW_DATA_CONSISTENCY_RATE}"
 [general.tx_indexer]
 indexer_id = "${TX_INDEXER_ID}"
 metrics_server_port = "${TX_SERVER_PORT}"
-cache_restore_blocks_range = "${CACHE_RESTORE_BLOCKS_RANGE}"
 
 [general.state_indexer]
 indexer_id = "${STATE_INDEXER_ID}"

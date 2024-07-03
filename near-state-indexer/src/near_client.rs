@@ -1,9 +1,6 @@
 use actix::Addr;
 use near_indexer::near_primitives;
-use near_indexer_primitives;
 use near_o11y::WithSpanContextExt;
-
-use crate::NearClient;
 
 #[derive(Clone)]
 pub(crate) struct NearViewClient {
@@ -16,7 +13,7 @@ impl NearViewClient {
     }
 }
 
-impl NearClient for NearViewClient {
+impl crate::NearClient for NearViewClient {
     async fn final_block_height(&self) -> anyhow::Result<u64> {
         let block = self
             .view_client
@@ -28,6 +25,18 @@ impl NearClient for NearViewClient {
             )
             .await??;
         Ok(block.header.height)
+    }
+
+    async fn protocol_config(&self) -> anyhow::Result<near_chain_configs::ProtocolConfigView> {
+        Ok(self
+            .view_client
+            .send(
+                near_client::GetProtocolConfig(near_primitives::types::BlockReference::Finality(
+                    near_primitives::types::Finality::Final,
+                ))
+                .with_span_context(),
+            )
+            .await??)
     }
 
     async fn validators_by_epoch_id(
@@ -42,18 +51,6 @@ impl NearClient for NearViewClient {
                         near_primitives::types::EpochId(epoch_id),
                     ),
                 }
-                .with_span_context(),
-            )
-            .await??)
-    }
-
-    async fn protocol_config(&self) -> anyhow::Result<near_chain_configs::ProtocolConfigView> {
-        Ok(self
-            .view_client
-            .send(
-                near_client::GetProtocolConfig(near_primitives::types::BlockReference::Finality(
-                    near_primitives::types::Finality::Final,
-                ))
                 .with_span_context(),
             )
             .await??)

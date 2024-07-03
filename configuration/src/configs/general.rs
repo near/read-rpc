@@ -25,9 +25,9 @@ pub struct GeneralTxIndexerConfig {
     pub chain_id: ChainId,
     pub near_rpc_url: String,
     pub near_archival_rpc_url: Option<String>,
+    pub redis_url: url::Url,
     pub indexer_id: String,
     pub metrics_server_port: u16,
-    pub cache_restore_blocks_range: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -148,8 +148,6 @@ pub struct CommonGeneralTxIndexerConfig {
     pub indexer_id: Option<String>,
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub metrics_server_port: Option<u16>,
-    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
-    pub cache_restore_blocks_range: Option<u64>,
 }
 
 impl CommonGeneralTxIndexerConfig {
@@ -160,10 +158,6 @@ impl CommonGeneralTxIndexerConfig {
     pub fn default_metrics_server_port() -> u16 {
         8080
     }
-
-    pub fn default_cache_restore_blocks_range() -> u64 {
-        1000
-    }
 }
 
 impl Default for CommonGeneralTxIndexerConfig {
@@ -171,7 +165,6 @@ impl Default for CommonGeneralTxIndexerConfig {
         Self {
             indexer_id: Some(Self::default_indexer_id()),
             metrics_server_port: Some(Self::default_metrics_server_port()),
-            cache_restore_blocks_range: Some(Self::default_cache_restore_blocks_range()),
         }
     }
 }
@@ -275,6 +268,12 @@ impl From<CommonGeneralConfig> for GeneralTxIndexerConfig {
             chain_id: common_config.chain_id,
             near_rpc_url: required_value_or_panic("near_rpc_url", common_config.near_rpc_url),
             near_archival_rpc_url: common_config.near_archival_rpc_url,
+            redis_url: url::Url::parse(
+                &common_config
+                    .redis_url
+                    .unwrap_or("redis://127.0.0.1:6379".to_string()),
+            )
+            .expect("Invalid redis url"),
             indexer_id: common_config
                 .tx_indexer
                 .indexer_id
@@ -283,10 +282,6 @@ impl From<CommonGeneralConfig> for GeneralTxIndexerConfig {
                 .tx_indexer
                 .metrics_server_port
                 .unwrap_or_else(CommonGeneralTxIndexerConfig::default_metrics_server_port),
-            cache_restore_blocks_range: common_config
-                .tx_indexer
-                .cache_restore_blocks_range
-                .unwrap_or_else(CommonGeneralTxIndexerConfig::default_cache_restore_blocks_range),
         }
     }
 }

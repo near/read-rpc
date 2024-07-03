@@ -484,30 +484,6 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         anyhow::bail!("Receipt not found")
     }
 
-    async fn get_transaction_by_hash(
-        &self,
-        transaction_hash: &str,
-        method_name: &str,
-    ) -> anyhow::Result<(u64, readnode_primitives::TransactionDetails)> {
-        todo!()
-    }
-
-    async fn get_indexed_transaction_by_hash(
-        &self,
-        transaction_hash: &str,
-        method_name: &str,
-    ) -> anyhow::Result<(u64, readnode_primitives::TransactionDetails)> {
-        todo!()
-    }
-
-    async fn get_indexing_transaction_by_hash(
-        &self,
-        transaction_hash: &str,
-        method_name: &str,
-    ) -> anyhow::Result<(u64, readnode_primitives::TransactionDetails)> {
-        todo!()
-    }
-
     async fn get_block_by_height_and_shard_id(
         &self,
         block_height: near_primitives::types::BlockHeight,
