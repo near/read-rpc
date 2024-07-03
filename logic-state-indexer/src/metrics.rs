@@ -57,7 +57,7 @@ pub fn init_server(port: u16) -> anyhow::Result<actix_web::dev::Server> {
         .run())
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Stats {
     pub block_heights_processing: std::collections::BTreeSet<u64>,
     pub blocks_processed_count: u64,

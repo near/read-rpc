@@ -8,6 +8,7 @@ use futures::{
 use near_indexer_primitives::IndexerTransactionWithOutcome;
 
 use crate::metrics;
+use crate::storage;
 
 /// Blocks #47317863 and #47317864 with restored receipts.
 const PROBLEMATIC_BLOCKS: [near_indexer_primitives::CryptoHash; 2] = [
@@ -27,7 +28,7 @@ const TRANSACTION_SAVE_ATTEMPTS: usize = 20;
 pub(crate) async fn index_transactions(
     streamer_message: &near_indexer_primitives::StreamerMessage,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
-    tx_collecting_storage: &std::sync::Arc<crate::storage::HashStorageWithDB>,
+    tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorageWithRedis>,
     tx_details_storage: &std::sync::Arc<crate::TxDetailsStorage>,
     indexer_config: &configuration::TxIndexerConfig,
 ) -> anyhow::Result<()> {
@@ -38,23 +39,21 @@ pub(crate) async fn index_transactions(
         indexer_config,
     )
     .await?;
-    collect_receipts_and_outcomes(
-        &indexer_config.general.chain_id,
-        streamer_message,
-        db_manager,
-        tx_collecting_storage,
-    )
-    .await?;
+    collect_receipts_and_outcomes(streamer_message, db_manager, tx_collecting_storage).await?;
 
     let finished_transaction_details = tx_collecting_storage.transactions_to_save().await?;
 
     if !finished_transaction_details.is_empty() {
-        let db_manager = db_manager.clone();
+        let tx_collecting_storage = tx_collecting_storage.clone();
         let tx_details_storage = tx_details_storage.clone();
         tokio::spawn(async move {
             let send_finished_transaction_details_futures =
                 finished_transaction_details.into_iter().map(|tx_details| {
-                    save_transaction_details(&db_manager, &tx_details_storage, tx_details)
+                    save_transaction_details(
+                        &tx_collecting_storage,
+                        &tx_details_storage,
+                        tx_details,
+                    )
                 });
 
             join_all(send_finished_transaction_details_futures).await;
@@ -70,7 +69,7 @@ pub(crate) async fn index_transactions(
 async fn extract_transactions_to_collect(
     streamer_message: &near_indexer_primitives::StreamerMessage,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
-    tx_collecting_storage: &std::sync::Arc<crate::storage::HashStorageWithDB>,
+    tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorageWithRedis>,
     indexer_config: &configuration::TxIndexerConfig,
 ) -> anyhow::Result<()> {
     let block_height = streamer_message.block.header.height;
@@ -119,7 +118,7 @@ async fn new_transaction_details_to_collecting_pool(
     block_hash: near_indexer_primitives::CryptoHash,
     shard_id: u64,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
-    tx_collecting_storage: &std::sync::Arc<crate::storage::HashStorageWithDB>,
+    tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorageWithRedis>,
     indexer_config: &configuration::TxIndexerConfig,
 ) -> anyhow::Result<()> {
     if !indexer_config.tx_should_be_indexed(transaction) {
@@ -137,7 +136,7 @@ async fn new_transaction_details_to_collecting_pool(
     // Save the Receipt produced by the Transaction to the DB Map
     save_receipt(
         db_manager,
-        &converted_into_receipt_id,
+        converted_into_receipt_id,
         &transaction.transaction.hash,
         &transaction.transaction.receiver_id,
         block_height,
@@ -169,17 +168,15 @@ async fn new_transaction_details_to_collecting_pool(
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn collect_receipts_and_outcomes(
-    chain_id: &configuration::ChainId,
     streamer_message: &near_indexer_primitives::StreamerMessage,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
-    tx_collecting_storage: &std::sync::Arc<crate::storage::HashStorageWithDB>,
+    tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorageWithRedis>,
 ) -> anyhow::Result<()> {
     let block_height = streamer_message.block.header.height;
     let block_hash = streamer_message.block.header.hash;
 
     let shard_futures = streamer_message.shards.iter().map(|shard| {
         process_shard(
-            chain_id,
             db_manager,
             tx_collecting_storage,
             block_height,
@@ -195,9 +192,8 @@ async fn collect_receipts_and_outcomes(
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn process_shard(
-    chain_id: &configuration::ChainId,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
-    tx_collecting_storage: &std::sync::Arc<crate::storage::HashStorageWithDB>,
+    tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorageWithRedis>,
     block_height: u64,
     block_hash: near_indexer_primitives::CryptoHash,
     shard: &near_indexer_primitives::IndexerShard,
@@ -208,7 +204,6 @@ async fn process_shard(
             .iter()
             .map(|receipt_execution_outcome| {
                 process_receipt_execution_outcome(
-                    chain_id,
                     db_manager,
                     tx_collecting_storage,
                     block_height,
@@ -225,24 +220,13 @@ async fn process_shard(
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn process_receipt_execution_outcome(
-    chain_id: &configuration::ChainId,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
-    tx_collecting_storage: &std::sync::Arc<crate::storage::HashStorageWithDB>,
+    tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorageWithRedis>,
     block_height: u64,
     block_hash: near_indexer_primitives::CryptoHash,
     shard_id: u64,
     receipt_execution_outcome: &near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
 ) -> anyhow::Result<()> {
-    if PROBLEMATIC_BLOCKS.contains(&block_hash) {
-        if let configuration::ChainId::Mainnet = chain_id {
-            tx_collecting_storage
-                .restore_transaction_by_receipt_id(
-                    &receipt_execution_outcome.receipt.receipt_id.to_string(),
-                )
-                .await?;
-        }
-    }
-
     if let Ok(transaction_key) = tx_collecting_storage
         .get_transaction_hash_by_receipt_id(
             &receipt_execution_outcome.receipt.receipt_id.to_string(),
@@ -299,27 +283,50 @@ async fn process_receipt_execution_outcome(
     Ok(())
 }
 
-// Save transaction detail into the db
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn save_transaction_details(
-    db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
+    tx_collecting_storage: &std::sync::Arc<storage::CacheStorageWithRedis>,
     tx_details_storage: &std::sync::Arc<crate::TxDetailsStorage>,
     tx_details: readnode_primitives::CollectingTransactionDetails,
-) -> bool {
-    let transaction_details = match tx_details.to_final_transaction_result() {
-        Ok(details) => details,
+) {
+    let transaction_key = tx_details.transaction_key();
+    match save_transaction_details_to_storage(tx_details_storage, tx_details).await {
+        Ok(_) => {
+            // We assume that the transaction is saved correctly
+            // We can remove the transaction from the cache storage
+            let transaction_hash = transaction_key.transaction_hash;
+            if let Err(err) = tx_collecting_storage
+                .remove_transaction_from_cache(transaction_key)
+                .await
+            {
+                tracing::error!(
+                    target: crate::INDEXER,
+                    "Failed to remove transaction from cache {}: Error {}",
+                    transaction_hash,
+                    err
+                );
+            }
+        }
         Err(err) => {
             tracing::error!(
                 target: crate::INDEXER,
-                "Failed to get final transaction {} \n{:#?}",
-                tx_details.transaction.hash,
+                "Failed to save transaction {}: Error {}",
+                transaction_key.transaction_hash,
                 err
             );
-            return false;
         }
-    };
+    }
+}
+
+// Save transaction detail into the storage
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
+async fn save_transaction_details_to_storage(
+    tx_details_storage: &std::sync::Arc<crate::TxDetailsStorage>,
+    tx_details: readnode_primitives::CollectingTransactionDetails,
+) -> anyhow::Result<()> {
+    let transaction_details = tx_details.to_final_transaction_result()?;
     let transaction_hash = transaction_details.transaction.hash.to_string();
-    let tx_bytes = borsh::to_vec(&transaction_details).expect("Failed to serialize transaction");
+    let tx_bytes = borsh::to_vec(&transaction_details)?;
 
     // We faced the issue when the transaction was saved to the storage but later
     // was failing to deserialize. To avoid this issue and monitor the situation
@@ -330,13 +337,11 @@ async fn save_transaction_details(
     'retry: loop {
         save_attempts += 1;
         if save_attempts >= TRANSACTION_SAVE_ATTEMPTS {
-            tracing::error!(
-                target: crate::INDEXER,
+            anyhow::bail!(
                 "Failed to save transaction {} after {} attempts",
                 transaction_hash,
                 save_attempts,
             );
-            break false;
         }
         match tx_details_storage
             .store(&transaction_hash, tx_bytes.clone())

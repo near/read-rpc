@@ -66,12 +66,6 @@ near_rpc_url = "https://beta.rpc.mainnet.near.org"
 ## By default it 8080 for tx-indexer and 8081 for state-indexer
 #metrics_server_port = 8080
 
-## To restore cache from db we use smart range blocks
-## Regular transaction takes some blocks to be finalized
-## We don't need to restore too old transactions for the indexer because we will probably never be able to reassemble them.
-## We use a range of 1000 blocks for our peace of mind. We also leave the option to increase or decrease this range
-#cache_restore_blocks_range = 1000
-
 ### State indexer general configuration
 [general.state_indexer]
 

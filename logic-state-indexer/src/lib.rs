@@ -236,7 +236,7 @@ pub async fn handle_streamer_message(
         block_height,
         block_hash,
         &indexer_config,
-        &shard_layout,
+        shard_layout,
     );
 
     let update_meta_future =

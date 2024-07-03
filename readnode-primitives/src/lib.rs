@@ -1,5 +1,6 @@
 use num_traits::ToPrimitive;
 use std::convert::TryFrom;
+use std::fmt::Display;
 use std::str::FromStr;
 
 use near_indexer_primitives::{views, CryptoHash, IndexerTransactionWithOutcome};
@@ -32,6 +33,27 @@ impl TransactionKey {
     }
 }
 
+impl From<String> for TransactionKey {
+    fn from(value: String) -> Self {
+        let parts: Vec<&str> = value.split('_').collect();
+        let transaction_hash =
+            CryptoHash::from_str(parts[0]).expect("Failed to parse transaction hash");
+        let block_height = parts[1]
+            .parse::<u64>()
+            .expect("Failed to parse block height");
+        Self {
+            transaction_hash,
+            block_height,
+        }
+    }
+}
+
+impl Display for TransactionKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}_{}", self.transaction_hash, self.block_height)
+    }
+}
+
 #[derive(
     borsh::BorshSerialize,
     borsh::BorshDeserialize,
@@ -61,7 +83,7 @@ impl CollectingTransactionDetails {
     /// Build unique transaction key based on transaction_hash and block_height
     /// Help to handle transaction hash collisions
     pub fn transaction_key(&self) -> TransactionKey {
-        TransactionKey::new(self.transaction.hash.clone(), self.block_height)
+        TransactionKey::new(self.transaction.hash, self.block_height)
     }
 
     pub fn final_status(&self) -> Option<views::FinalExecutionStatus> {

@@ -107,28 +107,6 @@ pub trait ReaderDbManager {
         method_name: &str,
     ) -> anyhow::Result<readnode_primitives::ReceiptRecord>;
 
-    /// Returns the readnode_primitives::TransactionDetails at the given transaction hash
-    /// TODO: rewrite this method to return a Result like a struct with block_height and transaction_details instead of a tuple
-    async fn get_transaction_by_hash(
-        &self,
-        transaction_hash: &str,
-        method_name: &str,
-    ) -> anyhow::Result<(u64, readnode_primitives::TransactionDetails)>;
-    /// Returns the readnode_primitives::TransactionDetails at the given transaction hash
-    /// TODO: rewrite this method to return a Result like a struct with block_height and transaction_details instead of a tuple
-    async fn get_indexed_transaction_by_hash(
-        &self,
-        transaction_hash: &str,
-        method_name: &str,
-    ) -> anyhow::Result<(u64, readnode_primitives::TransactionDetails)>;
-    /// Returns the readnode_primitives::TransactionDetails at the given transaction hash
-    /// TODO: rewrite this method to return a Result like a struct with block_height and transaction_details instead of a tuple
-    async fn get_indexing_transaction_by_hash(
-        &self,
-        transaction_hash: &str,
-        method_name: &str,
-    ) -> anyhow::Result<(u64, readnode_primitives::TransactionDetails)>;
-
     /// Returns the block height and shard id by the given block height
     async fn get_block_by_height_and_shard_id(
         &self,

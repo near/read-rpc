@@ -116,7 +116,7 @@ async fn query_call(
             args,
         } => function_call(data, block, account_id, method_name, args, is_optimistic).await,
         near_primitives::views::QueryRequest::ViewAccessKeyList { account_id } => {
-            view_access_keys_list(&data, block, &account_id).await
+            view_access_keys_list(data, block, account_id).await
         }
     };
 
