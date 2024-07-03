@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-use actix_web::rt::time;
-=======
 #[cfg(feature = "validator")]
->>>>>>> 598c7aa (Add sleep, log level adjustment)
 use borsh::BorshDeserialize;
 
 use futures::{
