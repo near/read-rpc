@@ -66,18 +66,6 @@ pub struct Stats {
     pub current_epoch_height: u64,
 }
 
-impl Stats {
-    pub fn new() -> Self {
-        Self {
-            block_heights_processing: std::collections::BTreeSet::new(),
-            blocks_processed_count: 0,
-            last_processed_block_height: 0,
-            current_epoch_id: None,
-            current_epoch_height: 0,
-        }
-    }
-}
-
 pub async fn state_logger(
     stats: std::sync::Arc<tokio::sync::RwLock<Stats>>,
     near_client: impl crate::NearClient,

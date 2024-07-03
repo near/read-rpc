@@ -42,7 +42,7 @@ async fn main() -> anyhow::Result<()> {
         metrics::init_server(indexer_config.general.metrics_server_port).expect("Failed to start metrics server"),
     );
 
-    let stats = std::sync::Arc::new(tokio::sync::RwLock::new(metrics::Stats::new()));
+    let stats = std::sync::Arc::new(tokio::sync::RwLock::new(metrics::Stats::default()));
     tokio::spawn(metrics::state_logger(std::sync::Arc::clone(&stats), near_client.clone()));
 
     let mut handlers = tokio_stream::wrappers::ReceiverStream::new(stream)
