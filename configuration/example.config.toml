@@ -138,6 +138,27 @@ aws_default_region = "eu-central-1"
 ## Lake framework bucket name
 aws_bucket_name = "near-lake-data-mainnet"
 
+[tx_details_storage]
+## Transaction details are stored in the S3-compatibe object storage (Google Cloud Storage by default)
+## You can use any S3-compatible object storage
+## Storage Access Key ID
+aws_access_key_id = "${TX_AWS_ACCESS_KEY_ID}"
+
+# Storage Secret Access Key
+aws_secret_access_key = "${TX_AWS_SECRET_ACCESS_KEY}"
+
+# Storage Region
+aws_default_region = "eu-central-1"
+
+# Storage Bucket Name
+aws_bucket_name = "readrpc-tx-details"
+
+# Storage Endpoint
+# Default value is "https://storage.googleapis.com" pointing to Google Cloud Storage
+# You can use any S3-compatible object storage, e.g. "https://s3.amazonaws.com"
+# or MinIO "http://127.0.0.1:9000"
+aws_endpoint = "https://storage.googleapis.com"
+
 ## Database configuration
 [database]
 

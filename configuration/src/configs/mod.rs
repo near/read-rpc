@@ -9,6 +9,7 @@ pub(crate) mod database;
 pub(crate) mod general;
 mod lake;
 mod rightsizing;
+mod tx_details_storage;
 
 lazy_static::lazy_static! {
     static ref RE_NAME_ENV: regex::Regex = regex::Regex::new(r"\$\{(?<env_name>\w+)}").unwrap();
@@ -80,6 +81,7 @@ pub struct CommonConfig {
     pub rightsizing: rightsizing::CommonRightsizingConfig,
     pub lake_config: lake::CommonLakeConfig,
     pub database: database::CommonDatabaseConfig,
+    pub tx_details_storage: tx_details_storage::CommonTxDetailStorageConfig,
 }
 
 pub trait Config {
@@ -91,6 +93,7 @@ pub struct RpcServerConfig {
     pub general: general::GeneralRpcServerConfig,
     pub lake_config: lake::LakeConfig,
     pub database: database::DatabaseConfig,
+    pub tx_details_storage: tx_details_storage::TxDetailsStorageConfig,
 }
 
 impl Config for RpcServerConfig {
@@ -99,6 +102,9 @@ impl Config for RpcServerConfig {
             general: common_config.general.into(),
             lake_config: common_config.lake_config.into(),
             database: database::DatabaseRpcServerConfig::from(common_config.database).into(),
+            tx_details_storage: tx_details_storage::TxDetailsStorageConfig::from(
+                common_config.tx_details_storage,
+            ),
         }
     }
 }
@@ -109,6 +115,7 @@ pub struct TxIndexerConfig {
     pub rightsizing: rightsizing::RightsizingConfig,
     pub lake_config: lake::LakeConfig,
     pub database: database::DatabaseConfig,
+    pub tx_details_storage: tx_details_storage::TxDetailsStorageConfig,
 }
 
 impl TxIndexerConfig {
@@ -127,6 +134,9 @@ impl Config for TxIndexerConfig {
             rightsizing: common_config.rightsizing.into(),
             lake_config: common_config.lake_config.into(),
             database: database::DatabaseTxIndexerConfig::from(common_config.database).into(),
+            tx_details_storage: tx_details_storage::TxDetailsStorageConfig::from(
+                common_config.tx_details_storage,
+            ),
         }
     }
 }

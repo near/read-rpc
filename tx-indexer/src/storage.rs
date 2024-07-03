@@ -208,6 +208,7 @@ impl HashStorageWithDB {
         receipt_id: String,
         transaction_key: readnode_primitives::TransactionKey,
     ) -> anyhow::Result<()> {
+        crate::metrics::RECEIPTS_IN_MEMORY_CACHE.inc();
         self.receipts_counters
             .write()
             .await
@@ -239,6 +240,7 @@ impl HashStorageWithDB {
             {
                 *receipts_counter -= 1;
             }
+            crate::metrics::RECEIPTS_IN_MEMORY_CACHE.dec();
             tracing::debug!(
                 target: crate::storage::STORAGE,
                 "-R {} - {}",
