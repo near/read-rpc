@@ -85,7 +85,7 @@ async fn run(home_dir: std::path::PathBuf) -> anyhow::Result<()> {
     )
     .await?;
 
-    let stats = std::sync::Arc::new(tokio::sync::RwLock::new(metrics::Stats::new()));
+    let stats = std::sync::Arc::new(tokio::sync::RwLock::new(metrics::Stats::default()));
     tokio::spawn(metrics::state_logger(
         std::sync::Arc::clone(&stats),
         near_client.clone(),
