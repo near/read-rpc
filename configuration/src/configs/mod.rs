@@ -243,20 +243,3 @@ impl Config for NearStateIndexerConfig {
         }
     }
 }
-
-#[derive(Debug, Clone)]
-pub struct EpochIndexerConfig {
-    pub general: general::GeneralEpochIndexerConfig,
-    pub lake_config: lake::LakeConfig,
-    pub database: database::DatabaseConfig,
-}
-
-impl Config for EpochIndexerConfig {
-    fn from_common_config(common_config: CommonConfig) -> Self {
-        Self {
-            general: common_config.general.into(),
-            lake_config: common_config.lake_config.into(),
-            database: database::DatabaseConfig::from(common_config.database),
-        }
-    }
-}

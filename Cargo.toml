@@ -38,7 +38,6 @@ rpath = false
 configuration = { path = "configuration" }
 database = { path = "database" }
 readnode-primitives = { path = "readnode-primitives" }
-epoch-indexer = { path = "epoch-indexer" }
 tx-details-storage = { path = "tx-details-storage" }
 
 # Please, update the supported nearcore version in .cargo/config.toml file
