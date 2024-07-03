@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased](https://github.com/near/read-rpc/compare/main...develop)
+### Supported Nearcore Version
+- nearcore v1.40.0
+- rust v1.77.0
+
+### What's Changed
+* Change main data source for `transaction_details` from database to the object storage (GCS Bucket)
+  * Add `tx-details-storage` library to handle the GCS communication
+  * Update `rpc-server` to read from the GCS Bucket when transaction is requested
+  * Keep the database as a backup data source for the migration period
+  * Add metric `legacy_database_tx_details` to track the number of requests to the database to monitor the transition progress (expected to decrease over time to zero)
+  * Extend the number of save attempts to ensure the transaction is saved to the GCS Bucket and is deserializable correctly
+* Refactor `tx-indexer` to store the transaction details in the GCS Bucket
+  * Still storing `ExecutionOutcome` and `Receipt` in the database
 
 ## [0.2.10](https://github.com/near/read-rpc/releases/tag/v0.2.10)
 ### Supported Nearcore Version
