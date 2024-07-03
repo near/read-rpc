@@ -175,33 +175,10 @@ async fn tx_status_common(
         } => *tx_hash,
     };
 
-    // This is the piece of code that gets the transaction details from the database
-    let (block_height, transaction_details) = data
-        .db_manager
-        .get_transaction_by_hash(&tx_hash.to_string(), method_name)
-        .await
-        .map_err(|_err| {
-            near_jsonrpc::primitives::types::transactions::RpcTransactionError::UnknownTransaction {
-                requested_transaction_hash: tx_hash,
-            }
-        })?;
-
-    // increase block category metrics
-    crate::metrics::increase_request_category_metrics(
-        data,
-        &near_primitives::types::BlockReference::BlockId(near_primitives::types::BlockId::Height(
-            block_height,
-        )),
-        method_name,
-        Some(block_height),
-    )
-    .await;
-
-    // And this is the piece of code that gets the transaction details from the tx_details_storage (bucket)
-    // TODO: refactor to retrieve bytes from tx_details_storage
     let transaction_details = super::try_get_transaction_details_by_hash(
         data,
-        tx_hash.to_string().as_str(),
+        &tx_hash,
+        method_name,
     )
     .await
     .map_err(|err| {
@@ -214,7 +191,7 @@ async fn tx_status_common(
         }
     })?;
 
-    // TODO rewrite this since we support optimistic finalities already
+    // TODO (@kobayurii): rewrite this since we support optimistic finalities already
     if fetch_receipt {
         Ok(
             near_jsonrpc::primitives::types::transactions::RpcTransactionResponse {
