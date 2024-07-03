@@ -100,15 +100,6 @@ near_rpc_url = "https://beta.rpc.mainnet.near.org"
 ## Default value is 1
 #concurrency = 1
 
-## Epoch indexer general configuration
-[general.epoch_indexer]
-
-## Indexer ID to handle meta data about the instance
-## Unique indexer ID
-## Epoch indexer is a single instance. it should run once to collect historical data
-## If you run state-indexer from genesis, you don't need to run epoch-indexer
-#indexer_id = "epoch-indexer"
-
 ### Tracking acconunts and state changes configuration
 [rightsizing]
 

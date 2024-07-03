@@ -48,15 +48,6 @@ pub struct GeneralNearStateIndexerConfig {
     pub concurrency: usize,
 }
 
-#[derive(Debug, Clone)]
-pub struct GeneralEpochIndexerConfig {
-    pub chain_id: ChainId,
-    pub near_rpc_url: String,
-    pub near_archival_rpc_url: Option<String>,
-    pub referer_header_value: String,
-    pub indexer_id: String,
-}
-
 #[derive(Deserialize, Debug, Clone, Default)]
 pub struct CommonGeneralConfig {
     #[serde(deserialize_with = "deserialize_data_or_env")]
@@ -77,8 +68,6 @@ pub struct CommonGeneralConfig {
     pub state_indexer: CommonGeneralStateIndexerConfig,
     #[serde(default)]
     pub near_state_indexer: CommonGeneralNearStateIndexerConfig,
-    #[serde(default)]
-    pub epoch_indexer: CommonGeneralEpochIndexerConfig,
 }
 
 #[derive(Deserialize, PartialEq, Debug, Clone, Default)]
@@ -241,26 +230,6 @@ impl Default for CommonGeneralNearStateIndexerConfig {
     }
 }
 
-#[derive(Deserialize, Debug, Clone)]
-pub struct CommonGeneralEpochIndexerConfig {
-    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
-    pub indexer_id: Option<String>,
-}
-
-impl CommonGeneralEpochIndexerConfig {
-    pub fn default_indexer_id() -> String {
-        "epoch-indexer".to_string()
-    }
-}
-
-impl Default for CommonGeneralEpochIndexerConfig {
-    fn default() -> Self {
-        Self {
-            indexer_id: Some(Self::default_indexer_id()),
-        }
-    }
-}
-
 impl From<CommonGeneralConfig> for GeneralRpcServerConfig {
     fn from(common_config: CommonGeneralConfig) -> Self {
         Self {
@@ -361,23 +330,6 @@ impl From<CommonGeneralConfig> for GeneralNearStateIndexerConfig {
                 .near_state_indexer
                 .concurrency
                 .unwrap_or_else(CommonGeneralNearStateIndexerConfig::default_concurrency),
-        }
-    }
-}
-
-impl From<CommonGeneralConfig> for GeneralEpochIndexerConfig {
-    fn from(common_config: CommonGeneralConfig) -> Self {
-        Self {
-            chain_id: common_config.chain_id,
-            near_rpc_url: required_value_or_panic("near_rpc_url", common_config.near_rpc_url),
-            near_archival_rpc_url: common_config.near_archival_rpc_url,
-            referer_header_value: common_config
-                .referer_header_value
-                .unwrap_or("http://read-rpc.local".to_string()),
-            indexer_id: common_config
-                .epoch_indexer
-                .indexer_id
-                .unwrap_or_else(CommonGeneralEpochIndexerConfig::default_indexer_id),
         }
     }
 }

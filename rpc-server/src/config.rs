@@ -110,7 +110,7 @@ impl ServerContext {
             rpc_server_config.tx_details_storage.storage_client().await,
             rpc_server_config.tx_details_storage.aws_bucket_name.clone(),
         );
-        
+
         let genesis_info = GenesisInfo::get(
             &near_rpc_client,
             &s3_client,

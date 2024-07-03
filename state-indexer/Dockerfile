@@ -10,7 +10,6 @@ COPY state-indexer/Cargo.toml state-indexer/Cargo.toml
 COPY configuration configuration
 COPY database database
 COPY readnode-primitives readnode-primitives
-COPY epoch-indexer epoch-indexer
 RUN mkdir state-indexer/src && echo 'fn main() {}' > state-indexer/src/main.rs cargo build --release && rm -r state-indexer/src
 
 # copy your source tree

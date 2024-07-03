@@ -29,9 +29,6 @@ concurrency = "${CONCURRENCY}"
 metrics_server_port = "${NEAR_STATE_SERVER_PORT}"
 concurrency = "${NEAR_STATE_CONCURRENCY}"
 
-[general.epoch_indexer]
-indexer_id = "${EPOCH_INDEXER_ID}"
-
 [rightsizing]
 tracked_accounts = "${TRACKED_ACCOUNTS}"
 tracked_changes = "${TRACKED_CHANGES}"
