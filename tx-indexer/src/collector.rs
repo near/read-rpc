@@ -17,6 +17,8 @@ const PROBLEMATIC_BLOCKS: [near_indexer_primitives::CryptoHash; 2] = [
     ),
 ];
 
+const TRANSACTION_SAVE_ATTEMPTS: usize = 10;
+
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 pub(crate) async fn index_transactions(
     streamer_message: &near_indexer_primitives::StreamerMessage,
@@ -307,11 +309,12 @@ async fn save_transaction_details(
     let mut save_attempts = 0;
     'retry: loop {
         save_attempts += 1;
-        if save_attempts > 3 {
+        if save_attempts >= TRANSACTION_SAVE_ATTEMPTS {
             tracing::error!(
                 target: crate::INDEXER,
-                "Failed to save transaction {} after 3 attempts",
-                transaction_hash
+                "Failed to save transaction {} after {} attempts",
+                transaction_hash,
+                save_attempts,
             );
             break false;
         }
@@ -323,7 +326,18 @@ async fn save_transaction_details(
                 // At this moment transaction seems to be stored, and we want to validate the correctness of the stored data
                 // To validate we will try to retrieve the transaction from the storage and validate that it is deserializable
                 // If the transaction is not deserializable, we will try to save it again
+                let mut retrieve_attempts = 0;
                 'validator: loop {
+                    retrieve_attempts += 1;
+                    if retrieve_attempts >= TRANSACTION_SAVE_ATTEMPTS {
+                        tracing::error!(
+                            target: crate::INDEXER,
+                            "Failed to retrieve transaction {} for validation after {} attempts",
+                            transaction_hash,
+                            retrieve_attempts,
+                        );
+                        break 'validator;
+                    }
                     tokio::time::sleep(std::time::Duration::from_millis(150)).await;
                     let Ok(tx_details_bytes_from_storage) =
                         tx_details_storage.retrieve(&transaction_hash).await
