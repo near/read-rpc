@@ -19,10 +19,24 @@ pub(crate) async fn try_get_transaction_details_by_hash(
 ) -> anyhow::Result<readnode_primitives::TransactionDetails> {
     match data.tx_details_storage.retrieve(&tx_hash.to_string()).await {
         Ok(transaction_details_bytes) => {
-            let transaction_details = borsh::from_slice::<readnode_primitives::TransactionDetails>(
+            match borsh::from_slice::<readnode_primitives::TransactionDetails>(
                 &transaction_details_bytes,
-            )?;
-            Ok(transaction_details)
+            ) {
+                Ok(transaction_details) => Ok(transaction_details),
+                Err(err) => {
+                    tracing::warn!(
+                        "Failed to deserialize transaction details for hash {}: {}. Trying legacy database",
+                        tx_hash,
+                        err
+                    );
+                    Ok(legacy_try_get_transaction_details_by_hash(
+                        data,
+                        &tx_hash.to_string(),
+                        method_name,
+                    )
+                    .await?)
+                }
+            }
         }
         Err(_) => {
             tracing::debug!(

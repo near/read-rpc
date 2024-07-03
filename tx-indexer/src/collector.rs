@@ -1,3 +1,4 @@
+use actix_web::rt::time;
 use borsh::BorshDeserialize;
 use futures::{
     future::{join_all, try_join_all},
@@ -338,11 +339,11 @@ async fn save_transaction_details(
                         );
                         break 'validator;
                     }
-                    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+                    tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
                     let Ok(tx_details_bytes_from_storage) =
                         tx_details_storage.retrieve(&transaction_hash).await
                     else {
-                        tracing::error!(
+                        tracing::warn!(
                             target: crate::INDEXER,
                             "Failed to retrieve transaction {} from storage",
                             transaction_hash,
@@ -380,12 +381,14 @@ async fn save_transaction_details(
             }
             Err(err) => {
                 crate::metrics::TX_STORE_ERRORS_TOTAL.inc();
-                tracing::error!(
+                tracing::warn!(
                     target: crate::INDEXER,
-                    "Failed to save transaction {} \n{:#?}",
+                    "[{}] Failed to save transaction {} \n{:#?}",
+                    save_attempts,
                     tx_details.transaction.hash,
                     err
                 );
+                time::sleep(std::time::Duration::from_millis(500)).await;
                 continue 'retry;
             }
         }
