@@ -44,6 +44,10 @@ pub(crate) async fn try_get_transaction_details_by_hash(
                         tx_hash,
                     );
                     // TODO: Except this. The cache search should stay, though refactored to the new cache solution
+                    // increase legacy database transaction details lookup metrics for in_progress transactions
+                    crate::metrics::LEGACY_DATABASE_TX_DETAILS
+                        .with_label_values(&["in_progress"])
+                        .inc();
                     let (_, transaction_details) = data
                         .db_manager
                         .get_indexing_transaction_by_hash(&tx_hash.to_string(), method_name)
@@ -62,6 +66,10 @@ async fn legacy_try_get_transaction_details_by_hash(
     tx_hash: &str,
     method_name: &str,
 ) -> anyhow::Result<readnode_primitives::TransactionDetails> {
+    // increase legacy database transaction details lookup metrics for finished transactions
+    crate::metrics::LEGACY_DATABASE_TX_DETAILS
+        .with_label_values(&["finished"])
+        .inc();
     let (block_height, transaction_details) = data
         .db_manager
         .get_transaction_by_hash(tx_hash, method_name)
