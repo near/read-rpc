@@ -1565,7 +1565,7 @@ dependencies = [
 
 [[package]]
 name = "configuration"
-version = "0.2.10"
+version = "0.2.11"
 dependencies = [
  "anyhow",
  "aws-credential-types",
@@ -2074,7 +2074,7 @@ dependencies = [
 
 [[package]]
 name = "database"
-version = "0.2.10"
+version = "0.2.11"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2554,7 +2554,7 @@ dependencies = [
 
 [[package]]
 name = "epoch-indexer"
-version = "0.2.10"
+version = "0.2.11"
 dependencies = [
  "anyhow",
  "clap",
@@ -4899,7 +4899,7 @@ dependencies = [
 
 [[package]]
 name = "near-state-indexer"
-version = "0.2.10"
+version = "0.2.11"
 dependencies = [
  "actix",
  "actix-web",
@@ -5973,7 +5973,7 @@ checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 
 [[package]]
 name = "perf-testing"
-version = "0.2.10"
+version = "0.2.11"
 dependencies = [
  "anyhow",
  "chrono",
@@ -6556,7 +6556,7 @@ dependencies = [
 
 [[package]]
 name = "read-rpc-server"
-version = "0.2.10"
+version = "0.2.11"
 dependencies = [
  "actix-cors 0.7.0",
  "actix-http",
@@ -6602,7 +6602,7 @@ dependencies = [
 
 [[package]]
 name = "readnode-primitives"
-version = "0.2.10"
+version = "0.2.11"
 dependencies = [
  "anyhow",
  "borsh 1.5.1",
@@ -7632,7 +7632,7 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "state-indexer"
-version = "0.2.10"
+version = "0.2.11"
 dependencies = [
  "actix-web",
  "anyhow",
@@ -8520,7 +8520,7 @@ dependencies = [
 
 [[package]]
 name = "tx-details-storage"
-version = "0.2.10"
+version = "0.2.11"
 dependencies = [
  "anyhow",
  "aws-credential-types",
@@ -8530,7 +8530,7 @@ dependencies = [
 
 [[package]]
 name = "tx-indexer"
-version = "0.2.10"
+version = "0.2.11"
 dependencies = [
  "actix-web",
  "anyhow",
