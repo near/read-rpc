@@ -52,6 +52,8 @@ pub struct ServerContext {
     pub s3_client: near_lake_framework::s3_fetchers::LakeS3Client,
     /// Database manager
     pub db_manager: std::sync::Arc<Box<dyn database::ReaderDbManager + Sync + Send + 'static>>,
+    /// TransactionDetails storage
+    pub tx_details_storage: std::sync::Arc<tx_details_storage::TxDetailsStorage>,
     /// Genesis info include genesis_config and genesis_block
     pub genesis_info: GenesisInfo,
     /// Near rpc client
@@ -115,6 +117,11 @@ impl ServerContext {
         >(&rpc_server_config.database)
         .await?;
 
+        let tx_details_storage = tx_details_storage::TxDetailsStorage::new(
+            rpc_server_config.tx_details_storage.storage_client().await,
+            rpc_server_config.tx_details_storage.aws_bucket_name.clone(),
+        );
+
         let genesis_info = GenesisInfo::get(
             &near_rpc_client,
             &s3_client,
@@ -127,6 +134,7 @@ impl ServerContext {
         Ok(Self {
             s3_client,
             db_manager: std::sync::Arc::new(Box::new(db_manager)),
+            tx_details_storage: std::sync::Arc::new(tx_details_storage),
             genesis_info,
             near_rpc_client,
             s3_bucket_name: rpc_server_config.lake_config.aws_bucket_name.clone(),

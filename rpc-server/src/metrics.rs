@@ -107,6 +107,13 @@ lazy_static! {
         "Optimistic updating status. 0: working, 1: not working",
     ).unwrap();
 
+    pub(crate) static ref LEGACY_DATABASE_TX_DETAILS: IntCounterVec = register_int_counter_vec(
+        "legacy_database_tx_details",
+        "Total number of calls to the legacy database for transaction details",
+        // This declares a label named `lookup_type` to differentiate "finished" and "in_progress" transaction lookups
+        &["lookup_type"]
+    ).unwrap();
+
     // Error metrics
     // 0: ReadRPC success, NEAR RPC success"
     // 1: ReadRPC success, NEAR RPC error"

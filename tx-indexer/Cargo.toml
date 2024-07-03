@@ -29,6 +29,7 @@ tracing = "0.1.34"
 configuration.workspace = true
 database.workspace = true
 readnode-primitives.workspace = true
+tx-details-storage.workspace = true
 
 near-indexer-primitives.workspace = true
 near-jsonrpc-client.workspace = true

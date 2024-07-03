@@ -1,5 +1,8 @@
 use clap::Parser;
 use futures::StreamExt;
+
+use tx_details_storage::TxDetailsStorage;
+
 mod collector;
 mod config;
 mod metrics;
@@ -65,6 +68,12 @@ async fn main() -> anyhow::Result<()> {
         .await?,
     );
 
+    tracing::info!(target: INDEXER, "Instantiating the tx_details storage client...");
+    let tx_details_storage = std::sync::Arc::new(TxDetailsStorage::new(
+        indexer_config.tx_details_storage.storage_client().await,
+        indexer_config.tx_details_storage.aws_bucket_name.clone(),
+    ));
+
     tracing::info!(target: INDEXER, "Instantiating the stream...",);
     let (sender, stream) = near_lake_framework::streamer(lake_config);
 
@@ -87,6 +96,7 @@ async fn main() -> anyhow::Result<()> {
                 streamer_message,
                 &db_manager,
                 &tx_collecting_storage,
+                &tx_details_storage,
                 indexer_config.clone(),
                 std::sync::Arc::clone(&stats),
             )
@@ -113,6 +123,7 @@ async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<storage::HashStorageWithDB>,
+    tx_details_storage: &std::sync::Arc<TxDetailsStorage>,
     indexer_config: configuration::TxIndexerConfig,
     stats: std::sync::Arc<tokio::sync::RwLock<metrics::Stats>>,
 ) -> anyhow::Result<u64> {
@@ -129,6 +140,7 @@ async fn handle_streamer_message(
         &streamer_message,
         db_manager,
         tx_collecting_storage,
+        tx_details_storage,
         &indexer_config,
     );
 

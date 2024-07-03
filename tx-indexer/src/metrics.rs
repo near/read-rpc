@@ -29,6 +29,21 @@ lazy_static! {
         "Last seen block height by indexer"
     )
     .unwrap();
+    pub(crate) static ref TX_IN_MEMORY_CACHE: IntGauge = try_create_int_gauge(
+        "tx_in_memory_cache",
+        "Number of transactions in memory cache"
+    )
+    .unwrap();
+    pub(crate) static ref RECEIPTS_IN_MEMORY_CACHE: IntGauge = try_create_int_gauge(
+        "receipts_in_memory_cache",
+        "Number of receipts in memory cache"
+    )
+    .unwrap();
+    pub(crate) static ref TX_STORE_ERRORS_TOTAL: IntCounter = try_create_int_counter(
+        "total_tx_store_errors",
+        "Total number of errors while storing transactions"
+    )
+    .unwrap();
 }
 
 #[get("/metrics")]
