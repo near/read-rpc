@@ -5,7 +5,7 @@ WORKDIR /tmp/
 COPY Cargo.lock ./
 COPY Cargo.toml ./
 COPY config.toml ./
-RUN sed '/perf-testing/d; /rpc-server/d; /tx-indexer/d; /near-state-indexer/d' Cargo.toml > Cargo.toml.new && mv Cargo.toml.new Cargo.toml
+RUN sed '/perf-testing/d; /rpc-server/d; /tx-indexer/d; /near-state-indexer/d; /tx-details-storage/d' Cargo.toml > Cargo.toml.new && mv Cargo.toml.new Cargo.toml
 COPY state-indexer/Cargo.toml state-indexer/Cargo.toml
 COPY configuration configuration
 COPY database database

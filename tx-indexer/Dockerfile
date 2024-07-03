@@ -10,6 +10,7 @@ COPY tx-indexer/Cargo.toml tx-indexer/Cargo.toml
 COPY configuration configuration
 COPY database database
 COPY readnode-primitives readnode-primitives
+COPY tx-details-storage tx-details-storage
 RUN mkdir tx-indexer/src && echo 'fn main() {}' > tx-indexer/src/main.rs cargo build --release && rm -r tx-indexer/src
 
 # copy your source tree
