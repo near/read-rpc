@@ -1,14 +1,15 @@
-use anyhow::Context;
-use aws_sdk_s3::primitives::ByteStream;
+use google_cloud_storage::http::objects::download::Range;
+use google_cloud_storage::http::objects::get::GetObjectRequest;
+use google_cloud_storage::http::objects::upload::{Media, UploadObjectRequest, UploadType};
 
 pub struct TxDetailsStorage {
-    client: aws_sdk_s3::Client,
+    client: google_cloud_storage::client::Client,
     bucket_name: String,
 }
 
 impl TxDetailsStorage {
     /// Create a new instance of the `TxDetailsStorage` struct.
-    pub fn new(client: aws_sdk_s3::Client, bucket_name: String) -> Self {
+    pub fn new(client: google_cloud_storage::client::Client, bucket_name: String) -> Self {
         Self {
             client,
             bucket_name,
@@ -17,31 +18,30 @@ impl TxDetailsStorage {
 
     pub async fn store(&self, key: &str, data: Vec<u8>) -> anyhow::Result<()> {
         self.client
-            .put_object()
-            .bucket(self.bucket_name.clone())
-            .key(key)
-            .body(ByteStream::from(data))
-            .send()
-            .await
-            .map(|_| ())
-            .context("Failed to store the data")
+            .upload_object(
+                &UploadObjectRequest {
+                    bucket: self.bucket_name.to_string(),
+                    ..Default::default()
+                },
+                data,
+                &UploadType::Simple(Media::new(key.to_string())),
+            )
+            .await?;
+        Ok(())
     }
 
     pub async fn retrieve(&self, key: &str) -> anyhow::Result<Vec<u8>> {
-        let response = self
+        let data = self
             .client
-            .get_object()
-            .bucket(self.bucket_name.clone())
-            .key(key)
-            .send()
-            .await
-            .context("Failed to retrieve the data")?;
-
-        let body = response
-            .body
-            .collect()
-            .await
-            .context("Failed to read the body")?;
-        Ok(body.to_vec())
+            .download_object(
+                &GetObjectRequest {
+                    bucket: self.bucket_name.to_string(),
+                    object: key.to_string(),
+                    ..Default::default()
+                },
+                &Range::default(),
+            )
+            .await?;
+        Ok(data)
     }
 }

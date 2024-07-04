@@ -3,8 +3,6 @@ use serde_derive::Deserialize;
 
 use crate::configs::{deserialize_optional_data_or_env, required_value_or_panic};
 
-const DEFAULT_GCP_ENDPOINT_URL: &str = "https://storage.googleapis.com";
-
 #[derive(Debug, Clone)]
 pub struct TxDetailsStorageConfig {
     pub aws_access_key_id: String,
@@ -15,31 +13,16 @@ pub struct TxDetailsStorageConfig {
 }
 
 impl TxDetailsStorageConfig {
-    pub async fn s3_config(&self) -> aws_sdk_s3::Config {
-        let credentials = aws_credential_types::Credentials::new(
-            &self.aws_access_key_id,
-            &self.aws_secret_access_key,
-            None,
-            None,
-            "",
-        );
-        aws_sdk_s3::Config::builder()
-            .stalled_stream_protection(StalledStreamProtectionConfig::disabled())
-            .credentials_provider(credentials)
-            .endpoint_url(
-                self.aws_endpoint
-                    .clone()
-                    .unwrap_or_else(|| DEFAULT_GCP_ENDPOINT_URL.to_string()),
-            )
-            .region(aws_types::region::Region::new(
-                self.aws_default_region.clone(),
-            ))
-            .build()
+    pub async fn gcs_config(&self) -> google_cloud_storage::client::ClientConfig {
+        google_cloud_storage::client::ClientConfig::default()
+            .with_auth()
+            .await
+            .unwrap()
     }
 
-    pub async fn storage_client(&self) -> aws_sdk_s3::Client {
-        let s3_config = self.s3_config().await;
-        aws_sdk_s3::Client::from_conf(s3_config)
+    pub async fn storage_client(&self) -> google_cloud_storage::client::Client {
+        let gcs_config = self.gcs_config().await;
+        google_cloud_storage::client::Client::new(gcs_config)
     }
 }
 
