@@ -1,3 +1,4 @@
+use aws_sdk_s3::config::StalledStreamProtectionConfig;
 use serde_derive::Deserialize;
 
 use crate::configs::{deserialize_optional_data_or_env, required_value_or_panic};
@@ -23,6 +24,7 @@ impl TxDetailsStorageConfig {
             "",
         );
         aws_sdk_s3::Config::builder()
+            .stalled_stream_protection(StalledStreamProtectionConfig::disabled())
             .credentials_provider(credentials)
             .endpoint_url(
                 self.aws_endpoint
