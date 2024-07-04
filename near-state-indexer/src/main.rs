@@ -57,6 +57,11 @@ async fn run(home_dir: std::path::PathBuf) -> anyhow::Result<()> {
     let redis_client = redis::Client::open(state_indexer_config.general.redis_url.clone())?
         .get_connection_manager()
         .await?;
+    // Use redis database 1 to update blocks by finality
+    redis::cmd("SELECT")
+        .arg(1)
+        .query_async(&mut redis_client.clone())
+        .await?;
 
     tracing::info!(target: INDEXER, "Setup near_indexer...");
     let indexer_config = near_indexer::IndexerConfig {

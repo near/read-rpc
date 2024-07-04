@@ -55,6 +55,8 @@ pub struct ServerContext {
     pub db_manager: std::sync::Arc<Box<dyn database::ReaderDbManager + Sync + Send + 'static>>,
     /// TransactionDetails storage
     pub tx_details_storage: std::sync::Arc<tx_details_storage::TxDetailsStorage>,
+    /// Connection to cache storage with transactions in process
+    pub tx_cache_storage: Option<redis::aio::ConnectionManager>,
     /// Genesis info include genesis_config and genesis_block
     pub genesis_info: GenesisInfo,
     /// Near rpc client
@@ -111,6 +113,22 @@ impl ServerContext {
             rpc_server_config.tx_details_storage.aws_bucket_name.clone(),
         );
 
+        let redis_client = redis::Client::open(rpc_server_config.general.redis_url.clone())?
+            .get_connection_manager()
+            .await
+            .map_err(|err| {
+                crate::metrics::OPTIMISTIC_UPDATING.set_not_working();
+                tracing::warn!("Failed to connect to Redis: {:?}", err);
+            })
+            .ok();
+        if let Some(redis_client) = redis_client.clone() {
+            // Use redis database 3 for collecting transactions cache
+            redis::cmd("SELECT")
+                .arg(3)
+                .query_async(&mut redis_client.clone())
+                .await?;
+        }
+
         let genesis_info = GenesisInfo::get(
             &near_rpc_client,
             &s3_client,
@@ -144,6 +162,7 @@ impl ServerContext {
             s3_client,
             db_manager: std::sync::Arc::new(Box::new(db_manager)),
             tx_details_storage: std::sync::Arc::new(tx_details_storage),
+            tx_cache_storage: redis_client,
             genesis_info,
             near_rpc_client,
             s3_bucket_name: rpc_server_config.lake_config.aws_bucket_name.clone(),
