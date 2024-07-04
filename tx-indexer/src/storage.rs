@@ -74,7 +74,7 @@ impl RedisStorage {
         indexer_execution_outcome_with_receipt: near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
     ) -> anyhow::Result<()> {
         redis::cmd("HSET")
-            .arg(format!("receipts_{}", transaction_key.to_string()))
+            .arg(format!("receipts_{}", transaction_key))
             .arg(
                 indexer_execution_outcome_with_receipt
                     .receipt
@@ -88,7 +88,7 @@ impl RedisStorage {
             .await?;
 
         redis::cmd("HSET")
-            .arg(format!("outcomes_{}", transaction_key.to_string()))
+            .arg(format!("outcomes_{}", transaction_key))
             .arg(
                 indexer_execution_outcome_with_receipt
                     .execution_outcome
@@ -109,7 +109,7 @@ impl RedisStorage {
         transaction_key: &readnode_primitives::TransactionKey,
     ) -> anyhow::Result<HashMap<String, Vec<u8>>> {
         Ok(redis::cmd("HGETALL")
-            .arg(format!("outcomes_{}", transaction_key.to_string()))
+            .arg(format!("outcomes_{}", transaction_key))
             .query_async::<redis::aio::ConnectionManager, HashMap<String, Vec<u8>>>(
                 &mut self.client.clone(),
             )
@@ -121,7 +121,7 @@ impl RedisStorage {
         transaction_key: &readnode_primitives::TransactionKey,
     ) -> anyhow::Result<HashMap<String, Vec<u8>>> {
         Ok(redis::cmd("HGETALL")
-            .arg(format!("receipts_{}", transaction_key.to_string()))
+            .arg(format!("receipts_{}", transaction_key))
             .query_async::<redis::aio::ConnectionManager, HashMap<String, Vec<u8>>>(
                 &mut self.client.clone(),
             )
@@ -133,11 +133,11 @@ impl RedisStorage {
         transaction_key: &readnode_primitives::TransactionKey,
     ) -> anyhow::Result<()> {
         redis::cmd("DEL")
-            .arg(format!("receipts_{}", transaction_key.to_string()))
+            .arg(format!("receipts_{}", transaction_key))
             .query_async::<redis::aio::ConnectionManager, u64>(&mut self.client.clone())
             .await?;
         redis::cmd("DEL")
-            .arg(format!("outcomes_{}", transaction_key.to_string()))
+            .arg(format!("outcomes_{}", transaction_key))
             .query_async::<redis::aio::ConnectionManager, u64>(&mut self.client.clone())
             .await?;
         Ok(())
@@ -166,7 +166,7 @@ impl RedisStorage {
 
         Ok(result
             .into_iter()
-            .map(|key| readnode_primitives::TransactionKey::from(key))
+            .map(readnode_primitives::TransactionKey::from)
             .collect())
     }
 
@@ -292,7 +292,7 @@ impl CacheStorageWithRedis {
             .receipts_counters_inc(transaction_key.clone())
             .await?;
         self.redis_storage
-            .add_receipts_watching_list(receipt_id.clone(), transaction_key.clone())
+            .add_receipts_watching_list(*receipt_id, transaction_key.clone())
             .await?;
         tracing::debug!(
             target: STORAGE,
@@ -406,7 +406,7 @@ impl CacheStorageWithRedis {
         let mut transactions = vec![];
         let transactions_hashes = self.redis_storage.get_transactions_to_save().await?;
         for transaction_key in transactions_hashes {
-            let tx = self.redis_storage.get_tx(&transaction_key).await?;
+            let tx = self.get_tx(&transaction_key).await?;
             transactions.push(tx);
         }
         Ok(transactions)
