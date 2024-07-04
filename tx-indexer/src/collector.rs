@@ -118,7 +118,7 @@ async fn new_transaction_details_to_collecting_pool(
     block_hash: near_indexer_primitives::CryptoHash,
     shard_id: u64,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
-    tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorageWithRedis>,
+    tx_collecting_storage: &std::sync::Arc<storage::CacheStorageWithRedis>,
     indexer_config: &configuration::TxIndexerConfig,
 ) -> anyhow::Result<()> {
     if !indexer_config.tx_should_be_indexed(transaction) {
@@ -221,16 +221,14 @@ async fn process_shard(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn process_receipt_execution_outcome(
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
-    tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorageWithRedis>,
+    tx_collecting_storage: &std::sync::Arc<storage::CacheStorageWithRedis>,
     block_height: u64,
     block_hash: near_indexer_primitives::CryptoHash,
     shard_id: u64,
     receipt_execution_outcome: &near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
 ) -> anyhow::Result<()> {
     if let Ok(transaction_key) = tx_collecting_storage
-        .get_transaction_hash_by_receipt_id(
-            &receipt_execution_outcome.receipt.receipt_id.to_string(),
-        )
+        .get_transaction_hash_by_receipt_id(receipt_execution_outcome.receipt.receipt_id)
         .await
     {
         save_receipt(

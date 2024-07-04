@@ -60,6 +60,11 @@ async fn main() -> anyhow::Result<()> {
 
     // Update final block from Redis if Redis is available
     if let Some(redis_client) = redis_client.clone() {
+        // Use redis database 1 to update blocks by finality
+        redis::cmd("SELECT")
+            .arg(1)
+            .query_async(&mut redis_client.clone())
+            .await?;
         tokio::spawn(async move {
             utils::update_final_block_regularly_from_redis(
                 blocks_cache_clone,
