@@ -1,3 +1,4 @@
+use aws_sdk_s3::config::StalledStreamProtectionConfig;
 use near_lake_framework::near_indexer_primitives::near_primitives;
 use serde_derive::Deserialize;
 
@@ -21,6 +22,7 @@ impl LakeConfig {
             "",
         );
         aws_sdk_s3::Config::builder()
+            .stalled_stream_protection(StalledStreamProtectionConfig::disabled())
             .credentials_provider(credentials)
             .region(aws_types::region::Region::new(
                 self.aws_default_region.clone(),
