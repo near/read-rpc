@@ -21,6 +21,7 @@ rpath = false
 [workspace]
 resolver = "2"
 members = [
+    "cache-storage",
     "configuration",
     "database",
     "perf-testing",
@@ -35,6 +36,7 @@ members = [
 
 [workspace.dependencies]
 
+cache-storage = { path = "cache-storage" }
 configuration = { path = "configuration" }
 database = { path = "database" }
 readnode-primitives = { path = "readnode-primitives" }

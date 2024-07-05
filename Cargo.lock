@@ -1395,6 +1395,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "cache-storage"
+version = "0.2.11"
+dependencies = [
+ "anyhow",
+ "borsh 1.5.1",
+ "futures",
+ "near-indexer-primitives",
+ "readnode-primitives",
+ "redis",
+ "serde_json",
+]
+
+[[package]]
 name = "castaway"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4961,6 +4974,7 @@ dependencies = [
  "actix",
  "actix-web",
  "anyhow",
+ "cache-storage",
  "clap",
  "configuration",
  "database",
@@ -4973,7 +4987,6 @@ dependencies = [
  "near-o11y 1.40.0",
  "once_cell",
  "openssl-probe",
- "redis",
  "rustc_version 0.4.0",
  "serde_json",
  "tokio",
@@ -6579,6 +6592,7 @@ dependencies = [
  "anyhow",
  "assert-json-diff",
  "borsh 1.5.1",
+ "cache-storage",
  "chrono",
  "configuration",
  "database",
@@ -6602,7 +6616,6 @@ dependencies = [
  "near-vm-runner 1.40.0",
  "prometheus",
  "readnode-primitives",
- "redis",
  "rustc_version 0.4.0",
  "serde",
  "serde_json",
@@ -8687,6 +8700,7 @@ dependencies = [
  "actix-web",
  "anyhow",
  "borsh 1.5.1",
+ "cache-storage",
  "clap",
  "configuration",
  "database",
@@ -8699,7 +8713,6 @@ dependencies = [
  "near-lake-framework",
  "prometheus",
  "readnode-primitives",
- "redis",
  "tokio",
  "tokio-stream",
  "tracing",

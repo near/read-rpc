@@ -8,9 +8,17 @@ pub(crate) async fn try_get_transaction_details_by_hash(
     data: &Data<ServerContext>,
     tx_hash: &near_indexer_primitives::CryptoHash,
 ) -> anyhow::Result<readnode_primitives::TransactionDetails> {
-    let transaction_details_bytes = data
-        .tx_details_storage
-        .retrieve(&tx_hash.to_string())
-        .await?;
-    Ok(borsh::from_slice::<readnode_primitives::TransactionDetails>(&transaction_details_bytes)?)
+    if let Ok(transaction_details_bytes) =
+        &data.tx_details_storage.retrieve(&tx_hash.to_string()).await
+    {
+        Ok(
+            borsh::from_slice::<readnode_primitives::TransactionDetails>(
+                transaction_details_bytes,
+            )?,
+        )
+    } else if let Some(tx_cache_storage) = data.tx_cache_storage.clone() {
+        Ok(tx_cache_storage.get_tx_by_tx_hash(tx_hash).await?)
+    } else {
+        anyhow::bail!("Transaction not found")
+    }
 }

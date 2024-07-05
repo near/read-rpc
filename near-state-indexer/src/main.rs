@@ -54,14 +54,10 @@ async fn run(home_dir: std::path::PathBuf) -> anyhow::Result<()> {
         configuration::read_configuration::<configuration::NearStateIndexerConfig>().await?;
 
     tracing::info!(target: INDEXER, "Connecting to redis...");
-    let redis_client = redis::Client::open(state_indexer_config.general.redis_url.clone())?
-        .get_connection_manager()
-        .await?;
-    // Use redis database 1 to update blocks by finality
-    redis::cmd("SELECT")
-        .arg(1)
-        .query_async(&mut redis_client.clone())
-        .await?;
+    let finality_blocks_storage = cache_storage::BlocksByFinalityCache::new(
+        state_indexer_config.general.redis_url.to_string(),
+    )
+    .await?;
 
     tracing::info!(target: INDEXER, "Setup near_indexer...");
     let indexer_config = near_indexer::IndexerConfig {
@@ -100,14 +96,14 @@ async fn run(home_dir: std::path::PathBuf) -> anyhow::Result<()> {
     tokio::spawn(utils::update_block_in_redis_by_finality(
         view_client.clone(),
         client.clone(),
-        redis_client.clone(),
+        finality_blocks_storage.clone(),
         near_indexer_primitives::near_primitives::types::Finality::None,
     ));
     // And the same job for the final blocks
     tokio::spawn(utils::update_block_in_redis_by_finality(
         view_client.clone(),
         client.clone(),
-        redis_client.clone(),
+        finality_blocks_storage.clone(),
         near_indexer_primitives::near_primitives::types::Finality::Final,
     ));
 

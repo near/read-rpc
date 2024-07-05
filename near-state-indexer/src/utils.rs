@@ -31,55 +31,6 @@ pub(crate) async fn fetch_status(
         .await??)
 }
 
-/// Sets the keys in Redis shared between the ReadRPC components about the most recent
-/// blocks based on finalities (final or optimistic).
-/// `final_height` of `optimistic_height` depending on `block_type` passed.
-/// Additionally, sets the JSON serialized `StreamerMessage` into keys `final` or `optimistic`
-/// accordingly.
-pub(crate) async fn update_block_streamer_message(
-    finality: near_primitives::types::Finality,
-    streamer_message: &near_indexer::StreamerMessage,
-    redis_client: redis::aio::ConnectionManager,
-) -> anyhow::Result<()> {
-    let block_height = streamer_message.block.header.height;
-    let block_type = serde_json::to_string(&finality)?;
-
-    let last_height = redis::cmd("GET")
-        .arg(format!("{}_height", block_type))
-        .query_async(&mut redis_client.clone())
-        .await
-        .unwrap_or(0);
-
-    // If the block height is greater than the last height, update the block streamer message
-    // if we have a few indexers running, we need to make sure that we are not updating the same block
-    // or block which is already processed or block less than the last processed block
-    if block_height > last_height {
-        let json_streamer_message = serde_json::to_string(streamer_message)?;
-        // Update the last block height
-        // Create a clone of the redis client and redis cmd to avoid borrowing issues
-        let mut redis_client_clone = redis_client.clone();
-        let mut redis_set_cmd = redis::cmd("SET");
-        let update_height_feature = redis_set_cmd
-            .arg(format!("{}_height", block_type))
-            .arg(block_height)
-            .query_async::<redis::aio::ConnectionManager, String>(&mut redis_client_clone);
-
-        // Update the block streamer message
-        // Create a clone of the redis client and redis cmd to avoid borrowing issues
-        let mut redis_client_clone = redis_client.clone();
-        let mut redis_set_cmd = redis::cmd("SET");
-        let update_stream_msg_feature =
-            redis_set_cmd
-                .arg(block_type)
-                .arg(json_streamer_message)
-                .query_async::<redis::aio::ConnectionManager, String>(&mut redis_client_clone);
-
-        // Wait for both futures to complete
-        futures::try_join!(update_height_feature, update_stream_msg_feature)?;
-    };
-    Ok(())
-}
-
 /// This function starts a busy-loop that does the similar job to the near-indexer one.
 /// However, this one deals with the blocks by provided finality, and instead of streaming them to
 /// the client, it stores the block directly to the Redis instance shared between
@@ -87,7 +38,7 @@ pub(crate) async fn update_block_streamer_message(
 pub async fn update_block_in_redis_by_finality(
     view_client: actix::Addr<near_client::ViewClientActor>,
     client: actix::Addr<near_client::ClientActor>,
-    redis_client: redis::aio::ConnectionManager,
+    finality_blocks_storage: cache_storage::BlocksByFinalityCache,
     finality: near_primitives::types::Finality,
 ) {
     let block_type = serde_json::to_string(&finality).unwrap();
@@ -121,12 +72,12 @@ pub async fn update_block_in_redis_by_finality(
             match response {
                 Ok(streamer_message) => {
                     tracing::debug!(target: crate::INDEXER, "[{}] block {:?}", block_type, last_stored_block_height);
-                    if let Err(err) = update_block_streamer_message(
-                        near_primitives::types::Finality::None,
-                        &streamer_message,
-                        redis_client.clone(),
-                    )
-                    .await
+                    if let Err(err) = finality_blocks_storage
+                        .update_block_by_finality(
+                            near_primitives::types::Finality::None,
+                            &streamer_message,
+                        )
+                        .await
                     {
                         tracing::error!(
                             target: crate::INDEXER,
