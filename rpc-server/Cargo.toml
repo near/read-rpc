@@ -28,7 +28,6 @@ lazy_static = "1.4.0"
 lru = "0.12.2"
 mimalloc = { version = "0.1.41", default-features = false }
 prometheus = "0.13.1"
-redis = { version = "0.25.2", features = ["tokio-comp", "connection-manager"] }
 serde = { version = "1.0.145", features = ["derive"] }
 serde_json = "1.0.85"
 thiserror = "1.0.40"
@@ -38,7 +37,7 @@ tracing = { version = "0.1.36", features = ["std"] }
 tracing-actix-web = "0.7.9"
 sysinfo = "0.30.5"
 
-
+cache-storage.workspace = true
 configuration.workspace = true
 database.workspace = true
 readnode-primitives.workspace = true

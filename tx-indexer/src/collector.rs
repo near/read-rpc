@@ -28,7 +28,7 @@ const TRANSACTION_SAVE_ATTEMPTS: usize = 20;
 pub(crate) async fn index_transactions(
     streamer_message: &near_indexer_primitives::StreamerMessage,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
-    tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorageWithRedis>,
+    tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorage>,
     tx_details_storage: &std::sync::Arc<crate::TxDetailsStorage>,
     indexer_config: &configuration::TxIndexerConfig,
 ) -> anyhow::Result<()> {
@@ -69,7 +69,7 @@ pub(crate) async fn index_transactions(
 async fn extract_transactions_to_collect(
     streamer_message: &near_indexer_primitives::StreamerMessage,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
-    tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorageWithRedis>,
+    tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorage>,
     indexer_config: &configuration::TxIndexerConfig,
 ) -> anyhow::Result<()> {
     let block_height = streamer_message.block.header.height;
@@ -118,7 +118,7 @@ async fn new_transaction_details_to_collecting_pool(
     block_hash: near_indexer_primitives::CryptoHash,
     shard_id: u64,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
-    tx_collecting_storage: &std::sync::Arc<storage::CacheStorageWithRedis>,
+    tx_collecting_storage: &std::sync::Arc<storage::CacheStorage>,
     indexer_config: &configuration::TxIndexerConfig,
 ) -> anyhow::Result<()> {
     if !indexer_config.tx_should_be_indexed(transaction) {
@@ -153,7 +153,7 @@ async fn new_transaction_details_to_collecting_pool(
     match tx_collecting_storage.set_tx(transaction_details).await {
         Ok(_) => {
             tx_collecting_storage
-                .push_receipt_to_watching_list(converted_into_receipt_id, transaction_key)
+                .push_receipt_to_watching_list(*converted_into_receipt_id, transaction_key)
                 .await?
         }
         Err(e) => tracing::error!(
@@ -170,7 +170,7 @@ async fn new_transaction_details_to_collecting_pool(
 async fn collect_receipts_and_outcomes(
     streamer_message: &near_indexer_primitives::StreamerMessage,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
-    tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorageWithRedis>,
+    tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorage>,
 ) -> anyhow::Result<()> {
     let block_height = streamer_message.block.header.height;
     let block_hash = streamer_message.block.header.hash;
@@ -193,7 +193,7 @@ async fn collect_receipts_and_outcomes(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn process_shard(
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
-    tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorageWithRedis>,
+    tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorage>,
     block_height: u64,
     block_hash: near_indexer_primitives::CryptoHash,
     shard: &near_indexer_primitives::IndexerShard,
@@ -221,7 +221,7 @@ async fn process_shard(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn process_receipt_execution_outcome(
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
-    tx_collecting_storage: &std::sync::Arc<storage::CacheStorageWithRedis>,
+    tx_collecting_storage: &std::sync::Arc<storage::CacheStorage>,
     block_height: u64,
     block_hash: near_indexer_primitives::CryptoHash,
     shard_id: u64,
@@ -253,7 +253,7 @@ async fn process_receipt_execution_outcome(
                 .iter()
                 .map(|receipt_id| {
                     tx_collecting_storage
-                        .push_receipt_to_watching_list(receipt_id, transaction_key.clone())
+                        .push_receipt_to_watching_list(*receipt_id, transaction_key.clone())
                 }),
         );
         while let Some(result) = tasks.next().await {
@@ -283,7 +283,7 @@ async fn process_receipt_execution_outcome(
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn save_transaction_details(
-    tx_collecting_storage: &std::sync::Arc<storage::CacheStorageWithRedis>,
+    tx_collecting_storage: &std::sync::Arc<storage::CacheStorage>,
     tx_details_storage: &std::sync::Arc<crate::TxDetailsStorage>,
     tx_details: readnode_primitives::CollectingTransactionDetails,
 ) {

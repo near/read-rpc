@@ -14,6 +14,6 @@ pub(crate) async fn try_get_transaction_details_by_hash(
     } else if let Some(tx_cache_storage) = data.tx_cache_storage.clone() {
         Ok(tx_cache_storage.get_tx_by_tx_hash(tx_hash).await?)
     } else {
-        anyhow::bail!("Transaction not found") 
+        anyhow::bail!("Transaction not found")
     }
 }

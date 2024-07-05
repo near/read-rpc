@@ -62,8 +62,7 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!(target: INDEXER, "Creating hash storage...");
     let tx_collecting_storage = std::sync::Arc::new(
-        storage::CacheStorageWithRedis::init_storage(indexer_config.general.redis_url.to_string())
-            .await,
+        storage::CacheStorage::init_storage(indexer_config.general.redis_url.to_string()).await,
     );
 
     tracing::info!(target: INDEXER, "Instantiating the tx_details storage client...");
@@ -120,7 +119,7 @@ async fn main() -> anyhow::Result<()> {
 async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
-    tx_collecting_storage: &std::sync::Arc<storage::CacheStorageWithRedis>,
+    tx_collecting_storage: &std::sync::Arc<storage::CacheStorage>,
     tx_details_storage: &std::sync::Arc<TxDetailsStorage>,
     indexer_config: configuration::TxIndexerConfig,
     stats: std::sync::Arc<tokio::sync::RwLock<metrics::Stats>>,

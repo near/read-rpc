@@ -6,39 +6,49 @@ rust-version = "1.78.0"
 repository = "https://github.com/near/read-rpc"
 license = "MIT OR Apache-2.0"
 
-[workspace]
-resolver = "2"
-members = [
-    "configuration",
-    "database",
-    "epoch-indexer",
-    "near-state-indexer",
-    "perf-testing",
-    "readnode-primitives",
-    "rpc-server",
-    "state-indexer",
-    "tx-details-storage",
-    "tx-indexer",
-]
-
 [profile.release]
 opt-level = 3
 debug = false
 split-debuginfo = 'off'
 debug-assertions = false
 overflow-checks = false
-lto = "thin"
+lto = true
 panic = 'unwind'
 incremental = false
 codegen-units = 1
 rpath = false
 
+# A much faster to compile version of `release`, for development use.
+[profile.dev-release]
+inherits = "release"
+lto = false
+codegen-units = 16
+debug-assertions = true
+
+[workspace]
+resolver = "2"
+members = [
+    "cache-storage",
+    "configuration",
+    "database",
+    "perf-testing",
+    "readnode-primitives",
+    "rpc-server",
+    "logic-state-indexer",
+    "near-state-indexer",
+    "state-indexer",
+    "tx-details-storage",
+    "tx-indexer",
+]
+
 [workspace.dependencies]
 
+cache-storage = { path = "cache-storage" }
 configuration = { path = "configuration" }
 database = { path = "database" }
 readnode-primitives = { path = "readnode-primitives" }
 tx-details-storage = { path = "tx-details-storage" }
+logic-state-indexer = { path = "logic-state-indexer" }
 
 # Please, update the supported nearcore version in .cargo/config.toml file
 near-async = { git = 'https://github.com/kobayurii/nearcore.git', branch = "2.0.0-fork1" }

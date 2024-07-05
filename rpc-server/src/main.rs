@@ -45,31 +45,26 @@ async fn main() -> anyhow::Result<()> {
         std::sync::Arc::clone(&server_context.blocks_info_by_finality);
     let near_rpc_client_clone = near_rpc_client.clone();
 
-    let redis_client = redis::Client::open(rpc_server_config.general.redis_url.clone())?
-        .get_connection_manager()
-        .await
-        .map_err(|err| {
-            crate::metrics::OPTIMISTIC_UPDATING.set_not_working();
-            tracing::warn!("Failed to connect to Redis: {:?}", err);
-        })
-        .ok();
+    let finality_blocks_storage =
+        cache_storage::BlocksByFinalityCache::new(rpc_server_config.general.redis_url.to_string())
+            .await
+            .map_err(|err| {
+                crate::metrics::OPTIMISTIC_UPDATING.set_not_working();
+                tracing::warn!("Failed to connect to Redis: {:?}", err);
+            })
+            .ok();
 
     // We need to update final block from Redis and Lake
     // Because we can't be sure that Redis has the latest block
     // And Lake can be used as a backup source
 
     // Update final block from Redis if Redis is available
-    if let Some(redis_client) = redis_client.clone() {
-        // Use redis database 1 to update blocks by finality
-        redis::cmd("SELECT")
-            .arg(1)
-            .query_async(&mut redis_client.clone())
-            .await?;
+    if let Some(finality_blocks_storage) = finality_blocks_storage.clone() {
         tokio::spawn(async move {
             utils::update_final_block_regularly_from_redis(
                 blocks_cache_clone,
                 blocks_info_by_finality_clone,
-                redis_client,
+                finality_blocks_storage,
                 near_rpc_client_clone,
             )
             .await
@@ -91,11 +86,15 @@ async fn main() -> anyhow::Result<()> {
     });
 
     // Update optimistic block from Redis if Redis is available
-    if let Some(redis_client) = redis_client {
+    if let Some(finality_blocks_storage) = finality_blocks_storage {
         let blocks_info_by_finality =
             std::sync::Arc::clone(&server_context.blocks_info_by_finality);
         tokio::spawn(async move {
-            utils::update_optimistic_block_regularly(blocks_info_by_finality, redis_client).await
+            utils::update_optimistic_block_regularly(
+                blocks_info_by_finality,
+                finality_blocks_storage,
+            )
+            .await
         });
     }
 
