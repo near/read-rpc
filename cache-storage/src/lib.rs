@@ -237,7 +237,9 @@ impl TxIndexerCache {
     ) -> anyhow::Result<readnode_primitives::CollectingTransactionDetails> {
         let result: Vec<u8> = self.cache_storage.get(transaction_key.to_string()).await?;
         let mut tx =
-            borsh::from_slice::<readnode_primitives::CollectingTransactionDetails>(&result)?;
+            borsh::from_slice::<readnode_primitives::CollectingTransactionDetails>(&result).map_err(
+                |err| anyhow::anyhow!("Error deserializing transaction from cache {} - {} - {}", err, result.len(), transaction_key),
+            )?;
         for (_, outcome) in self
             .cache_storage
             .hgetall::<std::collections::HashMap<String, Vec<u8>>>(format!(
@@ -281,19 +283,26 @@ impl TxIndexerCache {
         &self,
         transaction_key: &readnode_primitives::TransactionKey,
     ) -> anyhow::Result<()> {
-        self.cache_storage.del(transaction_key.to_string()).await?;
-        self.cache_storage
-            .del(format!("receipts_{}", transaction_key))
-            .await?;
-        self.cache_storage
-            .del(format!("outcomes_{}", transaction_key))
-            .await?;
-        self.cache_storage
-            .hdel("receipts_counters", transaction_key.to_string())
-            .await?;
-        self.cache_storage
-            .hdel("transactions_to_save", transaction_key.to_string())
-            .await?;
+        let del_tx_future = self.cache_storage.del(transaction_key.to_string());
+        let del_tx_receipts_future = self
+            .cache_storage
+            .del(format!("receipts_{}", transaction_key));
+        let del_tx_outcomes_future = self
+            .cache_storage
+            .del(format!("outcomes_{}", transaction_key));
+        let del_tx_counter_future = self
+            .cache_storage
+            .hdel("receipts_counters", transaction_key.to_string());
+        let del_tx_to_save_future = self
+            .cache_storage
+            .hdel("transactions_to_save", transaction_key.to_string());
+        futures::try_join!(
+            del_tx_future,
+            del_tx_receipts_future,
+            del_tx_outcomes_future,
+            del_tx_counter_future,
+            del_tx_to_save_future
+        )?;
         Ok(())
     }
 

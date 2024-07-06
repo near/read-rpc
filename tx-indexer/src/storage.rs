@@ -35,34 +35,6 @@ impl CacheStorage {
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
-    async fn remove_receipt_from_watching_list(
-        &self,
-        receipt_id: near_indexer_primitives::CryptoHash,
-    ) -> anyhow::Result<()> {
-        self.storage
-            .del_receipt_from_watching_list(receipt_id)
-            .await?;
-        crate::metrics::RECEIPTS_IN_MEMORY_CACHE.dec();
-        tracing::debug!(
-            target: STORAGE,
-            "-R {} ",
-            receipt_id,
-        );
-
-        Ok(())
-    }
-
-    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
-    async fn receipts_transaction_hash_count(
-        &self,
-        transaction_key: &readnode_primitives::TransactionKey,
-    ) -> anyhow::Result<u64> {
-        self.storage
-            .get_receipts_counter(transaction_key.clone())
-            .await
-    }
-
-    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
     pub(crate) async fn set_tx(
         &self,
         transaction_details: readnode_primitives::CollectingTransactionDetails,
@@ -70,20 +42,6 @@ impl CacheStorage {
         let transaction_hash = transaction_details.transaction.hash.clone().to_string();
         self.storage.set_tx(transaction_details).await?;
         tracing::debug!(target: STORAGE, "+T {}", transaction_hash,);
-        Ok(())
-    }
-
-    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
-    async fn add_tx_to_save(
-        &self,
-        transaction_key: readnode_primitives::TransactionKey,
-    ) -> anyhow::Result<()> {
-        self.storage.set_tx_to_save(transaction_key.clone()).await?;
-        tracing::debug!(
-            target: STORAGE,
-            "-T {}",
-            transaction_key.transaction_hash
-        );
         Ok(())
     }
 
@@ -116,18 +74,42 @@ impl CacheStorage {
         transaction_key: &readnode_primitives::TransactionKey,
         indexer_execution_outcome_with_receipt: near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
     ) -> anyhow::Result<()> {
-        self.remove_receipt_from_watching_list(
-            indexer_execution_outcome_with_receipt.receipt.receipt_id,
-        )
-        .await?;
-        self.storage
-            .set_outcomes_and_receipts(transaction_key, indexer_execution_outcome_with_receipt)
-            .await?;
-        let transaction_receipts_watching_count = self
-            .receipts_transaction_hash_count(transaction_key)
-            .await?;
-        if transaction_receipts_watching_count == 0 {
-            self.add_tx_to_save(transaction_key.clone()).await?;
+        // Check if transaction is in cache
+        // And collect receipts for this transaction
+        if let Ok(_) = self.storage.get_tx(transaction_key).await {
+            // Remove receipt from watching list
+            self.storage
+                .del_receipt_from_watching_list(
+                    indexer_execution_outcome_with_receipt.receipt.receipt_id,
+                )
+                .await?;
+            crate::metrics::RECEIPTS_IN_MEMORY_CACHE.dec();
+            tracing::debug!(
+                target: STORAGE,
+                "-R {} - {}",
+                indexer_execution_outcome_with_receipt.receipt.receipt_id,
+                transaction_key.transaction_hash
+            );
+
+            // Save outcome and receipt
+            self.storage
+                .set_outcomes_and_receipts(transaction_key, indexer_execution_outcome_with_receipt)
+                .await?;
+
+            // Check if all receipts are collected
+            let transaction_receipts_watching_count = self
+                .storage
+                .get_receipts_counter(transaction_key.clone())
+                .await?;
+            if transaction_receipts_watching_count == 0 {
+                // Mark transaction to save
+                self.storage.set_tx_to_save(transaction_key.clone()).await?;
+                tracing::debug!(
+                    target: STORAGE,
+                    "-T {}",
+                    transaction_key.transaction_hash
+                );
+            }
         }
         Ok(())
     }
