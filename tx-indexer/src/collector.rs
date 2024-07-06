@@ -41,7 +41,18 @@ pub(crate) async fn index_transactions(
     .await?;
     collect_receipts_and_outcomes(streamer_message, db_manager, tx_collecting_storage).await?;
 
-    let finished_transaction_details = tx_collecting_storage.transactions_to_save().await?;
+    let finished_transaction_details =
+        tx_collecting_storage
+            .transactions_to_save()
+            .await
+            .map_err(|err| {
+                tracing::error!(
+                    target: crate::INDEXER,
+                    "Failed to get transactions to save\n{:#?}",
+                    err
+                );
+                err
+            })?;
 
     if !finished_transaction_details.is_empty() {
         let tx_collecting_storage = tx_collecting_storage.clone();
