@@ -46,6 +46,14 @@ impl CacheStorage {
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
+    pub(crate) async fn get_tx(
+        &self,
+        transaction_key: readnode_primitives::TransactionKey,
+    ) -> anyhow::Result<readnode_primitives::CollectingTransactionDetails> {
+        self.storage.get_tx(&transaction_key).await
+    }
+
+    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
     pub(crate) async fn remove_transaction_from_cache(
         &self,
         transaction_key: readnode_primitives::TransactionKey,
@@ -64,7 +72,7 @@ impl CacheStorage {
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
     pub(crate) async fn transactions_to_save(
         &self,
-    ) -> anyhow::Result<Vec<readnode_primitives::CollectingTransactionDetails>> {
+    ) -> anyhow::Result<Vec<readnode_primitives::TransactionKey>> {
         self.storage.get_tx_to_save().await
     }
 
