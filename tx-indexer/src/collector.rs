@@ -59,12 +59,8 @@ pub(crate) async fn index_transactions(
         let tx_details_storage = tx_details_storage.clone();
         tokio::spawn(async move {
             let send_finished_transaction_details_futures =
-                finished_transaction_details.into_iter().map(|tx_details| {
-                    save_transaction_details(
-                        &tx_collecting_storage,
-                        &tx_details_storage,
-                        tx_details,
-                    )
+                finished_transaction_details.into_iter().map(|tx_key| {
+                    save_transaction_details(&tx_collecting_storage, &tx_details_storage, tx_key)
                 });
 
             join_all(send_finished_transaction_details_futures).await;
@@ -296,22 +292,26 @@ async fn process_receipt_execution_outcome(
 async fn save_transaction_details(
     tx_collecting_storage: &std::sync::Arc<storage::CacheStorage>,
     tx_details_storage: &std::sync::Arc<crate::TxDetailsStorage>,
-    tx_details: readnode_primitives::CollectingTransactionDetails,
+    tx_key: readnode_primitives::TransactionKey,
 ) {
-    let transaction_key = tx_details.transaction_key();
-    match save_transaction_details_to_storage(tx_details_storage, tx_details).await {
+    match save_transaction_details_to_storage(
+        tx_collecting_storage,
+        tx_details_storage,
+        tx_key.clone(),
+    )
+    .await
+    {
         Ok(_) => {
             // We assume that the transaction is saved correctly
             // We can remove the transaction from the cache storage
-            let transaction_hash = transaction_key.transaction_hash;
             if let Err(err) = tx_collecting_storage
-                .remove_transaction_from_cache(transaction_key)
+                .remove_transaction_from_cache(tx_key.clone())
                 .await
             {
                 tracing::error!(
                     target: crate::INDEXER,
                     "Failed to remove transaction from cache {}: Error {}",
-                    transaction_hash,
+                    tx_key.transaction_hash,
                     err
                 );
             }
@@ -320,7 +320,7 @@ async fn save_transaction_details(
             tracing::error!(
                 target: crate::INDEXER,
                 "Failed to save transaction {}: Error {}",
-                transaction_key.transaction_hash,
+                tx_key.transaction_hash,
                 err
             );
         }
@@ -330,12 +330,14 @@ async fn save_transaction_details(
 // Save transaction detail into the storage
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn save_transaction_details_to_storage(
+    tx_collecting_storage: &std::sync::Arc<storage::CacheStorage>,
     tx_details_storage: &std::sync::Arc<crate::TxDetailsStorage>,
-    tx_details: readnode_primitives::CollectingTransactionDetails,
+    tx_key: readnode_primitives::TransactionKey,
 ) -> anyhow::Result<()> {
-    let transaction_details = tx_details.to_final_transaction_result()?;
-    let transaction_hash = transaction_details.transaction.hash.to_string();
-    let tx_bytes = borsh::to_vec(&transaction_details)?;
+    let transaction_details = tx_collecting_storage
+        .get_tx(tx_key.clone())
+        .await?
+        .to_final_transaction_result()?;
 
     // We faced the issue when the transaction was saved to the storage but later
     // was failing to deserialize. To avoid this issue and monitor the situation
@@ -348,12 +350,15 @@ async fn save_transaction_details_to_storage(
         if save_attempts >= TRANSACTION_SAVE_ATTEMPTS {
             anyhow::bail!(
                 "Failed to save transaction {} after {} attempts",
-                transaction_hash,
+                tx_key.transaction_hash,
                 save_attempts,
             );
         }
         match tx_details_storage
-            .store(&transaction_hash, tx_bytes.clone())
+            .store(
+                &tx_key.transaction_hash.to_string(),
+                borsh::to_vec(&transaction_details)?,
+            )
             .await
         {
             Ok(_) => {

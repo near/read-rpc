@@ -237,9 +237,7 @@ impl TxIndexerCache {
     ) -> anyhow::Result<readnode_primitives::CollectingTransactionDetails> {
         let result: Vec<u8> = self.cache_storage.get(transaction_key.to_string()).await?;
         let mut tx =
-            borsh::from_slice::<readnode_primitives::CollectingTransactionDetails>(&result).map_err(
-                |err| anyhow::anyhow!("Error deserializing transaction from cache {} - {} - {}", err, result.len(), transaction_key),
-            )?;
+            borsh::from_slice::<readnode_primitives::CollectingTransactionDetails>(&result)?;
         for (_, outcome) in self
             .cache_storage
             .hgetall::<std::collections::HashMap<String, Vec<u8>>>(format!(
@@ -397,20 +395,13 @@ impl TxIndexerCache {
             .await
     }
 
-    pub async fn get_tx_to_save(
-        &self,
-    ) -> anyhow::Result<Vec<readnode_primitives::CollectingTransactionDetails>> {
-        let mut transactions = vec![];
-        for (tx_key_string, _) in self
+    pub async fn get_tx_to_save(&self) -> anyhow::Result<Vec<readnode_primitives::TransactionKey>> {
+        Ok(self
             .cache_storage
             .hgetall::<std::collections::HashMap<String, String>>("transactions_to_save")
             .await?
-        {
-            let tx = self
-                .get_tx(&readnode_primitives::TransactionKey::from(tx_key_string))
-                .await?;
-            transactions.push(tx);
-        }
-        Ok(transactions)
+            .into_iter()
+            .map(|(tx_key_string, _)| readnode_primitives::TransactionKey::from(tx_key_string))
+            .collect())
     }
 }
