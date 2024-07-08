@@ -6,7 +6,7 @@ COPY .cargo .cargo
 COPY Cargo.lock ./
 COPY Cargo.toml ./
 COPY config.toml ./
-RUN sed '/perf-testing/d; /state-indexer/d; /tx-indexer/d; /epoch-indexer/d; /near-state-indexer/d; /tx-details-storage/d' Cargo.toml > Cargo.toml.new && mv Cargo.toml.new Cargo.toml
+RUN sed '/perf-testing/d; /state-indexer/d; /tx-indexer/d; /epoch-indexer/d; /near-state-indexer/d' Cargo.toml > Cargo.toml.new && mv Cargo.toml.new Cargo.toml
 COPY rpc-server/Cargo.toml rpc-server/Cargo.toml
 COPY configuration configuration
 COPY database database
