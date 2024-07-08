@@ -37,6 +37,7 @@ near-lake-framework.workspace = true
 
 [features]
 default = ["scylla_db"]
+validator = []
 tracing-instrumentation = ["configuration/tracing-instrumentation"]
 postgres_db = ["database/postgres_db"]
 scylla_db = ["database/scylla_db"]

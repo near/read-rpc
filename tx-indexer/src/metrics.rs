@@ -44,6 +44,11 @@ lazy_static! {
         "Total number of errors while storing transactions"
     )
     .unwrap();
+    pub(crate) static ref TX_IN_BLOCK_TOTAL: IntGauge = try_create_int_gauge(
+        "tx_in_block_total",
+        "Number of transactions in a block"
+    )
+    .unwrap();
 }
 
 #[get("/metrics")]
