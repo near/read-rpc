@@ -47,18 +47,23 @@ impl CodeStorage {
             Option<readnode_primitives::StateValue>,
         >,
     ) -> Self {
-        let prefetch_state_data = if account_id.to_string().ends_with("poolv1.near") {
-            utils::get_state_from_db(
-                &db_manager,
-                &account_id,
-                block_height,
-                &[],
-                "query_call_function",
-            )
+        let mut prefetch_state_data = HashMap::new();
+
+        if let Ok(account) = db_manager
+            .get_account(&account_id, block_height, "query_call_function")
             .await
-        } else {
-            HashMap::new()
-        };
+        {
+            if account.data.storage_usage() < 1_000_000 {
+                prefetch_state_data = utils::get_state_from_db(
+                    &db_manager,
+                    &account_id,
+                    block_height,
+                    &[],
+                    "query_call_function",
+                )
+                .await;
+            }
+        }
 
         Self {
             db_manager,
