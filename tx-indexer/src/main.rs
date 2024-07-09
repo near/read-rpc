@@ -62,7 +62,8 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!(target: INDEXER, "Creating hash storage...");
     let tx_collecting_storage = std::sync::Arc::new(
-        storage::CacheStorage::init_storage(indexer_config.general.redis_url.to_string()).await,
+        storage::CacheStorage::init_with_restore(indexer_config.general.redis_url.to_string())
+            .await?,
     );
 
     tracing::info!(target: INDEXER, "Instantiating the tx_details storage client...");
