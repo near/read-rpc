@@ -10,18 +10,6 @@ use near_indexer_primitives::IndexerTransactionWithOutcome;
 use crate::metrics;
 use crate::storage;
 
-/// Blocks #47317863 and #47317864 with restored receipts.
-const PROBLEMATIC_BLOCKS: [near_indexer_primitives::CryptoHash; 2] = [
-    near_indexer_primitives::CryptoHash(
-        *b"\xcd\xde\x9a\x3f\x5d\xdf\xb4\x2c\xb9\x9b\xf4\x8c\x04\x95\x6f\x5b\
-           \xa0\xb7\x29\xe2\xa5\x04\xf8\xbd\x9c\x86\x92\xd6\x16\x8c\xcf\x14",
-    ),
-    near_indexer_primitives::CryptoHash(
-        *b"\x12\xa9\x5a\x1a\x3d\x14\xa7\x36\xb3\xce\xe6\xea\x07\x20\x8e\x75\
-           \x4e\xb5\xc2\xd7\xf9\x11\xca\x29\x09\xe0\xb8\x85\xb5\x2b\x95\x6a",
-    ),
-];
-
 const TRANSACTION_SAVE_ATTEMPTS: usize = 20;
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
@@ -59,8 +47,12 @@ pub(crate) async fn index_transactions(
         let tx_details_storage = tx_details_storage.clone();
         tokio::spawn(async move {
             let send_finished_transaction_details_futures =
-                finished_transaction_details.into_iter().map(|tx_key| {
-                    save_transaction_details(&tx_collecting_storage, &tx_details_storage, tx_key)
+                finished_transaction_details.into_iter().map(|tx_details| {
+                    save_transaction_details(
+                        &tx_collecting_storage,
+                        &tx_details_storage,
+                        tx_details,
+                    )
                 });
 
             join_all(send_finished_transaction_details_futures).await;
@@ -160,7 +152,10 @@ async fn new_transaction_details_to_collecting_pool(
     match tx_collecting_storage.set_tx(transaction_details).await {
         Ok(_) => {
             tx_collecting_storage
-                .push_receipt_to_watching_list(*converted_into_receipt_id, transaction_key)
+                .push_receipt_to_watching_list(
+                    converted_into_receipt_id.to_string(),
+                    transaction_key,
+                )
                 .await?
         }
         Err(e) => tracing::error!(
@@ -235,7 +230,9 @@ async fn process_receipt_execution_outcome(
     receipt_execution_outcome: &near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
 ) -> anyhow::Result<()> {
     if let Ok(transaction_key) = tx_collecting_storage
-        .get_transaction_hash_by_receipt_id(receipt_execution_outcome.receipt.receipt_id)
+        .get_transaction_hash_by_receipt_id(
+            &receipt_execution_outcome.receipt.receipt_id.to_string(),
+        )
         .await
     {
         save_receipt(
@@ -259,8 +256,10 @@ async fn process_receipt_execution_outcome(
                 .receipt_ids
                 .iter()
                 .map(|receipt_id| {
-                    tx_collecting_storage
-                        .push_receipt_to_watching_list(*receipt_id, transaction_key.clone())
+                    tx_collecting_storage.push_receipt_to_watching_list(
+                        receipt_id.to_string(),
+                        transaction_key.clone(),
+                    )
                 }),
         );
         while let Some(result) = tasks.next().await {
@@ -292,15 +291,10 @@ async fn process_receipt_execution_outcome(
 async fn save_transaction_details(
     tx_collecting_storage: &std::sync::Arc<storage::CacheStorage>,
     tx_details_storage: &std::sync::Arc<crate::TxDetailsStorage>,
-    tx_key: readnode_primitives::TransactionKey,
+    tx_details: readnode_primitives::CollectingTransactionDetails,
 ) {
-    match save_transaction_details_to_storage(
-        tx_collecting_storage,
-        tx_details_storage,
-        tx_key.clone(),
-    )
-    .await
-    {
+    let tx_key = tx_details.transaction_key();
+    match save_transaction_details_to_storage(tx_details_storage, tx_details.clone()).await {
         Ok(_) => {
             // We assume that the transaction is saved correctly
             // We can remove the transaction from the cache storage
@@ -319,10 +313,19 @@ async fn save_transaction_details(
         Err(err) => {
             tracing::error!(
                 target: crate::INDEXER,
-                "Failed to save transaction {}: Error {}",
+                "Failed to save transaction {}: Back transaction to save. Error {}",
                 tx_key.transaction_hash,
                 err
             );
+            // If the transaction wasn't saved correctly, we will move it back to the save queue
+            if let Err(err) = tx_collecting_storage.move_tx_to_save(tx_details).await {
+                tracing::error!(
+                    target: crate::INDEXER,
+                    "Failed to move transaction to save {}: Error {}",
+                    tx_key.transaction_hash,
+                    err
+                );
+            };
         }
     }
 }
@@ -330,14 +333,12 @@ async fn save_transaction_details(
 // Save transaction detail into the storage
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn save_transaction_details_to_storage(
-    tx_collecting_storage: &std::sync::Arc<storage::CacheStorage>,
     tx_details_storage: &std::sync::Arc<crate::TxDetailsStorage>,
-    tx_key: readnode_primitives::TransactionKey,
+    tx_details: readnode_primitives::CollectingTransactionDetails,
 ) -> anyhow::Result<()> {
-    let transaction_details = tx_collecting_storage
-        .get_tx(tx_key.clone())
-        .await?
-        .to_final_transaction_result()?;
+    let transaction_details = tx_details.to_final_transaction_result()?;
+    let transaction_hash = transaction_details.transaction.hash.to_string();
+    let tx_bytes = borsh::to_vec(&transaction_details)?;
 
     // We faced the issue when the transaction was saved to the storage but later
     // was failing to deserialize. To avoid this issue and monitor the situation
@@ -350,15 +351,12 @@ async fn save_transaction_details_to_storage(
         if save_attempts >= TRANSACTION_SAVE_ATTEMPTS {
             anyhow::bail!(
                 "Failed to save transaction {} after {} attempts",
-                tx_key.transaction_hash,
+                transaction_hash,
                 save_attempts,
             );
         }
         match tx_details_storage
-            .store(
-                &tx_key.transaction_hash.to_string(),
-                borsh::to_vec(&transaction_details)?,
-            )
+            .store(&transaction_hash, tx_bytes.clone())
             .await
         {
             Ok(_) => {
@@ -408,14 +406,7 @@ async fn save_transaction_details_to_storage(
                                 // We assume that the transaction is saved correctly
                                 // We can remove the transaction from the cache storage
                                 metrics::TX_IN_MEMORY_CACHE.dec();
-                                db_manager
-                                    .cache_delete_transaction(
-                                        &transaction_hash,
-                                        tx_details.block_height,
-                                    )
-                                    .await
-                                    .expect("Failed to delete transaction from memory storage");
-                                break 'retry true;
+                                break 'retry Ok(());
                             }
                             Err(err) => {
                                 tracing::warn!(
@@ -433,11 +424,7 @@ async fn save_transaction_details_to_storage(
                 #[cfg(not(feature = "validator"))]
                 {
                     metrics::TX_IN_MEMORY_CACHE.dec();
-                    db_manager
-                        .cache_delete_transaction(&transaction_hash, tx_details.block_height)
-                        .await
-                        .expect("Failed to delete transaction from memory storage");
-                    break 'retry true;
+                    break 'retry Ok(());
                 }
             }
             Err(err) => {
@@ -455,7 +442,6 @@ async fn save_transaction_details_to_storage(
         }
     }
 }
-
 // Save receipt_id, parent_transaction_hash, block_height and shard_id to the Db
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn save_receipt(

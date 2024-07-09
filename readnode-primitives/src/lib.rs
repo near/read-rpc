@@ -1,10 +1,22 @@
+use near_indexer_primitives::{views, CryptoHash, IndexerTransactionWithOutcome};
+use num_traits::ToPrimitive;
+use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::fmt::Display;
 use std::str::FromStr;
 
-use near_indexer_primitives::{views, CryptoHash, IndexerTransactionWithOutcome};
-use num_traits::ToPrimitive;
-use serde::{Deserialize, Serialize};
+#[derive(
+    Clone,
+    Debug,
+    serde::Serialize,
+    serde::Deserialize,
+    borsh::BorshSerialize,
+    borsh::BorshDeserialize,
+)]
+pub struct ExecutionOutcomeWithReceipt {
+    pub execution_outcome: views::ExecutionOutcomeWithIdView,
+    pub receipt: views::ReceiptView,
+}
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 pub struct TransactionKey {

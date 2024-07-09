@@ -19,15 +19,11 @@ impl RedisCacheStorage {
     }
 
     //return first key by prefix
-    async fn get_key(&self, key_prefix: String) -> anyhow::Result<String> {
-        let values: Vec<String> = redis::cmd("KEYS")
+    async fn get_keys(&self, key_prefix: String) -> anyhow::Result<Vec<String>> {
+        Ok(redis::cmd("KEYS")
             .arg(format!("{key_prefix}*"))
             .query_async(&mut self.client.clone())
-            .await?;
-        match values.first() {
-            Some(value) => Ok(value.clone()),
-            None => anyhow::bail!("Key does not exists"),
-        }
+            .await?)
     }
 
     async fn get<V: redis::FromRedisValue + std::fmt::Debug>(
@@ -62,87 +58,30 @@ impl RedisCacheStorage {
         Ok(())
     }
 
-    async fn hget<V: redis::FromRedisValue + std::fmt::Debug>(
+    async fn rpush(
         &self,
         key: impl redis::ToRedisArgs + std::fmt::Debug,
-        field: impl redis::ToRedisArgs + std::fmt::Debug,
-    ) -> anyhow::Result<V> {
-        let value: V = redis::cmd("HGET")
-            .arg(&key)
-            .arg(&field)
-            .query_async(&mut self.client.clone())
-            .await?;
-        Ok(value)
-    }
-
-    async fn hgetall<V: redis::FromRedisValue + std::fmt::Debug>(
-        &self,
-        key: impl redis::ToRedisArgs + std::fmt::Debug,
-    ) -> anyhow::Result<V> {
-        let value: V = redis::cmd("HGETALL")
-            .arg(&key)
-            .query_async(&mut self.client.clone())
-            .await?;
-        Ok(value)
-    }
-
-    async fn hset(
-        &self,
-        key: impl redis::ToRedisArgs + std::fmt::Debug,
-        field: impl redis::ToRedisArgs + std::fmt::Debug,
         value: impl redis::ToRedisArgs + std::fmt::Debug,
     ) -> anyhow::Result<()> {
-        redis::cmd("HSET")
+        redis::cmd("RPUSH")
             .arg(&key)
-            .arg(&field)
             .arg(&value)
             .query_async(&mut self.client.clone())
             .await?;
         Ok(())
     }
 
-    async fn hdel(
+    async fn lrange<V: redis::FromRedisValue + std::fmt::Debug>(
         &self,
         key: impl redis::ToRedisArgs + std::fmt::Debug,
-        field: impl redis::ToRedisArgs + std::fmt::Debug,
-    ) -> anyhow::Result<()> {
-        redis::cmd("HDEL")
-            .arg(&key)
-            .arg(&field)
-            .query_async(&mut self.client.clone())
-            .await?;
-        Ok(())
-    }
-
-    async fn hincrby<V: redis::FromRedisValue + std::fmt::Debug>(
-        &self,
-        key: impl redis::ToRedisArgs + std::fmt::Debug,
-        field: impl redis::ToRedisArgs + std::fmt::Debug,
-        value: i64, // 1 - to incr, -1 to decr
     ) -> anyhow::Result<V> {
-        let value: V = redis::cmd("HINCRBY")
+        let value: V = redis::cmd("LRANGE")
             .arg(&key)
-            .arg(&field)
-            .arg(value)
+            .arg(0)
+            .arg(-1)
             .query_async(&mut self.client.clone())
             .await?;
         Ok(value)
-    }
-
-    async fn hincr<V: redis::FromRedisValue + std::fmt::Debug>(
-        &self,
-        key: impl redis::ToRedisArgs + std::fmt::Debug,
-        field: impl redis::ToRedisArgs + std::fmt::Debug,
-    ) -> anyhow::Result<V> {
-        self.hincrby(key, field, 1).await
-    }
-
-    async fn hdecr<V: redis::FromRedisValue + std::fmt::Debug>(
-        &self,
-        key: impl redis::ToRedisArgs + std::fmt::Debug,
-        field: impl redis::ToRedisArgs + std::fmt::Debug,
-    ) -> anyhow::Result<V> {
-        self.hincrby(key, field, -1).await
     }
 }
 
@@ -225,42 +164,70 @@ impl TxIndexerCache {
         &self,
         tx_hash: &near_indexer_primitives::CryptoHash,
     ) -> anyhow::Result<readnode_primitives::TransactionDetails> {
-        let tx_key_string = self.cache_storage.get_key(tx_hash.to_string()).await?;
-        let tx_key = readnode_primitives::TransactionKey::from(tx_key_string);
-        let tx_details = self.get_tx(&tx_key).await?;
+        let tx_key = match self
+            .cache_storage
+            .get_keys(format!("transaction_{}", tx_hash))
+            .await?
+            .first()
+        {
+            Some(value) => {
+                readnode_primitives::TransactionKey::from(value.replace("transaction_", ""))
+            }
+            None => anyhow::bail!("Key does not exists"),
+        };
+        let tx_details = self.get_tx_full(&tx_key).await?;
         Ok(tx_details.into())
+    }
+
+    pub async fn get_txs_in_process(
+        &self,
+    ) -> anyhow::Result<Vec<readnode_primitives::TransactionKey>> {
+        Ok(self
+            .cache_storage
+            .get_keys("transaction_".to_string())
+            .await?
+            .into_iter()
+            .map(|key| readnode_primitives::TransactionKey::from(key.replace("transaction_", "")))
+            .collect())
     }
 
     pub async fn get_tx(
         &self,
         transaction_key: &readnode_primitives::TransactionKey,
     ) -> anyhow::Result<readnode_primitives::CollectingTransactionDetails> {
-        let result: Vec<u8> = self.cache_storage.get(transaction_key.to_string()).await?;
-        let mut tx =
-            borsh::from_slice::<readnode_primitives::CollectingTransactionDetails>(&result)?;
-        for (_, outcome) in self
+        let result: Vec<u8> = self
             .cache_storage
-            .hgetall::<std::collections::HashMap<String, Vec<u8>>>(format!(
-                "outcomes_{}",
-                transaction_key
-            ))
-            .await?
-        {
-            tx.execution_outcomes.push(borsh::from_slice::<
-                near_indexer_primitives::views::ExecutionOutcomeWithIdView,
-            >(&outcome)?)
-        }
-        for (_, receipt) in self
+            .get(format!("transaction_{}", transaction_key))
+            .await?;
+        Ok(borsh::from_slice::<
+            readnode_primitives::CollectingTransactionDetails,
+        >(&result)?)
+    }
+
+    pub async fn get_tx_outcomes(
+        &self,
+        transaction_key: &readnode_primitives::TransactionKey,
+    ) -> anyhow::Result<Vec<readnode_primitives::ExecutionOutcomeWithReceipt>> {
+        Ok(self
             .cache_storage
-            .hgetall::<std::collections::HashMap<String, Vec<u8>>>(format!(
-                "receipts_{}",
-                transaction_key
-            ))
+            .lrange::<Vec<Vec<u8>>>(format!("outcomes_{}", transaction_key))
             .await?
-        {
-            tx.receipts.push(borsh::from_slice::<
-                near_indexer_primitives::views::ReceiptView,
-            >(&receipt)?)
+            .iter()
+            .map(|outcome| {
+                borsh::from_slice::<readnode_primitives::ExecutionOutcomeWithReceipt>(outcome)
+                    .expect("Failed to deserialize ExecutionOutcome")
+            })
+            .collect())
+    }
+
+    pub async fn get_tx_full(
+        &self,
+        transaction_key: &readnode_primitives::TransactionKey,
+    ) -> anyhow::Result<readnode_primitives::CollectingTransactionDetails> {
+        let mut tx = self.get_tx(transaction_key).await?;
+        for outcome in self.get_tx_outcomes(transaction_key).await? {
+            tx.execution_outcomes.push(outcome.execution_outcome);
+            tx.receipts.push(outcome.receipt);
         }
         Ok(tx)
     }
@@ -271,7 +238,7 @@ impl TxIndexerCache {
     ) -> anyhow::Result<()> {
         self.cache_storage
             .set(
-                transaction_details.transaction_key().to_string(),
+                format!("transaction_{}", transaction_details.transaction_key()),
                 borsh::to_vec(&transaction_details)?,
             )
             .await
@@ -281,26 +248,13 @@ impl TxIndexerCache {
         &self,
         transaction_key: &readnode_primitives::TransactionKey,
     ) -> anyhow::Result<()> {
-        let del_tx_future = self.cache_storage.del(transaction_key.to_string());
-        let del_tx_receipts_future = self
+        let del_tx_future = self
             .cache_storage
-            .del(format!("receipts_{}", transaction_key));
+            .del(format!("transaction_{}", transaction_key));
         let del_tx_outcomes_future = self
             .cache_storage
             .del(format!("outcomes_{}", transaction_key));
-        let del_tx_counter_future = self
-            .cache_storage
-            .hdel("receipts_counters", transaction_key.to_string());
-        let del_tx_to_save_future = self
-            .cache_storage
-            .hdel("transactions_to_save", transaction_key.to_string());
-        futures::try_join!(
-            del_tx_future,
-            del_tx_receipts_future,
-            del_tx_outcomes_future,
-            del_tx_counter_future,
-            del_tx_to_save_future
-        )?;
+        futures::try_join!(del_tx_future, del_tx_outcomes_future,)?;
         Ok(())
     }
 
@@ -309,99 +263,17 @@ impl TxIndexerCache {
         transaction_key: &readnode_primitives::TransactionKey,
         indexer_execution_outcome_with_receipt: near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
     ) -> anyhow::Result<()> {
-        let receipt_future = self.cache_storage.hset(
-            format!("receipts_{}", transaction_key),
-            indexer_execution_outcome_with_receipt
-                .receipt
-                .receipt_id
-                .to_string(),
-            borsh::to_vec(&indexer_execution_outcome_with_receipt.receipt)?,
-        );
-
-        let outcome_future = self.cache_storage.hset(
-            format!("outcomes_{}", transaction_key),
-            indexer_execution_outcome_with_receipt
+        let execution_outcome_with_receipt = readnode_primitives::ExecutionOutcomeWithReceipt {
+            execution_outcome: indexer_execution_outcome_with_receipt
                 .execution_outcome
-                .id
-                .to_string(),
-            borsh::to_vec(&indexer_execution_outcome_with_receipt.execution_outcome)?,
-        );
-        futures::try_join!(receipt_future, outcome_future)?;
-        Ok(())
-    }
-
-    pub async fn get_tx_key_by_receipt_id(
-        &self,
-        receipt_id: near_indexer_primitives::CryptoHash,
-    ) -> anyhow::Result<readnode_primitives::TransactionKey> {
-        let tx_key_string: String = self
-            .cache_storage
-            .hget("receipts_watching_list", receipt_id.to_string())
-            .await?;
-        Ok(readnode_primitives::TransactionKey::from(tx_key_string))
-    }
-
-    pub async fn set_receipt_to_watching_list(
-        &self,
-        receipt_id: near_indexer_primitives::CryptoHash,
-        transaction_key: readnode_primitives::TransactionKey,
-    ) -> anyhow::Result<()> {
+                .clone(),
+            receipt: indexer_execution_outcome_with_receipt.receipt,
+        };
         self.cache_storage
-            .hset(
-                "receipts_watching_list",
-                receipt_id.to_string(),
-                transaction_key.to_string(),
-            )
-            .await?;
-        self.cache_storage
-            .hincr("receipts_counters", transaction_key.to_string())
-            .await?;
-        Ok(())
-    }
-
-    pub async fn del_receipt_from_watching_list(
-        &self,
-        receipt_id: near_indexer_primitives::CryptoHash,
-    ) -> anyhow::Result<()> {
-        let tx_key = self.get_tx_key_by_receipt_id(receipt_id).await?;
-        self.cache_storage
-            .hdel("receipts_watching_list", receipt_id.to_string())
-            .await?;
-        self.cache_storage
-            .hdecr("receipts_counters", tx_key.to_string())
-            .await?;
-        Ok(())
-    }
-
-    pub async fn get_receipts_counter(
-        &self,
-        transaction_key: readnode_primitives::TransactionKey,
-    ) -> anyhow::Result<u64> {
-        self.cache_storage
-            .hget("receipts_counters", transaction_key.to_string())
-            .await
-    }
-
-    pub async fn set_tx_to_save(
-        &self,
-        transaction_key: readnode_primitives::TransactionKey,
-    ) -> anyhow::Result<()> {
-        self.cache_storage
-            .hset(
-                "transactions_to_save",
-                transaction_key.to_string(),
-                transaction_key.to_string(),
+            .rpush(
+                format!("outcomes_{}", transaction_key),
+                borsh::to_vec(&execution_outcome_with_receipt)?,
             )
             .await
-    }
-
-    pub async fn get_tx_to_save(&self) -> anyhow::Result<Vec<readnode_primitives::TransactionKey>> {
-        Ok(self
-            .cache_storage
-            .hgetall::<std::collections::HashMap<String, String>>("transactions_to_save")
-            .await?
-            .into_iter()
-            .map(|(tx_key_string, _)| readnode_primitives::TransactionKey::from(tx_key_string))
-            .collect())
     }
 }
