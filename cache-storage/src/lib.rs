@@ -18,7 +18,6 @@ impl RedisCacheStorage {
         })
     }
 
-    //return first key by prefix
     async fn get_keys(&self, key_prefix: String) -> anyhow::Result<Vec<String>> {
         Ok(redis::cmd("KEYS")
             .arg(format!("{key_prefix}*"))
