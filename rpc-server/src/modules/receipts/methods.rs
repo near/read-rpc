@@ -60,7 +60,7 @@ async fn fetch_receipt(
     let receipt_id = request.receipt_reference.receipt_id;
 
     let receipt_record = fetch_receipt_record(data, request, "EXPERIMENTAL_receipt").await?;
-    
+
     let transaction_details =
         try_get_transaction_details_by_hash(data, &receipt_record.parent_transaction_hash)
             .await
