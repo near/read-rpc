@@ -71,8 +71,10 @@ async fn extract_transactions_to_collect(
     tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorage>,
     indexer_config: &configuration::TxIndexerConfig,
 ) -> anyhow::Result<()> {
-    let block_height = streamer_message.block.header.height;
-    let block_hash = streamer_message.block.header.hash;
+    let block = readnode_primitives::BlockRecord {
+        height: streamer_message.block.header.height,
+        hash: streamer_message.block.header.hash,
+    };
 
     let txs_in_block = streamer_message
         .shards
@@ -95,8 +97,7 @@ async fn extract_transactions_to_collect(
             transactions.map(move |tx| {
                 new_transaction_details_to_collecting_pool(
                     tx,
-                    block_height,
-                    block_hash,
+                    block,
                     shard_id,
                     db_manager,
                     tx_collecting_storage,
@@ -113,8 +114,7 @@ async fn extract_transactions_to_collect(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn new_transaction_details_to_collecting_pool(
     transaction: &IndexerTransactionWithOutcome,
-    block_height: u64,
-    block_hash: near_indexer_primitives::CryptoHash,
+    block: readnode_primitives::BlockRecord,
     shard_id: u64,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<storage::CacheStorage>,
@@ -133,20 +133,20 @@ async fn new_transaction_details_to_collecting_pool(
         .expect("`receipt_ids` must contain one Receipt ID");
 
     // Save the Receipt produced by the Transaction to the DB Map
-    save_receipt(
+    save_outcome_and_receipt(
         db_manager,
+        &transaction.outcome.execution_outcome.id,
         converted_into_receipt_id,
         &transaction.transaction.hash,
         &transaction.transaction.receiver_id,
-        block_height,
-        block_hash,
+        block,
         shard_id,
     )
     .await?;
 
     let transaction_details = readnode_primitives::CollectingTransactionDetails::from_indexer_tx(
         transaction.clone(),
-        block_height,
+        block.height,
     );
     let transaction_key = transaction_details.transaction_key();
     match tx_collecting_storage.set_tx(transaction_details).await {
@@ -174,18 +174,14 @@ async fn collect_receipts_and_outcomes(
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorage>,
 ) -> anyhow::Result<()> {
-    let block_height = streamer_message.block.header.height;
-    let block_hash = streamer_message.block.header.hash;
-
-    let shard_futures = streamer_message.shards.iter().map(|shard| {
-        process_shard(
-            db_manager,
-            tx_collecting_storage,
-            block_height,
-            block_hash,
-            shard,
-        )
-    });
+    let block = readnode_primitives::BlockRecord {
+        height: streamer_message.block.header.height,
+        hash: streamer_message.block.header.hash,
+    };
+    let shard_futures = streamer_message
+        .shards
+        .iter()
+        .map(|shard| process_shard(db_manager, tx_collecting_storage, block, shard));
 
     futures::future::try_join_all(shard_futures).await?;
 
@@ -196,8 +192,7 @@ async fn collect_receipts_and_outcomes(
 async fn process_shard(
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorage>,
-    block_height: u64,
-    block_hash: near_indexer_primitives::CryptoHash,
+    block: readnode_primitives::BlockRecord,
     shard: &near_indexer_primitives::IndexerShard,
 ) -> anyhow::Result<()> {
     let process_receipt_execution_outcome_futures =
@@ -208,8 +203,7 @@ async fn process_shard(
                 process_receipt_execution_outcome(
                     db_manager,
                     tx_collecting_storage,
-                    block_height,
-                    block_hash,
+                    block,
                     shard.shard_id,
                     receipt_execution_outcome,
                 )
@@ -224,8 +218,7 @@ async fn process_shard(
 async fn process_receipt_execution_outcome(
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<storage::CacheStorage>,
-    block_height: u64,
-    block_hash: near_indexer_primitives::CryptoHash,
+    block: readnode_primitives::BlockRecord,
     shard_id: u64,
     receipt_execution_outcome: &near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
 ) -> anyhow::Result<()> {
@@ -235,13 +228,13 @@ async fn process_receipt_execution_outcome(
         )
         .await
     {
-        save_receipt(
+        save_outcome_and_receipt(
             db_manager,
+            &receipt_execution_outcome.execution_outcome.id,
             &receipt_execution_outcome.receipt.receipt_id,
             &transaction_key.transaction_hash,
             &receipt_execution_outcome.receipt.receiver_id,
-            block_height,
-            block_hash,
+            block,
             shard_id,
         )
         .await?;
@@ -444,34 +437,35 @@ async fn save_transaction_details_to_storage(
 }
 // Save receipt_id, parent_transaction_hash, block_height and shard_id to the Db
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
-async fn save_receipt(
+async fn save_outcome_and_receipt(
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
+    outcome_id: &near_indexer_primitives::CryptoHash,
     receipt_id: &near_indexer_primitives::CryptoHash,
     parent_tx_hash: &near_indexer_primitives::CryptoHash,
     receiver_id: &near_indexer_primitives::types::AccountId,
-    block_height: u64,
-    block_hash: near_indexer_primitives::CryptoHash,
+    block: readnode_primitives::BlockRecord,
     shard_id: u64,
 ) -> anyhow::Result<()> {
     tracing::debug!(
         target: crate::INDEXER,
-        "Saving receipt_id: {} to `receipts_map` in DB",
+        "Saving outcome: {}, and receipt: {} to the database",
+        outcome_id,
         receipt_id,
     );
     db_manager
-        .save_receipt(
+        .save_outcome_and_receipt(
+            outcome_id,
             receipt_id,
             parent_tx_hash,
             receiver_id,
-            block_height,
-            block_hash,
+            block,
             shard_id,
         )
         .await
         .map_err(|err| {
             tracing::error!(
                 target: crate::INDEXER,
-                "Failed to save receipt \n{:#?}",
+                "Failed to save_outcome_and_receipt \n{:#?}",
                 err
             );
             err

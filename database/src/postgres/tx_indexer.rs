@@ -7,8 +7,7 @@ impl crate::TxIndexerDbManager for crate::PostgresDBManager {
         receipt_id: &near_indexer_primitives::CryptoHash,
         parent_tx_hash: &near_indexer_primitives::CryptoHash,
         receiver_id: &near_primitives::types::AccountId,
-        block_height: near_primitives::types::BlockHeight,
-        block_hash: near_indexer_primitives::CryptoHash,
+        block: readnode_primitives::BlockRecord,
         shard_id: crate::primitives::ShardId,
     ) -> anyhow::Result<()> {
         let shard_id_pool = self.get_shard_connection(receiver_id).await?;
@@ -28,8 +27,41 @@ impl crate::TxIndexerDbManager for crate::PostgresDBManager {
             .bind(receipt_id.to_string())
             .bind(parent_tx_hash.to_string())
             .bind(receiver_id.to_string())
-            .bind(bigdecimal::BigDecimal::from(block_height))
-            .bind(block_hash.to_string())
+            .bind(bigdecimal::BigDecimal::from(block.height))
+            .bind(block.hash.to_string())
+            .bind(bigdecimal::BigDecimal::from(shard_id))
+            .execute(shard_id_pool.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn save_outcome(
+        &self,
+        outcome_id: &near_indexer_primitives::CryptoHash,
+        parent_tx_hash: &near_indexer_primitives::CryptoHash,
+        receiver_id: &near_primitives::types::AccountId,
+        block: readnode_primitives::BlockRecord,
+        shard_id: crate::primitives::ShardId,
+    ) -> anyhow::Result<()> {
+        let shard_id_pool = self.get_shard_connection(receiver_id).await?;
+        crate::metrics::SHARD_DATABASE_WRITE_QUERIES
+            .with_label_values(&[
+                &shard_id_pool.shard_id.to_string(),
+                "save_outcome",
+                "outcomes_map",
+            ])
+            .inc();
+        sqlx::query(
+            "
+            INSERT INTO outcomes_map (outcome_id, parent_transaction_hash, receiver_id, block_height, block_hash, shard_id)
+            VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING;
+            ",
+        )
+            .bind(outcome_id.to_string())
+            .bind(parent_tx_hash.to_string())
+            .bind(receiver_id.to_string())
+            .bind(bigdecimal::BigDecimal::from(block.height))
+            .bind(block.hash.to_string())
             .bind(bigdecimal::BigDecimal::from(shard_id))
             .execute(shard_id_pool.pool)
             .await?;
