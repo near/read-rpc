@@ -221,6 +221,7 @@ pub struct ReceiptRecord {
     pub shard_id: near_indexer_primitives::types::ShardId,
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct BlockRecord {
     pub height: u64,
     pub hash: CryptoHash,
