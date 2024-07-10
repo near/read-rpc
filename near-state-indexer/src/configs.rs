@@ -1,6 +1,6 @@
 /// Watches for stream of blocks from the chain
 #[derive(clap::Parser, Debug)]
-#[command(version)]
+#[command(version = concat!(env!("CARGO_PKG_VERSION"), "\nnearcore ", env!("NEARCORE_VERSION")))]
 pub(crate) struct Opts {
     /// Sets a custom config dir. Defaults to ~/.near/
     #[clap(long)]
