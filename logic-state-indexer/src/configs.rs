@@ -3,6 +3,7 @@ pub use clap::{Parser, Subcommand};
 /// NEAR Indexer for Explorer
 /// Watches for stream of blocks from the chain
 #[derive(Parser, Debug)]
+#[command(version)]
 pub struct Opts {
     #[clap(subcommand)]
     pub start_options: StartOptions,
