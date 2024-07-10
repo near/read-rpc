@@ -46,24 +46,20 @@ impl CodeStorage {
             readnode_primitives::StateKey,
             Option<readnode_primitives::StateValue>,
         >,
-        prefetch_storage_limit: u64,
+        storage_usage: u64,
+        prefetch_state_size_limit: u64,
     ) -> Self {
         let mut prefetch_state_data = HashMap::new();
 
-        if let Ok(account) = db_manager
-            .get_account(&account_id, block_height, "query_call_function")
-            .await
-        {
-            if account.data.storage_usage() < prefetch_storage_limit {
-                prefetch_state_data = utils::get_state_from_db(
-                    &db_manager,
-                    &account_id,
-                    block_height,
-                    &[],
-                    "query_call_function",
-                )
-                .await;
-            }
+        if storage_usage < prefetch_state_size_limit {
+            prefetch_state_data = utils::get_state_from_db(
+                &db_manager,
+                &account_id,
+                block_height,
+                &[],
+                "query_call_function",
+            )
+            .await;
         }
 
         Self {
