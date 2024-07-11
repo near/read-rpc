@@ -49,18 +49,18 @@ impl CodeStorage {
         storage_usage: u64,
         prefetch_state_size_limit: u64,
     ) -> Self {
-        let mut prefetch_state_data = HashMap::new();
-
-        if storage_usage < prefetch_state_size_limit {
-            prefetch_state_data = utils::get_state_from_db(
+        let prefetch_state_data = if storage_usage < prefetch_state_size_limit {
+            utils::get_state_from_db(
                 &db_manager,
                 &account_id,
                 block_height,
                 &[],
                 "query_call_function",
             )
-            .await;
-        }
+            .await
+        } else {
+            HashMap::new()
+        };
 
         Self {
             db_manager,
