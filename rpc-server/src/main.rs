@@ -22,6 +22,12 @@ pub(crate) const RPC_SERVER: &str = "read_rpc_server";
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
     configuration::init_tracing(RPC_SERVER).await?;
+    tracing::info!(
+        "Starting {} v{}",
+        env!("CARGO_PKG_NAME"),
+        env!("CARGO_PKG_VERSION"),
+    );
+
     let rpc_server_config =
         configuration::read_configuration::<configuration::RpcServerConfig>().await?;
 

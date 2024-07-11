@@ -16,6 +16,12 @@ pub(crate) const INDEXER: &str = "tx_indexer";
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     configuration::init_tracing(INDEXER).await?;
+    tracing::info!(
+        "Starting {} v{}",
+        env!("CARGO_PKG_NAME"),
+        env!("CARGO_PKG_VERSION"),
+    );
+
     let indexer_config =
         configuration::read_configuration::<configuration::TxIndexerConfig>().await?;
 
