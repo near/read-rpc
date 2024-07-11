@@ -1,7 +1,7 @@
 #[async_trait::async_trait]
 pub trait ReaderDbManager {
     /// Searches the block height by the given block hash
-    async fn get_block_by_hash(
+    async fn get_block_height_by_hash(
         &self,
         block_hash: near_primitives::hash::CryptoHash,
         method_name: &str,

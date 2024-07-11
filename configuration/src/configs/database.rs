@@ -1,24 +1,29 @@
 use crate::configs::deserialize_data_or_env;
 use near_lake_framework::near_indexer_primitives::near_primitives;
 
+// Database connection URL
+// Example: "postgres://user:password@localhost:5432/dbname"
+type DatabaseConnectUrl = String;
+
 #[derive(serde_derive::Deserialize, Debug, Clone, Default)]
 pub struct ShardDatabaseConfig {
     #[serde(deserialize_with = "deserialize_data_or_env")]
     pub shard_id: u64,
     #[serde(deserialize_with = "deserialize_data_or_env")]
-    pub database_url: String,
+    pub database_url: DatabaseConnectUrl,
 }
 
 #[derive(Debug, Clone)]
 pub struct DatabaseConfig {
-    pub database_url: String,
-    pub shards_config: std::collections::HashMap<near_primitives::types::ShardId, String>,
+    pub database_url: DatabaseConnectUrl,
+    pub shards_config:
+        std::collections::HashMap<near_primitives::types::ShardId, DatabaseConnectUrl>,
 }
 
 #[derive(serde_derive::Deserialize, Debug, Clone, Default)]
 pub struct CommonDatabaseConfig {
     #[serde(deserialize_with = "deserialize_data_or_env")]
-    pub database_url: String,
+    pub database_url: DatabaseConnectUrl,
     #[serde(default)]
     pub shards: Vec<ShardDatabaseConfig>,
 }

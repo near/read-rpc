@@ -87,7 +87,7 @@ pub async fn fetch_block_from_cache_or_get(
                 near_primitives::types::BlockId::Height(block_height) => *block_height,
                 near_primitives::types::BlockId::Hash(hash) => data
                     .db_manager
-                    .get_block_by_hash(*hash, method_name)
+                    .get_block_height_by_hash(*hash, method_name)
                     .await
                     .map_err(|err| {
                         near_jsonrpc::primitives::types::blocks::RpcBlockError::UnknownBlock {
