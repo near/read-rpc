@@ -644,8 +644,6 @@ async fn view_access_keys_list(
         .db_manager
         .get_account_access_keys(account_id, block.block_height, "query_view_access_key_list")
         .await
-        // TODO: review this once we implement the `account_access_keys` after the redesign
-        // this error has to be the same the real NEAR JSON RPC returns in this case
         .map_err(
             |err| near_jsonrpc::primitives::types::query::RpcQueryError::InternalError {
                 error_message: format!("Failed to fetch access keys: {}", err),

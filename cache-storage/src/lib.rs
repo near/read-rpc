@@ -4,13 +4,18 @@ struct RedisCacheStorage {
 }
 
 impl RedisCacheStorage {
-    async fn new(redis_url: String, database: usize) -> anyhow::Result<Self> {
+    // Create a new instance of the `RedisCacheStorage` struct.
+    // param `redis_url` - Redis connection URL.
+    // param `database_number` - Number of the database to use.
+    // We use database 1 for handling the blocks by finality cache.
+    // We use database 3 for collecting transactions cache.
+    // Different databases are used to avoid key conflicts.
+    async fn new(redis_url: String, database_number: usize) -> anyhow::Result<Self> {
         let redis_client = redis::Client::open(redis_url)?
             .get_connection_manager()
             .await?;
-        // Use redis database 3 for collecting transactions cache
         redis::cmd("SELECT")
-            .arg(database)
+            .arg(database_number)
             .query_async(&mut redis_client.clone())
             .await?;
         Ok(Self {
@@ -95,6 +100,7 @@ pub struct BlocksByFinalityCache {
 /// Additionally, sets the JSON serialized `StreamerMessage` into keys `final` or `optimistic`
 /// accordingly.
 impl BlocksByFinalityCache {
+    // Use redis database 1 for handling the blocks by finality cache.
     pub async fn new(redis_url: String) -> anyhow::Result<Self> {
         Ok(Self {
             cache_storage: RedisCacheStorage::new(redis_url, 1).await?,
@@ -153,6 +159,7 @@ pub struct TxIndexerCache {
 }
 
 impl TxIndexerCache {
+    // Use redis database 3 for collecting transactions cache
     pub async fn new(redis_url: String) -> anyhow::Result<Self> {
         Ok(Self {
             cache_storage: RedisCacheStorage::new(redis_url, 3).await?,

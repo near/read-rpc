@@ -111,7 +111,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
         Ok(())
     }
 
-    async fn get_block_by_hash(
+    async fn get_block_height_by_hash(
         &self,
         block_hash: near_indexer_primitives::CryptoHash,
         method_name: &str,
@@ -186,7 +186,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
             .with_label_values(&["add_validators", "validators"])
             .inc();
         let epoch_end_block_height = self
-            .get_block_by_hash(epoch_end_block_hash, "add_validators")
+            .get_block_height_by_hash(epoch_end_block_hash, "add_validators")
             .await?;
         sqlx::query(
             "
@@ -253,11 +253,10 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
         query_builder.push(" ON CONFLICT DO NOTHING;");
         query_builder
             .build()
-            .execute(
-                self.shards_pool
-                    .get(&shard_id)
-                    .ok_or(anyhow::anyhow!("Shard not found"))?,
-            )
+            .execute(self.shards_pool.get(&shard_id).ok_or(anyhow::anyhow!(
+                "Database connection for Shard_{} not found",
+                shard_id
+            ))?)
             .await?;
         Ok(())
     }
@@ -317,11 +316,10 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
         query_builder.push(" ON CONFLICT DO NOTHING;");
         query_builder
             .build()
-            .execute(
-                self.shards_pool
-                    .get(&shard_id)
-                    .ok_or(anyhow::anyhow!("Shard not found"))?,
-            )
+            .execute(self.shards_pool.get(&shard_id).ok_or(anyhow::anyhow!(
+                "Database connection for Shard_{} not found",
+                shard_id
+            ))?)
             .await?;
         Ok(())
     }
@@ -372,11 +370,10 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
         query_builder.push(" ON CONFLICT DO NOTHING;");
         query_builder
             .build()
-            .execute(
-                self.shards_pool
-                    .get(&shard_id)
-                    .ok_or(anyhow::anyhow!("Shard not found"))?,
-            )
+            .execute(self.shards_pool.get(&shard_id).ok_or(anyhow::anyhow!(
+                "Database connection for Shard_{} not found",
+                shard_id
+            ))?)
             .await?;
         Ok(())
     }
@@ -427,11 +424,10 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
         query_builder.push(" ON CONFLICT DO NOTHING;");
         query_builder
             .build()
-            .execute(
-                self.shards_pool
-                    .get(&shard_id)
-                    .ok_or(anyhow::anyhow!("Shard not found"))?,
-            )
+            .execute(self.shards_pool.get(&shard_id).ok_or(anyhow::anyhow!(
+                "Database connection for Shard_{} not found",
+                shard_id
+            ))?)
             .await?;
         Ok(())
     }

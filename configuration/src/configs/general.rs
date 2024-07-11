@@ -268,11 +268,10 @@ impl From<CommonGeneralConfig> for GeneralTxIndexerConfig {
             chain_id: common_config.chain_id,
             near_rpc_url: required_value_or_panic("near_rpc_url", common_config.near_rpc_url),
             near_archival_rpc_url: common_config.near_archival_rpc_url,
-            redis_url: url::Url::parse(
-                &common_config
-                    .redis_url
-                    .unwrap_or("redis://127.0.0.1:6379".to_string()),
-            )
+            redis_url: url::Url::parse(&required_value_or_panic(
+                "redis_url",
+                common_config.redis_url,
+            ))
             .expect("Invalid redis url"),
             indexer_id: common_config
                 .tx_indexer
@@ -315,11 +314,10 @@ impl From<CommonGeneralConfig> for GeneralNearStateIndexerConfig {
     fn from(common_config: CommonGeneralConfig) -> Self {
         Self {
             chain_id: common_config.chain_id,
-            redis_url: url::Url::parse(
-                &common_config
-                    .redis_url
-                    .unwrap_or("redis://127.0.0.1:6379".to_string()),
-            )
+            redis_url: url::Url::parse(&required_value_or_panic(
+                "redis_url",
+                common_config.redis_url,
+            ))
             .expect("Invalid redis url"),
             concurrency: common_config
                 .near_state_indexer

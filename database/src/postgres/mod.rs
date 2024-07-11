@@ -68,10 +68,10 @@ impl PostgresDBManager {
             near_primitives::shard_layout::account_id_to_shard_id(account_id, &self.shard_layout);
         Ok(ShardIdPool {
             shard_id,
-            pool: self
-                .shards_pool
-                .get(&shard_id)
-                .ok_or(anyhow::anyhow!("Shard not found"))?,
+            pool: self.shards_pool.get(&shard_id).ok_or(anyhow::anyhow!(
+                "Database connection for Shard_{} not found",
+                shard_id
+            ))?,
         })
     }
 

@@ -16,7 +16,7 @@ pub trait StateIndexerDbManager {
         )>,
     ) -> anyhow::Result<()>;
 
-    async fn get_block_by_hash(
+    async fn get_block_height_by_hash(
         &self,
         block_hash: near_primitives::hash::CryptoHash,
         method_name: &str,

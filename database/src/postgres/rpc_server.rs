@@ -1,10 +1,11 @@
+use std::str::FromStr;
+
 use bigdecimal::ToPrimitive;
 use futures::StreamExt;
-use std::str::FromStr;
 
 #[async_trait::async_trait]
 impl crate::ReaderDbManager for crate::PostgresDBManager {
-    async fn get_block_by_hash(
+    async fn get_block_height_by_hash(
         &self,
         block_hash: near_indexer_primitives::CryptoHash,
         method_name: &str,
@@ -456,6 +457,9 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         receipt_id: near_indexer_primitives::CryptoHash,
         method_name: &str,
     ) -> anyhow::Result<readnode_primitives::ReceiptRecord> {
+        // We need to query all shards because we don't know which shard the receipt is stored in
+        // and we need to return the receipt as soon as we find it.
+        // Query all shards in parallel and then we wait for the first result.
         let futures = self.shards_pool.iter().map(|(shard_id, pool)| {
             crate::metrics::SHARD_DATABASE_READ_QUERIES
                 .with_label_values(&[

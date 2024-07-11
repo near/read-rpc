@@ -261,7 +261,7 @@ pub async fn fetch_block(
             near_primitives::types::BlockId::Hash(block_hash) => {
                 match data
                     .db_manager
-                    .get_block_by_hash(*block_hash, method_name)
+                    .get_block_height_by_hash(*block_hash, method_name)
                     .await
                 {
                     Ok(block_height) => Ok(block_height),
@@ -349,7 +349,7 @@ pub async fn fetch_chunk(
             near_primitives::types::BlockId::Hash(block_hash) => {
                 let block_height = data
                     .db_manager
-                    .get_block_by_hash(block_hash, "chunk")
+                    .get_block_height_by_hash(block_hash, "chunk")
                     .await
                     .map_err(|err| {
                         tracing::error!("Failed to fetch block by hash: {}", err);
