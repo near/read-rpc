@@ -8,13 +8,10 @@ repository.workspace = true
 license.workspace = true
 
 [dependencies]
-actix-web = "4.2.1"
 anyhow = "1.0.70"
 clap = "4.4.18"
 futures = "0.3.5"
-itertools = "0.13.0"
 openssl-probe = "0.1.5"
-prometheus = "0.13.1"
 tokio = { version = "1.36.0", features = [
     "sync",
     "time",
@@ -28,10 +25,9 @@ configuration.workspace = true
 database.workspace = true
 logic-state-indexer.workspace = true
 
-near-primitives.workspace = true
-near-indexer-primitives.workspace = true
 near-jsonrpc-client.workspace = true
 near-lake-framework.workspace = true
 
 [features]
+default = []
 tracing-instrumentation = ["configuration/tracing-instrumentation"]

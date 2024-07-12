@@ -81,7 +81,7 @@ cargo run --package <package_name>
 Example:
 
 ```
-cargo run --release --package rpc-server
+cargo run --profile dev-release --package rpc-server
 ```
 
 **Please don't forget** to handle `.env` files properly if you're running the package from the root using the proposed approach.
@@ -97,7 +97,7 @@ cd rpc-server/
 And run a package as usually from the folder
 
 ```
-cargo run --release
+cargo run --profile dev-release
 ```
 
 **In this case** you would want to have an `.env` file in the package folder.

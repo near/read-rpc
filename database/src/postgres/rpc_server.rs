@@ -7,7 +7,7 @@ use futures::StreamExt;
 impl crate::ReaderDbManager for crate::PostgresDBManager {
     async fn get_block_height_by_hash(
         &self,
-        block_hash: near_indexer_primitives::CryptoHash,
+        block_hash: near_primitives::hash::CryptoHash,
         method_name: &str,
     ) -> anyhow::Result<u64> {
         crate::metrics::META_DATABASE_READ_QUERIES
@@ -31,7 +31,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
 
     async fn get_block_by_chunk_hash(
         &self,
-        chunk_hash: near_indexer_primitives::CryptoHash,
+        chunk_hash: near_primitives::hash::CryptoHash,
         method_name: &str,
     ) -> anyhow::Result<readnode_primitives::BlockHeightShardId> {
         crate::metrics::META_DATABASE_READ_QUERIES
@@ -454,7 +454,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
 
     async fn get_receipt_by_id(
         &self,
-        receipt_id: near_indexer_primitives::CryptoHash,
+        receipt_id: near_primitives::hash::CryptoHash,
         method_name: &str,
     ) -> anyhow::Result<readnode_primitives::ReceiptRecord> {
         // We need to query all shards because we don't know which shard the receipt is stored in
@@ -514,7 +514,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
 
     async fn get_validators_by_epoch_id(
         &self,
-        epoch_id: near_indexer_primitives::CryptoHash,
+        epoch_id: near_primitives::hash::CryptoHash,
         method_name: &str,
     ) -> anyhow::Result<readnode_primitives::EpochValidatorsInfo> {
         crate::metrics::META_DATABASE_READ_QUERIES
@@ -567,7 +567,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         .bind(bigdecimal::BigDecimal::from(block_height))
         .fetch_one(&self.meta_db_pool)
         .await?;
-        let epoch_id = near_indexer_primitives::CryptoHash::from_str(&epoch_id)
+        let epoch_id = near_primitives::hash::CryptoHash::from_str(&epoch_id)
             .map_err(|err| anyhow::anyhow!("Failed to parse `epoch_id` to CryptoHash: {}", err))?;
         let validators_info: near_primitives::views::EpochValidatorInfo =
             serde_json::from_value(validators_info)?;

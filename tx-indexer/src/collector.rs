@@ -306,7 +306,7 @@ async fn save_transaction_details(
         Err(err) => {
             tracing::error!(
                 target: crate::INDEXER,
-                "Failed to save transaction {}: Back transaction to save. Error {}",
+                "Failed to save transaction {}: Error {}",
                 tx_key.transaction_hash,
                 err
             );

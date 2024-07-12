@@ -78,7 +78,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
     async fn save_block(
         &self,
         block_height: u64,
-        block_hash: near_indexer_primitives::CryptoHash,
+        block_hash: near_primitives::hash::CryptoHash,
     ) -> anyhow::Result<()> {
         crate::metrics::META_DATABASE_WRITE_QUERIES
             .with_label_values(&["save_block", "blocks"])
@@ -113,7 +113,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
 
     async fn get_block_height_by_hash(
         &self,
-        block_hash: near_indexer_primitives::CryptoHash,
+        block_hash: near_primitives::hash::CryptoHash,
         method_name: &str,
     ) -> anyhow::Result<u64> {
         crate::metrics::META_DATABASE_READ_QUERIES
@@ -176,11 +176,11 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
 
     async fn save_validators(
         &self,
-        epoch_id: near_indexer_primitives::CryptoHash,
+        epoch_id: near_primitives::hash::CryptoHash,
         epoch_height: u64,
         epoch_start_height: u64,
         validators_info: &near_primitives::views::EpochValidatorInfo,
-        epoch_end_block_hash: near_indexer_primitives::CryptoHash,
+        epoch_end_block_hash: near_primitives::hash::CryptoHash,
     ) -> anyhow::Result<()> {
         crate::metrics::META_DATABASE_WRITE_QUERIES
             .with_label_values(&["add_validators", "validators"])
@@ -209,7 +209,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
         shard_id: near_primitives::types::ShardId,
         state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
         block_height: u64,
-        block_hash: near_indexer_primitives::CryptoHash,
+        block_hash: near_primitives::hash::CryptoHash,
     ) -> anyhow::Result<()> {
         crate::metrics::SHARD_DATABASE_WRITE_QUERIES
             .with_label_values(&[
@@ -266,7 +266,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
         shard_id: near_primitives::types::ShardId,
         state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
         block_height: u64,
-        block_hash: near_indexer_primitives::CryptoHash,
+        block_hash: near_primitives::hash::CryptoHash,
     ) -> anyhow::Result<()> {
         crate::metrics::SHARD_DATABASE_WRITE_QUERIES
             .with_label_values(&[
@@ -329,7 +329,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
         shard_id: near_primitives::types::ShardId,
         state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
         block_height: u64,
-        block_hash: near_indexer_primitives::CryptoHash,
+        block_hash: near_primitives::hash::CryptoHash,
     ) -> anyhow::Result<()> {
         crate::metrics::SHARD_DATABASE_WRITE_QUERIES
             .with_label_values(&[
@@ -383,7 +383,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
         shard_id: near_primitives::types::ShardId,
         state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
         block_height: u64,
-        block_hash: near_indexer_primitives::CryptoHash,
+        block_hash: near_primitives::hash::CryptoHash,
     ) -> anyhow::Result<()> {
         crate::metrics::SHARD_DATABASE_WRITE_QUERIES
             .with_label_values(&[

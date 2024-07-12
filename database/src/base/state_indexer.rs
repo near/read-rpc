@@ -3,7 +3,7 @@ pub trait StateIndexerDbManager {
     async fn save_block(
         &self,
         block_height: u64,
-        block_hash: near_indexer_primitives::CryptoHash,
+        block_hash: near_primitives::hash::CryptoHash,
     ) -> anyhow::Result<()>;
 
     async fn save_chunks(
@@ -28,17 +28,17 @@ pub trait StateIndexerDbManager {
 
     async fn save_validators(
         &self,
-        epoch_id: near_indexer_primitives::CryptoHash,
+        epoch_id: near_primitives::hash::CryptoHash,
         epoch_height: u64,
         epoch_start_height: u64,
         validators_info: &near_primitives::views::EpochValidatorInfo,
-        epoch_end_block_hash: near_indexer_primitives::CryptoHash,
+        epoch_end_block_hash: near_primitives::hash::CryptoHash,
     ) -> anyhow::Result<()>;
 
     async fn save_block_with_chunks(
         &self,
         block_height: u64,
-        block_hash: near_indexer_primitives::CryptoHash,
+        block_hash: near_primitives::hash::CryptoHash,
         chunks: Vec<(
             crate::primitives::ChunkHash,
             crate::primitives::ShardId,
@@ -57,7 +57,7 @@ pub trait StateIndexerDbManager {
         shard_id: near_primitives::types::ShardId,
         state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
         block_height: u64,
-        block_hash: near_indexer_primitives::CryptoHash,
+        block_hash: near_primitives::hash::CryptoHash,
     ) -> anyhow::Result<()>;
 
     async fn save_state_changes_access_key(
@@ -65,7 +65,7 @@ pub trait StateIndexerDbManager {
         shard_id: near_primitives::types::ShardId,
         state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
         block_height: u64,
-        block_hash: near_indexer_primitives::CryptoHash,
+        block_hash: near_primitives::hash::CryptoHash,
     ) -> anyhow::Result<()>;
 
     async fn save_state_changes_contract(
@@ -73,7 +73,7 @@ pub trait StateIndexerDbManager {
         shard_id: near_primitives::types::ShardId,
         state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
         block_height: u64,
-        block_hash: near_indexer_primitives::CryptoHash,
+        block_hash: near_primitives::hash::CryptoHash,
     ) -> anyhow::Result<()>;
 
     async fn save_state_changes_account(
@@ -81,6 +81,6 @@ pub trait StateIndexerDbManager {
         shard_id: near_primitives::types::ShardId,
         state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
         block_height: u64,
-        block_hash: near_indexer_primitives::CryptoHash,
+        block_hash: near_primitives::hash::CryptoHash,
     ) -> anyhow::Result<()>;
 }
