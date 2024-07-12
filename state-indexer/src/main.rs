@@ -10,6 +10,8 @@ async fn main() -> anyhow::Result<()> {
     openssl_probe::init_ssl_cert_env_vars();
 
     configuration::init_tracing(INDEXER).await?;
+    tracing::info!("Starting {} v{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
+
     let indexer_config = configuration::read_configuration::<configuration::StateIndexerConfig>().await?;
     let opts: configs::Opts = configs::Opts::parse();
 

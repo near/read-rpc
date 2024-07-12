@@ -1,7 +1,7 @@
 use clap::Parser;
 
 #[derive(Parser)]
-#[clap(author, version, about, long_about = None)]
+#[clap(author, version = concat!(env!("CARGO_PKG_VERSION"), "\nnearcore ", env!("NEARCORE_VERSION")), about, long_about = None)]
 pub struct Opts {
     #[clap(long, env = "NEAR_RPC_URL")]
     pub near_rpc_url: http::Uri,
