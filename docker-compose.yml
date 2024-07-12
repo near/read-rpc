@@ -28,7 +28,7 @@ services:
         profile: "dev-release"
     environment:
       <<: *common-variables
-      TX_BUCKET_NAME: near-lake-tx-local
+      TX_BUCKET_NAME: near-tx-local
       STORAGE_EMULATOR_HOST: http://gcs_emulator:9023
       RUST_LOG: "read_rpc_server=debug,shadow_data_consistency=debug,info"
     restart: on-failure
@@ -81,7 +81,7 @@ services:
       <<: *common-variables
       REDIS_URL: redis://redis:6379/
       TX_INDEXER_ID: tx-indexer-local
-      TX_BUCKET_NAME: near-lake-tx-local
+      TX_BUCKET_NAME: near-tx-local
       STORAGE_EMULATOR_HOST: http://gcs_emulator:9023
       RUST_LOG: "info"
     command: [ "from-interruption" ]
@@ -120,7 +120,8 @@ services:
   gcs_emulator:
     image: oittaa/gcp-storage-emulator:latest
     restart: on-failure
-    command: ["start", "--default-bucket", "near-lake-tx-local"]
+    entrypoint: ["/bin/sh","-c"]
+    command: ["gcp-storage-emulator create_bucket near-tx-local && gcp-storage-emulator start"]
     ports:
       - "9023:9023"
     environment:
