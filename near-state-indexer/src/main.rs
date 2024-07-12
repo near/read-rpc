@@ -13,6 +13,12 @@ mod utils;
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
     configuration::init_tracing(INDEXER).await?;
+    tracing::info!(
+        "Starting {} v{}",
+        env!("CARGO_PKG_NAME"),
+        env!("CARGO_PKG_VERSION"),
+    );
+
     // We use it to automatically search the for root certificates to perform HTTPS calls
     // (sending telemetry and downloading genesis)
     openssl_probe::init_ssl_cert_env_vars();

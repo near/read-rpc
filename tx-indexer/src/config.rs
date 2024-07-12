@@ -5,6 +5,7 @@ use near_jsonrpc_client::{methods, JsonRpcClient};
 /// NEAR Indexer for Explorer
 /// Watches for stream of blocks from the chain
 #[derive(Parser, Debug)]
+#[command(version = concat!(env!("CARGO_PKG_VERSION"), "\nnearcore ", env!("NEARCORE_VERSION")))]
 pub(crate) struct Opts {
     #[clap(subcommand)]
     pub start_options: StartOptions,
