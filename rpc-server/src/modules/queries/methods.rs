@@ -401,6 +401,17 @@ async fn view_state(
         is_optimistic,
     );
 
+    data.db_manager
+        .get_account(account_id, block.block_height, "query_view_state")
+        .await
+        .map_err(
+            |_err| near_jsonrpc::primitives::types::query::RpcQueryError::UnknownAccount {
+                requested_account_id: account_id.clone(),
+                block_height: block.block_height,
+                block_hash: block.block_hash,
+            },
+        )?;
+
     let state_item = if is_optimistic {
         optimistic_view_state(data, block, account_id, prefix).await?
     } else {
@@ -429,17 +440,6 @@ async fn optimistic_view_state(
     Vec<near_primitives::views::StateItem>,
     near_jsonrpc::primitives::types::query::RpcQueryError,
 > {
-    data.db_manager
-        .get_account(account_id, block.block_height, "query_view_state")
-        .await
-        .map_err(
-            |_err| near_jsonrpc::primitives::types::query::RpcQueryError::UnknownAccount {
-                requested_account_id: account_id.clone(),
-                block_height: block.block_height,
-                block_hash: block.block_hash,
-            },
-        )?;
-
     let mut optimistic_data = data
         .blocks_info_by_finality
         .optimistic_state_changes_in_block(account_id, prefix)
@@ -500,17 +500,6 @@ async fn database_view_state(
     Vec<near_primitives::views::StateItem>,
     near_jsonrpc::primitives::types::query::RpcQueryError,
 > {
-    data.db_manager
-        .get_account(account_id, block.block_height, "query_view_state")
-        .await
-        .map_err(
-            |_err| near_jsonrpc::primitives::types::query::RpcQueryError::UnknownAccount {
-                requested_account_id: account_id.clone(),
-                block_height: block.block_height,
-                block_hash: block.block_hash,
-            },
-        )?;
-
     let state_from_db = get_state_from_db_with_timeout(
         &data.db_manager,
         account_id,
