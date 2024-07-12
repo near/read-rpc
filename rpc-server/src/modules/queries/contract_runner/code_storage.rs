@@ -46,8 +46,10 @@ impl CodeStorage {
             readnode_primitives::StateKey,
             Option<readnode_primitives::StateValue>,
         >,
+        storage_usage: u64,
+        prefetch_state_size_limit: u64,
     ) -> Self {
-        let prefetch_state_data = if account_id.to_string().ends_with("poolv1.near") {
+        let prefetch_state_data = if storage_usage < prefetch_state_size_limit {
             utils::get_state_from_db(
                 &db_manager,
                 &account_id,

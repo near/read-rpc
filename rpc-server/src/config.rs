@@ -77,6 +77,8 @@ pub struct ServerContext {
     pub max_gas_burnt: near_primitives::types::Gas,
     /// How many requests we should check for data consistency
     pub shadow_data_consistency_rate: f64,
+    /// Max size for state prefetch during a view_call
+    pub prefetch_state_size_limit: u64,
     /// Port of the server.
     pub server_port: u16,
     /// Timestamp of starting server.
@@ -164,6 +166,7 @@ impl ServerContext {
             contract_code_cache,
             max_gas_burnt: rpc_server_config.general.max_gas_burnt,
             shadow_data_consistency_rate: rpc_server_config.general.shadow_data_consistency_rate,
+            prefetch_state_size_limit: rpc_server_config.general.prefetch_state_size_limit,
             server_port: rpc_server_config.general.server_port,
             boot_time_seconds: chrono::Utc::now().timestamp(),
             version: near_primitives::version::Version {

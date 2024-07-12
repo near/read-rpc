@@ -38,6 +38,7 @@ pub async fn run_contract(
         readnode_primitives::StateKey,
         Option<readnode_primitives::StateValue>,
     >,
+    prefetch_state_size_limit: u64,
 ) -> Result<RunContractResponse, FunctionCallError> {
     let contract = db_manager
         .get_account(account_id, block.block_height, "query_call_function")
@@ -117,6 +118,8 @@ pub async fn run_contract(
         block.block_height,
         validators,
         optimistic_data,
+        contract.data.storage_usage(),
+        prefetch_state_size_limit,
     )
     .await;
 

@@ -53,6 +53,11 @@ near_rpc_url = "https://beta.rpc.mainnet.near.org"
 ## thet means for every method calls will be checked every 100th request
 #shadow_data_consistency_rate = 100
 
+## Max size (in bytes) for state prefetch during a view_call
+## Limits the amount of data prefetched to speed up the view_call
+## By default, it is set to 1MB (1_000_000 bytes).
+#prefetch_state_size_limit = 1_000_000
+
 ### Tx indexer general configuration
 [general.tx_indexer]
 
