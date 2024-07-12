@@ -365,6 +365,7 @@ async fn function_call(
         block,
         data.max_gas_burnt,
         maybe_optimistic_data,
+        data.prefetch_state_size_limit,
     )
     .await;
 

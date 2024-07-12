@@ -18,6 +18,7 @@ pub struct GeneralRpcServerConfig {
     pub contract_code_cache_size: f64,
     pub block_cache_size: f64,
     pub shadow_data_consistency_rate: f64,
+    pub prefetch_state_size_limit: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -106,6 +107,8 @@ pub struct CommonGeneralRpcServerConfig {
     pub block_cache_size: Option<f64>,
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub shadow_data_consistency_rate: Option<f64>,
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    pub prefetch_state_size_limit: Option<u64>,
 }
 
 impl CommonGeneralRpcServerConfig {
@@ -128,6 +131,10 @@ impl CommonGeneralRpcServerConfig {
     pub fn default_shadow_data_consistency_rate() -> f64 {
         100.0
     }
+
+    pub fn default_prefetch_state_size_limit() -> u64 {
+        1_000_000
+    }
 }
 
 impl Default for CommonGeneralRpcServerConfig {
@@ -138,6 +145,7 @@ impl Default for CommonGeneralRpcServerConfig {
             contract_code_cache_size: Some(Self::default_contract_code_cache_size()),
             block_cache_size: Some(Self::default_block_cache_size()),
             shadow_data_consistency_rate: Some(Self::default_shadow_data_consistency_rate()),
+            prefetch_state_size_limit: Some(Self::default_prefetch_state_size_limit()),
         }
     }
 }
@@ -258,6 +266,10 @@ impl From<CommonGeneralConfig> for GeneralRpcServerConfig {
                 .rpc_server
                 .shadow_data_consistency_rate
                 .unwrap_or_else(CommonGeneralRpcServerConfig::default_shadow_data_consistency_rate),
+            prefetch_state_size_limit: common_config
+                .rpc_server
+                .prefetch_state_size_limit
+                .unwrap_or_else(CommonGeneralRpcServerConfig::default_prefetch_state_size_limit),
         }
     }
 }
