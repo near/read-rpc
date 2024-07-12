@@ -402,6 +402,17 @@ async fn view_state(
         is_optimistic,
     );
 
+    data.db_manager
+        .get_account(account_id, block.block_height, "query_view_state")
+        .await
+        .map_err(
+            |_err| near_jsonrpc::primitives::types::query::RpcQueryError::UnknownAccount {
+                requested_account_id: account_id.clone(),
+                block_height: block.block_height,
+                block_hash: block.block_hash,
+            },
+        )?;
+
     let state_item = if is_optimistic {
         optimistic_view_state(data, block, account_id, prefix).await?
     } else {
@@ -450,43 +461,34 @@ async fn optimistic_view_state(
             block_hash: block.block_hash,
         }
     })?;
-    if state_from_db.is_empty() && optimistic_data.is_empty() {
-        Err(
-            near_jsonrpc::primitives::types::query::RpcQueryError::UnknownAccount {
-                requested_account_id: account_id.clone(),
-                block_height: block.block_height,
-                block_hash: block.block_hash,
-            },
-        )
-    } else {
-        let mut values: Vec<near_primitives::views::StateItem> = state_from_db
-            .into_iter()
-            .filter_map(|(key, value)| {
-                let value = if let Some(value) = optimistic_data.remove(&key) {
-                    value.clone()
-                } else {
-                    Some(value)
-                };
-                value.map(|value| near_primitives::views::StateItem {
-                    key: key.into(),
-                    value: value.into(),
+
+    let mut values: Vec<near_primitives::views::StateItem> = state_from_db
+        .into_iter()
+        .filter_map(|(key, value)| {
+            let value = if let Some(value) = optimistic_data.remove(&key) {
+                value.clone()
+            } else {
+                Some(value)
+            };
+            value.map(|value| near_primitives::views::StateItem {
+                key: key.into(),
+                value: value.into(),
+            })
+        })
+        .collect();
+    let optimistic_items: Vec<near_primitives::views::StateItem> = optimistic_data
+        .iter()
+        .filter_map(|(key, value)| {
+            value
+                .clone()
+                .map(|value| near_primitives::views::StateItem {
+                    key: key.clone().into(),
+                    value: value.clone().into(),
                 })
-            })
-            .collect();
-        let optimistic_items: Vec<near_primitives::views::StateItem> = optimistic_data
-            .iter()
-            .filter_map(|(key, value)| {
-                value
-                    .clone()
-                    .map(|value| near_primitives::views::StateItem {
-                        key: key.clone().into(),
-                        value: value.clone().into(),
-                    })
-            })
-            .collect();
-        values.extend(optimistic_items);
-        Ok(values)
-    }
+        })
+        .collect();
+    values.extend(optimistic_items);
+    Ok(values)
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
@@ -515,24 +517,15 @@ async fn database_view_state(
             block_hash: block.block_hash,
         }
     })?;
-    if state_from_db.is_empty() {
-        Err(
-            near_jsonrpc::primitives::types::query::RpcQueryError::UnknownAccount {
-                requested_account_id: account_id.clone(),
-                block_height: block.block_height,
-                block_hash: block.block_hash,
-            },
-        )
-    } else {
-        let values: Vec<near_primitives::views::StateItem> = state_from_db
-            .into_iter()
-            .map(|(key, value)| near_primitives::views::StateItem {
-                key: key.into(),
-                value: value.into(),
-            })
-            .collect();
-        Ok(values)
-    }
+
+    let values: Vec<near_primitives::views::StateItem> = state_from_db
+        .into_iter()
+        .map(|(key, value)| near_primitives::views::StateItem {
+            key: key.into(),
+            value: value.into(),
+        })
+        .collect();
+    Ok(values)
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
