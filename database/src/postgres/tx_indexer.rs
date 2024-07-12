@@ -4,8 +4,8 @@ use bigdecimal::ToPrimitive;
 impl crate::TxIndexerDbManager for crate::PostgresDBManager {
     async fn save_receipt(
         &self,
-        receipt_id: &near_indexer_primitives::CryptoHash,
-        parent_tx_hash: &near_indexer_primitives::CryptoHash,
+        receipt_id: &near_primitives::hash::CryptoHash,
+        parent_tx_hash: &near_primitives::hash::CryptoHash,
         receiver_id: &near_primitives::types::AccountId,
         block: readnode_primitives::BlockRecord,
         shard_id: crate::primitives::ShardId,
@@ -37,8 +37,8 @@ impl crate::TxIndexerDbManager for crate::PostgresDBManager {
 
     async fn save_outcome(
         &self,
-        outcome_id: &near_indexer_primitives::CryptoHash,
-        parent_tx_hash: &near_indexer_primitives::CryptoHash,
+        outcome_id: &near_primitives::hash::CryptoHash,
+        parent_tx_hash: &near_primitives::hash::CryptoHash,
         receiver_id: &near_primitives::types::AccountId,
         block: readnode_primitives::BlockRecord,
         shard_id: crate::primitives::ShardId,

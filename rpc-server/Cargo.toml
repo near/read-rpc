@@ -35,7 +35,6 @@ tokio = { version = "1.36.0", features = ["full", "tracing"] }
 tokio-stream = { version = "0.1.12" }
 tracing = { version = "0.1.36", features = ["std"] }
 tracing-actix-web = "0.7.9"
-sysinfo = "0.30.5"
 
 cache-storage.workspace = true
 configuration.workspace = true
@@ -55,5 +54,6 @@ near-parameters.workspace = true
 near-vm-runner.workspace = true
 
 [features]
+default = []
 tracing-instrumentation = ["configuration/tracing-instrumentation"]
 shadow_data_consistency = ["dep:assert-json-diff"]

@@ -1,14 +1,12 @@
-version: '3.7'
-
 x-common-variables: &common-variables
   CHAIN_ID: mainnet
-  META_DATABASE_URL: postgres://postgres:password@localhost:5422/near_data
-  SHARD_0_DATABASE_URL: postgres://postgres:password@localhost:5430/near_data
-  SHARD_1_DATABASE_URL: postgres://postgres:password@localhost:5431/near_data
-  SHARD_2_DATABASE_URL: postgres://postgres:password@localhost:5432/near_data
-  SHARD_3_DATABASE_URL: postgres://postgres:password@localhost:5433/near_data
-  SHARD_4_DATABASE_URL: postgres://postgres:password@localhost:5434/near_data
-  SHARD_5_DATABASE_URL: postgres://postgres:password@localhost:5435/near_data
+  META_DATABASE_URL: postgres://postgres:password@metadata_db:5432/near_data
+  SHARD_0_DATABASE_URL: postgres://postgres:password@shard_0_db:5432/near_data
+  SHARD_1_DATABASE_URL: postgres://postgres:password@shard_1_db:5432/near_data
+  SHARD_2_DATABASE_URL: postgres://postgres:password@shard_2_db:5432/near_data
+  SHARD_3_DATABASE_URL: postgres://postgres:password@shard_3_db:5432/near_data
+  SHARD_4_DATABASE_URL: postgres://postgres:password@shard_4_db:5432/near_data
+  SHARD_5_DATABASE_URL: postgres://postgres:password@shard_5_db:5432/near_data
   AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
   AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
   AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
@@ -27,14 +25,17 @@ services:
       dockerfile: rpc-server/Dockerfile
       args:
         features: "tracing-instrumentation,shadow_data_consistency"
+        profile: "dev-release"
     environment:
       <<: *common-variables
-      SERVER_PORT: 8000
+      TX_BUCKET_NAME: near-lake-tx-local
+      STORAGE_EMULATOR_HOST: http://gcs_emulator:9023
       RUST_LOG: "read_rpc_server=debug,shadow_data_consistency=debug,info"
     restart: on-failure
     ports:
-      - 8000:8000
+      - "8080:8080"
     depends_on:
+      - gcs_emulator
       - metadata_db
       - shard_0_db
       - shard_1_db
@@ -50,13 +51,14 @@ services:
       dockerfile: state-indexer/Dockerfile
       args:
         features: "tracing-instrumentation"
+        profile: "dev-release"
     environment:
       <<: *common-variables
       STATE_INDEXER_ID: state-indexer-local
       RUST_LOG: "info"
     command: [ "from-interruption" ]
     ports:
-      - 8080:8080
+      - "8081:8081"
     depends_on:
       - metadata_db
       - shard_0_db
@@ -74,14 +76,19 @@ services:
       dockerfile: tx-indexer/Dockerfile
       args:
         features: "tracing-instrumentation"
+        profile: "dev-release"
     environment:
       <<: *common-variables
+      REDIS_URL: redis://redis:6379/
       TX_INDEXER_ID: tx-indexer-local
+      TX_BUCKET_NAME: near-lake-tx-local
+      STORAGE_EMULATOR_HOST: http://gcs_emulator:9023
       RUST_LOG: "info"
     command: [ "from-interruption" ]
     ports:
-      - 8081:8081
+      - "8082:8082"
     depends_on:
+      - gcs_emulator
       - metadata_db
       - shard_0_db
       - shard_1_db
@@ -95,14 +102,30 @@ services:
   jaeger:
     image: jaegertracing/all-in-one:1.37
     ports:
-      - 5775:5775/udp
-      - 6831:6831/udp
-      - 6832:6832/udp
-      - 5778:5778
-      - 16686:16686
-      - 14268:14268
-      - 9411:9411
-      -
+      - "5775:5775/udp"
+      - "6831:6831/udp"
+      - "6832:6832/udp"
+      - "5778:5778"
+      - "16686:16686"
+      - "14268:14268"
+      - "9411:9411"
+
+  redis:
+    image: redis/redis-stack-server:latest
+    container_name: redis-stack-server
+    ports:
+      - "6379:6379"
+    restart: always
+
+  gcs_emulator:
+    image: oittaa/gcp-storage-emulator:latest
+    restart: on-failure
+    command: ["start", "--default-bucket", "near-lake-tx-local"]
+    ports:
+      - "9023:9023"
+    environment:
+      PORT: 9023
+
   metadata_db:
     image: postgres:15.5
     restart: always

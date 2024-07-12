@@ -25,6 +25,10 @@ RUST_LOG=info
 ```bash
 $ cargo build --release
 ```
+#### A much faster to compile version of `release`, for development use.
+```bash
+$ cargo build --profile dev-release
+```
 
 ### Run
 

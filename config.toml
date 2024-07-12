@@ -39,11 +39,7 @@ aws_default_region = "${AWS_DEFAULT_REGION}"
 aws_bucket_name = "${AWS_BUCKET_NAME}"
 
 [tx_details_storage]
-aws_access_key_id = "${TX_AWS_ACCESS_KEY_ID}"
-aws_secret_access_key = "${TX_AWS_SECRET_ACCESS_KEY}"
-aws_default_region = "${TX_AWS_DEFAULT_REGION}"
-aws_bucket_name = "${TX_AWS_BUCKET_NAME}"
-aws_endpoint = "${TX_AWS_ENDPOINT}"
+bucket_name = "${TX_BUCKET_NAME}"
 
 [database]
 database_url = "${META_DATABASE_URL}"

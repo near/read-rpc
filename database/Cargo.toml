@@ -28,7 +28,5 @@ sqlx = { version = "0.7.1", features = [
 configuration.workspace = true
 readnode-primitives.workspace = true
 
-near-chain-configs.workspace = true
 near-primitives.workspace = true
 near-crypto.workspace = true
-near-indexer-primitives.workspace = true

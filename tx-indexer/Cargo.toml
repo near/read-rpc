@@ -37,5 +37,6 @@ near-jsonrpc-client.workspace = true
 near-lake-framework.workspace = true
 
 [features]
+default = []
 validator = []
 tracing-instrumentation = ["configuration/tracing-instrumentation"]
