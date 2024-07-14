@@ -81,6 +81,9 @@ pub struct CommonConfig {
     pub rightsizing: rightsizing::CommonRightsizingConfig,
     pub lake_config: lake::CommonLakeConfig,
     pub database: database::CommonDatabaseConfig,
+    // Set as default to avoid breaking changes
+    // This options needs only for tx_indexer and rpc_server
+    #[serde(default)]
     pub tx_details_storage: tx_details_storage::CommonTxDetailStorageConfig,
 }
 
