@@ -7,6 +7,10 @@ rust-version.workspace = true
 repository.workspace = true
 license.workspace = true
 
+[build-dependencies]
+anyhow = "1.0.51"
+rustc_version = "0.4"
+
 [dependencies]
 anyhow = "1.0.70"
 clap = "4.4.18"
