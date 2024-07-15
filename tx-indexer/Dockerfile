@@ -3,6 +3,7 @@ ARG features="default"
 ARG profile="release"
 WORKDIR /tmp/
 
+COPY .cargo .cargo
 COPY Cargo.lock ./
 COPY Cargo.toml ./
 COPY config.toml ./
