@@ -18,6 +18,19 @@ pub struct DatabaseConfig {
     pub database_url: DatabaseConnectUrl,
     pub shards_config:
         std::collections::HashMap<near_primitives::types::ShardId, DatabaseConnectUrl>,
+    // Migrations cannot be applied to read-only replicas
+    // We should run rpc-server only on read-only replicas
+    pub read_only: bool,
+}
+
+impl DatabaseConfig {
+    pub fn to_read_only(&self) -> Self {
+        Self {
+            database_url: self.database_url.clone(),
+            shards_config: self.shards_config.clone(),
+            read_only: true,
+        }
+    }
 }
 
 #[derive(serde_derive::Deserialize, Debug, Clone, Default)]
@@ -37,6 +50,7 @@ impl From<CommonDatabaseConfig> for DatabaseConfig {
                 .into_iter()
                 .map(|shard| (shard.shard_id, shard.database_url))
                 .collect(),
+            read_only: false,
         }
     }
 }
