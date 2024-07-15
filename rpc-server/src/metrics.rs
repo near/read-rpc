@@ -77,9 +77,41 @@ impl OptimisticUpdating {
     }
 }
 
+// Help struct to store the RPC methods for the server
+// This is used to store the methods that are available for the server
+// It should be present of METHOD_CALLS_COUNTER metrics
+pub struct RpcMethods {
+    methods: futures_locks::RwLock<std::collections::HashMap<String, String>>,
+}
+
+impl RpcMethods {
+    pub fn new() -> Self {
+        Self {
+            methods: futures_locks::RwLock::new(std::collections::HashMap::new()),
+        }
+    }
+
+    // Insert all rpc methods to the hashmap after init the server
+    pub async fn insert(&self, methods_map: Vec<String>) {
+        for method_name in methods_map {
+            self.methods
+                .write()
+                .await
+                .insert(method_name.clone(), method_name);
+        }
+    }
+
+    // Method to get the method name from the hashmap
+    pub async fn get(&self, method_name: &str) -> Option<String> {
+        self.methods.read().await.get(method_name).cloned()
+    }
+}
+
 // Is not a metric, but a global variable to track the optimistic updating status
 lazy_static! {
     pub(crate) static ref OPTIMISTIC_UPDATING: OptimisticUpdating = OptimisticUpdating::new();
+    // Initialize the RPC methods hashmap
+    pub(crate) static ref RPC_METHODS: RpcMethods = RpcMethods::new();
 }
 
 // Metrics

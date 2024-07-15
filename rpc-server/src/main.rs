@@ -1,4 +1,4 @@
-use jsonrpc_v2::{Data, Server};
+use jsonrpc_v2::{Data, Router, Server};
 use mimalloc::MiMalloc;
 
 #[global_allocator]
@@ -182,6 +182,9 @@ async fn main() -> anyhow::Result<()> {
             modules::network::methods::split_storage_info,
         )
         .finish();
+
+    // Insert all rpc methods to the hashmap after init the server
+    metrics::RPC_METHODS.insert(rpc.router.routers()).await;
 
     actix_web::HttpServer::new(move || {
         let rpc = rpc.clone();
