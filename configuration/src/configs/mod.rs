@@ -124,7 +124,7 @@ impl Config for RpcServerConfig {
         Self {
             general: common_config.general.into(),
             lake_config: common_config.lake_config.into(),
-            database: database::DatabaseConfig::from(common_config.database),
+            database: database::DatabaseConfig::from(common_config.database).to_read_only(),
             tx_details_storage: tx_details_storage::TxDetailsStorageConfig::from(
                 common_config.tx_details_storage,
             ),

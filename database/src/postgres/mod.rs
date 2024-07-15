@@ -42,21 +42,26 @@ pub struct PostgresDBManager {
 }
 
 impl PostgresDBManager {
-    async fn create_meta_db_pool(database_url: &str) -> anyhow::Result<sqlx::Pool<sqlx::Postgres>> {
+    async fn create_meta_db_pool(database_url: &str, read_only: bool) -> anyhow::Result<sqlx::Pool<sqlx::Postgres>> {
         let pool = sqlx::postgres::PgPoolOptions::new()
             .connect(database_url)
             .await?;
-        Self::run_migrations(&META_DB_MIGRATOR, &pool).await?;
+        if !read_only {
+            Self::run_migrations(&META_DB_MIGRATOR, &pool).await?;
+        }
         Ok(pool)
     }
 
     async fn create_shard_db_pool(
         database_url: &str,
+        read_only: bool,
     ) -> anyhow::Result<sqlx::Pool<sqlx::Postgres>> {
         let pool = sqlx::postgres::PgPoolOptions::new()
             .connect(database_url)
             .await?;
-        Self::run_migrations(&SHARD_DB_MIGRATOR, &pool).await?;
+        if !read_only {
+            Self::run_migrations(&SHARD_DB_MIGRATOR, &pool).await?;
+        }
         Ok(pool)
     }
 
@@ -90,14 +95,14 @@ impl crate::BaseDbManager for PostgresDBManager {
         config: &configuration::DatabaseConfig,
         shard_layout: near_primitives::shard_layout::ShardLayout,
     ) -> anyhow::Result<Box<Self>> {
-        let meta_db_pool = Self::create_meta_db_pool(&config.database_url).await?;
+        let meta_db_pool = Self::create_meta_db_pool(&config.database_url, config.read_only).await?;
         let mut shards_pool = std::collections::HashMap::new();
         for shard_id in shard_layout.shard_ids() {
             let database_url = config
                 .shards_config
                 .get(&shard_id)
                 .unwrap_or_else(|| panic!("Shard_{shard_id} - database config not found"));
-            let pool = Self::create_shard_db_pool(database_url).await?;
+            let pool = Self::create_shard_db_pool(database_url, config.read_only).await?;
             shards_pool.insert(shard_id, pool);
         }
         Ok(Box::new(Self {
