@@ -1,4 +1,4 @@
-use crate::metrics::METHOD_CALLS_COUNTER;
+use crate::metrics::{METHOD_CALLS_COUNTER, RPC_METHODS};
 use actix_web::dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform};
 use futures::future::LocalBoxFuture;
 use futures::StreamExt;
@@ -99,8 +99,12 @@ where
                         };
                         METHOD_CALLS_COUNTER.with_label_values(&[method]).inc()
                     }
-                } else {
+                } else if RPC_METHODS.get(method).await.is_some() {
                     METHOD_CALLS_COUNTER.with_label_values(&[method]).inc()
+                } else {
+                    METHOD_CALLS_COUNTER
+                        .with_label_values(&["method_not_found"])
+                        .inc()
                 }
             };
 
