@@ -42,7 +42,10 @@ pub struct PostgresDBManager {
 }
 
 impl PostgresDBManager {
-    async fn create_meta_db_pool(database_url: &str, read_only: bool) -> anyhow::Result<sqlx::Pool<sqlx::Postgres>> {
+    async fn create_meta_db_pool(
+        database_url: &str,
+        read_only: bool,
+    ) -> anyhow::Result<sqlx::Pool<sqlx::Postgres>> {
         let pool = sqlx::postgres::PgPoolOptions::new()
             .connect(database_url)
             .await?;
@@ -95,7 +98,8 @@ impl crate::BaseDbManager for PostgresDBManager {
         config: &configuration::DatabaseConfig,
         shard_layout: near_primitives::shard_layout::ShardLayout,
     ) -> anyhow::Result<Box<Self>> {
-        let meta_db_pool = Self::create_meta_db_pool(&config.database_url, config.read_only).await?;
+        let meta_db_pool =
+            Self::create_meta_db_pool(&config.database_url, config.read_only).await?;
         let mut shards_pool = std::collections::HashMap::new();
         for shard_id in shard_layout.shard_ids() {
             let database_url = config
