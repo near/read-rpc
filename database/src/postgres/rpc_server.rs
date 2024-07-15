@@ -264,7 +264,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
             "
                 SELECT data_value 
                 FROM state_changes_data
-                WHERE account_id = $1 AND key_data = $2 AND block_height <= $3
+                WHERE account_id = $1 AND data_key = $2 AND block_height <= $3
                 ORDER BY block_height DESC
                 LIMIT 1
                 ",
