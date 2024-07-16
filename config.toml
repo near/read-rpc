@@ -14,6 +14,7 @@ max_gas_burnt = "${MAX_GAS_BURNT}"
 contract_code_cache_size = "${CONTRACT_CODE_CAHCE_SIZE}"
 block_cache_size = "${BLOCK_CACHE_SIZE}"
 shadow_data_consistency_rate = "${SHADOW_DATA_CONSISTENCY_RATE}"
+prefetch_state_size_limit = "${PREFETCH_STATE_SIZE_LIMIT}"
 
 [general.tx_indexer]
 indexer_id = "${TX_INDEXER_ID}"
