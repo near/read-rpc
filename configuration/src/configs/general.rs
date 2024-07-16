@@ -3,7 +3,10 @@ use std::str::FromStr;
 use serde_derive::Deserialize;
 
 use crate::configs::{
-    deserialize_data_or_env, deserialize_optional_data_or_env, required_value_or_panic,
+    deserialize_data_or_env, deserialize_optional_block_cache_size_or_env,
+    deserialize_optional_contract_code_cache_size_or_env, deserialize_optional_data_or_env,
+    deserialize_optional_shadow_data_consistency_rate_or_env, deserialize_optional_url_or_env,
+    required_value_or_panic,
 };
 
 #[derive(Debug, Clone)]
@@ -53,13 +56,13 @@ pub struct GeneralNearStateIndexerConfig {
 pub struct CommonGeneralConfig {
     #[serde(deserialize_with = "deserialize_data_or_env")]
     pub chain_id: ChainId,
-    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    #[serde(deserialize_with = "deserialize_optional_url_or_env", default)]
     pub near_rpc_url: Option<String>,
-    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    #[serde(deserialize_with = "deserialize_optional_url_or_env", default)]
     pub near_archival_rpc_url: Option<String>,
-    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    #[serde(deserialize_with = "deserialize_optional_url_or_env", default)]
     pub referer_header_value: Option<String>,
-    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    #[serde(deserialize_with = "deserialize_optional_url_or_env", default)]
     pub redis_url: Option<String>,
     #[serde(default)]
     pub rpc_server: CommonGeneralRpcServerConfig,
@@ -101,11 +104,20 @@ pub struct CommonGeneralRpcServerConfig {
     pub server_port: Option<u16>,
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub max_gas_burnt: Option<u64>,
-    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    #[serde(
+        deserialize_with = "deserialize_optional_contract_code_cache_size_or_env",
+        default
+    )]
     pub contract_code_cache_size: Option<f64>,
-    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    #[serde(
+        deserialize_with = "deserialize_optional_block_cache_size_or_env",
+        default
+    )]
     pub block_cache_size: Option<f64>,
-    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    #[serde(
+        deserialize_with = "deserialize_optional_shadow_data_consistency_rate_or_env",
+        default
+    )]
     pub shadow_data_consistency_rate: Option<f64>,
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub prefetch_state_size_limit: Option<u64>,

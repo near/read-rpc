@@ -1,4 +1,4 @@
-use crate::configs::deserialize_data_or_env;
+use crate::configs::{deserialize_data_or_env, deserialize_url_or_env};
 use near_lake_framework::near_indexer_primitives::near_primitives;
 
 // Database connection URL
@@ -9,7 +9,7 @@ type DatabaseConnectUrl = String;
 pub struct ShardDatabaseConfig {
     #[serde(deserialize_with = "deserialize_data_or_env")]
     pub shard_id: u64,
-    #[serde(deserialize_with = "deserialize_data_or_env")]
+    #[serde(deserialize_with = "deserialize_url_or_env")]
     pub database_url: DatabaseConnectUrl,
 }
 
@@ -35,7 +35,7 @@ impl DatabaseConfig {
 
 #[derive(serde_derive::Deserialize, Debug, Clone, Default)]
 pub struct CommonDatabaseConfig {
-    #[serde(deserialize_with = "deserialize_data_or_env")]
+    #[serde(deserialize_with = "deserialize_url_or_env")]
     pub database_url: DatabaseConnectUrl,
     #[serde(default)]
     pub shards: Vec<ShardDatabaseConfig>,
