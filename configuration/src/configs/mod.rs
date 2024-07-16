@@ -4,6 +4,7 @@ use near_lake_framework::{
     near_indexer_primitives, near_indexer_primitives::views::StateChangeValueView,
 };
 use serde::Deserialize;
+use validator::Validate;
 
 pub(crate) mod database;
 pub(crate) mod general;
@@ -59,35 +60,6 @@ where
     serde_json::from_value::<T>(value).map_err(serde::de::Error::custom)
 }
 
-fn deserialize_url_or_env<'de, D>(deserializer: D) -> Result<String, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let value = serde_json::Value::deserialize(deserializer)?;
-    if let serde_json::Value::String(value) = &value {
-        if let Some(caps) = RE_NAME_ENV.captures(value) {
-            let env_value =
-                get_env_var::<String>(&caps["env_name"]).map_err(serde::de::Error::custom)?;
-            if url::Url::parse(&env_value).is_ok() {
-                return Ok(env_value);
-            } else {
-                tracing::warn!("Failed to deserialize_url_or_env: Environment variable value should be a valid URL");
-                return Err(serde::de::Error::custom(
-                    "Environment variable value should be a valid URL",
-                ));
-            }
-        }
-    }
-
-    let value = serde_json::from_value::<String>(value).map_err(serde::de::Error::custom)?;
-    if url::Url::parse(&value).is_ok() {
-        Ok(value)
-    } else {
-        tracing::warn!("Failed to deserialize_url_or_env: Value should be a valid URL");
-        Err(serde::de::Error::custom("Value should be a valid URL"))
-    }
-}
-
 fn deserialize_optional_data_or_env<'de, D, T>(data: D) -> Result<Option<T>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -103,98 +75,14 @@ where
     })
 }
 
-fn deserialize_optional_url_or_env<'de, D>(data: D) -> Result<Option<String>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    Ok(match deserialize_data_or_env::<D, String>(data) {
-        Ok(value) => {
-            if url::Url::parse(&value).is_ok() {
-                Some(value.to_string())
-            } else {
-                tracing::warn!(
-                    "Failed to deserialize_optional_url_or_env: Value should be a valid URL"
-                );
-                None
-            }
-        }
-        Err(err) => {
-            tracing::warn!("Failed to deserialize_optional_url_or_env: {:?}", err);
-            None
-        }
-    })
-}
-
-fn deserialize_optional_contract_code_cache_size_or_env<'de, D>(
-    data: D,
-) -> Result<Option<f64>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    Ok(match deserialize_data_or_env(data) {
-        Ok(value) => {
-            if value >= 0.0 {
-                Some(value)
-            } else {
-                tracing::warn!("Failed to deserialize_optional_contract_code_cache_size_or_env: Value should be greater than or equal to 0");
-                None
-            }
-        }
-        Err(err) => {
-            tracing::warn!("Failed to deserialize_optional_data_or_env: {:?}", err);
-            None
-        }
-    })
-}
-
-fn deserialize_optional_block_cache_size_or_env<'de, D>(data: D) -> Result<Option<f64>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    Ok(match deserialize_data_or_env(data) {
-        Ok(value) => {
-            if value >= 0.0 {
-                Some(value)
-            } else {
-                tracing::warn!("Failed to deserialize_optional_block_cache_size_or_env: Value should be greater than or equal to 0");
-                None
-            }
-        }
-        Err(err) => {
-            tracing::warn!("Failed to deserialize_optional_data_or_env: {:?}", err);
-            None
-        }
-    })
-}
-
-fn deserialize_optional_shadow_data_consistency_rate_or_env<'de, D>(
-    data: D,
-) -> Result<Option<f64>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    Ok(match deserialize_data_or_env(data) {
-        Ok(value) => {
-            if (0.0..=100.0).contains(&value) {
-                Some(value)
-            } else {
-                tracing::warn!("Failed to deserialize_optional_shadow_data_consistency_rate_or_env: Value should be in range 0.0..100.0");
-                None
-            }
-        }
-        Err(err) => {
-            tracing::warn!("Failed to deserialize_optional_data_or_env: {:?}", err);
-            None
-        }
-    })
-}
-
-#[derive(Deserialize, Debug, Clone, Default)]
+#[derive(Validate, Deserialize, Debug, Clone, Default)]
 pub struct CommonConfig {
+    #[validate(nested)]
     pub general: general::CommonGeneralConfig,
     #[serde(default)]
     pub rightsizing: rightsizing::CommonRightsizingConfig,
     pub lake_config: lake::CommonLakeConfig,
+    #[validate(nested)]
     pub database: database::CommonDatabaseConfig,
     // Set as default to avoid breaking changes
     // This options needs only for tx_indexer and rpc_server
