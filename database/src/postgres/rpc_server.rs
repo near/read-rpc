@@ -133,7 +133,9 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         block_height: near_primitives::types::BlockHeight,
         prefix: &[u8],
         method_name: &str,
-    ) -> anyhow::Result<std::collections::HashMap<readnode_primitives::StateKey, readnode_primitives::StateValue>> {
+    ) -> anyhow::Result<
+        std::collections::HashMap<readnode_primitives::StateKey, readnode_primitives::StateValue>,
+    > {
         let shard_id_pool = self.get_shard_connection(account_id).await?;
         crate::metrics::SHARD_DATABASE_READ_QUERIES
             .with_label_values(&[
@@ -189,7 +191,9 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         account_id: &near_primitives::types::AccountId,
         block_height: near_primitives::types::BlockHeight,
         method_name: &str,
-    ) -> anyhow::Result<std::collections::HashMap<readnode_primitives::StateKey, readnode_primitives::StateValue>> {
+    ) -> anyhow::Result<
+        std::collections::HashMap<readnode_primitives::StateKey, readnode_primitives::StateValue>,
+    > {
         let shard_id_pool = self.get_shard_connection(account_id).await?;
         crate::metrics::SHARD_DATABASE_READ_QUERIES
             .with_label_values(&[
