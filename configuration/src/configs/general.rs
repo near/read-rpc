@@ -107,10 +107,16 @@ pub struct CommonGeneralRpcServerConfig {
     pub server_port: Option<u16>,
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub max_gas_burnt: Option<u64>,
-    #[validate(range(min = 0.0, message = "Contract code cache size must be greater than 0"))]
+    #[validate(range(
+        min = 0.0,
+        message = "Contract code cache size must be greater than or equal to 0"
+    ))]
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub contract_code_cache_size: Option<f64>,
-    #[validate(range(min = 0.0, message = "Block cache size must be greater than 0"))]
+    #[validate(range(
+        min = 0.0,
+        message = "Block cache size must be greater than or equal to 0"
+    ))]
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub block_cache_size: Option<f64>,
     #[validate(range(
