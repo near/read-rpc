@@ -69,9 +69,9 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         let page_state = if let Some(page_state_token) = page_token {
             borsh::from_slice::<crate::postgres::PageState>(&hex::decode(page_state_token)?)?
         } else {
-            crate::postgres::PageState::new(2000)
+            crate::postgres::PageState::new(1000)
         };
-        let rows = sqlx::query_as::<_, (String, Vec<u8>, bigdecimal::BigDecimal)>(
+        let mut stream = sqlx::query_as::<_, (String, Vec<u8>, bigdecimal::BigDecimal)>(
             "
                 SELECT 
                     sc.data_key,
@@ -98,6 +98,9 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                     AND sc.block_height = sub.max_block_height
                     AND sc.data_value IS NOT NULL
                     and sc.account_id = sub.account_id
+                ORDER BY 
+                    sc.data_key, 
+                    sc.block_height DESC
                 LIMIT $3 OFFSET $4;
                 ",
         )
@@ -105,16 +108,15 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         .bind(bigdecimal::BigDecimal::from(block_height))
         .bind(page_state.page_size)
         .bind(page_state.offset)
-        .fetch_all(shard_id_pool.pool)
-        .await?;
-
-        let items: Vec<near_primitives::views::StateItem> = rows
-            .into_iter()
-            .map(|(key, value, _)| near_primitives::views::StateItem {
+        .fetch(shard_id_pool.pool);
+        let mut items = vec![];
+        while let Some(row) = stream.next().await {
+            let (key, value, _): (String, Vec<u8>, _) = row?;
+            items.push(near_primitives::views::StateItem {
                 key: hex::decode(key).expect("Failed decode state key").into(),
                 value: value.into(),
-            })
-            .collect();
+            });
+        }
         if items.len() < page_state.page_size as usize {
             Ok((items, None))
         } else {
@@ -131,7 +133,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         block_height: near_primitives::types::BlockHeight,
         prefix: &[u8],
         method_name: &str,
-    ) -> anyhow::Result<Vec<near_primitives::views::StateItem>> {
+    ) -> anyhow::Result<std::collections::HashMap<readnode_primitives::StateKey, readnode_primitives::StateValue>> {
         let shard_id_pool = self.get_shard_connection(account_id).await?;
         crate::metrics::SHARD_DATABASE_READ_QUERIES
             .with_label_values(&[
@@ -140,7 +142,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 "state_changes_data",
             ])
             .inc();
-        let mut items = Vec::new();
+        let mut items = std::collections::HashMap::new();
         let mut stream = sqlx::query_as::<_, (String, Vec<u8>, bigdecimal::BigDecimal)>(
             "
                 SELECT 
@@ -177,10 +179,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         .fetch(shard_id_pool.pool);
         while let Some(row) = stream.next().await {
             let (key, value, _): (String, Vec<u8>, _) = row?;
-            items.push(near_primitives::views::StateItem {
-                key: hex::decode(key)?.into(),
-                value: value.into(),
-            });
+            items.insert(hex::decode(key)?, value);
         }
         Ok(items)
     }
@@ -190,7 +189,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         account_id: &near_primitives::types::AccountId,
         block_height: near_primitives::types::BlockHeight,
         method_name: &str,
-    ) -> anyhow::Result<Vec<near_primitives::views::StateItem>> {
+    ) -> anyhow::Result<std::collections::HashMap<readnode_primitives::StateKey, readnode_primitives::StateValue>> {
         let shard_id_pool = self.get_shard_connection(account_id).await?;
         crate::metrics::SHARD_DATABASE_READ_QUERIES
             .with_label_values(&[
@@ -199,7 +198,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 "state_changes_data",
             ])
             .inc();
-        let mut items = Vec::new();
+        let mut items = std::collections::HashMap::new();
         let mut stream = sqlx::query_as::<_, (String, Vec<u8>, bigdecimal::BigDecimal)>(
             "
                 SELECT 
@@ -234,10 +233,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         .fetch(shard_id_pool.pool);
         while let Some(row) = stream.next().await {
             let (key, value, _): (String, Vec<u8>, _) = row?;
-            items.push(near_primitives::views::StateItem {
-                key: hex::decode(key)?.into(),
-                value: value.into(),
-            });
+            items.insert(hex::decode(key)?, value);
         }
         Ok(items)
     }

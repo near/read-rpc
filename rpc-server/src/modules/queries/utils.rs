@@ -44,9 +44,6 @@ pub async fn get_state_from_db(
         .get_account_state(account_id, block_height, prefix, method_name)
         .await
         .unwrap_or_default()
-        .into_iter()
-        .map(|item| (item.key.into(), item.value.into()))
-        .collect()
 }
 
 pub async fn get_state_from_db_with_timeout(

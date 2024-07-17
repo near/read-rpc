@@ -30,7 +30,7 @@ pub trait ReaderDbManager {
         block_height: near_primitives::types::BlockHeight,
         prefix: &[u8],
         method_name: &str,
-    ) -> anyhow::Result<Vec<near_primitives::views::StateItem>>;
+    ) -> anyhow::Result<std::collections::HashMap<readnode_primitives::StateKey, readnode_primitives::StateValue>>;
 
     /// Returns the state for the given account id at the given block height
     async fn get_state(
@@ -38,7 +38,7 @@ pub trait ReaderDbManager {
         account_id: &near_primitives::types::AccountId,
         block_height: near_primitives::types::BlockHeight,
         method_name: &str,
-    ) -> anyhow::Result<Vec<near_primitives::views::StateItem>>;
+    ) -> anyhow::Result<std::collections::HashMap<readnode_primitives::StateKey, readnode_primitives::StateValue>>;
 
     /// Returns the state for the given account id at the given block height
     async fn get_account_state(
@@ -47,7 +47,7 @@ pub trait ReaderDbManager {
         block_height: near_primitives::types::BlockHeight,
         prefix: &[u8],
         method_name: &str,
-    ) -> anyhow::Result<Vec<near_primitives::views::StateItem>> {
+    ) -> anyhow::Result<std::collections::HashMap<readnode_primitives::StateKey, readnode_primitives::StateValue>> {
         if prefix.is_empty() {
             self.get_state(account_id, block_height, method_name).await
         } else {
