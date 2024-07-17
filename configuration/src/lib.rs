@@ -22,7 +22,7 @@ where
     let common_config = read_toml_file(path_root).await?;
 
     if let Err(validation_errors) = common_config.validate() {
-        tracing::warn!("Failed to validate config: {validation_errors}");
+        panic!("Failed to validate config: {validation_errors}");
     }
 
     Ok(T::from_common_config(common_config))
