@@ -1,7 +1,7 @@
-use crate::configs::deserialize_data_or_env;
+use near_lake_framework::near_indexer_primitives::near_primitives;
 use validator::Validate;
 
-use near_lake_framework::near_indexer_primitives::near_primitives;
+use crate::configs::deserialize_data_or_env;
 
 // Database connection URL
 // Example: "postgres://user:password@localhost:5432/dbname"
