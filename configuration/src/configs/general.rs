@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use serde_derive::Deserialize;
+use validator::Validate;
 
 use crate::configs::{
     deserialize_data_or_env, deserialize_optional_data_or_env, required_value_or_panic,
@@ -49,18 +50,23 @@ pub struct GeneralNearStateIndexerConfig {
     pub concurrency: usize,
 }
 
-#[derive(Deserialize, Debug, Clone, Default)]
+#[derive(Validate, Deserialize, Debug, Clone, Default)]
 pub struct CommonGeneralConfig {
     #[serde(deserialize_with = "deserialize_data_or_env")]
     pub chain_id: ChainId,
+    #[validate(url(message = "Invalid NEAR RPC URL"))]
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub near_rpc_url: Option<String>,
+    #[validate(url(message = "Invalid NEAR Archival RPC URL"))]
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub near_archival_rpc_url: Option<String>,
+    #[validate(url(message = "Invalid referer header value"))]
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub referer_header_value: Option<String>,
+    #[validate(url(message = "Invalid Redis URL"))]
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub redis_url: Option<String>,
+    #[validate(nested)]
     #[serde(default)]
     pub rpc_server: CommonGeneralRpcServerConfig,
     #[serde(default)]
@@ -95,16 +101,29 @@ impl FromStr for ChainId {
     }
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Validate, Deserialize, Debug, Clone)]
 pub struct CommonGeneralRpcServerConfig {
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub server_port: Option<u16>,
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub max_gas_burnt: Option<u64>,
+    #[validate(range(
+        min = 0.0,
+        message = "Contract code cache size must be greater than or equal to 0"
+    ))]
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub contract_code_cache_size: Option<f64>,
+    #[validate(range(
+        min = 0.0,
+        message = "Block cache size must be greater than or equal to 0"
+    ))]
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub block_cache_size: Option<f64>,
+    #[validate(range(
+        min = 0.0,
+        max = 100.0,
+        message = "Shadow data consistency rate must be between 0 and 100"
+    ))]
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub shadow_data_consistency_rate: Option<f64>,
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]

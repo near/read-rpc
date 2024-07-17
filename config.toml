@@ -11,7 +11,7 @@ redis_url = "${REDIS_URL}"
 [general.rpc_server]
 server_port = "${SERVER_PORT}"
 max_gas_burnt = "${MAX_GAS_BURNT}"
-contract_code_cache_size = "${CONTRACT_CODE_CAHCE_SIZE}"
+contract_code_cache_size = "${CONTRACT_CODE_CACHE_SIZE}"
 block_cache_size = "${BLOCK_CACHE_SIZE}"
 shadow_data_consistency_rate = "${SHADOW_DATA_CONSISTENCY_RATE}"
 prefetch_state_size_limit = "${PREFETCH_STATE_SIZE_LIMIT}"
