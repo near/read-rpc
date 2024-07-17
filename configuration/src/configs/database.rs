@@ -1,14 +1,17 @@
-use crate::configs::deserialize_data_or_env;
 use near_lake_framework::near_indexer_primitives::near_primitives;
+use validator::Validate;
+
+use crate::configs::deserialize_data_or_env;
 
 // Database connection URL
 // Example: "postgres://user:password@localhost:5432/dbname"
 type DatabaseConnectUrl = String;
 
-#[derive(serde_derive::Deserialize, Debug, Clone, Default)]
+#[derive(Validate, serde_derive::Deserialize, Debug, Clone, Default)]
 pub struct ShardDatabaseConfig {
     #[serde(deserialize_with = "deserialize_data_or_env")]
     pub shard_id: u64,
+    #[validate(url(message = "Invalid database shard URL"))]
     #[serde(deserialize_with = "deserialize_data_or_env")]
     pub database_url: DatabaseConnectUrl,
 }
@@ -33,10 +36,12 @@ impl DatabaseConfig {
     }
 }
 
-#[derive(serde_derive::Deserialize, Debug, Clone, Default)]
+#[derive(Validate, serde_derive::Deserialize, Debug, Clone, Default)]
 pub struct CommonDatabaseConfig {
+    #[validate(url(message = "Invalid database URL"))]
     #[serde(deserialize_with = "deserialize_data_or_env")]
     pub database_url: DatabaseConnectUrl,
+    #[validate(nested)]
     #[serde(default)]
     pub shards: Vec<ShardDatabaseConfig>,
 }

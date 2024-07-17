@@ -4,6 +4,7 @@ use near_lake_framework::{
     near_indexer_primitives, near_indexer_primitives::views::StateChangeValueView,
 };
 use serde::Deserialize;
+use validator::Validate;
 
 pub(crate) mod database;
 pub(crate) mod general;
@@ -74,12 +75,14 @@ where
     })
 }
 
-#[derive(Deserialize, Debug, Clone, Default)]
+#[derive(Validate, Deserialize, Debug, Clone, Default)]
 pub struct CommonConfig {
+    #[validate(nested)]
     pub general: general::CommonGeneralConfig,
     #[serde(default)]
     pub rightsizing: rightsizing::CommonRightsizingConfig,
     pub lake_config: lake::CommonLakeConfig,
+    #[validate(nested)]
     pub database: database::CommonDatabaseConfig,
     // Set as default to avoid breaking changes
     // This options needs only for tx_indexer and rpc_server

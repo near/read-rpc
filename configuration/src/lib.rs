@@ -2,6 +2,8 @@ use std::path::PathBuf;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
+use validator::Validate;
+
 mod configs;
 
 pub use crate::configs::database::DatabaseConfig;
@@ -18,6 +20,11 @@ where
     let path_root = find_configs_root().await?;
     load_env(path_root.clone()).await?;
     let common_config = read_toml_file(path_root).await?;
+
+    if let Err(validation_errors) = common_config.validate() {
+        panic!("Failed to validate config: {validation_errors}");
+    }
+
     Ok(T::from_common_config(common_config))
 }
 
