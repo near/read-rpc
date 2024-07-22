@@ -46,10 +46,9 @@ impl CodeStorage {
             readnode_primitives::StateKey,
             Option<readnode_primitives::StateValue>,
         >,
-        storage_usage: u64,
-        prefetch_state_size_limit: u64,
+        prefetch_state: bool,
     ) -> Self {
-        let prefetch_state_data = if storage_usage < prefetch_state_size_limit {
+        let prefetch_state_data = if prefetch_state {
             utils::get_state_from_db(
                 &db_manager,
                 &account_id,
