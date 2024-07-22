@@ -21,7 +21,10 @@ pub trait ReaderDbManager {
         block_height: near_primitives::types::BlockHeight,
         page_token: crate::PageToken,
         method_name: &str,
-    ) -> anyhow::Result<(Vec<near_primitives::views::StateItem>, crate::PageToken)>;
+    ) -> anyhow::Result<(
+        std::collections::HashMap<readnode_primitives::StateKey, readnode_primitives::StateValue>,
+        crate::PageToken,
+    )>;
 
     /// Returns state keys for the given account id filtered by the given prefix
     async fn get_state_by_key_prefix(

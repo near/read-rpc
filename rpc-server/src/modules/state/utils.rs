@@ -19,7 +19,13 @@ pub async fn get_state_from_db_paginated(
         .await
     {
         crate::modules::state::PageStateValues {
-            values,
+            values: values
+                .into_iter()
+                .map(|(k, v)| near_primitives::views::StateItem {
+                    key: k.into(),
+                    value: v.into(),
+                })
+                .collect(),
             next_page_token,
         }
     } else {

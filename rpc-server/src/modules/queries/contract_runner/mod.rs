@@ -111,6 +111,17 @@ pub async fn run_contract(
         })
     };
 
+    // TODO: Temporary solution just for testing
+    let prefetch_state = if contract.data.storage_usage() < prefetch_state_size_limit {
+        if account_id.to_string().ends_with("poolv1near") && method_name == "get_accounts" {
+            true
+        } else {
+            account_id.to_string().ends_with("dataplatform.near") && method_name == "list_all"
+        }
+    } else {
+        false
+    };
+
     // Init an external database interface for the Runtime logic
     let code_storage = CodeStorage::init(
         db_manager.clone(),
@@ -118,8 +129,7 @@ pub async fn run_contract(
         block.block_height,
         validators,
         optimistic_data,
-        contract.data.storage_usage(),
-        prefetch_state_size_limit,
+        prefetch_state,
     )
     .await;
 
