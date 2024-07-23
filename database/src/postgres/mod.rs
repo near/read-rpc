@@ -47,6 +47,7 @@ impl PostgresDBManager {
         read_only: bool,
     ) -> anyhow::Result<sqlx::Pool<sqlx::Postgres>> {
         let pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(128) // Start with 64 connections based on 4x the number of CPU cores.
             .connect(database_url)
             .await?;
         if !read_only {
@@ -60,6 +61,7 @@ impl PostgresDBManager {
         read_only: bool,
     ) -> anyhow::Result<sqlx::Pool<sqlx::Postgres>> {
         let pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(128) // Start with 64 connections based on 4x the number of CPU cores.
             .connect(database_url)
             .await?;
         if !read_only {
