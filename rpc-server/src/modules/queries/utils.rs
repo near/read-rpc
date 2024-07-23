@@ -45,24 +45,3 @@ pub async fn get_state_from_db(
         .await
         .unwrap_or_default()
 }
-
-pub async fn get_state_from_db_with_timeout(
-    db_manager: &std::sync::Arc<Box<dyn database::ReaderDbManager + Sync + Send + 'static>>,
-    account_id: &near_primitives::types::AccountId,
-    block_height: near_primitives::types::BlockHeight,
-    prefix: &[u8],
-    method_name: &str,
-    timeout: tokio::time::Duration,
-) -> anyhow::Result<HashMap<readnode_primitives::StateKey, readnode_primitives::StateValue>> {
-    tracing::debug!(
-        "`get_state_from_db_with_timeout` call. AccountId {}, block {}, prefix {:?}",
-        account_id,
-        block_height,
-        prefix,
-    );
-    Ok(tokio::time::timeout(
-        timeout,
-        get_state_from_db(db_manager, account_id, block_height, prefix, method_name),
-    )
-    .await?)
-}

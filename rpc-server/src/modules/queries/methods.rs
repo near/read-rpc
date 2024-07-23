@@ -6,7 +6,7 @@ use jsonrpc_v2::{Data, Params};
 use near_jsonrpc::RpcRequest;
 
 use super::contract_runner;
-use super::utils::get_state_from_db_with_timeout;
+use super::utils::get_state_from_db;
 
 /// `query` rpc method implementation
 /// calls proxy_rpc_call to get `query` from near-rpc if request parameters not supported by read-rpc
@@ -402,7 +402,8 @@ async fn view_state(
         is_optimistic,
     );
 
-    data.db_manager
+    let account = data
+        .db_manager
         .get_account(account_id, block.block_height, "query_view_state")
         .await
         .map_err(
@@ -412,6 +413,15 @@ async fn view_state(
                 block_hash: block.block_hash,
             },
         )?;
+    if account.data.storage_usage() > data.prefetch_state_size_limit {
+        return Err(
+            near_jsonrpc::primitives::types::query::RpcQueryError::TooLargeContractState {
+                contract_account_id: account_id.clone(),
+                block_height: block.block_height,
+                block_hash: block.block_hash,
+            },
+        );
+    }
 
     let state_item = if is_optimistic {
         optimistic_view_state(data, block, account_id, prefix).await?
@@ -445,22 +455,14 @@ async fn optimistic_view_state(
         .blocks_info_by_finality
         .optimistic_state_changes_in_block(account_id, prefix)
         .await;
-    let state_from_db = get_state_from_db_with_timeout(
+    let state_from_db = get_state_from_db(
         &data.db_manager,
         account_id,
         block.block_height,
         prefix,
         "query_view_state",
-        tokio::time::Duration::from_secs(3),
     )
-    .await
-    .map_err(|_| {
-        near_jsonrpc::primitives::types::query::RpcQueryError::TooLargeContractState {
-            contract_account_id: account_id.clone(),
-            block_height: block.block_height,
-            block_hash: block.block_hash,
-        }
-    })?;
+    .await;
 
     let mut values: Vec<near_primitives::views::StateItem> = state_from_db
         .into_iter()
@@ -501,22 +503,14 @@ async fn database_view_state(
     Vec<near_primitives::views::StateItem>,
     near_jsonrpc::primitives::types::query::RpcQueryError,
 > {
-    let state_from_db = get_state_from_db_with_timeout(
+    let state_from_db = get_state_from_db(
         &data.db_manager,
         account_id,
         block.block_height,
         prefix,
         "query_view_state",
-        tokio::time::Duration::from_secs(3),
     )
-    .await
-    .map_err(|_| {
-        near_jsonrpc::primitives::types::query::RpcQueryError::TooLargeContractState {
-            contract_account_id: account_id.clone(),
-            block_height: block.block_height,
-            block_hash: block.block_hash,
-        }
-    })?;
+    .await;
 
     let values: Vec<near_primitives::views::StateItem> = state_from_db
         .into_iter()
