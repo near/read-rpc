@@ -18,7 +18,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 SELECT block_height
                 FROM blocks
                 WHERE block_hash = $1
-                LIMIT 1
+                LIMIT 1;
                 ",
         )
         .bind(block_hash.to_string())
@@ -42,7 +42,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 SELECT block_height, shard_id
                 FROM chunks
                 WHERE chunk_hash = $1
-                LIMIT 1
+                LIMIT 1;
                 ",
         )
         .bind(chunk_hash.to_string())
@@ -177,9 +177,6 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                     AND sc.account_id = lb.account_id
                 WHERE
                     sc.data_value IS NOT NULL
-                ORDER BY 
-                    sc.data_key, 
-                    sc.block_height DESC;
                 ",
         )
         .bind(account_id.to_string())
@@ -211,7 +208,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
             .inc();
         let mut items = std::collections::HashMap::new();
         let mut page_token = Some(hex::encode(borsh::to_vec(
-            &crate::postgres::PageState::new(10000),
+            &crate::postgres::PageState::new(5000),
         )?));
         while let Some(token) = page_token {
             let (page_items, next_token) = self
@@ -249,7 +246,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                     AND data_key = $2 
                     AND block_height <= $3
                 ORDER BY block_height DESC
-                LIMIT 1
+                LIMIT 1;
                 ",
         )
         .bind(account_id.to_string())
@@ -282,7 +279,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 WHERE account_id = $1 
                     AND block_height <= $2
                 ORDER BY block_height DESC
-                LIMIT 1
+                LIMIT 1;
                 ",
             )
             .bind(account_id.to_string())
@@ -319,7 +316,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 WHERE account_id = $1 
                     AND block_height <= $2
                 ORDER BY block_height DESC
-                LIMIT 1
+                LIMIT 1;
                 ",
             )
             .bind(account_id.to_string())
@@ -359,7 +356,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                     AND data_key = $2 
                     AND block_height <= $3
                 ORDER BY block_height DESC
-                LIMIT 1
+                LIMIT 1;
                 ",
             )
             .bind(account_id.to_string())
@@ -473,7 +470,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                     shard_id
                 FROM receipts_map
                 WHERE receipt_id = $1
-                LIMIT 1
+                LIMIT 1;
                 ",
             )
             .bind(receipt_id.to_string())
@@ -503,7 +500,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 FROM chunks_duplicate
                 WHERE block_height = $1 
                     AND shard_id = $2
-                LIMIT 1
+                LIMIT 1;
                 ",
         )
         .bind(bigdecimal::BigDecimal::from(block_height))
@@ -527,7 +524,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 SELECT epoch_height, validators_info
                 FROM validators
                 WHERE epoch_id = $1
-                LIMIT 1
+                LIMIT 1;
                 ",
             )
             .bind(epoch_id.to_string())
@@ -562,7 +559,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 SELECT epoch_id, epoch_height, validators_info
                 FROM validators
                 WHERE epoch_end_height = $1
-                LIMIT 1
+                LIMIT 1;
                 ",
         )
         .bind(bigdecimal::BigDecimal::from(block_height))
