@@ -112,7 +112,9 @@ pub async fn run_contract(
     };
 
     // TODO: Temporary solution just for testing
-    let prefetch_state = if contract.data.storage_usage() < prefetch_state_size_limit {
+    let prefetch_state = if contract.data.storage_usage() < 1000000 {
+        true
+    } else if contract.data.storage_usage() < prefetch_state_size_limit {
         if account_id.to_string().ends_with("poolv1near") && method_name == "get_accounts" {
             true
         } else {
