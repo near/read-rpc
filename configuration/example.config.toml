@@ -141,6 +141,21 @@ bucket_name = "readrpc-tx-details"
 ## postgresql://{user}:{password}@localhost:5432/{db_name}
 database_url = "postgresql://postgres:password@localhost:5432/near-indexer"
 
+## Database max connections
+## Default value is 10
+##The maximum number of connections that this pool should maintain.
+## Be mindful of the connection limits for your database as well
+## as other applications which may want to connect to the same database
+## (or even multiple instances of the same application in high-availability deployments).
+
+## A production application will want to set a higher limit than this.
+## Start with connections based on 4x the number of CPU cores.
+## For example, a 4-core machine might start with 16 connections.
+
+## This parameter not needed to encrise for indexers
+## 10 connections is enough for indexers to save changes to the database
+max_connections = 10
+
 ## Database shards
 ## You can use multiple database shards
 ## Each shard should have a unique shard_id

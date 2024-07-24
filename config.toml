@@ -44,6 +44,7 @@ bucket_name = "${TX_BUCKET_NAME}"
 
 [database]
 database_url = "${META_DATABASE_URL}"
+max_connections = "${MAX_CONNECTIONS}"
 
 [[database.shards]]
 shard_id = 0

@@ -45,9 +45,10 @@ impl PostgresDBManager {
     async fn create_meta_db_pool(
         database_url: &str,
         read_only: bool,
+        max_connections: u32,
     ) -> anyhow::Result<sqlx::Pool<sqlx::Postgres>> {
         let pool = sqlx::postgres::PgPoolOptions::new()
-            .max_connections(128) // Start with 64 connections based on 4x the number of CPU cores.
+            .max_connections(max_connections)
             .connect(database_url)
             .await?;
         if !read_only {
@@ -59,9 +60,10 @@ impl PostgresDBManager {
     async fn create_shard_db_pool(
         database_url: &str,
         read_only: bool,
+        max_connections: u32,
     ) -> anyhow::Result<sqlx::Pool<sqlx::Postgres>> {
         let pool = sqlx::postgres::PgPoolOptions::new()
-            .max_connections(128) // Start with 64 connections based on 4x the number of CPU cores.
+            .max_connections(max_connections)
             .connect(database_url)
             .await?;
         if !read_only {
@@ -100,15 +102,21 @@ impl crate::BaseDbManager for PostgresDBManager {
         config: &configuration::DatabaseConfig,
         shard_layout: near_primitives::shard_layout::ShardLayout,
     ) -> anyhow::Result<Box<Self>> {
-        let meta_db_pool =
-            Self::create_meta_db_pool(&config.database_url, config.read_only).await?;
+        let meta_db_pool = Self::create_meta_db_pool(
+            &config.database_url,
+            config.read_only,
+            config.max_connections,
+        )
+        .await?;
         let mut shards_pool = std::collections::HashMap::new();
         for shard_id in shard_layout.shard_ids() {
             let database_url = config
                 .shards_config
                 .get(&shard_id)
                 .unwrap_or_else(|| panic!("Shard_{shard_id} - database config not found"));
-            let pool = Self::create_shard_db_pool(database_url, config.read_only).await?;
+            let pool =
+                Self::create_shard_db_pool(database_url, config.read_only, config.max_connections)
+                    .await?;
             shards_pool.insert(shard_id, pool);
         }
         Ok(Box::new(Self {
