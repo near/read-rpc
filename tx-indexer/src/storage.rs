@@ -1,7 +1,41 @@
 pub const STORAGE: &str = "storage_tx";
 
+#[derive(Default)]
+pub struct ReceiptsAndOutcomesCacheStorage {
+    pub receipts: std::collections::HashMap<String, readnode_primitives::ReceiptRecord>,
+    pub outcomes: std::collections::HashMap<String, readnode_primitives::OutcomeRecord>,
+}
+
+impl ReceiptsAndOutcomesCacheStorage {
+    pub fn new(
+        receipt_record: readnode_primitives::ReceiptRecord,
+        outcome_record: readnode_primitives::OutcomeRecord,
+    ) -> Self {
+        let mut receipts = std::collections::HashMap::new();
+        receipts.insert(receipt_record.receipt_id.to_string(), receipt_record);
+        let mut outcomes = std::collections::HashMap::new();
+        outcomes.insert(outcome_record.outcome_id.to_string(), outcome_record);
+        Self { receipts, outcomes }
+    }
+}
+
+impl From<&ReceiptsAndOutcomesCacheStorage> for ReceiptsAndOutcomesToSave {
+    fn from(receipts_and_outcomes: &ReceiptsAndOutcomesCacheStorage) -> Self {
+        Self {
+            receipts: receipts_and_outcomes.receipts.values().cloned().collect(),
+            outcomes: receipts_and_outcomes.outcomes.values().cloned().collect(),
+        }
+    }
+}
+
+pub struct ReceiptsAndOutcomesToSave {
+    pub receipts: Vec<readnode_primitives::ReceiptRecord>,
+    pub outcomes: Vec<readnode_primitives::OutcomeRecord>,
+}
+
 pub struct CacheStorage {
     storage: cache_storage::TxIndexerCache,
+    shard_layout: near_indexer_primitives::near_primitives::shard_layout::ShardLayout,
     transactions: futures_locks::RwLock<
         std::collections::HashMap<
             readnode_primitives::TransactionKey,
@@ -19,26 +53,39 @@ pub struct CacheStorage {
             readnode_primitives::CollectingTransactionDetails,
         >,
     >,
+    outcomes_and_receipts_to_save: futures_locks::RwLock<
+        std::collections::HashMap<database::primitives::ShardId, ReceiptsAndOutcomesCacheStorage>,
+    >,
 }
 
 impl CacheStorage {
     /// Init storage without restore transactions with receipts after interruption
-    pub(crate) async fn init_storage(redis_url: String) -> Self {
+    pub(crate) async fn init_storage(
+        redis_url: String,
+        shard_layout: near_indexer_primitives::near_primitives::shard_layout::ShardLayout,
+    ) -> Self {
         let cache_storage = cache_storage::TxIndexerCache::new(redis_url)
             .await
             .expect("Failed connecting to redis");
         Self {
             storage: cache_storage,
+            shard_layout,
             transactions: futures_locks::RwLock::new(std::collections::HashMap::new()),
             receipts_counters: futures_locks::RwLock::new(std::collections::HashMap::new()),
             receipts_watching_list: futures_locks::RwLock::new(std::collections::HashMap::new()),
             transactions_to_save: futures_locks::RwLock::new(std::collections::HashMap::new()),
+            outcomes_and_receipts_to_save: futures_locks::RwLock::new(
+                std::collections::HashMap::new(),
+            ),
         }
     }
 
     /// Init storage with restore transactions with receipts after interruption
-    pub(crate) async fn init_with_restore(redis_url: String) -> anyhow::Result<Self> {
-        let storage = Self::init_storage(redis_url).await;
+    pub(crate) async fn init_with_restore(
+        redis_url: String,
+        shard_layout: near_indexer_primitives::near_primitives::shard_layout::ShardLayout,
+    ) -> anyhow::Result<Self> {
+        let storage = Self::init_storage(redis_url, shard_layout).await;
         storage
             .restore_transactions_with_receipts_after_interruption()
             .await?;
@@ -309,6 +356,95 @@ impl CacheStorage {
                 .remove(transaction_hash);
         }
         Ok(transactions)
+    }
+
+    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
+    pub(crate) async fn outcomes_and_receipts_to_save(
+        &self,
+    ) -> anyhow::Result<
+        std::collections::HashMap<database::primitives::ShardId, ReceiptsAndOutcomesToSave>,
+    > {
+        let mut outcomes_and_receipts: std::collections::HashMap<
+            database::primitives::ShardId,
+            ReceiptsAndOutcomesToSave,
+        > = std::collections::HashMap::new();
+
+        for (shard_id, receipts_and_outcomes) in
+            self.outcomes_and_receipts_to_save.read().await.iter()
+        {
+            outcomes_and_receipts.insert(*shard_id, receipts_and_outcomes.into());
+        }
+
+        for (shard_id, receipts_and_outcomes_to_save) in outcomes_and_receipts.iter() {
+            self.outcomes_and_receipts_to_save
+                .write()
+                .await
+                .entry(*shard_id)
+                .and_modify(|receipts_and_outcomes| {
+                    for receipt in receipts_and_outcomes_to_save.receipts.iter() {
+                        receipts_and_outcomes
+                            .receipts
+                            .remove(&receipt.receipt_id.to_string());
+                    }
+                    for outcome in receipts_and_outcomes_to_save.outcomes.iter() {
+                        receipts_and_outcomes
+                            .outcomes
+                            .remove(&outcome.outcome_id.to_string());
+                    }
+                });
+        }
+        Ok(outcomes_and_receipts)
+    }
+
+    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
+    pub(crate) async fn push_outcome_and_receipt_to_save(
+        &self,
+        outcome_id: &near_indexer_primitives::CryptoHash,
+        receipt_id: &near_indexer_primitives::CryptoHash,
+        parent_tx_hash: &near_indexer_primitives::CryptoHash,
+        receiver_id: &near_indexer_primitives::types::AccountId,
+        block: readnode_primitives::BlockRecord,
+        shard_id: u64,
+    ) -> anyhow::Result<()> {
+        let database_shard_id =
+            near_indexer_primitives::near_primitives::shard_layout::account_id_to_shard_id(
+                receiver_id,
+                &self.shard_layout,
+            );
+
+        let receipt_record = readnode_primitives::ReceiptRecord {
+            receipt_id: *receipt_id,
+            parent_transaction_hash: *parent_tx_hash,
+            receiver_id: receiver_id.clone(),
+            block_height: block.height,
+            block_hash: block.hash,
+            shard_id,
+        };
+        let outcome_record = readnode_primitives::OutcomeRecord {
+            outcome_id: *outcome_id,
+            parent_transaction_hash: *parent_tx_hash,
+            receiver_id: receiver_id.clone(),
+            block_height: block.height,
+            block_hash: block.hash,
+            shard_id,
+        };
+        self.outcomes_and_receipts_to_save
+            .write()
+            .await
+            .entry(database_shard_id)
+            .and_modify(|receipts_and_outcomes| {
+                receipts_and_outcomes
+                    .receipts
+                    .insert(receipt_id.to_string(), receipt_record.clone());
+                receipts_and_outcomes
+                    .outcomes
+                    .insert(outcome_id.to_string(), outcome_record.clone());
+            })
+            .or_insert(ReceiptsAndOutcomesCacheStorage::new(
+                receipt_record,
+                outcome_record,
+            ));
+        Ok(())
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
