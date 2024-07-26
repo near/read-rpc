@@ -2,68 +2,70 @@ use bigdecimal::ToPrimitive;
 
 #[async_trait::async_trait]
 impl crate::TxIndexerDbManager for crate::PostgresDBManager {
-    async fn save_receipt(
+    async fn save_receipts(
         &self,
-        receipt_id: &near_primitives::hash::CryptoHash,
-        parent_tx_hash: &near_primitives::hash::CryptoHash,
-        receiver_id: &near_primitives::types::AccountId,
-        block: readnode_primitives::BlockRecord,
         shard_id: crate::primitives::ShardId,
+        receipts: Vec<readnode_primitives::ReceiptRecord>,
     ) -> anyhow::Result<()> {
-        let shard_id_pool = self.get_shard_connection(receiver_id).await?;
+        if receipts.is_empty() {
+            return Ok(());
+        }
         crate::metrics::SHARD_DATABASE_WRITE_QUERIES
-            .with_label_values(&[
-                &shard_id_pool.shard_id.to_string(),
-                "save_receipt",
-                "receipts_map",
-            ])
+            .with_label_values(&[&shard_id.to_string(), "save_receipts", "receipts_map"])
             .inc();
-        sqlx::query(
-            "
-            INSERT INTO receipts_map (receipt_id, parent_transaction_hash, receiver_id, block_height, block_hash, shard_id)
-            VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING;
-            ",
-        )
-            .bind(receipt_id.to_string())
-            .bind(parent_tx_hash.to_string())
-            .bind(receiver_id.to_string())
-            .bind(bigdecimal::BigDecimal::from(block.height))
-            .bind(block.hash.to_string())
-            .bind(bigdecimal::BigDecimal::from(shard_id))
-            .execute(shard_id_pool.pool)
+        let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
+            "INSERT INTO receipts_map (receipt_id, parent_transaction_hash, receiver_id, block_height, block_hash, shard_id) ",
+        );
+        query_builder.push_values(receipts.iter(), |mut values, receipt| {
+            values
+                .push_bind(receipt.receipt_id.to_string())
+                .push_bind(receipt.parent_transaction_hash.to_string())
+                .push_bind(receipt.receiver_id.to_string())
+                .push_bind(bigdecimal::BigDecimal::from(receipt.block_height))
+                .push_bind(receipt.block_hash.to_string())
+                .push_bind(bigdecimal::BigDecimal::from(receipt.shard_id));
+        });
+        query_builder.push(" ON CONFLICT DO NOTHING;");
+        query_builder
+            .build()
+            .execute(self.shards_pool.get(&shard_id).ok_or(anyhow::anyhow!(
+                "Database connection for Shard_{} not found",
+                shard_id
+            ))?)
             .await?;
         Ok(())
     }
 
-    async fn save_outcome(
+    async fn save_outcomes(
         &self,
-        outcome_id: &near_primitives::hash::CryptoHash,
-        parent_tx_hash: &near_primitives::hash::CryptoHash,
-        receiver_id: &near_primitives::types::AccountId,
-        block: readnode_primitives::BlockRecord,
         shard_id: crate::primitives::ShardId,
+        outcomes: Vec<readnode_primitives::OutcomeRecord>,
     ) -> anyhow::Result<()> {
-        let shard_id_pool = self.get_shard_connection(receiver_id).await?;
+        if outcomes.is_empty() {
+            return Ok(());
+        }
         crate::metrics::SHARD_DATABASE_WRITE_QUERIES
-            .with_label_values(&[
-                &shard_id_pool.shard_id.to_string(),
-                "save_outcome",
-                "outcomes_map",
-            ])
+            .with_label_values(&[&shard_id.to_string(), "save_outcomes", "outcomes_map"])
             .inc();
-        sqlx::query(
-            "
-            INSERT INTO outcomes_map (outcome_id, parent_transaction_hash, receiver_id, block_height, block_hash, shard_id)
-            VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING;
-            ",
-        )
-            .bind(outcome_id.to_string())
-            .bind(parent_tx_hash.to_string())
-            .bind(receiver_id.to_string())
-            .bind(bigdecimal::BigDecimal::from(block.height))
-            .bind(block.hash.to_string())
-            .bind(bigdecimal::BigDecimal::from(shard_id))
-            .execute(shard_id_pool.pool)
+        let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
+            "INSERT INTO outcomes_map (outcome_id, parent_transaction_hash, receiver_id, block_height, block_hash, shard_id) ",
+        );
+        query_builder.push_values(outcomes.iter(), |mut values, outcome| {
+            values
+                .push_bind(outcome.outcome_id.to_string())
+                .push_bind(outcome.parent_transaction_hash.to_string())
+                .push_bind(outcome.receiver_id.to_string())
+                .push_bind(bigdecimal::BigDecimal::from(outcome.block_height))
+                .push_bind(outcome.block_hash.to_string())
+                .push_bind(bigdecimal::BigDecimal::from(outcome.shard_id));
+        });
+        query_builder.push(" ON CONFLICT DO NOTHING;");
+        query_builder
+            .build()
+            .execute(self.shards_pool.get(&shard_id).ok_or(anyhow::anyhow!(
+                "Database connection for Shard_{} not found",
+                shard_id
+            ))?)
             .await?;
         Ok(())
     }

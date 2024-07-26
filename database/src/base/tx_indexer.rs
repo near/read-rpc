@@ -1,36 +1,25 @@
 #[async_trait::async_trait]
 pub trait TxIndexerDbManager {
-    async fn save_receipt(
+    async fn save_receipts(
         &self,
-        receipt_id: &near_primitives::hash::CryptoHash,
-        parent_tx_hash: &near_primitives::hash::CryptoHash,
-        receiver_id: &near_primitives::types::AccountId,
-        block: readnode_primitives::BlockRecord,
         shard_id: crate::primitives::ShardId,
+        receipts: Vec<readnode_primitives::ReceiptRecord>,
     ) -> anyhow::Result<()>;
 
-    async fn save_outcome(
+    async fn save_outcomes(
         &self,
-        outcome_id: &near_primitives::hash::CryptoHash,
-        parent_tx_hash: &near_primitives::hash::CryptoHash,
-        receiver_id: &near_primitives::types::AccountId,
-        block: readnode_primitives::BlockRecord,
         shard_id: crate::primitives::ShardId,
+        outcomes: Vec<readnode_primitives::OutcomeRecord>,
     ) -> anyhow::Result<()>;
 
     async fn save_outcome_and_receipt(
         &self,
-        outcome_id: &near_primitives::hash::CryptoHash,
-        receipt_id: &near_primitives::hash::CryptoHash,
-        parent_tx_hash: &near_primitives::hash::CryptoHash,
-        receiver_id: &near_primitives::types::AccountId,
-        block: readnode_primitives::BlockRecord,
         shard_id: crate::primitives::ShardId,
+        receipts: Vec<readnode_primitives::ReceiptRecord>,
+        outcomes: Vec<readnode_primitives::OutcomeRecord>,
     ) -> anyhow::Result<()> {
-        let save_outcome_future =
-            self.save_outcome(outcome_id, parent_tx_hash, receiver_id, block, shard_id);
-        let save_receipt_future =
-            self.save_receipt(receipt_id, parent_tx_hash, receiver_id, block, shard_id);
+        let save_outcome_future = self.save_outcomes(shard_id, outcomes);
+        let save_receipt_future = self.save_receipts(shard_id, receipts);
         futures::try_join!(save_outcome_future, save_receipt_future)?;
         Ok(())
     }

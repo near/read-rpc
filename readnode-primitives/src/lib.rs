@@ -212,8 +212,19 @@ pub struct QueryData<T: borsh::BorshDeserialize> {
     pub block_hash: CryptoHash,
 }
 
+#[derive(Debug, Clone)]
 pub struct ReceiptRecord {
     pub receipt_id: CryptoHash,
+    pub parent_transaction_hash: CryptoHash,
+    pub receiver_id: near_indexer_primitives::types::AccountId,
+    pub block_height: near_indexer_primitives::types::BlockHeight,
+    pub block_hash: CryptoHash,
+    pub shard_id: near_indexer_primitives::types::ShardId,
+}
+
+#[derive(Debug, Clone)]
+pub struct OutcomeRecord {
+    pub outcome_id: CryptoHash,
     pub parent_transaction_hash: CryptoHash,
     pub receiver_id: near_indexer_primitives::types::AccountId,
     pub block_height: near_indexer_primitives::types::BlockHeight,
