@@ -10,7 +10,7 @@ use near_indexer_primitives::IndexerTransactionWithOutcome;
 use crate::metrics;
 use crate::storage;
 
-const TRANSACTION_SAVE_ATTEMPTS: usize = 20;
+const SAVE_ATTEMPTS: usize = 20;
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 pub(crate) async fn index_transactions(
@@ -118,7 +118,7 @@ async fn save_outcome_and_receipt_to_shard(
     let mut save_attempts = 0;
     'retry: loop {
         save_attempts += 1;
-        if save_attempts >= TRANSACTION_SAVE_ATTEMPTS {
+        if save_attempts >= SAVE_ATTEMPTS {
             tracing::error!(
                 target: crate::INDEXER,
                 "Failed to save receipts and outcomes for shard {} after {} attempts",
@@ -135,7 +135,7 @@ async fn save_outcome_and_receipt_to_shard(
                 if save_attempts > 1 {
                     // If the receipts and outcomes wasn't saved after first attempt we want to inform
                     // a log reader about it
-                    tracing::warn!(
+                    tracing::info!(
                         target: crate::INDEXER,
                         "Receipts and outcomes for shard {} were saved after {} attempts",
                         shard_id,
@@ -145,7 +145,7 @@ async fn save_outcome_and_receipt_to_shard(
                 break 'retry;
             }
             Err(err) => {
-                tracing::error!(
+                tracing::warn!(
                     target: crate::INDEXER,
                     "Failed to save receipts and outcomes for shard {}: Error {}",
                     shard_id,
@@ -431,7 +431,7 @@ async fn save_transaction_details_to_storage(
     let mut save_attempts = 0;
     'retry: loop {
         save_attempts += 1;
-        if save_attempts >= TRANSACTION_SAVE_ATTEMPTS {
+        if save_attempts >= SAVE_ATTEMPTS {
             anyhow::bail!(
                 "Failed to save transaction {} after {} attempts",
                 transaction_hash,
@@ -461,7 +461,7 @@ async fn save_transaction_details_to_storage(
                     let mut retrieve_attempts = 0;
                     'validator: loop {
                         retrieve_attempts += 1;
-                        if retrieve_attempts >= TRANSACTION_SAVE_ATTEMPTS {
+                        if retrieve_attempts >= SAVE_ATTEMPTS {
                             tracing::error!(
                                 target: crate::INDEXER,
                                 "Failed to retrieve transaction {} for validation after {} attempts",
