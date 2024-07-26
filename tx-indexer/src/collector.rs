@@ -26,11 +26,11 @@ pub(crate) async fn index_transactions(
 
     let save_finished_tx_details_future =
         save_finished_transaction_details(tx_collecting_storage, tx_details_storage);
-    let save_outcome_and_receipt_future =
+    let save_outcomes_and_receipts_future =
         save_outcomes_and_receipts(db_manager, tx_collecting_storage);
     futures::try_join!(
         save_finished_tx_details_future,
-        save_outcome_and_receipt_future
+        save_outcomes_and_receipts_future
     )?;
 
     Ok(())
