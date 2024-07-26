@@ -47,7 +47,7 @@ async fn main() -> anyhow::Result<()> {
         std::sync::Arc::new(Box::new(
             database::prepare_db_manager::<database::PostgresDBManager>(
                 &indexer_config.database,
-                protocol_config_view.shard_layout,
+                protocol_config_view.shard_layout.clone(),
             )
             .await?,
         ));
@@ -68,8 +68,11 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!(target: INDEXER, "Creating hash storage...");
     let tx_collecting_storage = std::sync::Arc::new(
-        storage::CacheStorage::init_with_restore(indexer_config.general.redis_url.to_string())
-            .await?,
+        storage::CacheStorage::init_with_restore(
+            indexer_config.general.redis_url.to_string(),
+            protocol_config_view.shard_layout,
+        )
+        .await?,
     );
 
     tracing::info!(target: INDEXER, "Instantiating the tx_details storage client...");
