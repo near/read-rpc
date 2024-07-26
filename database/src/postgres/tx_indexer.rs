@@ -48,7 +48,7 @@ impl crate::TxIndexerDbManager for crate::PostgresDBManager {
             .with_label_values(&[&shard_id.to_string(), "save_outcomes", "outcomes_map"])
             .inc();
         let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
-            "INSERT INTO outcomes_map (receipt_id, parent_transaction_hash, receiver_id, block_height, block_hash, shard_id) ",
+            "INSERT INTO outcomes_map (outcome_id, parent_transaction_hash, receiver_id, block_height, block_hash, shard_id) ",
         );
         query_builder.push_values(outcomes.iter(), |mut values, outcome| {
             values

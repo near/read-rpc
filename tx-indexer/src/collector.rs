@@ -127,11 +127,10 @@ async fn save_outcome_and_receipt_to_shard(
             );
             break 'retry;
         }
-        match db_manager.save_outcome_and_receipt(
-            shard_id,
-            receipts.clone(),
-            outcomes.clone(),
-        ).await {
+        match db_manager
+            .save_outcome_and_receipt(shard_id, receipts.clone(), outcomes.clone())
+            .await
+        {
             Ok(_) => {
                 if save_attempts > 1 {
                     // If the receipts and outcomes wasn't saved after first attempt we want to inform
@@ -156,7 +155,6 @@ async fn save_outcome_and_receipt_to_shard(
                 save_attempts += 1;
                 continue 'retry;
             }
-        
         }
     }
 }
