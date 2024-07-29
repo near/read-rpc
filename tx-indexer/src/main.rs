@@ -66,7 +66,7 @@ async fn main() -> anyhow::Result<()> {
         .lake_config(start_block_height)
         .await?;
 
-    tracing::info!(target: INDEXER, "Creating hash storage...");
+    tracing::info!(target: INDEXER, "Creating cache storage...");
     let tx_collecting_storage = std::sync::Arc::new(
         storage::CacheStorage::init_with_restore(
             indexer_config.general.redis_url.to_string(),
