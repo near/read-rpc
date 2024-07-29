@@ -116,30 +116,36 @@ impl CacheStorage {
             "Transaction restoring from storage {}",
             transaction_key.transaction_hash,
         );
-        let tx_details = self.storage.get_tx(transaction_key).await?;
-        self.update_tx(tx_details.clone()).await?;
-        let receipt_id = tx_details
-            .execution_outcomes
-            .first()
-            .expect("No execution outcomes")
-            .outcome
-            .receipt_ids
-            .first()
-            .expect("`receipt_ids` must contain one Receipt ID")
-            .to_string();
-        self.push_receipt_to_watching_list(receipt_id.clone(), transaction_key.clone())
-            .await?;
-        for outcome in self.storage.get_tx_outcomes(transaction_key).await? {
-            let indexed_outcome = near_indexer_primitives::IndexerExecutionOutcomeWithReceipt {
-                execution_outcome: outcome.execution_outcome.clone(),
-                receipt: outcome.receipt.clone(),
-            };
-            for receipt_id in indexed_outcome.execution_outcome.outcome.receipt_ids.iter() {
-                self.push_receipt_to_watching_list(receipt_id.to_string(), transaction_key.clone())
+        // The indexers work pretty fast. 
+        // We use the KEYS method to get the list of transactions, which is relatively slow. 
+        // And sometimes we get into a situation where the indexer already running has time to save the transaction 
+        // and we get an error `Unexpected length of input`. 
+        // This hook will help to avoid such situations when launching several indexers.
+        if let Ok(tx_details) = self.storage.get_tx(transaction_key).await {
+            self.update_tx(tx_details.clone()).await?;
+            let receipt_id = tx_details
+                .execution_outcomes
+                .first()
+                .expect("No execution outcomes")
+                .outcome
+                .receipt_ids
+                .first()
+                .expect("`receipt_ids` must contain one Receipt ID")
+                .to_string();
+            self.push_receipt_to_watching_list(receipt_id.clone(), transaction_key.clone())
+                .await?;
+            for outcome in self.storage.get_tx_outcomes(transaction_key).await? {
+                let indexed_outcome = near_indexer_primitives::IndexerExecutionOutcomeWithReceipt {
+                    execution_outcome: outcome.execution_outcome.clone(),
+                    receipt: outcome.receipt.clone(),
+                };
+                for receipt_id in indexed_outcome.execution_outcome.outcome.receipt_ids.iter() {
+                    self.push_receipt_to_watching_list(receipt_id.to_string(), transaction_key.clone())
+                        .await?;
+                }
+                self.push_outcome_and_receipt_to_cache(transaction_key, indexed_outcome)
                     .await?;
             }
-            self.push_outcome_and_receipt_to_cache(transaction_key, indexed_outcome)
-                .await?;
         }
         Ok(())
     }
