@@ -116,10 +116,10 @@ impl CacheStorage {
             "Transaction restoring from storage {}",
             transaction_key.transaction_hash,
         );
-        // The indexers work pretty fast. 
-        // We use the KEYS method to get the list of transactions, which is relatively slow. 
-        // And sometimes we get into a situation where the indexer already running has time to save the transaction 
-        // and we get an error `Unexpected length of input`. 
+        // The indexers work pretty fast.
+        // We use the KEYS method to get the list of transactions, which is relatively slow.
+        // And sometimes we get into a situation where the indexer already running has time to save the transaction
+        // and we get an error `Unexpected length of input`.
         // This hook will help to avoid such situations when launching several indexers.
         if let Ok(tx_details) = self.storage.get_tx(transaction_key).await {
             self.update_tx(tx_details.clone()).await?;
@@ -140,8 +140,11 @@ impl CacheStorage {
                     receipt: outcome.receipt.clone(),
                 };
                 for receipt_id in indexed_outcome.execution_outcome.outcome.receipt_ids.iter() {
-                    self.push_receipt_to_watching_list(receipt_id.to_string(), transaction_key.clone())
-                        .await?;
+                    self.push_receipt_to_watching_list(
+                        receipt_id.to_string(),
+                        transaction_key.clone(),
+                    )
+                    .await?;
                 }
                 self.push_outcome_and_receipt_to_cache(transaction_key, indexed_outcome)
                     .await?;
