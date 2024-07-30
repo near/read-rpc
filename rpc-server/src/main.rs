@@ -1,4 +1,4 @@
-use jsonrpc_v2::{Data, Router, Server};
+use jsonrpc_v2::{Data, Params, Router, Server};
 use mimalloc::MiMalloc;
 
 #[global_allocator]
@@ -18,6 +18,45 @@ mod utils;
 
 // Categories for logging
 pub(crate) const RPC_SERVER: &str = "read_rpc_server";
+
+pub async fn handle_rpc_error<F, Fut, T, P>(
+    method: F,
+    data: Data<config::ServerContext>,
+    params: Params<P>,
+) -> Result<T, crate::errors::RPCError>
+where
+    F: FnOnce(Data<config::ServerContext>, Params<P>) -> Fut,
+    Fut: std::future::Future<Output = Result<T, crate::errors::RPCError>>,
+{
+    let result = method(data, params).await;
+    if let Err(err) = &result {
+        if let Some(error_struct) = &err.error_struct {
+            // TODO: Increase appropriate metrics
+            match error_struct {
+                near_jsonrpc::primitives::errors::RpcErrorKind::RequestValidationError(
+                    request_validation_error,
+                ) => {
+                    match request_validation_error {
+                            near_jsonrpc::primitives::errors::RpcRequestValidationErrorKind::MethodNotFound { method_name } => {
+                                // This is unreachable because the method is registered in the router
+                                unreachable!("Method not found: {:?}", method_name);
+                            }
+                            near_jsonrpc::primitives::errors::RpcRequestValidationErrorKind::ParseError { error_message } => {
+                                println!("Invalid params: {:?}", error_message);
+                            }
+                        }
+                }
+                near_jsonrpc::primitives::errors::RpcErrorKind::HandlerError(_) => {
+                    println!("Handler error: {:?}", err);
+                }
+                near_jsonrpc::primitives::errors::RpcErrorKind::InternalError(_) => {
+                    println!("Internal error: {:?}", err);
+                }
+            }
+        }
+    }
+    result
+}
 
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
@@ -107,79 +146,125 @@ async fn main() -> anyhow::Result<()> {
     let rpc = Server::new()
         .with_data(Data::new(server_context.clone()))
         // custom requests methods
-        .with_method(
-            "view_state_paginated",
-            modules::state::methods::view_state_paginated,
-        )
-        .with_method(
-            "view_receipt_record",
-            modules::receipts::methods::view_receipt_record,
-        )
+        .with_method("view_state_paginated", |data, params| async move {
+            handle_rpc_error(modules::state::methods::view_state_paginated, data, params).await
+        })
+        .with_method("view_receipt_record", |data, params| async move {
+            handle_rpc_error(
+                modules::receipts::methods::view_receipt_record,
+                data,
+                params,
+            )
+            .await
+        })
         // requests methods
-        .with_method("query", modules::queries::methods::query)
+        .with_method("query", |data, params| async move {
+            handle_rpc_error(modules::queries::methods::query, data, params).await
+        })
         // basic requests methods
-        .with_method("block", modules::blocks::methods::block)
-        .with_method(
-            "broadcast_tx_async",
-            modules::transactions::methods::broadcast_tx_async,
-        )
-        .with_method(
-            "broadcast_tx_commit",
-            modules::transactions::methods::broadcast_tx_commit,
-        )
-        .with_method("chunk", modules::blocks::methods::chunk)
-        .with_method("gas_price", modules::gas::methods::gas_price)
-        .with_method("health", modules::network::methods::health)
-        .with_method(
-            "light_client_proof",
-            modules::clients::methods::light_client_proof,
-        )
-        .with_method(
-            "next_light_client_block",
-            modules::clients::methods::next_light_client_block,
-        )
-        .with_method("network_info", modules::network::methods::network_info)
-        .with_method("send_tx", modules::transactions::methods::send_tx)
-        .with_method("status", modules::network::methods::status)
-        .with_method("tx", modules::transactions::methods::tx)
-        .with_method("validators", modules::network::methods::validators)
-        .with_method("client_config", modules::network::methods::client_config)
-        .with_method(
-            "EXPERIMENTAL_changes",
-            modules::blocks::methods::changes_in_block_by_type,
-        )
-        .with_method(
-            "EXPERIMENTAL_changes_in_block",
-            modules::blocks::methods::changes_in_block,
-        )
-        .with_method(
-            "EXPERIMENTAL_genesis_config",
-            modules::network::methods::genesis_config,
-        )
+        .with_method("block", |data, params| async move {
+            handle_rpc_error(modules::blocks::methods::block, data, params).await
+        })
+        .with_method("broadcast_tx_async", |data, params| async move {
+            handle_rpc_error(
+                modules::transactions::methods::broadcast_tx_async,
+                data,
+                params,
+            )
+            .await
+        })
+        .with_method("broadcast_tx_commit", |data, params| async move {
+            handle_rpc_error(
+                modules::transactions::methods::broadcast_tx_commit,
+                data,
+                params,
+            )
+            .await
+        })
+        .with_method("chunk", |data, params| async move {
+            handle_rpc_error(modules::blocks::methods::chunk, data, params).await
+        })
+        .with_method("gas_price", |data, params| async move {
+            handle_rpc_error(modules::gas::methods::gas_price, data, params).await
+        })
+        .with_method("health", |data, params| async move {
+            handle_rpc_error(modules::network::methods::health, data, params).await
+        })
+        .with_method("light_client_proof", |data, params| async move {
+            handle_rpc_error(modules::clients::methods::light_client_proof, data, params).await
+        })
+        .with_method("next_light_client_block", |data, params| async move {
+            handle_rpc_error(
+                modules::clients::methods::next_light_client_block,
+                data,
+                params,
+            )
+            .await
+        })
+        .with_method("network_info", |data, params| async move {
+            handle_rpc_error(modules::network::methods::network_info, data, params).await
+        })
+        .with_method("send_tx", |data, params| async move {
+            handle_rpc_error(modules::transactions::methods::send_tx, data, params).await
+        })
+        .with_method("status", |data, params| async move {
+            handle_rpc_error(modules::network::methods::status, data, params).await
+        })
+        .with_method("tx", |data, params| async move {
+            handle_rpc_error(modules::transactions::methods::tx, data, params).await
+        })
+        .with_method("validators", |data, params| async move {
+            handle_rpc_error(modules::network::methods::validators, data, params).await
+        })
+        .with_method("client_config", |data, params| async move {
+            handle_rpc_error(modules::network::methods::client_config, data, params).await
+        })
+        .with_method("EXPERIMENTAL_changes", |data, params| async move {
+            handle_rpc_error(
+                modules::blocks::methods::changes_in_block_by_type,
+                data,
+                params,
+            )
+            .await
+        })
+        .with_method("EXPERIMENTAL_changes_in_block", |data, params| async move {
+            handle_rpc_error(modules::blocks::methods::changes_in_block, data, params).await
+        })
+        .with_method("EXPERIMENTAL_genesis_config", |data, params| async move {
+            handle_rpc_error(modules::network::methods::genesis_config, data, params).await
+        })
         .with_method(
             "EXPERIMENTAL_light_client_proof",
-            modules::clients::methods::light_client_proof,
+            |data, params| async move {
+                handle_rpc_error(modules::clients::methods::light_client_proof, data, params).await
+            },
         )
-        .with_method(
-            "EXPERIMENTAL_protocol_config",
-            modules::network::methods::protocol_config,
-        )
-        .with_method("EXPERIMENTAL_receipt", modules::receipts::methods::receipt)
-        .with_method(
-            "EXPERIMENTAL_tx_status",
-            modules::transactions::methods::tx_status,
-        )
+        .with_method("EXPERIMENTAL_protocol_config", |data, params| async move {
+            handle_rpc_error(modules::network::methods::protocol_config, data, params).await
+        })
+        .with_method("EXPERIMENTAL_receipt", |data, params| async move {
+            handle_rpc_error(modules::receipts::methods::receipt, data, params).await
+        })
+        .with_method("EXPERIMENTAL_tx_status", |data, params| async move {
+            handle_rpc_error(modules::transactions::methods::tx_status, data, params).await
+        })
         .with_method(
             "EXPERIMENTAL_validators_ordered",
-            modules::network::methods::validators_ordered,
+            |data, params| async move {
+                handle_rpc_error(modules::network::methods::validators_ordered, data, params).await
+            },
         )
         .with_method(
             "EXPERIMENTAL_maintenance_windows",
-            modules::network::methods::maintenance_windows,
+            |data, params| async move {
+                handle_rpc_error(modules::network::methods::maintenance_windows, data, params).await
+            },
         )
         .with_method(
             "EXPERIMENTAL_split_storage_info",
-            modules::network::methods::split_storage_info,
+            |data, params| async move {
+                handle_rpc_error(modules::network::methods::split_storage_info, data, params).await
+            },
         )
         .finish();
 
