@@ -223,7 +223,10 @@ impl CacheStorage {
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
-    async fn remove_receipt_from_watching_list(&self, receipt_id: &str) -> anyhow::Result<()> {
+    pub(crate) async fn remove_receipt_from_watching_list(
+        &self,
+        receipt_id: &str,
+    ) -> anyhow::Result<()> {
         if let Some(transaction_key) = self.receipts_watching_list.write().await.remove(receipt_id)
         {
             if let Some(receipts_counter) = self
