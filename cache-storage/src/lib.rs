@@ -100,10 +100,10 @@ pub struct BlocksByFinalityCache {
 /// Additionally, sets the JSON serialized `StreamerMessage` into keys `final` or `optimistic`
 /// accordingly.
 impl BlocksByFinalityCache {
-    // Use redis database 1 for handling the blocks by finality cache.
+    // Use redis database 0(default for redis) for handling the blocks by finality cache.
     pub async fn new(redis_url: String) -> anyhow::Result<Self> {
         Ok(Self {
-            cache_storage: RedisCacheStorage::new(redis_url, 1).await?,
+            cache_storage: RedisCacheStorage::new(redis_url, 0).await?,
         })
     }
 
