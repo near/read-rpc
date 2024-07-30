@@ -128,21 +128,11 @@ async fn save_receipts_and_outcomes_details(
     .await
     {
         Ok(_) => {
-            for receipt in receipts {
-                tx_collecting_storage
-                    .remove_receipt_from_watching_list(&receipt.receipt_id.to_string())
-                    .await
-                    .map_err(|err| {
-                        tracing::error!(
-                            target: crate::INDEXER,
-                            "Failed to remove receipt from watching list {}: Error {}",
-                            receipt.receipt_id.to_string(),
-                            err
-                        );
-                        err
-                    })
-                    .ok();
-            }
+            tracing::debug!(
+                target: crate::INDEXER,
+                "Receipts and outcomes for shard {} were saved",
+                shard_id
+            );
         }
         Err(err) => {
             tracing::error!(
@@ -152,32 +142,12 @@ async fn save_receipts_and_outcomes_details(
                 err
             );
 
-            for (receipt, outcome) in receipts.into_iter().zip(outcomes) {
-                tx_collecting_storage
-                    .push_outcome_and_receipt_to_save(
-                        &outcome.outcome_id,
-                        &receipt.receipt_id,
-                        &outcome.parent_transaction_hash,
-                        &receipt.receiver_id,
-                        readnode_primitives::BlockRecord {
-                            height: outcome.block_height,
-                            hash: outcome.block_hash,
-                        },
-                        shard_id,
-                    )
-                    .await
-                    .map_err(|err| {
-                        tracing::error!(
-                            target: crate::INDEXER,
-                            "Failed to push outcome_and_receipt to save ({}, {}): Error {}",
-                            receipt.receipt_id.to_string(),
-                            outcome.outcome_id.to_string(),
-                            err
-                        );
-                        err
-                    })
-                    .ok();
-            }
+            tx_collecting_storage
+                .return_outcomes_to_save(outcomes)
+                .await;
+            tx_collecting_storage
+                .return_receipts_to_save(receipts)
+                .await;
         }
     }
 }
