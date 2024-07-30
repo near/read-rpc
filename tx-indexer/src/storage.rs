@@ -223,7 +223,10 @@ impl CacheStorage {
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
-    async fn remove_receipt_from_watching_list(&self, receipt_id: &str) -> anyhow::Result<()> {
+    pub(crate) async fn remove_receipt_from_watching_list(
+        &self,
+        receipt_id: &str,
+    ) -> anyhow::Result<()> {
         if let Some(transaction_key) = self.receipts_watching_list.write().await.remove(receipt_id)
         {
             if let Some(receipts_counter) = self
@@ -454,6 +457,44 @@ impl CacheStorage {
                 outcome_record,
             ));
         Ok(())
+    }
+
+    pub(crate) async fn return_outcomes_to_save(
+        &self,
+        shard_id: u64,
+        outcomes: Vec<readnode_primitives::OutcomeRecord>,
+    ) {
+        let outcomes = outcomes
+            .into_iter()
+            .map(|outcome| (outcome.outcome_id.to_string(), outcome))
+            .collect::<std::collections::HashMap<_, _>>();
+
+        self.outcomes_and_receipts_to_save
+            .write()
+            .await
+            .entry(shard_id)
+            .and_modify(|receipts_and_outcomes| {
+                receipts_and_outcomes.outcomes.extend(outcomes);
+            });
+    }
+
+    pub(crate) async fn return_receipts_to_save(
+        &self,
+        shard_id: u64,
+        receipts: Vec<readnode_primitives::ReceiptRecord>,
+    ) {
+        let receipts = receipts
+            .into_iter()
+            .map(|receipt| (receipt.receipt_id.to_string(), receipt))
+            .collect::<std::collections::HashMap<_, _>>();
+
+        self.outcomes_and_receipts_to_save
+            .write()
+            .await
+            .entry(shard_id)
+            .and_modify(|receipts_and_outcomes| {
+                receipts_and_outcomes.receipts.extend(receipts);
+            });
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
