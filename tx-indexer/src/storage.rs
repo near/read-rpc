@@ -461,36 +461,40 @@ impl CacheStorage {
 
     pub(crate) async fn return_outcomes_to_save(
         &self,
+        shard_id: u64,
         outcomes: Vec<readnode_primitives::OutcomeRecord>,
     ) {
-        for outcome in outcomes {
-            self.outcomes_and_receipts_to_save
-                .write()
-                .await
-                .entry(outcome.shard_id)
-                .and_modify(|receipts_and_outcomes| {
-                    receipts_and_outcomes
-                        .outcomes
-                        .insert(outcome.outcome_id.to_string(), outcome);
-                });
-        }
+        let outcomes = outcomes
+            .into_iter()
+            .map(|outcome| (outcome.outcome_id.to_string(), outcome))
+            .collect::<std::collections::HashMap<_, _>>();
+
+        self.outcomes_and_receipts_to_save
+            .write()
+            .await
+            .entry(shard_id)
+            .and_modify(|receipts_and_outcomes| {
+                receipts_and_outcomes.outcomes.extend(outcomes);
+            });
     }
 
     pub(crate) async fn return_receipts_to_save(
         &self,
+        shard_id: u64,
         receipts: Vec<readnode_primitives::ReceiptRecord>,
     ) {
-        for receipt in receipts {
-            self.outcomes_and_receipts_to_save
-                .write()
-                .await
-                .entry(receipt.shard_id)
-                .and_modify(|receipts_and_outcomes| {
-                    receipts_and_outcomes
-                        .receipts
-                        .insert(receipt.receipt_id.to_string(), receipt);
-                });
-        }
+        let receipts = receipts
+            .into_iter()
+            .map(|receipt| (receipt.receipt_id.to_string(), receipt))
+            .collect::<std::collections::HashMap<_, _>>();
+
+        self.outcomes_and_receipts_to_save
+            .write()
+            .await
+            .entry(shard_id)
+            .and_modify(|receipts_and_outcomes| {
+                receipts_and_outcomes.receipts.extend(receipts);
+            });
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]

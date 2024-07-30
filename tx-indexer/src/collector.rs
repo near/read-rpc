@@ -143,10 +143,10 @@ async fn save_receipts_and_outcomes_details(
             );
 
             tx_collecting_storage
-                .return_outcomes_to_save(outcomes)
+                .return_outcomes_to_save(shard_id, outcomes)
                 .await;
             tx_collecting_storage
-                .return_receipts_to_save(receipts)
+                .return_receipts_to_save(shard_id, receipts)
                 .await;
         }
     }
