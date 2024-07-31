@@ -157,7 +157,10 @@ async fn main() -> anyhow::Result<()> {
         // custom requests methods
         .with_method(
             "view_state_paginated",
-            handle_rpc_method!(modules::state::methods::view_state_paginated, "view_state"),
+            handle_rpc_method!(
+                modules::state::methods::view_state_paginated,
+                "view_state_paginated"
+            ),
         )
         .with_method(
             "view_receipt_record",
