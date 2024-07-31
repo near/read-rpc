@@ -19,8 +19,15 @@ mod utils;
 // Categories for logging
 pub(crate) const RPC_SERVER: &str = "read_rpc_server";
 
-pub async fn handle_rpc_error<F, Fut, T, P>(
+macro_rules! handle_rpc_method {
+    ($method:expr, $method_name:expr) => {
+        |data, params| async move { handle_rpc_method($method, $method_name, data, params).await }
+    };
+}
+
+pub async fn handle_rpc_method<F, Fut, T, P>(
     method: F,
+    method_name: &str,
     data: Data<config::ServerContext>,
     params: Params<P>,
 ) -> Result<T, crate::errors::RPCError>
@@ -31,26 +38,28 @@ where
     let result = method(data, params).await;
     if let Err(err) = &result {
         if let Some(error_struct) = &err.error_struct {
-            // TODO: Increase appropriate metrics
             match error_struct {
                 near_jsonrpc::primitives::errors::RpcErrorKind::RequestValidationError(
                     request_validation_error,
                 ) => {
-                    match request_validation_error {
-                            near_jsonrpc::primitives::errors::RpcRequestValidationErrorKind::MethodNotFound { method_name } => {
-                                // This is unreachable because the method is registered in the router
-                                unreachable!("Method not found: {:?}", method_name);
-                            }
-                            near_jsonrpc::primitives::errors::RpcRequestValidationErrorKind::ParseError { error_message } => {
-                                println!("Invalid params: {:?}", error_message);
-                            }
-                        }
+                    if let near_jsonrpc::primitives::errors::RpcRequestValidationErrorKind::ParseError { .. } = request_validation_error
+                    {
+                        metrics::METHOD_ERRORS_TOTAL
+                            .with_label_values(&[method_name, "PARSE_ERROR"])
+                            .inc();
+                    }
                 }
-                near_jsonrpc::primitives::errors::RpcErrorKind::HandlerError(_) => {
-                    println!("Handler error: {:?}", err);
+                near_jsonrpc::primitives::errors::RpcErrorKind::HandlerError(error_struct) => {
+                    if let Some(stringified_error_name) = error_struct.get("name").and_then(|name| name.as_str()) {
+                        metrics::METHOD_ERRORS_TOTAL
+                            .with_label_values(&[method_name, stringified_error_name])
+                            .inc();
+                    }
                 }
                 near_jsonrpc::primitives::errors::RpcErrorKind::InternalError(_) => {
-                    println!("Internal error: {:?}", err);
+                    metrics::METHOD_ERRORS_TOTAL
+                        .with_label_values(&[method_name, "INTERNAL_ERROR"])
+                        .inc();
                 }
             }
         }
@@ -146,125 +155,157 @@ async fn main() -> anyhow::Result<()> {
     let rpc = Server::new()
         .with_data(Data::new(server_context.clone()))
         // custom requests methods
-        .with_method("view_state_paginated", |data, params| async move {
-            handle_rpc_error(modules::state::methods::view_state_paginated, data, params).await
-        })
-        .with_method("view_receipt_record", |data, params| async move {
-            handle_rpc_error(
+        .with_method(
+            "view_state_paginated",
+            handle_rpc_method!(modules::state::methods::view_state_paginated, "view_state"),
+        )
+        .with_method(
+            "view_receipt_record",
+            handle_rpc_method!(
                 modules::receipts::methods::view_receipt_record,
-                data,
-                params,
-            )
-            .await
-        })
+                "view_receipt_record"
+            ),
+        )
         // requests methods
-        .with_method("query", |data, params| async move {
-            handle_rpc_error(modules::queries::methods::query, data, params).await
-        })
+        .with_method(
+            "query",
+            handle_rpc_method!(modules::queries::methods::query, "query"),
+        )
         // basic requests methods
-        .with_method("block", |data, params| async move {
-            handle_rpc_error(modules::blocks::methods::block, data, params).await
-        })
-        .with_method("broadcast_tx_async", |data, params| async move {
-            handle_rpc_error(
+        .with_method(
+            "block",
+            handle_rpc_method!(modules::blocks::methods::block, "block"),
+        )
+        .with_method(
+            "broadcast_tx_async",
+            handle_rpc_method!(
                 modules::transactions::methods::broadcast_tx_async,
-                data,
-                params,
-            )
-            .await
-        })
-        .with_method("broadcast_tx_commit", |data, params| async move {
-            handle_rpc_error(
+                "broadcast_tx_async"
+            ),
+        )
+        .with_method(
+            "broadcast_tx_commit",
+            handle_rpc_method!(
                 modules::transactions::methods::broadcast_tx_commit,
-                data,
-                params,
-            )
-            .await
-        })
-        .with_method("chunk", |data, params| async move {
-            handle_rpc_error(modules::blocks::methods::chunk, data, params).await
-        })
-        .with_method("gas_price", |data, params| async move {
-            handle_rpc_error(modules::gas::methods::gas_price, data, params).await
-        })
-        .with_method("health", |data, params| async move {
-            handle_rpc_error(modules::network::methods::health, data, params).await
-        })
-        .with_method("light_client_proof", |data, params| async move {
-            handle_rpc_error(modules::clients::methods::light_client_proof, data, params).await
-        })
-        .with_method("next_light_client_block", |data, params| async move {
-            handle_rpc_error(
+                "broadcast_tx_commit"
+            ),
+        )
+        .with_method(
+            "chunk",
+            handle_rpc_method!(modules::blocks::methods::chunk, "chunk"),
+        )
+        .with_method(
+            "gas_price",
+            handle_rpc_method!(modules::gas::methods::gas_price, "gas_price"),
+        )
+        .with_method(
+            "health",
+            handle_rpc_method!(modules::network::methods::health, "health"),
+        )
+        .with_method(
+            "light_client_proof",
+            handle_rpc_method!(
+                modules::clients::methods::light_client_proof,
+                "light_client_proof"
+            ),
+        )
+        .with_method(
+            "next_light_client_block",
+            handle_rpc_method!(
                 modules::clients::methods::next_light_client_block,
-                data,
-                params,
-            )
-            .await
-        })
-        .with_method("network_info", |data, params| async move {
-            handle_rpc_error(modules::network::methods::network_info, data, params).await
-        })
-        .with_method("send_tx", |data, params| async move {
-            handle_rpc_error(modules::transactions::methods::send_tx, data, params).await
-        })
-        .with_method("status", |data, params| async move {
-            handle_rpc_error(modules::network::methods::status, data, params).await
-        })
-        .with_method("tx", |data, params| async move {
-            handle_rpc_error(modules::transactions::methods::tx, data, params).await
-        })
-        .with_method("validators", |data, params| async move {
-            handle_rpc_error(modules::network::methods::validators, data, params).await
-        })
-        .with_method("client_config", |data, params| async move {
-            handle_rpc_error(modules::network::methods::client_config, data, params).await
-        })
-        .with_method("EXPERIMENTAL_changes", |data, params| async move {
-            handle_rpc_error(
+                "next_light_client_block"
+            ),
+        )
+        .with_method(
+            "network_info",
+            handle_rpc_method!(modules::network::methods::network_info, "network_info"),
+        )
+        .with_method(
+            "send_tx",
+            handle_rpc_method!(modules::transactions::methods::send_tx, "send_tx"),
+        )
+        .with_method(
+            "status",
+            handle_rpc_method!(modules::network::methods::status, "status"),
+        )
+        .with_method(
+            "tx",
+            handle_rpc_method!(modules::transactions::methods::tx, "tx"),
+        )
+        .with_method(
+            "validators",
+            handle_rpc_method!(modules::network::methods::validators, "validators"),
+        )
+        .with_method(
+            "client_config",
+            handle_rpc_method!(modules::network::methods::client_config, "client_config"),
+        )
+        .with_method(
+            "EXPERIMENTAL_changes",
+            handle_rpc_method!(
                 modules::blocks::methods::changes_in_block_by_type,
-                data,
-                params,
-            )
-            .await
-        })
-        .with_method("EXPERIMENTAL_changes_in_block", |data, params| async move {
-            handle_rpc_error(modules::blocks::methods::changes_in_block, data, params).await
-        })
-        .with_method("EXPERIMENTAL_genesis_config", |data, params| async move {
-            handle_rpc_error(modules::network::methods::genesis_config, data, params).await
-        })
+                "EXPERIMENTAL_changes"
+            ),
+        )
+        .with_method(
+            "EXPERIMENTAL_changes_in_block",
+            handle_rpc_method!(
+                modules::blocks::methods::changes_in_block,
+                "EXPERIMENTAL_changes_in_block"
+            ),
+        )
+        .with_method(
+            "EXPERIMENTAL_genesis_config",
+            handle_rpc_method!(
+                modules::network::methods::genesis_config,
+                "EXPERIMENTAL_genesis_config"
+            ),
+        )
         .with_method(
             "EXPERIMENTAL_light_client_proof",
-            |data, params| async move {
-                handle_rpc_error(modules::clients::methods::light_client_proof, data, params).await
-            },
+            handle_rpc_method!(
+                modules::clients::methods::light_client_proof,
+                "EXPERIMENTAL_light_client_proof"
+            ),
         )
-        .with_method("EXPERIMENTAL_protocol_config", |data, params| async move {
-            handle_rpc_error(modules::network::methods::protocol_config, data, params).await
-        })
-        .with_method("EXPERIMENTAL_receipt", |data, params| async move {
-            handle_rpc_error(modules::receipts::methods::receipt, data, params).await
-        })
-        .with_method("EXPERIMENTAL_tx_status", |data, params| async move {
-            handle_rpc_error(modules::transactions::methods::tx_status, data, params).await
-        })
+        .with_method(
+            "EXPERIMENTAL_protocol_config",
+            handle_rpc_method!(
+                modules::network::methods::protocol_config,
+                "EXPERIMENTAL_protocol_config"
+            ),
+        )
+        .with_method(
+            "EXPERIMENTAL_receipt",
+            handle_rpc_method!(modules::receipts::methods::receipt, "EXPERIMENTAL_receipt"),
+        )
+        .with_method(
+            "EXPERIMENTAL_tx_status",
+            handle_rpc_method!(
+                modules::transactions::methods::tx_status,
+                "EXPERIMENTAL_tx_status"
+            ),
+        )
         .with_method(
             "EXPERIMENTAL_validators_ordered",
-            |data, params| async move {
-                handle_rpc_error(modules::network::methods::validators_ordered, data, params).await
-            },
+            handle_rpc_method!(
+                modules::network::methods::validators_ordered,
+                "EXPERIMENTAL_validators_ordered"
+            ),
         )
         .with_method(
             "EXPERIMENTAL_maintenance_windows",
-            |data, params| async move {
-                handle_rpc_error(modules::network::methods::maintenance_windows, data, params).await
-            },
+            handle_rpc_method!(
+                modules::network::methods::maintenance_windows,
+                "EXPERIMENTAL_maintenance_windows"
+            ),
         )
         .with_method(
             "EXPERIMENTAL_split_storage_info",
-            |data, params| async move {
-                handle_rpc_error(modules::network::methods::split_storage_info, data, params).await
-            },
+            handle_rpc_method!(
+                modules::network::methods::split_storage_info,
+                "EXPERIMENTAL_split_storage_info"
+            ),
         )
         .finish();
 
