@@ -250,7 +250,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                 _ => {}
             }
         });
-        query_builder.push(" ON CONFLICT DO NOTHING;");
+        query_builder.push(" ON CONFLICT (account_id, data_key, block_height) DO UPDATE SET data_value = EXCLUDED.data_value;");
         query_builder
             .build()
             .execute(self.shards_pool.get(&shard_id).ok_or(anyhow::anyhow!(
@@ -313,7 +313,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                 _ => {}
             }
         });
-        query_builder.push(" ON CONFLICT DO NOTHING;");
+        query_builder.push(" ON CONFLICT (account_id, data_key, block_height) DO UPDATE SET data_value = EXCLUDED.data_value;");
         query_builder
             .build()
             .execute(self.shards_pool.get(&shard_id).ok_or(anyhow::anyhow!(
@@ -367,7 +367,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                 _ => {}
             }
         });
-        query_builder.push(" ON CONFLICT DO NOTHING;");
+        query_builder.push(" ON CONFLICT (account_id, block_height) DO UPDATE SET data_value = EXCLUDED.data_value;");
         query_builder
             .build()
             .execute(self.shards_pool.get(&shard_id).ok_or(anyhow::anyhow!(
@@ -421,7 +421,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                 _ => {}
             }
         });
-        query_builder.push(" ON CONFLICT DO NOTHING;");
+        query_builder.push(" ON CONFLICT (account_id, block_height) DO UPDATE SET data_value = EXCLUDED.data_value;");
         query_builder
             .build()
             .execute(self.shards_pool.get(&shard_id).ok_or(anyhow::anyhow!(
