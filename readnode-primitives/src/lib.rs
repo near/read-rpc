@@ -312,7 +312,7 @@ impl TransactionDetails {
     // and convert it to the new version
     // This is needed to handle the backward incompatible changes in the TransactionDetails
     // https://github.com/near/nearcore/pull/10676/files#diff-1e4fc99d32e48420a9bd37050fa1412758cba37825851edea40cbdfcab406944R1927
-    pub fn borsh_deserialize(data: &Vec<u8>) -> anyhow::Result<Self> {
+    pub fn borsh_deserialize(data: &[u8]) -> anyhow::Result<Self> {
         match borsh::from_slice::<Self>(data) {
             Ok(tx_details) => Ok(tx_details),
             Err(_) => Ok(

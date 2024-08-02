@@ -1,5 +1,6 @@
-use crate::config::ServerContext;
 use jsonrpc_v2::Data;
+
+use crate::config::ServerContext;
 
 pub mod methods;
 
