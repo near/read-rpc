@@ -128,6 +128,12 @@ lazy_static! {
         &["method_name"] // This declares a label named `method name`
     ).unwrap();
 
+    pub(crate) static ref METHOD_ERRORS_TOTAL: IntCounterVec = register_int_counter_vec(
+        "method_errors_total",
+        "Total number of errors for method",
+        &["method_name", "error_type"] // This declares a label named `method_name` and `error_type`
+    ).unwrap();
+
     pub(crate) static ref TOTAL_REQUESTS_COUNTER: IntCounterVec = register_int_counter_vec(
         "total_requests_counter",
         "Total number of method requests by type",
