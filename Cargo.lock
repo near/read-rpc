@@ -6620,6 +6620,7 @@ version = "0.2.11"
 dependencies = [
  "anyhow",
  "borsh 1.5.1",
+ "near-crypto 1.40.0",
  "near-indexer-primitives",
  "num-traits",
  "serde",
