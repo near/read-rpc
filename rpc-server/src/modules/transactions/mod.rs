@@ -1,6 +1,5 @@
-use jsonrpc_v2::Data;
-
 use crate::config::ServerContext;
+use jsonrpc_v2::Data;
 
 pub mod methods;
 
@@ -19,7 +18,7 @@ pub(crate) async fn try_get_transaction_details_by_hash(
 ) -> anyhow::Result<readnode_primitives::TransactionDetails> {
     match data.tx_details_storage.retrieve(&tx_hash.to_string()).await {
         Ok(transaction_details_bytes) => {
-            match borsh::from_slice::<readnode_primitives::TransactionDetails>(
+            match readnode_primitives::TransactionDetails::borsh_deserialize(
                 &transaction_details_bytes,
             ) {
                 Ok(transaction_details) => Ok(transaction_details),
