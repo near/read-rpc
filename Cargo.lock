@@ -6796,6 +6796,7 @@ dependencies = [
  "anyhow",
  "borsh 1.5.1",
  "near-chain-configs 1.40.0",
+ "near-crypto 1.40.0",
  "near-indexer-primitives",
  "num-traits",
  "serde",
