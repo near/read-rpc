@@ -19,20 +19,8 @@ mod utils;
 // Categories for logging
 pub(crate) const RPC_SERVER: &str = "read_rpc_server";
 
-trait WithMethodAndMetrics {
-    fn with_method_and_metrics<F, Fut, T, P>(
-        self,
-        method_name: &'static str,
-        method: &'static F,
-    ) -> Self
-    where
-        F: Fn(Data<config::ServerContext>, Params<P>) -> Fut + Send + Sync + 'static,
-        Fut: std::future::Future<Output = Result<T, crate::errors::RPCError>> + Send + 'static,
-        T: serde::Serialize + Send + 'static,
-        P: serde::de::DeserializeOwned + Send + 'static;
-}
-
-impl<R> WithMethodAndMetrics for jsonrpc_v2::ServerBuilder<R>
+#[easy_ext::ext(WithMethodAndMetrics)]
+impl<R> jsonrpc_v2::ServerBuilder<R>
 where
     R: Router,
 {
@@ -48,51 +36,40 @@ where
         P: serde::de::DeserializeOwned + Send + 'static,
     {
         self.with_method(method_name, move |data, params| async move {
-            handle_rpc_method(method, method_name, data, params).await
-        })
-    }
-}
+            let result = method(data, params).await;
 
-pub async fn handle_rpc_method<F, Fut, T, P>(
-    method: F,
-    method_name: &str,
-    data: Data<config::ServerContext>,
-    params: Params<P>,
-) -> Result<T, crate::errors::RPCError>
-where
-    F: Fn(Data<config::ServerContext>, Params<P>) -> Fut,
-    Fut: std::future::Future<Output = Result<T, crate::errors::RPCError>>,
-{
-    let result = method(data, params).await;
-    if let Err(err) = &result {
-        if let Some(error_struct) = &err.error_struct {
-            match error_struct {
-                near_jsonrpc::primitives::errors::RpcErrorKind::RequestValidationError(
-                    request_validation_error,
-                ) => {
-                    if let near_jsonrpc::primitives::errors::RpcRequestValidationErrorKind::ParseError { .. } = request_validation_error
-                    {
-                        metrics::METHOD_ERRORS_TOTAL
-                            .with_label_values(&[method_name, "PARSE_ERROR"])
-                            .inc();
+            if let Err(err) = &result {
+                if let Some(error_struct) = &err.error_struct {
+                    match error_struct {
+                        near_jsonrpc::primitives::errors::RpcErrorKind::RequestValidationError(
+                            request_validation_error,
+                        ) => {
+                            if let near_jsonrpc::primitives::errors::RpcRequestValidationErrorKind::ParseError { .. } = request_validation_error
+                            {
+                                metrics::METHOD_ERRORS_TOTAL
+                                    .with_label_values(&[method_name, "PARSE_ERROR"])
+                                    .inc();
+                            }
+                        }
+                        near_jsonrpc::primitives::errors::RpcErrorKind::HandlerError(error_struct) => {
+                            if let Some(stringified_error_name) = error_struct.get("name").and_then(|name| name.as_str()) {
+                                metrics::METHOD_ERRORS_TOTAL
+                                    .with_label_values(&[method_name, stringified_error_name])
+                                    .inc();
+                            }
+                        }
+                        near_jsonrpc::primitives::errors::RpcErrorKind::InternalError(_) => {
+                            metrics::METHOD_ERRORS_TOTAL
+                                .with_label_values(&[method_name, "INTERNAL_ERROR"])
+                                .inc();
+                        }
                     }
-                }
-                near_jsonrpc::primitives::errors::RpcErrorKind::HandlerError(error_struct) => {
-                    if let Some(stringified_error_name) = error_struct.get("name").and_then(|name| name.as_str()) {
-                        metrics::METHOD_ERRORS_TOTAL
-                            .with_label_values(&[method_name, stringified_error_name])
-                            .inc();
-                    }
-                }
-                near_jsonrpc::primitives::errors::RpcErrorKind::InternalError(_) => {
-                    metrics::METHOD_ERRORS_TOTAL
-                        .with_label_values(&[method_name, "INTERNAL_ERROR"])
-                        .inc();
                 }
             }
-        }
+
+            result
+        })
     }
-    result
 }
 
 #[actix_web::main]
