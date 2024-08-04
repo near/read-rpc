@@ -24,50 +24,57 @@ impl<R> jsonrpc_v2::ServerBuilder<R>
 where
     R: Router,
 {
-    fn with_method_and_metrics<F, Fut, T, P>(
-        self,
-        method_name: &'static str,
-        method: &'static F,
-    ) -> Self
+    fn with_method_and_metrics<N, F, T, P>(self, name: N, handler: F) -> Self
     where
-        F: Fn(Data<config::ServerContext>, Params<P>) -> Fut + Send + Sync + 'static,
-        Fut: std::future::Future<Output = Result<T, crate::errors::RPCError>> + Send + 'static,
+        N: Into<String>,
+        F: jsonrpc_v2::Factory<T, errors::RPCError, (Data<config::ServerContext>, Params<P>)>
+            + Send
+            + Sync
+            + Clone
+            + 'static,
         T: serde::Serialize + Send + 'static,
         P: serde::de::DeserializeOwned + Send + 'static,
     {
-        self.with_method(method_name, move |data, params| async move {
-            let result = method(data, params).await;
+        let name = name.into();
 
-            if let Err(err) = &result {
-                if let Some(error_struct) = &err.error_struct {
-                    match error_struct {
-                        near_jsonrpc::primitives::errors::RpcErrorKind::RequestValidationError(
-                            request_validation_error,
-                        ) => {
-                            if let near_jsonrpc::primitives::errors::RpcRequestValidationErrorKind::ParseError { .. } = request_validation_error
-                            {
+        self.with_method(name.clone(), move |data, params| {
+            let name = name.clone();
+            let handler = handler.clone();
+
+            async move {
+                let result = handler.call((data, params)).await;
+
+                if let Err(err) = &result {
+                    if let Some(error_struct) = &err.error_struct {
+                        match error_struct {
+                            near_jsonrpc::primitives::errors::RpcErrorKind::RequestValidationError(
+                                request_validation_error,
+                            ) => {
+                                if let near_jsonrpc::primitives::errors::RpcRequestValidationErrorKind::ParseError { .. } = request_validation_error
+                                {
+                                    metrics::METHOD_ERRORS_TOTAL
+                                        .with_label_values(&[name.as_str(), "PARSE_ERROR"])
+                                        .inc();
+                                }
+                            }
+                            near_jsonrpc::primitives::errors::RpcErrorKind::HandlerError(error_struct) => {
+                                if let Some(stringified_error_name) = error_struct.get("name").and_then(|name| name.as_str()) {
+                                    metrics::METHOD_ERRORS_TOTAL
+                                        .with_label_values(&[name.as_str(), stringified_error_name])
+                                        .inc();
+                                }
+                            }
+                            near_jsonrpc::primitives::errors::RpcErrorKind::InternalError(_) => {
                                 metrics::METHOD_ERRORS_TOTAL
-                                    .with_label_values(&[method_name, "PARSE_ERROR"])
+                                    .with_label_values(&[name.as_str(), "INTERNAL_ERROR"])
                                     .inc();
                             }
-                        }
-                        near_jsonrpc::primitives::errors::RpcErrorKind::HandlerError(error_struct) => {
-                            if let Some(stringified_error_name) = error_struct.get("name").and_then(|name| name.as_str()) {
-                                metrics::METHOD_ERRORS_TOTAL
-                                    .with_label_values(&[method_name, stringified_error_name])
-                                    .inc();
-                            }
-                        }
-                        near_jsonrpc::primitives::errors::RpcErrorKind::InternalError(_) => {
-                            metrics::METHOD_ERRORS_TOTAL
-                                .with_label_values(&[method_name, "INTERNAL_ERROR"])
-                                .inc();
                         }
                     }
                 }
-            }
 
-            result
+                result
+            }
         })
     }
 }
@@ -162,77 +169,77 @@ async fn main() -> anyhow::Result<()> {
         // custom requests methods
         .with_method_and_metrics(
             "view_state_paginated",
-            &modules::state::methods::view_state_paginated,
+            modules::state::methods::view_state_paginated,
         )
         .with_method_and_metrics(
             "view_receipt_record",
-            &modules::receipts::methods::view_receipt_record,
+            modules::receipts::methods::view_receipt_record,
         )
         // requests methods
-        .with_method_and_metrics("query", &modules::queries::methods::query)
+        .with_method_and_metrics("query", modules::queries::methods::query)
         // basic requests methods
-        .with_method_and_metrics("block", &modules::blocks::methods::block)
+        .with_method_and_metrics("block", modules::blocks::methods::block)
         .with_method_and_metrics(
             "broadcast_tx_async",
-            &modules::transactions::methods::broadcast_tx_async,
+            modules::transactions::methods::broadcast_tx_async,
         )
         .with_method_and_metrics(
             "broadcast_tx_commit",
-            &modules::transactions::methods::broadcast_tx_commit,
+            modules::transactions::methods::broadcast_tx_commit,
         )
-        .with_method_and_metrics("chunk", &modules::blocks::methods::chunk)
-        .with_method_and_metrics("gas_price", &modules::gas::methods::gas_price)
-        .with_method_and_metrics("health", &modules::network::methods::health)
+        .with_method_and_metrics("chunk", modules::blocks::methods::chunk)
+        .with_method_and_metrics("gas_price", modules::gas::methods::gas_price)
+        .with_method_and_metrics("health", modules::network::methods::health)
         .with_method_and_metrics(
             "light_client_proof",
-            &modules::clients::methods::light_client_proof,
+            modules::clients::methods::light_client_proof,
         )
         .with_method_and_metrics(
             "next_light_client_block",
-            &modules::clients::methods::next_light_client_block,
+            modules::clients::methods::next_light_client_block,
         )
-        .with_method_and_metrics("network_info", &modules::network::methods::network_info)
-        .with_method_and_metrics("send_tx", &modules::transactions::methods::send_tx)
-        .with_method_and_metrics("status", &modules::network::methods::status)
-        .with_method_and_metrics("tx", &modules::transactions::methods::tx)
-        .with_method_and_metrics("validators", &modules::network::methods::validators)
-        .with_method_and_metrics("client_config", &modules::network::methods::client_config)
+        .with_method_and_metrics("network_info", modules::network::methods::network_info)
+        .with_method_and_metrics("send_tx", modules::transactions::methods::send_tx)
+        .with_method_and_metrics("status", modules::network::methods::status)
+        .with_method_and_metrics("tx", modules::transactions::methods::tx)
+        .with_method_and_metrics("validators", modules::network::methods::validators)
+        .with_method_and_metrics("client_config", modules::network::methods::client_config)
         .with_method_and_metrics(
             "EXPERIMENTAL_changes",
-            &modules::blocks::methods::changes_in_block_by_type,
+            modules::blocks::methods::changes_in_block_by_type,
         )
         .with_method_and_metrics(
             "EXPERIMENTAL_changes_in_block",
-            &modules::blocks::methods::changes_in_block,
+            modules::blocks::methods::changes_in_block,
         )
         .with_method_and_metrics(
             "EXPERIMENTAL_genesis_config",
-            &modules::network::methods::genesis_config,
+            modules::network::methods::genesis_config,
         )
         .with_method_and_metrics(
             "EXPERIMENTAL_light_client_proof",
-            &modules::clients::methods::light_client_proof,
+            modules::clients::methods::light_client_proof,
         )
         .with_method_and_metrics(
             "EXPERIMENTAL_protocol_config",
-            &modules::network::methods::protocol_config,
+            modules::network::methods::protocol_config,
         )
-        .with_method_and_metrics("EXPERIMENTAL_receipt", &modules::receipts::methods::receipt)
+        .with_method_and_metrics("EXPERIMENTAL_receipt", modules::receipts::methods::receipt)
         .with_method_and_metrics(
             "EXPERIMENTAL_tx_status",
-            &modules::transactions::methods::tx_status,
+            modules::transactions::methods::tx_status,
         )
         .with_method_and_metrics(
             "EXPERIMENTAL_validators_ordered",
-            &modules::network::methods::validators_ordered,
+            modules::network::methods::validators_ordered,
         )
         .with_method_and_metrics(
             "EXPERIMENTAL_maintenance_windows",
-            &modules::network::methods::maintenance_windows,
+            modules::network::methods::maintenance_windows,
         )
         .with_method_and_metrics(
             "EXPERIMENTAL_split_storage_info",
-            &modules::network::methods::split_storage_info,
+            modules::network::methods::split_storage_info,
         )
         .finish();
 
