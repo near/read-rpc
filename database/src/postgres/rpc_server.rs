@@ -74,38 +74,34 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         } else {
             crate::postgres::PageState::new(1000)
         };
-        let mut stream = sqlx::query_as::<_, (String, Vec<u8>, bigdecimal::BigDecimal)>(
+        let mut stream = sqlx::query_as::<_, (String, Vec<u8>)>(
             "
                 WITH latest_blocks AS (
                     SELECT 
                         data_key,
-                        account_id,
-                        MAX(block_height) as max_block_height
+                        MAX(block_height) AS max_block_height
                     FROM 
                         state_changes_data
                     WHERE 
                         account_id = $1
                         AND block_height <= $2
                     GROUP BY 
-                        data_key,
-                        account_id
+                        data_key
                 )
                 SELECT 
                     sc.data_key,
-                    sc.data_value,
-                    sc.block_height 
+                    sc.data_value
                 FROM
                     state_changes_data sc
                 INNER JOIN latest_blocks lb
                 ON 
                     sc.data_key = lb.data_key 
                     AND sc.block_height = lb.max_block_height
-                    AND sc.account_id = lb.account_id
                 WHERE
-                    sc.data_value IS NOT NULL
+                    sc.account_id = $1
+                    AND sc.data_value IS NOT NULL
                 ORDER BY 
-                    sc.data_key, 
-                    sc.block_height DESC
+                    sc.data_key
                 LIMIT $3 OFFSET $4;
                 ",
         )
@@ -116,7 +112,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         .fetch(shard_id_pool.pool);
         let mut items = std::collections::HashMap::new();
         while let Some(row) = stream.next().await {
-            let (key, value, _): (String, Vec<u8>, _) = row?;
+            let (key, value): (String, Vec<u8>) = row?;
             items.insert(hex::decode(key)?, value);
         }
         if items.len() < page_state.page_size as usize {
@@ -147,13 +143,12 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
             ])
             .inc();
         let mut items = std::collections::HashMap::new();
-        let mut stream = sqlx::query_as::<_, (String, Vec<u8>, bigdecimal::BigDecimal)>(
+        let mut stream = sqlx::query_as::<_, (String, Vec<u8>)>(
             "
                 WITH latest_blocks AS (
                     SELECT 
                         data_key,
-                        account_id,
-                        MAX(block_height) as max_block_height
+                        MAX(block_height) AS max_block_height
                     FROM 
                         state_changes_data
                     WHERE 
@@ -161,22 +156,20 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                         AND data_key LIKE $2
                         AND block_height <= $3
                     GROUP BY 
-                        data_key,
-                        account_id
+                        data_key
                 )
                 SELECT 
                     sc.data_key,
-                    sc.data_value,
-                    sc.block_height 
+                    sc.data_value
                 FROM
                     state_changes_data sc
                 INNER JOIN latest_blocks lb
                 ON 
                     sc.data_key = lb.data_key 
                     AND sc.block_height = lb.max_block_height
-                    AND sc.account_id = lb.account_id
                 WHERE
-                    sc.data_value IS NOT NULL
+                    sc.account_id = $1
+                    AND sc.data_value IS NOT NULL;
                 ",
         )
         .bind(account_id.to_string())
@@ -184,7 +177,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         .bind(bigdecimal::BigDecimal::from(block_height))
         .fetch(shard_id_pool.pool);
         while let Some(row) = stream.next().await {
-            let (key, value, _): (String, Vec<u8>, _) = row?;
+            let (key, value): (String, Vec<u8>) = row?;
             items.insert(hex::decode(key)?, value);
         }
         Ok(items)
@@ -207,15 +200,40 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
             ])
             .inc();
         let mut items = std::collections::HashMap::new();
-        let mut page_token = Some(hex::encode(borsh::to_vec(
-            &crate::postgres::PageState::new(5000),
-        )?));
-        while let Some(token) = page_token {
-            let (page_items, next_token) = self
-                .get_state_by_page(account_id, block_height, Some(token), method_name)
-                .await?;
-            items.extend(page_items);
-            page_token = next_token;
+        let mut stream = sqlx::query_as::<_, (String, Vec<u8>)>(
+            "
+                WITH latest_blocks AS (
+                    SELECT 
+                        data_key,
+                        MAX(block_height) AS max_block_height
+                    FROM 
+                        state_changes_data
+                    WHERE 
+                        account_id = $1
+                        AND block_height <= $2
+                    GROUP BY 
+                        data_key
+                )
+                SELECT 
+                    sc.data_key,
+                    sc.data_value
+                FROM
+                    state_changes_data sc
+                INNER JOIN latest_blocks lb
+                ON 
+                    sc.data_key = lb.data_key 
+                    AND sc.block_height = lb.max_block_height
+                WHERE
+                    sc.account_id = $1
+                    AND sc.data_value IS NOT NULL;
+                ",
+        )
+        .bind(account_id.to_string())
+        .bind(bigdecimal::BigDecimal::from(block_height))
+        .fetch(shard_id_pool.pool);
+        while let Some(row) = stream.next().await {
+            let (key, value): (String, Vec<u8>) = row?;
+            items.insert(hex::decode(key)?, value);
         }
         Ok(items)
     }
