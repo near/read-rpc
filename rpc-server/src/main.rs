@@ -19,52 +19,52 @@ mod utils;
 // Categories for logging
 pub(crate) const RPC_SERVER: &str = "read_rpc_server";
 
-macro_rules! handle_rpc_method {
-    ($method:expr, $method_name:expr) => {
-        |data, params| async move { handle_rpc_method($method, $method_name, data, params).await }
-    };
-}
-
-pub async fn handle_rpc_method<F, Fut, T, P>(
-    method: F,
-    method_name: &str,
-    data: Data<config::ServerContext>,
-    params: Params<P>,
-) -> Result<T, crate::errors::RPCError>
+#[easy_ext::ext(WithMethodAndMetrics)]
+impl<R> jsonrpc_v2::ServerBuilder<R>
 where
-    F: FnOnce(Data<config::ServerContext>, Params<P>) -> Fut,
-    Fut: std::future::Future<Output = Result<T, crate::errors::RPCError>>,
+    R: Router,
 {
-    let result = method(data, params).await;
-    if let Err(err) = &result {
-        if let Some(error_struct) = &err.error_struct {
-            match error_struct {
-                near_jsonrpc::primitives::errors::RpcErrorKind::RequestValidationError(
-                    request_validation_error,
-                ) => {
-                    if let near_jsonrpc::primitives::errors::RpcRequestValidationErrorKind::ParseError { .. } = request_validation_error
-                    {
+    fn with_method_and_metrics<F, T, P>(self, name: &'static str, handler: &'static F) -> Self
+    where
+        F: jsonrpc_v2::Factory<T, errors::RPCError, (Data<config::ServerContext>, Params<P>)>
+            + Send
+            + Sync
+            + 'static,
+        T: serde::Serialize + Send + 'static,
+        P: serde::de::DeserializeOwned + Send + 'static,
+    {
+        self.with_method(name, |data, params| async {
+            let result = handler.call((data, params)).await;
+
+            if let Err(err) = &result {
+                match &err.error_struct {
+                    Some(near_jsonrpc::primitives::errors::RpcErrorKind::RequestValidationError(
+                        near_jsonrpc::primitives::errors::RpcRequestValidationErrorKind::ParseError { .. },
+                    )) => {
                         metrics::METHOD_ERRORS_TOTAL
-                            .with_label_values(&[method_name, "PARSE_ERROR"])
+                            .with_label_values(&[name, "PARSE_ERROR"])
                             .inc();
                     }
-                }
-                near_jsonrpc::primitives::errors::RpcErrorKind::HandlerError(error_struct) => {
-                    if let Some(stringified_error_name) = error_struct.get("name").and_then(|name| name.as_str()) {
+                    Some(near_jsonrpc::primitives::errors::RpcErrorKind::HandlerError(error_struct)) => {
+                        if let Some(stringified_error_name) = error_struct.get("name").and_then(serde_json::Value::as_str) {
+                            metrics::METHOD_ERRORS_TOTAL
+                                .with_label_values(&[name, stringified_error_name])
+                                .inc();
+                        }
+                    }
+                    Some(near_jsonrpc::primitives::errors::RpcErrorKind::InternalError(_)) => {
                         metrics::METHOD_ERRORS_TOTAL
-                            .with_label_values(&[method_name, stringified_error_name])
+                            .with_label_values(&[name, "INTERNAL_ERROR"])
                             .inc();
                     }
-                }
-                near_jsonrpc::primitives::errors::RpcErrorKind::InternalError(_) => {
-                    metrics::METHOD_ERRORS_TOTAL
-                        .with_label_values(&[method_name, "INTERNAL_ERROR"])
-                        .inc();
+                    Some(near_jsonrpc::primitives::errors::RpcErrorKind::RequestValidationError(_))
+                    | None => {}
                 }
             }
-        }
+
+            result
+        })
     }
-    result
 }
 
 #[actix_web::main]
@@ -155,160 +155,79 @@ async fn main() -> anyhow::Result<()> {
     let rpc = Server::new()
         .with_data(Data::new(server_context.clone()))
         // custom requests methods
-        .with_method(
+        .with_method_and_metrics(
             "view_state_paginated",
-            handle_rpc_method!(
-                modules::state::methods::view_state_paginated,
-                "view_state_paginated"
-            ),
+            &modules::state::methods::view_state_paginated,
         )
-        .with_method(
+        .with_method_and_metrics(
             "view_receipt_record",
-            handle_rpc_method!(
-                modules::receipts::methods::view_receipt_record,
-                "view_receipt_record"
-            ),
+            &modules::receipts::methods::view_receipt_record,
         )
         // requests methods
-        .with_method(
-            "query",
-            handle_rpc_method!(modules::queries::methods::query, "query"),
-        )
+        .with_method_and_metrics("query", &modules::queries::methods::query)
         // basic requests methods
-        .with_method(
-            "block",
-            handle_rpc_method!(modules::blocks::methods::block, "block"),
-        )
-        .with_method(
+        .with_method_and_metrics("block", &modules::blocks::methods::block)
+        .with_method_and_metrics(
             "broadcast_tx_async",
-            handle_rpc_method!(
-                modules::transactions::methods::broadcast_tx_async,
-                "broadcast_tx_async"
-            ),
+            &modules::transactions::methods::broadcast_tx_async,
         )
-        .with_method(
+        .with_method_and_metrics(
             "broadcast_tx_commit",
-            handle_rpc_method!(
-                modules::transactions::methods::broadcast_tx_commit,
-                "broadcast_tx_commit"
-            ),
+            &modules::transactions::methods::broadcast_tx_commit,
         )
-        .with_method(
-            "chunk",
-            handle_rpc_method!(modules::blocks::methods::chunk, "chunk"),
-        )
-        .with_method(
-            "gas_price",
-            handle_rpc_method!(modules::gas::methods::gas_price, "gas_price"),
-        )
-        .with_method(
-            "health",
-            handle_rpc_method!(modules::network::methods::health, "health"),
-        )
-        .with_method(
+        .with_method_and_metrics("chunk", &modules::blocks::methods::chunk)
+        .with_method_and_metrics("gas_price", &modules::gas::methods::gas_price)
+        .with_method_and_metrics("health", &modules::network::methods::health)
+        .with_method_and_metrics(
             "light_client_proof",
-            handle_rpc_method!(
-                modules::clients::methods::light_client_proof,
-                "light_client_proof"
-            ),
+            &modules::clients::methods::light_client_proof,
         )
-        .with_method(
+        .with_method_and_metrics(
             "next_light_client_block",
-            handle_rpc_method!(
-                modules::clients::methods::next_light_client_block,
-                "next_light_client_block"
-            ),
+            &modules::clients::methods::next_light_client_block,
         )
-        .with_method(
-            "network_info",
-            handle_rpc_method!(modules::network::methods::network_info, "network_info"),
-        )
-        .with_method(
-            "send_tx",
-            handle_rpc_method!(modules::transactions::methods::send_tx, "send_tx"),
-        )
-        .with_method(
-            "status",
-            handle_rpc_method!(modules::network::methods::status, "status"),
-        )
-        .with_method(
-            "tx",
-            handle_rpc_method!(modules::transactions::methods::tx, "tx"),
-        )
-        .with_method(
-            "validators",
-            handle_rpc_method!(modules::network::methods::validators, "validators"),
-        )
-        .with_method(
-            "client_config",
-            handle_rpc_method!(modules::network::methods::client_config, "client_config"),
-        )
-        .with_method(
+        .with_method_and_metrics("network_info", &modules::network::methods::network_info)
+        .with_method_and_metrics("send_tx", &modules::transactions::methods::send_tx)
+        .with_method_and_metrics("status", &modules::network::methods::status)
+        .with_method_and_metrics("tx", &modules::transactions::methods::tx)
+        .with_method_and_metrics("validators", &modules::network::methods::validators)
+        .with_method_and_metrics("client_config", &modules::network::methods::client_config)
+        .with_method_and_metrics(
             "EXPERIMENTAL_changes",
-            handle_rpc_method!(
-                modules::blocks::methods::changes_in_block_by_type,
-                "EXPERIMENTAL_changes"
-            ),
+            &modules::blocks::methods::changes_in_block_by_type,
         )
-        .with_method(
+        .with_method_and_metrics(
             "EXPERIMENTAL_changes_in_block",
-            handle_rpc_method!(
-                modules::blocks::methods::changes_in_block,
-                "EXPERIMENTAL_changes_in_block"
-            ),
+            &modules::blocks::methods::changes_in_block,
         )
-        .with_method(
+        .with_method_and_metrics(
             "EXPERIMENTAL_genesis_config",
-            handle_rpc_method!(
-                modules::network::methods::genesis_config,
-                "EXPERIMENTAL_genesis_config"
-            ),
+            &modules::network::methods::genesis_config,
         )
-        .with_method(
+        .with_method_and_metrics(
             "EXPERIMENTAL_light_client_proof",
-            handle_rpc_method!(
-                modules::clients::methods::light_client_proof,
-                "EXPERIMENTAL_light_client_proof"
-            ),
+            &modules::clients::methods::light_client_proof,
         )
-        .with_method(
+        .with_method_and_metrics(
             "EXPERIMENTAL_protocol_config",
-            handle_rpc_method!(
-                modules::network::methods::protocol_config,
-                "EXPERIMENTAL_protocol_config"
-            ),
+            &modules::network::methods::protocol_config,
         )
-        .with_method(
-            "EXPERIMENTAL_receipt",
-            handle_rpc_method!(modules::receipts::methods::receipt, "EXPERIMENTAL_receipt"),
-        )
-        .with_method(
+        .with_method_and_metrics("EXPERIMENTAL_receipt", &modules::receipts::methods::receipt)
+        .with_method_and_metrics(
             "EXPERIMENTAL_tx_status",
-            handle_rpc_method!(
-                modules::transactions::methods::tx_status,
-                "EXPERIMENTAL_tx_status"
-            ),
+            &modules::transactions::methods::tx_status,
         )
-        .with_method(
+        .with_method_and_metrics(
             "EXPERIMENTAL_validators_ordered",
-            handle_rpc_method!(
-                modules::network::methods::validators_ordered,
-                "EXPERIMENTAL_validators_ordered"
-            ),
+            &modules::network::methods::validators_ordered,
         )
-        .with_method(
+        .with_method_and_metrics(
             "EXPERIMENTAL_maintenance_windows",
-            handle_rpc_method!(
-                modules::network::methods::maintenance_windows,
-                "EXPERIMENTAL_maintenance_windows"
-            ),
+            &modules::network::methods::maintenance_windows,
         )
-        .with_method(
+        .with_method_and_metrics(
             "EXPERIMENTAL_split_storage_info",
-            handle_rpc_method!(
-                modules::network::methods::split_storage_info,
-                "EXPERIMENTAL_split_storage_info"
-            ),
+            &modules::network::methods::split_storage_info,
         )
         .finish();
 
