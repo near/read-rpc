@@ -3738,6 +3738,7 @@ dependencies = [
  "prometheus",
  "readnode-primitives",
  "tokio",
+ "tokio-retry",
  "tracing",
 ]
 

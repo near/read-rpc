@@ -41,6 +41,7 @@ pub struct GeneralStateIndexerConfig {
     pub indexer_id: String,
     pub metrics_server_port: u16,
     pub concurrency: usize,
+    pub retries: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -204,6 +205,8 @@ pub struct CommonGeneralStateIndexerConfig {
     pub metrics_server_port: Option<u16>,
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub concurrency: Option<usize>,
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    pub retries: Option<usize>,
 }
 
 impl CommonGeneralStateIndexerConfig {
@@ -218,6 +221,10 @@ impl CommonGeneralStateIndexerConfig {
     pub fn default_concurrency() -> usize {
         1
     }
+
+    pub fn default_retries() -> usize {
+        10
+    }
 }
 
 impl Default for CommonGeneralStateIndexerConfig {
@@ -226,6 +233,7 @@ impl Default for CommonGeneralStateIndexerConfig {
             indexer_id: Some(Self::default_indexer_id()),
             metrics_server_port: Some(Self::default_metrics_server_port()),
             concurrency: Some(Self::default_concurrency()),
+            retries: Some(Self::default_retries()),
         }
     }
 }
@@ -337,6 +345,10 @@ impl From<CommonGeneralConfig> for GeneralStateIndexerConfig {
                 .state_indexer
                 .concurrency
                 .unwrap_or_else(CommonGeneralStateIndexerConfig::default_concurrency),
+            retries: common_config
+                .state_indexer
+                .retries
+                .unwrap_or_else(CommonGeneralStateIndexerConfig::default_retries),
         }
     }
 }

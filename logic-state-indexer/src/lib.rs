@@ -1,8 +1,11 @@
 use std::collections::HashMap;
 
-use itertools::Itertools;
 use near_indexer_primitives::views::StateChangeValueView;
 use near_indexer_primitives::CryptoHash;
+
+use itertools::Itertools;
+use tokio_retry::strategy::{jitter, ExponentialBackoff};
+use tokio_retry::Retry;
 
 #[macro_use]
 extern crate lazy_static;
@@ -206,41 +209,58 @@ pub async fn handle_streamer_message(
         .block_heights_processing
         .insert(block_height);
 
-    let handle_epoch_future = handle_epoch(
-        stats.read().await.current_epoch_id,
-        stats.read().await.current_epoch_height,
-        current_epoch_id,
-        next_epoch_id,
-        near_client,
-        db_manager,
-    );
-    let handle_block_future = db_manager.save_block_with_chunks(
-        block_height,
-        block_hash,
-        streamer_message
-            .block
-            .chunks
-            .iter()
-            .map(|chunk| {
-                (
-                    chunk.chunk_hash.to_string(),
-                    chunk.shard_id,
-                    chunk.height_included,
-                )
-            })
-            .collect(),
-    );
-    let handle_state_change_future = handle_state_changes(
-        &streamer_message,
-        db_manager,
-        block_height,
-        block_hash,
-        &indexer_config,
-        shard_layout,
-    );
+    let retry_strategy = ExponentialBackoff::from_millis(10)
+        .map(jitter)
+        .take(indexer_config.retries());
 
-    let update_meta_future =
-        db_manager.update_meta(indexer_config.indexer_id().as_ref(), block_height);
+    let handle_epoch_future = Retry::spawn(retry_strategy.clone(), || async {
+        handle_epoch(
+            stats.read().await.current_epoch_id,
+            stats.read().await.current_epoch_height,
+            current_epoch_id,
+            next_epoch_id,
+            near_client,
+            db_manager,
+        )
+        .await
+    });
+    let handle_block_future = Retry::spawn(retry_strategy.clone(), || async {
+        db_manager
+            .save_block_with_chunks(
+                block_height,
+                block_hash,
+                streamer_message
+                    .block
+                    .chunks
+                    .iter()
+                    .map(|chunk| {
+                        (
+                            chunk.chunk_hash.to_string(),
+                            chunk.shard_id,
+                            chunk.height_included,
+                        )
+                    })
+                    .collect(),
+            )
+            .await
+    });
+    let handle_state_change_future = Retry::spawn(retry_strategy.clone(), || async {
+        handle_state_changes(
+            &streamer_message,
+            db_manager,
+            block_height,
+            block_hash,
+            &indexer_config,
+            shard_layout,
+        )
+        .await
+    });
+
+    let update_meta_future = Retry::spawn(retry_strategy, || async {
+        db_manager
+            .update_meta(indexer_config.indexer_id().as_ref(), block_height)
+            .await
+    });
 
     futures::try_join!(
         handle_epoch_future,
