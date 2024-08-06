@@ -209,9 +209,8 @@ pub async fn handle_streamer_message(
         .block_heights_processing
         .insert(block_height);
 
-    let retry_strategy = ExponentialBackoff::from_millis(10)
-        .map(jitter)
-        .take(indexer_config.retries());
+    // Last delay with exponential strategy will take about 2560ms
+    let retry_strategy = ExponentialBackoff::from_millis(5).map(jitter).take(10);
 
     let handle_epoch_future = Retry::spawn(retry_strategy.clone(), || async {
         handle_epoch(

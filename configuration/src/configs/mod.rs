@@ -112,7 +112,6 @@ pub trait RightsizingConfig {
 /// For instance, `indexer_id()` to get the id of the indexer
 pub trait IndexerConfig {
     fn indexer_id(&self) -> &str;
-    fn retries(&self) -> usize;
 }
 
 #[derive(Debug, Clone)]
@@ -180,10 +179,6 @@ impl IndexerConfig for StateIndexerConfig {
     fn indexer_id(&self) -> &str {
         &self.general.indexer_id
     }
-
-    fn retries(&self) -> usize {
-        self.general.retries
-    }
 }
 
 impl RightsizingConfig for StateIndexerConfig {
@@ -225,10 +220,6 @@ impl IndexerConfig for NearStateIndexerConfig {
     // around the `update_meta` function
     fn indexer_id(&self) -> &str {
         "near_state_indexer"
-    }
-
-    fn retries(&self) -> usize {
-        10
     }
 }
 
