@@ -212,17 +212,14 @@ pub async fn handle_streamer_message(
     // Last delay with exponential strategy will take about 2560ms
     let retry_strategy = ExponentialBackoff::from_millis(5).map(jitter).take(10);
 
-    let handle_epoch_future = Retry::spawn(retry_strategy.clone(), || async {
-        handle_epoch(
-            stats.read().await.current_epoch_id,
-            stats.read().await.current_epoch_height,
-            current_epoch_id,
-            next_epoch_id,
-            near_client,
-            db_manager,
-        )
-        .await
-    });
+    let handle_epoch_future = handle_epoch(
+        stats.read().await.current_epoch_id,
+        stats.read().await.current_epoch_height,
+        current_epoch_id,
+        next_epoch_id,
+        near_client,
+        db_manager,
+    );
     let handle_block_future = Retry::spawn(retry_strategy.clone(), || async {
         db_manager
             .save_block_with_chunks(
@@ -255,11 +252,8 @@ pub async fn handle_streamer_message(
         .await
     });
 
-    let update_meta_future = Retry::spawn(retry_strategy, || async {
-        db_manager
-            .update_meta(indexer_config.indexer_id().as_ref(), block_height)
-            .await
-    });
+    let update_meta_future =
+        db_manager.update_meta(indexer_config.indexer_id().as_ref(), block_height);
 
     futures::try_join!(
         handle_epoch_future,
