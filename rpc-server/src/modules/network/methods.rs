@@ -384,7 +384,8 @@ async fn protocol_config_call(
             fees: runtime_config.fees.clone(),
             wasm_config: runtime_config.wasm_config.clone(),
             account_creation_config: runtime_config.account_creation_config.clone(),
-            storage_proof_size_soft_limit: runtime_config.storage_proof_size_soft_limit,
+            congestion_control_config: runtime_config.congestion_control_config,
+            witness_config: runtime_config.witness_config,
         },
     };
     Ok(protocol_config.into())

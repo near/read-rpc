@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased](https://github.com/near/read-rpc/compare/main...develop)
 
+## [0.2.12](https://github.com/near/read-rpc/releases/tag/v0.2.12)
+### Supported Nearcore Version
+- nearcore v2.0.0
+- rust v1.78.0
+
+### What's Changed
+* Update `nearcore` to v2.0.0
+* Update rust version to v1.78.0
+* Fix fetching the transaction details from the GCS Bucket
+
 ## [0.2.11](https://github.com/near/read-rpc/releases/tag/v0.2.11)
 ### Supported Nearcore Version
 - nearcore v1.40.0
