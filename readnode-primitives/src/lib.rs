@@ -175,9 +175,9 @@ impl From<SignedTransactionViewWithOutPriorityFee> for views::SignedTransactionV
             nonce: tx.nonce,
             receiver_id: tx.receiver_id,
             actions: tx.actions,
+            priority_fee: 0, // priority_fee for Transaction::V0 => None,
             signature: tx.signature,
             hash: tx.hash,
-            priority_fee: 0, // priority_fee for Transaction::V0 => None,
         }
     }
 }
@@ -280,8 +280,28 @@ impl From<TransactionDetailsWithReceiptWithoutIsPromiseYield> for TransactionDet
 }
 
 #[derive(borsh::BorshDeserialize, Debug, Clone)]
+struct ReceiptViewWithoutPriority {
+    pub predecessor_id: near_indexer_primitives::types::AccountId,
+    pub receiver_id: near_indexer_primitives::types::AccountId,
+    pub receipt_id: CryptoHash,
+    pub receipt: views::ReceiptEnumView,
+}
+
+impl From<ReceiptViewWithoutPriority> for views::ReceiptView {
+    fn from(receipt: ReceiptViewWithoutPriority) -> Self {
+        Self {
+            predecessor_id: receipt.predecessor_id,
+            receiver_id: receipt.receiver_id,
+            receipt_id: receipt.receipt_id,
+            receipt: receipt.receipt,
+            priority: 0,
+        }
+    }
+}
+
+#[derive(borsh::BorshDeserialize, Debug, Clone)]
 struct TransactionDetailsWithReceiptWithoutPriorityFee {
-    receipts: Vec<views::ReceiptView>,
+    receipts: Vec<ReceiptViewWithoutPriority>,
     receipts_outcome: Vec<views::ExecutionOutcomeWithIdView>,
     status: views::FinalExecutionStatus,
     transaction: SignedTransactionViewWithOutPriorityFee,
@@ -291,28 +311,6 @@ struct TransactionDetailsWithReceiptWithoutPriorityFee {
 // Convert the old version of the TransactionDetails to the new version
 impl From<TransactionDetailsWithReceiptWithoutPriorityFee> for TransactionDetails {
     fn from(tx: TransactionDetailsWithReceiptWithoutPriorityFee) -> Self {
-        Self {
-            receipts: tx.receipts,
-            receipts_outcome: tx.receipts_outcome,
-            status: tx.status,
-            transaction: tx.transaction.into(),
-            transaction_outcome: tx.transaction_outcome,
-        }
-    }
-}
-
-#[derive(borsh::BorshDeserialize, Debug, Clone)]
-struct TransactionDetailsWithReceiptWithoutPriorityFeeAndIsPromiseYield {
-    receipts: Vec<ReceiptViewWithReceiptWithoutIsPromiseYield>,
-    receipts_outcome: Vec<views::ExecutionOutcomeWithIdView>,
-    status: views::FinalExecutionStatus,
-    transaction: SignedTransactionViewWithOutPriorityFee,
-    transaction_outcome: views::ExecutionOutcomeWithIdView,
-}
-
-// Convert the old version of the TransactionDetails to the new version
-impl From<TransactionDetailsWithReceiptWithoutPriorityFeeAndIsPromiseYield> for TransactionDetails {
-    fn from(tx: TransactionDetailsWithReceiptWithoutPriorityFeeAndIsPromiseYield) -> Self {
         Self {
             receipts: tx.receipts.into_iter().map(|r| r.into()).collect(),
             receipts_outcome: tx.receipts_outcome,
@@ -371,20 +369,17 @@ impl TransactionDetails {
         match borsh::from_slice::<Self>(data) {
             Ok(tx_details) => Ok(tx_details),
             Err(_) => {
-                match borsh::from_slice::<TransactionDetailsWithReceiptWithoutIsPromiseYield>(data)
-                {
+                match borsh::from_slice::<TransactionDetailsWithReceiptWithoutPriorityFee>(data) {
                     Ok(tx_details) => Ok(tx_details.into()),
                     Err(_) => {
-                        match borsh::from_slice::<TransactionDetailsWithReceiptWithoutPriorityFee>(
+                        match borsh::from_slice::<TransactionDetailsWithReceiptWithoutIsPromiseYield>(
                             data,
                         ) {
                             Ok(tx_details) => Ok(tx_details.into()),
-                            Err(_) => {
-                                match borsh::from_slice::<TransactionDetailsWithReceiptWithoutPriorityFeeAndIsPromiseYield>(data) {
-                                      Ok(tx_details) => Ok(tx_details.into()),
-                                      Err(err) => Err(anyhow::anyhow!("Failed to deserialize TransactionDetails: {}", err)),
-                                 }
-                            }
+                            Err(err) => Err(anyhow::anyhow!(
+                                "Failed to deserialize TransactionDetails: {}",
+                                err
+                            )),
                         }
                     }
                 }
