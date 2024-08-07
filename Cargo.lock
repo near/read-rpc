@@ -2345,6 +2345,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "53aff6fdc1b181225acdcb5b14c47106726fd8e486707315b1b138baed68ee31"
 
 [[package]]
+name = "easy-ext"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc5d6d6a8504f8caedd7de14576464383900cd3840b7033a7a3dce5ac00121ca"
+
+[[package]]
 name = "ecdsa"
 version = "0.14.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4080,7 +4086,7 @@ dependencies = [
  "bytesize",
  "chrono",
  "crossbeam-channel",
- "easy-ext",
+ "easy-ext 0.2.9",
  "enum-map",
  "itertools 0.10.5",
  "itoa",
@@ -4668,7 +4674,7 @@ dependencies = [
  "actix-web",
  "bs58",
  "derive_more",
- "easy-ext",
+ "easy-ext 0.2.9",
  "futures",
  "hex",
  "near-async",
@@ -5113,7 +5119,7 @@ dependencies = [
  "cfg-if 1.0.0",
  "chrono",
  "derive_more",
- "easy-ext",
+ "easy-ext 0.2.9",
  "enum-map",
  "hex",
  "near-crypto 0.20.1",
@@ -5155,7 +5161,7 @@ dependencies = [
  "cfg-if 1.0.0",
  "chrono",
  "derive_more",
- "easy-ext",
+ "easy-ext 0.2.9",
  "enum-map",
  "hex",
  "near-crypto 0.21.2",
@@ -5197,7 +5203,7 @@ dependencies = [
  "cfg-if 1.0.0",
  "chrono",
  "derive_more",
- "easy-ext",
+ "easy-ext 0.2.9",
  "enum-map",
  "hex",
  "near-crypto 0.22.0",
@@ -5240,7 +5246,7 @@ dependencies = [
  "cfg-if 1.0.0",
  "chrono",
  "derive_more",
- "easy-ext",
+ "easy-ext 0.2.9",
  "enum-map",
  "hex",
  "itertools 0.10.5",
@@ -5281,7 +5287,7 @@ dependencies = [
  "cfg-if 1.0.0",
  "chrono",
  "derive_more",
- "easy-ext",
+ "easy-ext 0.2.9",
  "hex",
  "itertools 0.10.5",
  "near-crypto 2.0.0",
@@ -6207,7 +6213,7 @@ dependencies = [
  "chrono",
  "cloud-storage",
  "dirs",
- "easy-ext",
+ "easy-ext 0.2.9",
  "futures",
  "hex",
  "hyper 0.14.30",
@@ -7558,6 +7564,7 @@ dependencies = [
  "chrono",
  "configuration",
  "database",
+ "easy-ext 1.0.2",
  "erased-serde",
  "futures",
  "futures-locks",
