@@ -151,6 +151,37 @@ pub struct TransactionDetails {
     pub transaction_outcome: views::ExecutionOutcomeWithIdView,
 }
 
+// Since https://github.com/near/nearcore/pull/11228
+// the SignedTransactionView has been changed to include `priority_fee` field
+// which is not present in the old version of the SignedTransactionView
+// This change is not backward compatible and we need to handle it
+// by deserializing the old version of the SignedTransactionView and converting it to the new version
+#[derive(borsh::BorshDeserialize, Debug, Clone)]
+pub struct SignedTransactionViewWithOutPriorityFee {
+    pub signer_id: near_indexer_primitives::types::AccountId,
+    pub public_key: near_crypto::PublicKey,
+    pub nonce: near_indexer_primitives::types::Nonce,
+    pub receiver_id: near_indexer_primitives::types::AccountId,
+    pub actions: Vec<views::ActionView>,
+    pub signature: near_crypto::Signature,
+    pub hash: CryptoHash,
+}
+
+impl From<SignedTransactionViewWithOutPriorityFee> for views::SignedTransactionView {
+    fn from(tx: SignedTransactionViewWithOutPriorityFee) -> Self {
+        Self {
+            signer_id: tx.signer_id,
+            public_key: tx.public_key,
+            nonce: tx.nonce,
+            receiver_id: tx.receiver_id,
+            actions: tx.actions,
+            signature: tx.signature,
+            hash: tx.hash,
+            priority_fee: 0, // priority_fee for Transaction::V0 => None,
+        }
+    }
+}
+
 // Since https://github.com/near/nearcore/pull/10676
 // the ReceiptEnumView has been changed to include `is_promise_yield` field
 // which is not present in the old version of the ReceiptEnumView
@@ -248,6 +279,50 @@ impl From<TransactionDetailsWithReceiptWithoutIsPromiseYield> for TransactionDet
     }
 }
 
+#[derive(borsh::BorshDeserialize, Debug, Clone)]
+struct TransactionDetailsWithReceiptWithoutPriorityFee {
+    receipts: Vec<views::ReceiptView>,
+    receipts_outcome: Vec<views::ExecutionOutcomeWithIdView>,
+    status: views::FinalExecutionStatus,
+    transaction: SignedTransactionViewWithOutPriorityFee,
+    transaction_outcome: views::ExecutionOutcomeWithIdView,
+}
+
+// Convert the old version of the TransactionDetails to the new version
+impl From<TransactionDetailsWithReceiptWithoutPriorityFee> for TransactionDetails {
+    fn from(tx: TransactionDetailsWithReceiptWithoutPriorityFee) -> Self {
+        Self {
+            receipts: tx.receipts,
+            receipts_outcome: tx.receipts_outcome,
+            status: tx.status,
+            transaction: tx.transaction.into(),
+            transaction_outcome: tx.transaction_outcome,
+        }
+    }
+}
+
+#[derive(borsh::BorshDeserialize, Debug, Clone)]
+struct TransactionDetailsWithReceiptWithoutPriorityFeeAndIsPromiseYield {
+    receipts: Vec<ReceiptViewWithReceiptWithoutIsPromiseYield>,
+    receipts_outcome: Vec<views::ExecutionOutcomeWithIdView>,
+    status: views::FinalExecutionStatus,
+    transaction: SignedTransactionViewWithOutPriorityFee,
+    transaction_outcome: views::ExecutionOutcomeWithIdView,
+}
+
+// Convert the old version of the TransactionDetails to the new version
+impl From<TransactionDetailsWithReceiptWithoutPriorityFeeAndIsPromiseYield> for TransactionDetails {
+    fn from(tx: TransactionDetailsWithReceiptWithoutPriorityFeeAndIsPromiseYield) -> Self {
+        Self {
+            receipts: tx.receipts.into_iter().map(|r| r.into()).collect(),
+            receipts_outcome: tx.receipts_outcome,
+            status: tx.status,
+            transaction: tx.transaction.into(),
+            transaction_outcome: tx.transaction_outcome,
+        }
+    }
+}
+
 impl TransactionDetails {
     pub fn to_final_execution_outcome(&self) -> views::FinalExecutionOutcomeView {
         views::FinalExecutionOutcomeView {
@@ -295,10 +370,25 @@ impl TransactionDetails {
     pub fn borsh_deserialize(data: &[u8]) -> anyhow::Result<Self> {
         match borsh::from_slice::<Self>(data) {
             Ok(tx_details) => Ok(tx_details),
-            Err(_) => Ok(
-                borsh::from_slice::<TransactionDetailsWithReceiptWithoutIsPromiseYield>(data)?
-                    .into(),
-            ),
+            Err(_) => {
+                match borsh::from_slice::<TransactionDetailsWithReceiptWithoutIsPromiseYield>(data)
+                {
+                    Ok(tx_details) => Ok(tx_details.into()),
+                    Err(_) => {
+                        match borsh::from_slice::<TransactionDetailsWithReceiptWithoutPriorityFee>(
+                            data,
+                        ) {
+                            Ok(tx_details) => Ok(tx_details.into()),
+                            Err(_) => {
+                                match borsh::from_slice::<TransactionDetailsWithReceiptWithoutPriorityFeeAndIsPromiseYield>(data) {
+                                      Ok(tx_details) => Ok(tx_details.into()),
+                                      Err(err) => Err(anyhow::anyhow!("Failed to deserialize TransactionDetails: {}", err)),
+                                 }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
