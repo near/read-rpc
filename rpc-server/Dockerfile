@@ -1,4 +1,4 @@
-FROM rust:1.77 AS builder
+FROM rust:1.78 AS builder
 ARG features="default"
 ARG profile="release"
 WORKDIR /tmp/
@@ -15,7 +15,7 @@ COPY readnode-primitives readnode-primitives
 COPY tx-details-storage tx-details-storage
 COPY cache-storage cache-storage
 RUN apt update && apt install -yy llvm \
-    clang
+    clang libssl-dev
 RUN mkdir rpc-server/src && echo 'fn main() {}' > rpc-server/src/main.rs cargo build --release && rm -r rpc-server/src
 
 # copy your source tree
@@ -25,7 +25,7 @@ COPY rpc-server/src ./rpc-server/src
 # build for release
 RUN cargo build --profile "$profile" --no-default-features --features "$features"
 
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 ARG profile="release"
 RUN apt update && apt install -yy openssl ca-certificates libcurl4 libpq5
 COPY --from=builder /tmp/target/$profile/read-rpc-server .

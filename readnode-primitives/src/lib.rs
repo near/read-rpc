@@ -240,6 +240,7 @@ impl From<ReceiptViewWithReceiptWithoutIsPromiseYield> for views::ReceiptView {
             receiver_id: receipt.receiver_id,
             receipt_id: receipt.receipt_id,
             receipt: receipt.receipt.into(),
+            priority: 0, // For ReceiptV0 ReceiptPriority::NoPriority => 0
         }
     }
 }
