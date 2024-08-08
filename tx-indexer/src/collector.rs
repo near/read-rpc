@@ -193,7 +193,6 @@ async fn save_outcome_and_receipt_to_shard(
                     err
                 );
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                save_attempts += 1;
                 continue 'retry;
             }
         }
