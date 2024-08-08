@@ -151,173 +151,79 @@ pub struct TransactionDetails {
     pub transaction_outcome: views::ExecutionOutcomeWithIdView,
 }
 
-// Since https://github.com/near/nearcore/pull/11228
-// the SignedTransactionView has been changed to include `priority_fee` field
-// which is not present in the old version of the SignedTransactionView
-// This change is not backward compatible and we need to handle it
-// by deserializing the old version of the SignedTransactionView and converting it to the new version
-#[derive(borsh::BorshDeserialize, Debug, Clone)]
-pub struct SignedTransactionViewWithOutPriorityFee {
-    pub signer_id: near_indexer_primitives::types::AccountId,
-    pub public_key: near_crypto::PublicKey,
-    pub nonce: near_indexer_primitives::types::Nonce,
-    pub receiver_id: near_indexer_primitives::types::AccountId,
-    pub actions: Vec<views::ActionView>,
-    pub signature: near_crypto::Signature,
-    pub hash: CryptoHash,
+#[derive(borsh::BorshDeserialize, serde::Serialize, Debug, Clone)]
+pub struct TransactionDetailsV0201 {
+    pub receipts: Vec<near_indexer_primitives_0_20_1::views::ReceiptView>,
+    pub receipts_outcome: Vec<near_indexer_primitives_0_20_1::views::ExecutionOutcomeWithIdView>,
+    pub status: near_indexer_primitives_0_20_1::views::FinalExecutionStatus,
+    pub transaction: near_indexer_primitives_0_20_1::views::SignedTransactionView,
+    pub transaction_outcome: near_indexer_primitives_0_20_1::views::ExecutionOutcomeWithIdView,
 }
 
-impl From<SignedTransactionViewWithOutPriorityFee> for views::SignedTransactionView {
-    fn from(tx: SignedTransactionViewWithOutPriorityFee) -> Self {
-        Self {
-            signer_id: tx.signer_id,
-            public_key: tx.public_key,
-            nonce: tx.nonce,
-            receiver_id: tx.receiver_id,
-            actions: tx.actions,
-            priority_fee: 0, // priority_fee for Transaction::V0 => None,
-            signature: tx.signature,
-            hash: tx.hash,
-        }
-    }
+#[derive(borsh::BorshDeserialize, serde::Serialize, Debug, Clone)]
+pub struct TransactionDetailsV0212 {
+    pub receipts: Vec<near_indexer_primitives_0_21_2::views::ReceiptView>,
+    pub receipts_outcome: Vec<near_indexer_primitives_0_21_2::views::ExecutionOutcomeWithIdView>,
+    pub status: near_indexer_primitives_0_21_2::views::FinalExecutionStatus,
+    pub transaction: near_indexer_primitives_0_21_2::views::SignedTransactionView,
+    pub transaction_outcome: near_indexer_primitives_0_21_2::views::ExecutionOutcomeWithIdView,
 }
 
-// Since https://github.com/near/nearcore/pull/10676
-// the ReceiptEnumView has been changed to include `is_promise_yield` field
-// which is not present in the old version of the ReceiptEnumView
-// This change is not backward compatible and we need to handle it
-// by deserializing the old version of the ReceiptEnumView and converting it to the new version
-#[derive(borsh::BorshDeserialize, Debug, Clone)]
-enum ReceiptEnumViewWithoutIsPromiseYield {
-    Action {
-        signer_id: near_indexer_primitives::types::AccountId,
-        signer_public_key: near_crypto::PublicKey,
-        gas_price: near_indexer_primitives::types::Balance,
-        output_data_receivers: Vec<views::DataReceiverView>,
-        input_data_ids: Vec<CryptoHash>,
-        actions: Vec<views::ActionView>,
-    },
-    Data {
-        data_id: CryptoHash,
-        data: Option<Vec<u8>>,
-    },
+#[derive(borsh::BorshDeserialize, serde::Serialize, Debug, Clone)]
+pub struct TransactionDetailsV0220 {
+    pub receipts: Vec<near_indexer_primitives_0_22_0::views::ReceiptView>,
+    pub receipts_outcome: Vec<near_indexer_primitives_0_22_0::views::ExecutionOutcomeWithIdView>,
+    pub status: near_indexer_primitives_0_22_0::views::FinalExecutionStatus,
+    pub transaction: near_indexer_primitives_0_22_0::views::SignedTransactionView,
+    pub transaction_outcome: near_indexer_primitives_0_22_0::views::ExecutionOutcomeWithIdView,
 }
 
-// Convert the old version of the ReceiptEnumView to the new version
-impl From<ReceiptEnumViewWithoutIsPromiseYield> for views::ReceiptEnumView {
-    fn from(receipt: ReceiptEnumViewWithoutIsPromiseYield) -> Self {
-        match receipt {
-            ReceiptEnumViewWithoutIsPromiseYield::Action {
-                signer_id,
-                signer_public_key,
-                gas_price,
-                output_data_receivers,
-                input_data_ids,
-                actions,
-            } => Self::Action {
-                signer_id,
-                signer_public_key,
-                gas_price,
-                output_data_receivers,
-                input_data_ids,
-                actions,
-                is_promise_yield: false,
-            },
-            ReceiptEnumViewWithoutIsPromiseYield::Data { data_id, data } => Self::Data {
-                data_id,
-                data,
-                is_promise_resume: false,
+#[derive(borsh::BorshDeserialize, serde::Serialize, Debug, Clone)]
+pub struct TransactionDetailsV0230 {
+    pub receipts: Vec<near_indexer_primitives_0_23_0::views::ReceiptView>,
+    pub receipts_outcome: Vec<near_indexer_primitives_0_23_0::views::ExecutionOutcomeWithIdView>,
+    pub status: near_indexer_primitives_0_23_0::views::FinalExecutionStatus,
+    pub transaction: near_indexer_primitives_0_23_0::views::SignedTransactionView,
+    pub transaction_outcome: near_indexer_primitives_0_23_0::views::ExecutionOutcomeWithIdView,
+}
+
+// Deserialize old versions of the TransactionDetails
+// This is needed to handle the backward incompatible changes in the TransactionDetails
+enum TransactionDetailsOldVersion {
+    V0201(TransactionDetailsV0201),
+    V0212(TransactionDetailsV0212),
+    V0220(TransactionDetailsV0220),
+    V0230(TransactionDetailsV0230),
+}
+
+impl TransactionDetailsOldVersion {
+    fn borsh_deserialize(data: &[u8]) -> anyhow::Result<Self> {
+        match borsh::from_slice::<TransactionDetailsV0201>(data) {
+            Ok(tx_details) => Ok(TransactionDetailsOldVersion::V0201(tx_details)),
+            Err(_) => match borsh::from_slice::<TransactionDetailsV0212>(data) {
+                Ok(tx_details) => Ok(TransactionDetailsOldVersion::V0212(tx_details)),
+                Err(_) => match borsh::from_slice::<TransactionDetailsV0220>(data) {
+                    Ok(tx_details) => Ok(TransactionDetailsOldVersion::V0220(tx_details)),
+                    Err(_) => match borsh::from_slice::<TransactionDetailsV0230>(data) {
+                        Ok(tx_details) => Ok(TransactionDetailsOldVersion::V0230(tx_details)),
+                        Err(err) => Err(anyhow::anyhow!(
+                            "Failed to deserialize TransactionDetails: {}",
+                            err
+                        )),
+                    },
+                },
             },
         }
     }
-}
 
-// Deserialize the old version of the ReceiptEnumView
-// and convert it to the new version
-#[derive(borsh::BorshDeserialize, Debug, Clone)]
-struct ReceiptViewWithReceiptWithoutIsPromiseYield {
-    predecessor_id: near_indexer_primitives::types::AccountId,
-    receiver_id: near_indexer_primitives::types::AccountId,
-    receipt_id: CryptoHash,
-    receipt: ReceiptEnumViewWithoutIsPromiseYield,
-}
-
-// Convert the old version of the ReceiptView to the new version
-impl From<ReceiptViewWithReceiptWithoutIsPromiseYield> for views::ReceiptView {
-    fn from(receipt: ReceiptViewWithReceiptWithoutIsPromiseYield) -> Self {
-        Self {
-            predecessor_id: receipt.predecessor_id,
-            receiver_id: receipt.receiver_id,
-            receipt_id: receipt.receipt_id,
-            receipt: receipt.receipt.into(),
-            priority: 0, // For ReceiptV0 ReceiptPriority::NoPriority => 0
-        }
-    }
-}
-
-// Deserialize the old version of the TransactionDetails
-// and convert it to the new version
-#[derive(borsh::BorshDeserialize, Debug, Clone)]
-struct TransactionDetailsWithReceiptWithoutIsPromiseYield {
-    receipts: Vec<ReceiptViewWithReceiptWithoutIsPromiseYield>,
-    receipts_outcome: Vec<views::ExecutionOutcomeWithIdView>,
-    status: views::FinalExecutionStatus,
-    transaction: views::SignedTransactionView,
-    transaction_outcome: views::ExecutionOutcomeWithIdView,
-}
-
-// Convert the old version of the TransactionDetails to the new version
-impl From<TransactionDetailsWithReceiptWithoutIsPromiseYield> for TransactionDetails {
-    fn from(tx: TransactionDetailsWithReceiptWithoutIsPromiseYield) -> Self {
-        Self {
-            receipts: tx.receipts.into_iter().map(|r| r.into()).collect(),
-            receipts_outcome: tx.receipts_outcome,
-            status: tx.status,
-            transaction: tx.transaction,
-            transaction_outcome: tx.transaction_outcome,
-        }
-    }
-}
-
-#[derive(borsh::BorshDeserialize, Debug, Clone)]
-struct ReceiptViewWithoutPriority {
-    pub predecessor_id: near_indexer_primitives::types::AccountId,
-    pub receiver_id: near_indexer_primitives::types::AccountId,
-    pub receipt_id: CryptoHash,
-    pub receipt: views::ReceiptEnumView,
-}
-
-impl From<ReceiptViewWithoutPriority> for views::ReceiptView {
-    fn from(receipt: ReceiptViewWithoutPriority) -> Self {
-        Self {
-            predecessor_id: receipt.predecessor_id,
-            receiver_id: receipt.receiver_id,
-            receipt_id: receipt.receipt_id,
-            receipt: receipt.receipt,
-            priority: 0,
-        }
-    }
-}
-
-#[derive(borsh::BorshDeserialize, Debug, Clone)]
-struct TransactionDetailsWithReceiptWithoutPriorityFee {
-    receipts: Vec<ReceiptViewWithoutPriority>,
-    receipts_outcome: Vec<views::ExecutionOutcomeWithIdView>,
-    status: views::FinalExecutionStatus,
-    transaction: SignedTransactionViewWithOutPriorityFee,
-    transaction_outcome: views::ExecutionOutcomeWithIdView,
-}
-
-// Convert the old version of the TransactionDetails to the new version
-impl From<TransactionDetailsWithReceiptWithoutPriorityFee> for TransactionDetails {
-    fn from(tx: TransactionDetailsWithReceiptWithoutPriorityFee) -> Self {
-        Self {
-            receipts: tx.receipts.into_iter().map(|r| r.into()).collect(),
-            receipts_outcome: tx.receipts_outcome,
-            status: tx.status,
-            transaction: tx.transaction.into(),
-            transaction_outcome: tx.transaction_outcome,
-        }
+    fn to_latest(&self) -> anyhow::Result<TransactionDetails> {
+        let value = match self {
+            TransactionDetailsOldVersion::V0201(tx_details) => serde_json::to_value(tx_details)?,
+            TransactionDetailsOldVersion::V0212(tx_details) => serde_json::to_value(tx_details)?,
+            TransactionDetailsOldVersion::V0220(tx_details) => serde_json::to_value(tx_details)?,
+            TransactionDetailsOldVersion::V0230(tx_details) => serde_json::to_value(tx_details)?,
+        };
+        Ok(serde_json::from_value(value)?)
     }
 }
 
@@ -368,22 +274,7 @@ impl TransactionDetails {
     pub fn borsh_deserialize(data: &[u8]) -> anyhow::Result<Self> {
         match borsh::from_slice::<Self>(data) {
             Ok(tx_details) => Ok(tx_details),
-            Err(_) => {
-                match borsh::from_slice::<TransactionDetailsWithReceiptWithoutPriorityFee>(data) {
-                    Ok(tx_details) => Ok(tx_details.into()),
-                    Err(_) => {
-                        match borsh::from_slice::<TransactionDetailsWithReceiptWithoutIsPromiseYield>(
-                            data,
-                        ) {
-                            Ok(tx_details) => Ok(tx_details.into()),
-                            Err(err) => Err(anyhow::anyhow!(
-                                "Failed to deserialize TransactionDetails: {}",
-                                err
-                            )),
-                        }
-                    }
-                }
-            }
+            Err(_) => TransactionDetailsOldVersion::borsh_deserialize(data)?.to_latest(),
         }
     }
 }
