@@ -19,7 +19,7 @@ COPY tx-indexer/src ./tx-indexer/src
 # build for release
 RUN cargo build --release --no-default-features --features "$features"
 
-FROM ubuntu:24.04
+FROM ubuntu:22.04
 RUN apt update && apt install -yy openssl ca-certificates libcurl4 libpq5
 COPY --from=builder /tmp/target/release/tx-indexer .
 COPY --from=builder /tmp/config.toml .
