@@ -211,10 +211,11 @@ struct ShardedStateChangesWithCause {
 pub async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
     db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
-    near_client: &(impl NearClient + std::fmt::Debug),
+    near_client: &(impl NearClient + std::fmt::Debug + Sync),
     indexer_config: impl configuration::RightsizingConfig
         + configuration::IndexerConfig
-        + std::fmt::Debug,
+        + std::fmt::Debug
+        + Sync,
     stats: std::sync::Arc<tokio::sync::RwLock<metrics::Stats>>,
     shard_layout: &near_primitives::shard_layout::ShardLayout,
 ) -> anyhow::Result<()> {
@@ -328,17 +329,15 @@ pub async fn handle_streamer_message(
     let update_meta_future =
         db_manager.update_meta(indexer_config.indexer_id().as_ref(), block_height);
 
-    let (handle_epoch, handle_block, handle_state_change, update_meta) = futures::join!(
-        handle_epoch_future,
-        handle_block_future,
-        handle_state_change_future,
-        update_meta_future
-    );
-
-    handle_epoch?;
-    handle_block?;
-    handle_state_change?;
-    update_meta?;
+    futures::future::join_all([
+        handle_epoch_future.boxed(),
+        handle_block_future.boxed(),
+        handle_state_change_future.boxed(),
+        update_meta_future.boxed(),
+    ])
+    .await
+    .into_iter()
+    .collect::<anyhow::Result<_>>()?;
 
     metrics::BLOCK_PROCESSED_TOTAL.inc();
     // Prometheus Gauge Metric type do not support u64
