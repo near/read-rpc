@@ -172,26 +172,27 @@ impl CacheStorage {
         transaction_key: &readnode_primitives::TransactionKey,
         indexer_execution_outcome_with_receipt: near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
     ) -> anyhow::Result<()> {
-        let mut transaction_details = self.get_tx(transaction_key).await?;
-        self.remove_receipt_from_watching_list(
-            &indexer_execution_outcome_with_receipt
-                .receipt
-                .receipt_id
-                .to_string(),
-        )
-        .await?;
-        transaction_details
-            .receipts
-            .push(indexer_execution_outcome_with_receipt.receipt);
-        transaction_details
-            .execution_outcomes
-            .push(indexer_execution_outcome_with_receipt.execution_outcome);
-        let transaction_receipts_watching_count =
-            self.receipts_transaction_count(transaction_key).await?;
-        if transaction_receipts_watching_count == 0 {
-            self.move_tx_to_save(transaction_details.clone()).await?;
-        } else {
-            self.update_tx(transaction_details.clone()).await?;
+        if let Ok(mut transaction_details) = self.get_tx(transaction_key).await {
+            self.remove_receipt_from_watching_list(
+                &indexer_execution_outcome_with_receipt
+                    .receipt
+                    .receipt_id
+                    .to_string(),
+            )
+            .await?;
+            transaction_details
+                .receipts
+                .push(indexer_execution_outcome_with_receipt.receipt);
+            transaction_details
+                .execution_outcomes
+                .push(indexer_execution_outcome_with_receipt.execution_outcome);
+            let transaction_receipts_watching_count =
+                self.receipts_transaction_count(transaction_key).await?;
+            if transaction_receipts_watching_count == 0 {
+                self.move_tx_to_save(transaction_details.clone()).await?;
+            } else {
+                self.update_tx(transaction_details.clone()).await?;
+            }
         }
         Ok(())
     }
