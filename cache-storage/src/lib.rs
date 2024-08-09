@@ -270,7 +270,7 @@ impl TxIndexerCache {
         indexer_execution_outcome_with_receipt: near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
     ) -> anyhow::Result<()> {
         // We should not store outcomes for not indexed transactions
-        if let Ok(_) = self.get_tx(transaction_key).await {
+        if self.get_tx(transaction_key).await.is_ok() {
             let execution_outcome_with_receipt = readnode_primitives::ExecutionOutcomeWithReceipt {
                 execution_outcome: indexer_execution_outcome_with_receipt
                     .execution_outcome
