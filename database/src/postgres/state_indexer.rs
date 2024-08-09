@@ -194,7 +194,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
             VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING;
             "
         )
-            .bind(&epoch_id.to_string())
+            .bind(epoch_id.to_string())
             .bind(bigdecimal::BigDecimal::from(epoch_height))
             .bind(bigdecimal::BigDecimal::from(epoch_start_height))
             .bind(bigdecimal::BigDecimal::from(epoch_end_block_height))

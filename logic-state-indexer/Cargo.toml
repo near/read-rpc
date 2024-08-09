@@ -33,3 +33,6 @@ near-primitives.workspace = true
 near-indexer-primitives.workspace = true
 near-jsonrpc-client.workspace = true
 near-chain-configs.workspace = true
+
+[features]
+tracing-instrumentation = ["configuration/tracing-instrumentation"]
