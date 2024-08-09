@@ -1,5 +1,6 @@
 use num_traits::ToPrimitive;
 use std::convert::TryFrom;
+use std::fmt::Display;
 use std::str::FromStr;
 
 use near_indexer_primitives::{views, CryptoHash, IndexerTransactionWithOutcome};
@@ -19,16 +20,37 @@ pub struct ExecutionOutcomeWithReceipt {
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 pub struct TransactionKey {
-    pub transaction_hash: String,
+    pub transaction_hash: CryptoHash,
     pub block_height: u64,
 }
 
 impl TransactionKey {
-    pub fn new(transaction_hash: String, block_height: u64) -> Self {
+    pub fn new(transaction_hash: CryptoHash, block_height: u64) -> Self {
         Self {
             transaction_hash,
             block_height,
         }
+    }
+}
+
+impl From<String> for TransactionKey {
+    fn from(value: String) -> Self {
+        let parts: Vec<&str> = value.split('_').collect();
+        let transaction_hash =
+            CryptoHash::from_str(parts[0]).expect("Failed to parse transaction hash");
+        let block_height = parts[1]
+            .parse::<u64>()
+            .expect("Failed to parse block height");
+        Self {
+            transaction_hash,
+            block_height,
+        }
+    }
+}
+
+impl Display for TransactionKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}_{}", self.transaction_hash, self.block_height)
     }
 }
 
@@ -61,7 +83,7 @@ impl CollectingTransactionDetails {
     /// Build unique transaction key based on transaction_hash and block_height
     /// Help to handle transaction hash collisions
     pub fn transaction_key(&self) -> TransactionKey {
-        TransactionKey::new(self.transaction.hash.clone().to_string(), self.block_height)
+        TransactionKey::new(self.transaction.hash, self.block_height)
     }
 
     pub fn final_status(&self) -> Option<views::FinalExecutionStatus> {
@@ -151,82 +173,6 @@ pub struct TransactionDetails {
     pub transaction_outcome: views::ExecutionOutcomeWithIdView,
 }
 
-#[derive(borsh::BorshDeserialize, serde::Serialize, Debug, Clone)]
-pub struct TransactionDetailsV0201 {
-    pub receipts: Vec<near_indexer_primitives_0_20_1::views::ReceiptView>,
-    pub receipts_outcome: Vec<near_indexer_primitives_0_20_1::views::ExecutionOutcomeWithIdView>,
-    pub status: near_indexer_primitives_0_20_1::views::FinalExecutionStatus,
-    pub transaction: near_indexer_primitives_0_20_1::views::SignedTransactionView,
-    pub transaction_outcome: near_indexer_primitives_0_20_1::views::ExecutionOutcomeWithIdView,
-}
-
-#[derive(borsh::BorshDeserialize, serde::Serialize, Debug, Clone)]
-pub struct TransactionDetailsV0212 {
-    pub receipts: Vec<near_indexer_primitives_0_21_2::views::ReceiptView>,
-    pub receipts_outcome: Vec<near_indexer_primitives_0_21_2::views::ExecutionOutcomeWithIdView>,
-    pub status: near_indexer_primitives_0_21_2::views::FinalExecutionStatus,
-    pub transaction: near_indexer_primitives_0_21_2::views::SignedTransactionView,
-    pub transaction_outcome: near_indexer_primitives_0_21_2::views::ExecutionOutcomeWithIdView,
-}
-
-#[derive(borsh::BorshDeserialize, serde::Serialize, Debug, Clone)]
-pub struct TransactionDetailsV0220 {
-    pub receipts: Vec<near_indexer_primitives_0_22_0::views::ReceiptView>,
-    pub receipts_outcome: Vec<near_indexer_primitives_0_22_0::views::ExecutionOutcomeWithIdView>,
-    pub status: near_indexer_primitives_0_22_0::views::FinalExecutionStatus,
-    pub transaction: near_indexer_primitives_0_22_0::views::SignedTransactionView,
-    pub transaction_outcome: near_indexer_primitives_0_22_0::views::ExecutionOutcomeWithIdView,
-}
-
-#[derive(borsh::BorshDeserialize, serde::Serialize, Debug, Clone)]
-pub struct TransactionDetailsV0230 {
-    pub receipts: Vec<near_indexer_primitives_0_23_0::views::ReceiptView>,
-    pub receipts_outcome: Vec<near_indexer_primitives_0_23_0::views::ExecutionOutcomeWithIdView>,
-    pub status: near_indexer_primitives_0_23_0::views::FinalExecutionStatus,
-    pub transaction: near_indexer_primitives_0_23_0::views::SignedTransactionView,
-    pub transaction_outcome: near_indexer_primitives_0_23_0::views::ExecutionOutcomeWithIdView,
-}
-
-// Deserialize old versions of the TransactionDetails
-// This is needed to handle the backward incompatible changes in the TransactionDetails
-enum TransactionDetailsOldVersion {
-    V0201(TransactionDetailsV0201),
-    V0212(TransactionDetailsV0212),
-    V0220(TransactionDetailsV0220),
-    V0230(TransactionDetailsV0230),
-}
-
-impl TransactionDetailsOldVersion {
-    fn borsh_deserialize(data: &[u8]) -> anyhow::Result<Self> {
-        match borsh::from_slice::<TransactionDetailsV0201>(data) {
-            Ok(tx_details) => Ok(TransactionDetailsOldVersion::V0201(tx_details)),
-            Err(_) => match borsh::from_slice::<TransactionDetailsV0212>(data) {
-                Ok(tx_details) => Ok(TransactionDetailsOldVersion::V0212(tx_details)),
-                Err(_) => match borsh::from_slice::<TransactionDetailsV0220>(data) {
-                    Ok(tx_details) => Ok(TransactionDetailsOldVersion::V0220(tx_details)),
-                    Err(_) => match borsh::from_slice::<TransactionDetailsV0230>(data) {
-                        Ok(tx_details) => Ok(TransactionDetailsOldVersion::V0230(tx_details)),
-                        Err(err) => Err(anyhow::anyhow!(
-                            "Failed to deserialize TransactionDetails: {}",
-                            err
-                        )),
-                    },
-                },
-            },
-        }
-    }
-
-    fn to_latest(&self) -> anyhow::Result<TransactionDetails> {
-        let value = match self {
-            TransactionDetailsOldVersion::V0201(tx_details) => serde_json::to_value(tx_details)?,
-            TransactionDetailsOldVersion::V0212(tx_details) => serde_json::to_value(tx_details)?,
-            TransactionDetailsOldVersion::V0220(tx_details) => serde_json::to_value(tx_details)?,
-            TransactionDetailsOldVersion::V0230(tx_details) => serde_json::to_value(tx_details)?,
-        };
-        Ok(serde_json::from_value(value)?)
-    }
-}
-
 impl TransactionDetails {
     pub fn to_final_execution_outcome(&self) -> views::FinalExecutionOutcomeView {
         views::FinalExecutionOutcomeView {
@@ -266,16 +212,17 @@ impl TransactionDetails {
         }
     }
 
-    // Deserialize TransactionDetails from bytes
-    // If the deserialization fails, try to deserialize the old version of the TransactionDetails
-    // and convert it to the new version
+    // Serialize TransactionDetails to json bytes
     // This is needed to handle the backward incompatible changes in the TransactionDetails
-    // https://github.com/near/nearcore/pull/10676/files#diff-1e4fc99d32e48420a9bd37050fa1412758cba37825851edea40cbdfcab406944R1927
-    pub fn borsh_deserialize(data: &[u8]) -> anyhow::Result<Self> {
-        match borsh::from_slice::<Self>(data) {
-            Ok(tx_details) => Ok(tx_details),
-            Err(_) => TransactionDetailsOldVersion::borsh_deserialize(data)?.to_latest(),
-        }
+    pub fn tx_serialize(&self) -> anyhow::Result<Vec<u8>> {
+        let transaction_json = serde_json::to_value(self)?.to_string();
+        Ok(transaction_json.into_bytes())
+    }
+
+    // Deserialize TransactionDetails from json bytes
+    // This is needed to handle the backward incompatible changes in the TransactionDetails
+    pub fn tx_deserialize(data: &[u8]) -> anyhow::Result<Self> {
+        Ok(serde_json::from_slice(data)?)
     }
 }
 
@@ -292,13 +239,27 @@ pub struct QueryData<T: borsh::BorshDeserialize> {
     pub block_hash: CryptoHash,
 }
 
+#[derive(Debug, Clone)]
 pub struct ReceiptRecord {
     pub receipt_id: CryptoHash,
     pub parent_transaction_hash: CryptoHash,
+    pub receiver_id: near_indexer_primitives::types::AccountId,
     pub block_height: near_indexer_primitives::types::BlockHeight,
+    pub block_hash: CryptoHash,
     pub shard_id: near_indexer_primitives::types::ShardId,
 }
 
+#[derive(Debug, Clone)]
+pub struct OutcomeRecord {
+    pub outcome_id: CryptoHash,
+    pub parent_transaction_hash: CryptoHash,
+    pub receiver_id: near_indexer_primitives::types::AccountId,
+    pub block_height: near_indexer_primitives::types::BlockHeight,
+    pub block_hash: CryptoHash,
+    pub shard_id: near_indexer_primitives::types::ShardId,
+}
+
+#[derive(Clone, Copy, Debug)]
 pub struct BlockRecord {
     pub height: u64,
     pub hash: CryptoHash,
@@ -378,13 +339,13 @@ where
     }
 }
 
-impl<T> TryFrom<(String, String, T, T)> for ReceiptRecord
+impl<T> TryFrom<(String, String, String, T, String, T)> for ReceiptRecord
 where
     T: ToPrimitive,
 {
     type Error = anyhow::Error;
 
-    fn try_from(value: (String, String, T, T)) -> Result<Self, Self::Error> {
+    fn try_from(value: (String, String, String, T, String, T)) -> Result<Self, Self::Error> {
         let receipt_id = CryptoHash::from_str(&value.0).map_err(|err| {
             anyhow::anyhow!("Failed to parse `receipt_id` to CryptoHash: {}", err)
         })?;
@@ -394,19 +355,28 @@ where
                 err
             )
         })?;
+        let receiver_id =
+            near_indexer_primitives::types::AccountId::from_str(&value.2).map_err(|err| {
+                anyhow::anyhow!("Failed to parse `receiver_id` to AccountId: {}", err)
+            })?;
         let block_height = value
-            .2
+            .3
             .to_u64()
             .ok_or_else(|| anyhow::anyhow!("Failed to parse `block_height` to u64"))?;
+        let block_hash = CryptoHash::from_str(&value.4).map_err(|err| {
+            anyhow::anyhow!("Failed to parse `block_hash` to CryptoHash: {}", err)
+        })?;
         let shard_id = value
-            .3
+            .5
             .to_u64()
             .ok_or_else(|| anyhow::anyhow!("Failed to parse `shard_id` to u64"))?;
 
         Ok(ReceiptRecord {
             receipt_id,
             parent_transaction_hash,
+            receiver_id,
             block_height,
+            block_hash,
             shard_id,
         })
     }

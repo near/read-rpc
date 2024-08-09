@@ -1,225 +1,111 @@
-use crate::postgres::PostgresStorageManager;
 use bigdecimal::ToPrimitive;
 
-pub struct PostgresDBManager {
-    pg_pool: crate::postgres::PgAsyncPool,
-}
-
 #[async_trait::async_trait]
-impl crate::BaseDbManager for PostgresDBManager {
-    async fn new(config: &configuration::DatabaseConfig) -> anyhow::Result<Box<Self>> {
-        let pg_pool = Self::create_pool(
-            &config.database_url,
-            config.database_user.as_deref(),
-            config.database_password.as_deref(),
-            config.database_name.as_deref(),
-        )
-        .await?;
-        Ok(Box::new(Self { pg_pool }))
-    }
-}
-
-#[async_trait::async_trait]
-impl PostgresStorageManager for PostgresDBManager {}
-
-#[async_trait::async_trait]
-impl crate::TxIndexerDbManager for PostgresDBManager {
-    async fn add_transaction(
+impl crate::TxIndexerDbManager for crate::PostgresDBManager {
+    async fn save_receipts(
         &self,
-        transaction_hash: &str,
-        tx_bytes: Vec<u8>,
-        block_height: u64,
-        signer_id: &str,
+        shard_id: crate::primitives::ShardId,
+        receipts: Vec<readnode_primitives::ReceiptRecord>,
     ) -> anyhow::Result<()> {
-        crate::models::TransactionDetail {
-            transaction_hash: transaction_hash.to_string(),
-            block_height: bigdecimal::BigDecimal::from(block_height),
-            account_id: signer_id.to_string(),
-            transaction_details: tx_bytes,
+        if receipts.is_empty() {
+            return Ok(());
         }
-        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
-        .await
-    }
-
-    // return always true, because we don't have tx_save_validation for Postgres database
-    async fn validate_saved_transaction_deserializable(
-        &self,
-        _transaction_hash: &str,
-        _tx_bytes: &[u8],
-    ) -> anyhow::Result<bool> {
-        Ok(true)
-    }
-
-    async fn add_receipt(
-        &self,
-        receipt_id: &str,
-        parent_tx_hash: &str,
-        block_height: u64,
-        shard_id: u64,
-    ) -> anyhow::Result<()> {
-        crate::models::ReceiptMap {
-            receipt_id: receipt_id.to_string(),
-            parent_transaction_hash: parent_tx_hash.to_string(),
-            block_height: bigdecimal::BigDecimal::from(block_height),
-            shard_id: bigdecimal::BigDecimal::from(shard_id),
-        }
-        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
-        .await
-    }
-
-    async fn update_meta(&self, indexer_id: &str, block_height: u64) -> anyhow::Result<()> {
-        crate::models::Meta {
-            indexer_id: indexer_id.to_string(),
-            last_processed_block_height: bigdecimal::BigDecimal::from(block_height),
-        }
-        .insert_or_update(Self::get_connection(&self.pg_pool).await?)
-        .await
-    }
-
-    async fn cache_add_transaction(
-        &self,
-        transaction_details: readnode_primitives::CollectingTransactionDetails,
-    ) -> anyhow::Result<()> {
-        let transaction_hash = transaction_details.transaction.hash.clone().to_string();
-        let block_height = transaction_details.block_height;
-        let transaction_details = borsh::to_vec(&transaction_details).map_err(|err| {
-            tracing::error!(target: "tx_indexer", "Failed to serialize transaction details: {:?}", err);
-            err})?;
-        crate::models::TransactionCache {
-            block_height: bigdecimal::BigDecimal::from(block_height),
-            transaction_hash,
-            transaction_details,
-        }
-        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
-        .await?;
+        crate::metrics::SHARD_DATABASE_WRITE_QUERIES
+            .with_label_values(&[&shard_id.to_string(), "save_receipts", "receipts_map"])
+            .inc();
+        let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
+            "INSERT INTO receipts_map (receipt_id, parent_transaction_hash, receiver_id, block_height, block_hash, shard_id) ",
+        );
+        query_builder.push_values(receipts.iter(), |mut values, receipt| {
+            values
+                .push_bind(receipt.receipt_id.to_string())
+                .push_bind(receipt.parent_transaction_hash.to_string())
+                .push_bind(receipt.receiver_id.to_string())
+                .push_bind(bigdecimal::BigDecimal::from(receipt.block_height))
+                .push_bind(receipt.block_hash.to_string())
+                .push_bind(bigdecimal::BigDecimal::from(receipt.shard_id));
+        });
+        query_builder.push(" ON CONFLICT DO NOTHING;");
+        query_builder
+            .build()
+            .execute(self.shards_pool.get(&shard_id).ok_or(anyhow::anyhow!(
+                "Database connection for Shard_{} not found",
+                shard_id
+            ))?)
+            .await?;
         Ok(())
     }
 
-    async fn cache_add_receipt(
+    async fn save_outcomes(
         &self,
-        transaction_key: readnode_primitives::TransactionKey,
-        indexer_execution_outcome_with_receipt: near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
+        shard_id: crate::primitives::ShardId,
+        outcomes: Vec<readnode_primitives::OutcomeRecord>,
     ) -> anyhow::Result<()> {
-        crate::models::ReceiptOutcome {
-            block_height: bigdecimal::BigDecimal::from(transaction_key.block_height),
-            transaction_hash: transaction_key.transaction_hash,
-            receipt_id: indexer_execution_outcome_with_receipt
-                .receipt
-                .receipt_id
-                .to_string(),
-            receipt: borsh::to_vec(&indexer_execution_outcome_with_receipt.receipt)?,
-            outcome: borsh::to_vec(&indexer_execution_outcome_with_receipt.execution_outcome)?,
+        if outcomes.is_empty() {
+            return Ok(());
         }
-        .insert_or_ignore(Self::get_connection(&self.pg_pool).await?)
-        .await
+        crate::metrics::SHARD_DATABASE_WRITE_QUERIES
+            .with_label_values(&[&shard_id.to_string(), "save_outcomes", "outcomes_map"])
+            .inc();
+        let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
+            "INSERT INTO outcomes_map (outcome_id, parent_transaction_hash, receiver_id, block_height, block_hash, shard_id) ",
+        );
+        query_builder.push_values(outcomes.iter(), |mut values, outcome| {
+            values
+                .push_bind(outcome.outcome_id.to_string())
+                .push_bind(outcome.parent_transaction_hash.to_string())
+                .push_bind(outcome.receiver_id.to_string())
+                .push_bind(bigdecimal::BigDecimal::from(outcome.block_height))
+                .push_bind(outcome.block_hash.to_string())
+                .push_bind(bigdecimal::BigDecimal::from(outcome.shard_id));
+        });
+        query_builder.push(" ON CONFLICT DO NOTHING;");
+        query_builder
+            .build()
+            .execute(self.shards_pool.get(&shard_id).ok_or(anyhow::anyhow!(
+                "Database connection for Shard_{} not found",
+                shard_id
+            ))?)
+            .await?;
+        Ok(())
     }
 
-    async fn get_transactions_to_cache(
-        &self,
-        start_block_height: u64,
-        cache_restore_blocks_range: u64,
-        _max_db_parallel_queries: i64,
-    ) -> anyhow::Result<
-        std::collections::HashMap<
-            readnode_primitives::TransactionKey,
-            readnode_primitives::CollectingTransactionDetails,
-        >,
-    > {
-        let transactions = crate::models::TransactionCache::get_transactions(
-            Self::get_connection(&self.pg_pool).await?,
-            start_block_height,
-            cache_restore_blocks_range,
+    async fn update_meta(&self, indexer_id: &str, block_height: u64) -> anyhow::Result<()> {
+        crate::metrics::META_DATABASE_WRITE_QUERIES
+            .with_label_values(&["update_meta", "meta"])
+            .inc();
+        sqlx::query(
+            "
+            INSERT INTO meta (indexer_id, last_processed_block_height)
+            VALUES ($1, $2)
+            ON CONFLICT (indexer_id)
+            DO UPDATE SET last_processed_block_height = $2;
+            ",
         )
-        .await?;
-        Ok(transactions
-            .into_iter()
-            .map(|tx| {
-                let transaction_details = borsh::from_slice::<
-                    readnode_primitives::CollectingTransactionDetails,
-                >(&tx.transaction_details)
-                .expect("Failed to deserialize transaction details");
-                (transaction_details.transaction_key(), transaction_details)
-            })
-            .collect())
-    }
-
-    async fn get_transaction_by_receipt_id(
-        &self,
-        receipt_id: &str,
-    ) -> anyhow::Result<readnode_primitives::CollectingTransactionDetails> {
-        let (block_height, transaction_hash) = crate::models::ReceiptOutcome::get_transaction_key(
-            Self::get_connection(&self.pg_pool).await?,
-            receipt_id,
-        )
-        .await?;
-        let transaction_details = crate::models::TransactionCache::get_transaction(
-            Self::get_connection(&self.pg_pool).await?,
-            block_height,
-            &transaction_hash,
-        )
-        .await?;
-        Ok(borsh::from_slice::<
-            readnode_primitives::CollectingTransactionDetails,
-        >(&transaction_details)?)
-    }
-
-    async fn get_receipts_in_cache(
-        &self,
-        transaction_key: &readnode_primitives::TransactionKey,
-    ) -> anyhow::Result<Vec<near_indexer_primitives::IndexerExecutionOutcomeWithReceipt>> {
-        let result = crate::models::ReceiptOutcome::get_receipt_outcome(
-            Self::get_connection(&self.pg_pool).await?,
-            transaction_key.block_height,
-            &transaction_key.transaction_hash,
-        )
-        .await?;
-        Ok(result
-            .into_iter()
-            .map(|receipt_outcome| {
-                let receipt = borsh::from_slice::<near_primitives::views::ReceiptView>(
-                    &receipt_outcome.receipt,
-                )
-                .expect("Failed to deserialize receipt");
-                let execution_outcome = borsh::from_slice::<
-                    near_primitives::views::ExecutionOutcomeWithIdView,
-                >(&receipt_outcome.outcome)
-                .expect("Failed to deserialize execution outcome");
-                near_indexer_primitives::IndexerExecutionOutcomeWithReceipt {
-                    receipt,
-                    execution_outcome,
-                }
-            })
-            .collect())
-    }
-
-    async fn cache_delete_transaction(
-        &self,
-        transaction_hash: &str,
-        block_height: u64,
-    ) -> anyhow::Result<()> {
-        crate::models::TransactionCache::delete_transaction(
-            Self::get_connection(&self.pg_pool).await?,
-            block_height,
-            transaction_hash,
-        )
-        .await?;
-        crate::models::ReceiptOutcome::delete_receipt_outcome(
-            Self::get_connection(&self.pg_pool).await?,
-            block_height,
-            transaction_hash,
-        )
+        .bind(indexer_id)
+        .bind(bigdecimal::BigDecimal::from(block_height))
+        .execute(&self.meta_db_pool)
         .await?;
         Ok(())
     }
 
     async fn get_last_processed_block_height(&self, indexer_id: &str) -> anyhow::Result<u64> {
-        let block_height = crate::models::Meta::get_last_processed_block_height(
-            Self::get_connection(&self.pg_pool).await?,
-            indexer_id,
+        crate::metrics::META_DATABASE_READ_QUERIES
+            .with_label_values(&["get_last_processed_block_height", "meta"])
+            .inc();
+        let (last_processed_block_height,): (bigdecimal::BigDecimal,) = sqlx::query_as(
+            "
+            SELECT last_processed_block_height
+            FROM meta
+            WHERE indexer_id = $1
+            LIMIT 1;
+            ",
         )
+        .bind(indexer_id)
+        .fetch_one(&self.meta_db_pool)
         .await?;
-        block_height
+        last_processed_block_height
             .to_u64()
-            .ok_or_else(|| anyhow::anyhow!("Failed to parse `block_height` to u64"))
+            .ok_or_else(|| anyhow::anyhow!("Failed to parse `last_processed_block_height` to u64"))
     }
 }

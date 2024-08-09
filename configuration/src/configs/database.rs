@@ -1,286 +1,81 @@
-use serde_derive::Deserialize;
+use near_lake_framework::near_indexer_primitives::near_primitives;
+use validator::Validate;
 
 use crate::configs::{deserialize_data_or_env, deserialize_optional_data_or_env};
 
+// Database connection URL
+// Example: "postgres://user:password@localhost:5432/dbname"
+type DatabaseConnectUrl = String;
+
+#[derive(Validate, serde_derive::Deserialize, Debug, Clone, Default)]
+pub struct ShardDatabaseConfig {
+    #[serde(deserialize_with = "deserialize_data_or_env")]
+    pub shard_id: u64,
+    #[validate(url(message = "Invalid database shard URL"))]
+    #[serde(deserialize_with = "deserialize_data_or_env")]
+    pub database_url: DatabaseConnectUrl,
+}
+
 #[derive(Debug, Clone)]
 pub struct DatabaseConfig {
-    pub database_url: String,
-    pub database_user: Option<String>,
-    pub database_password: Option<String>,
-    pub database_name: Option<String>,
-    pub preferred_dc: Option<String>,
-    pub max_retry: u8,
-    pub strict_mode: bool,
-    pub keepalive_interval: Option<u64>,
-    pub max_db_parallel_queries: i64,
+    pub database_url: DatabaseConnectUrl,
+    pub shards_config:
+        std::collections::HashMap<near_primitives::types::ShardId, DatabaseConnectUrl>,
+    pub max_connections: u32,
+    // Migrations cannot be applied to read-only replicas
+    // We should run rpc-server only on read-only replicas
+    pub read_only: bool,
 }
 
-pub struct DatabaseRpcServerConfig {
-    pub database_url: String,
-    pub database_user: Option<String>,
-    pub database_password: Option<String>,
-    pub database_name: Option<String>,
-    pub preferred_dc: Option<String>,
-    pub max_retry: u8,
-    pub strict_mode: bool,
-    pub keepalive_interval: u64,
+impl DatabaseConfig {
+    pub fn to_read_only(&self) -> Self {
+        Self {
+            database_url: self.database_url.clone(),
+            shards_config: self.shards_config.clone(),
+            max_connections: self.max_connections,
+            read_only: true,
+        }
+    }
 }
 
-pub struct DatabaseTxIndexerConfig {
-    pub database_url: String,
-    pub database_user: Option<String>,
-    pub database_password: Option<String>,
-    pub database_name: Option<String>,
-    pub preferred_dc: Option<String>,
-    pub max_retry: u8,
-    pub strict_mode: bool,
-    pub max_db_parallel_queries: i64,
-}
-
-pub struct DatabaseStateIndexerConfig {
-    pub database_url: String,
-    pub database_user: Option<String>,
-    pub database_password: Option<String>,
-    pub database_name: Option<String>,
-    pub preferred_dc: Option<String>,
-    pub max_retry: u8,
-    pub strict_mode: bool,
-}
-
-#[derive(Deserialize, Debug, Clone, Default)]
+#[derive(Validate, serde_derive::Deserialize, Debug, Clone, Default)]
 pub struct CommonDatabaseConfig {
+    #[validate(url(message = "Invalid database URL"))]
     #[serde(deserialize_with = "deserialize_data_or_env")]
-    pub database_url: String,
-    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
-    pub database_user: Option<String>,
-    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
-    pub database_password: Option<String>,
-    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
-    pub database_name: Option<String>,
+    pub database_url: DatabaseConnectUrl,
+    #[validate(nested)]
     #[serde(default)]
-    pub rpc_server: CommonDatabaseRpcServerConfig,
-    #[serde(default)]
-    pub tx_indexer: CommonDatabaseTxIndexerConfig,
-    #[serde(default)]
-    pub state_indexer: CommonDatabaseStateIndexerConfig,
+    pub shards: Vec<ShardDatabaseConfig>,
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    pub max_connections: Option<u32>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
-pub struct CommonDatabaseRpcServerConfig {
-    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
-    pub preferred_dc: Option<String>,
-    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
-    pub max_retry: Option<u8>,
-    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
-    pub strict_mode: Option<bool>,
-    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
-    pub keepalive_interval: Option<u64>,
-}
-
-impl CommonDatabaseRpcServerConfig {
-    pub fn default_max_retry() -> u8 {
-        2
-    }
-
-    pub fn default_strict_mode() -> bool {
-        false
-    }
-
-    pub fn default_keepalive_interval() -> u64 {
-        60
+impl CommonDatabaseConfig {
+    //The maximum number of connections that this pool should maintain.
+    // Be mindful of the connection limits for your database as well
+    // as other applications which may want to connect to the same database
+    // (or even multiple instances of the same application in high-availability deployments).
+    //
+    // A production application will want to set a higher limit than this.
+    // Start with connections based on 4x the number of CPU cores.
+    pub fn default_max_connections() -> u32 {
+        10
     }
 }
 
-impl Default for CommonDatabaseRpcServerConfig {
-    fn default() -> Self {
+impl From<CommonDatabaseConfig> for DatabaseConfig {
+    fn from(database_config: CommonDatabaseConfig) -> Self {
         Self {
-            preferred_dc: Default::default(),
-            max_retry: Some(Self::default_max_retry()),
-            strict_mode: Some(Self::default_strict_mode()),
-            keepalive_interval: Some(Self::default_keepalive_interval()),
-        }
-    }
-}
-
-#[derive(Deserialize, Debug, Clone)]
-pub struct CommonDatabaseTxIndexerConfig {
-    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
-    pub preferred_dc: Option<String>,
-    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
-    pub max_retry: Option<u8>,
-    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
-    pub strict_mode: Option<bool>,
-    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
-    pub max_db_parallel_queries: Option<i64>,
-}
-
-impl CommonDatabaseTxIndexerConfig {
-    pub fn default_max_retry() -> u8 {
-        5
-    }
-
-    pub fn default_strict_mode() -> bool {
-        true
-    }
-
-    pub fn default_max_db_parallel_queries() -> i64 {
-        144
-    }
-}
-
-impl Default for CommonDatabaseTxIndexerConfig {
-    fn default() -> Self {
-        Self {
-            preferred_dc: Default::default(),
-            max_retry: Some(Self::default_max_retry()),
-            strict_mode: Some(Self::default_strict_mode()),
-            max_db_parallel_queries: Some(Self::default_max_db_parallel_queries()),
-        }
-    }
-}
-
-#[derive(Deserialize, Debug, Clone)]
-pub struct CommonDatabaseStateIndexerConfig {
-    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
-    pub preferred_dc: Option<String>,
-    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
-    pub max_retry: Option<u8>,
-    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
-    pub strict_mode: Option<bool>,
-}
-
-impl CommonDatabaseStateIndexerConfig {
-    pub fn default_max_retry() -> u8 {
-        5
-    }
-
-    pub fn default_strict_mode() -> bool {
-        true
-    }
-}
-
-impl Default for CommonDatabaseStateIndexerConfig {
-    fn default() -> Self {
-        Self {
-            preferred_dc: Default::default(),
-            max_retry: Some(Self::default_max_retry()),
-            strict_mode: Some(Self::default_strict_mode()),
-        }
-    }
-}
-
-impl From<CommonDatabaseConfig> for DatabaseRpcServerConfig {
-    fn from(common_config: CommonDatabaseConfig) -> Self {
-        Self {
-            database_url: common_config.database_url,
-            database_user: common_config.database_user,
-            database_password: common_config.database_password,
-            database_name: common_config.database_name,
-            preferred_dc: common_config.rpc_server.preferred_dc,
-            max_retry: common_config
-                .rpc_server
-                .max_retry
-                .unwrap_or_else(CommonDatabaseRpcServerConfig::default_max_retry),
-            strict_mode: common_config
-                .rpc_server
-                .strict_mode
-                .unwrap_or_else(CommonDatabaseRpcServerConfig::default_strict_mode),
-            keepalive_interval: common_config
-                .rpc_server
-                .keepalive_interval
-                .unwrap_or_else(CommonDatabaseRpcServerConfig::default_keepalive_interval),
-        }
-    }
-}
-
-impl From<CommonDatabaseConfig> for DatabaseTxIndexerConfig {
-    fn from(common_config: CommonDatabaseConfig) -> Self {
-        Self {
-            database_url: common_config.database_url,
-            database_user: common_config.database_user,
-            database_password: common_config.database_password,
-            database_name: common_config.database_name,
-            preferred_dc: common_config.tx_indexer.preferred_dc,
-            max_retry: common_config
-                .tx_indexer
-                .max_retry
-                .unwrap_or_else(CommonDatabaseTxIndexerConfig::default_max_retry),
-            strict_mode: common_config
-                .tx_indexer
-                .strict_mode
-                .unwrap_or_else(CommonDatabaseTxIndexerConfig::default_strict_mode),
-            max_db_parallel_queries: common_config
-                .tx_indexer
-                .max_db_parallel_queries
-                .unwrap_or_else(CommonDatabaseTxIndexerConfig::default_max_db_parallel_queries),
-        }
-    }
-}
-
-impl From<CommonDatabaseConfig> for DatabaseStateIndexerConfig {
-    fn from(common_config: CommonDatabaseConfig) -> Self {
-        Self {
-            database_url: common_config.database_url,
-            database_user: common_config.database_user,
-            database_password: common_config.database_password,
-            database_name: common_config.database_name,
-            preferred_dc: common_config.state_indexer.preferred_dc,
-            max_retry: common_config
-                .state_indexer
-                .max_retry
-                .unwrap_or_else(CommonDatabaseStateIndexerConfig::default_max_retry),
-            strict_mode: common_config
-                .state_indexer
-                .strict_mode
-                .unwrap_or_else(CommonDatabaseStateIndexerConfig::default_strict_mode),
-        }
-    }
-}
-
-impl From<DatabaseRpcServerConfig> for DatabaseConfig {
-    fn from(rpc_server_config: DatabaseRpcServerConfig) -> Self {
-        Self {
-            database_url: rpc_server_config.database_url,
-            database_user: rpc_server_config.database_user,
-            database_password: rpc_server_config.database_password,
-            database_name: rpc_server_config.database_name,
-            preferred_dc: rpc_server_config.preferred_dc,
-            max_retry: rpc_server_config.max_retry,
-            strict_mode: rpc_server_config.strict_mode,
-            keepalive_interval: Some(rpc_server_config.keepalive_interval),
-            max_db_parallel_queries: Default::default(),
-        }
-    }
-}
-
-impl From<DatabaseTxIndexerConfig> for DatabaseConfig {
-    fn from(tx_indexer_config: DatabaseTxIndexerConfig) -> Self {
-        Self {
-            database_url: tx_indexer_config.database_url,
-            database_user: tx_indexer_config.database_user,
-            database_password: tx_indexer_config.database_password,
-            database_name: tx_indexer_config.database_name,
-            preferred_dc: tx_indexer_config.preferred_dc,
-            max_retry: tx_indexer_config.max_retry,
-            strict_mode: tx_indexer_config.strict_mode,
-            keepalive_interval: Default::default(),
-            max_db_parallel_queries: tx_indexer_config.max_db_parallel_queries,
-        }
-    }
-}
-
-impl From<DatabaseStateIndexerConfig> for DatabaseConfig {
-    fn from(state_indexer_config: DatabaseStateIndexerConfig) -> Self {
-        Self {
-            database_url: state_indexer_config.database_url,
-            database_user: state_indexer_config.database_user,
-            database_password: state_indexer_config.database_password,
-            database_name: state_indexer_config.database_name,
-            preferred_dc: state_indexer_config.preferred_dc,
-            max_retry: state_indexer_config.max_retry,
-            strict_mode: state_indexer_config.strict_mode,
-            keepalive_interval: Default::default(),
-            max_db_parallel_queries: Default::default(),
+            database_url: database_config.database_url,
+            shards_config: database_config
+                .shards
+                .into_iter()
+                .map(|shard| (shard.shard_id, shard.database_url))
+                .collect(),
+            max_connections: database_config
+                .max_connections
+                .unwrap_or_else(CommonDatabaseConfig::default_max_connections),
+            read_only: false,
         }
     }
 }

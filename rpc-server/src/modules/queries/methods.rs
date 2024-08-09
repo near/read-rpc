@@ -6,8 +6,6 @@ use jsonrpc_v2::{Data, Params};
 use near_jsonrpc::RpcRequest;
 
 use super::contract_runner;
-#[cfg(feature = "account_access_keys")]
-use super::utils::fetch_list_access_keys_from_db;
 use super::utils::get_state_from_db;
 
 /// `query` rpc method implementation
@@ -116,79 +114,14 @@ async fn query_call(
             account_id,
             method_name,
             args,
-        } => {
-            // TODO: Temporary solution to proxy for poolv1.near
-            // It should be removed after migration to the postgres db
-            if account_id.to_string().ends_with("poolv1.near") {
-                // increase block category metrics
-                crate::metrics::increase_request_category_metrics(
-                    data,
-                    &query_request.block_reference,
-                    "poolv1.near",
-                    Some(block.block_height),
-                )
-                .await;
-                let final_block = data.blocks_info_by_finality.final_cache_block().await;
-                // `expected_earliest_available_block` calculated by formula:
-                // `final_block_height` - `node_epoch_count` * `epoch_length`
-                // Now near store 5 epochs, it can be changed in the future
-                // epoch_length = 43200 blocks
-                let expected_earliest_available_block =
-                    final_block.block_height - 5 * data.genesis_info.genesis_config.epoch_length;
-                return if block.block_height > expected_earliest_available_block {
-                    // Proxy to regular rpc if the block is available
-                    Ok(data
-                        .near_rpc_client
-                        .call(query_request, Some("poolv1.near"))
-                        .await?)
-                } else {
-                    // Proxy to archival rpc if the block garbage collected
-                    Ok(data
-                        .near_rpc_client
-                        .archival_call(query_request, Some("poolv1.near"))
-                        .await?)
-                };
-            } else {
-                function_call(data, block, account_id, method_name, args, is_optimistic).await
-            }
-        }
-        #[allow(unused_variables)]
-        // `account_id` is used in the `#[cfg(feature = "account_access_keys")]` branch.
+        } => function_call(data, block, account_id, method_name, args, is_optimistic).await,
         near_primitives::views::QueryRequest::ViewAccessKeyList { account_id } => {
-            #[cfg(not(feature = "account_access_keys"))]
-            {
-                let final_block = data.blocks_info_by_finality.final_cache_block().await;
-                // `expected_earliest_available_block` calculated by formula:
-                // `final_block_height` - `node_epoch_count` * `epoch_length`
-                // Now near store 5 epochs, it can be changed in the future
-                // epoch_length = 43200 blocks
-                let expected_earliest_available_block =
-                    final_block.block_height - 5 * data.genesis_info.genesis_config.epoch_length;
-                return if block.block_height > expected_earliest_available_block {
-                    // Proxy to regular rpc if the block is available
-                    Ok(data
-                        .near_rpc_client
-                        .call(query_request, Some("query_view_access_key_list"))
-                        .await?)
-                } else {
-                    // Proxy to archival rpc if the block garbage collected
-                    Ok(data
-                        .near_rpc_client
-                        .archival_call(query_request, Some("query_view_access_key_list"))
-                        .await?)
-                };
-            }
-            #[cfg(feature = "account_access_keys")]
-            {
-                view_access_keys_list(&data, block, &account_id).await
-            }
+            view_access_keys_list(data, block, account_id).await
         }
     };
 
     #[cfg(feature = "shadow_data_consistency")]
     {
-        // let request_copy = query_request.request.clone();
-
         // Since we do queries with the clause WHERE block_height <= X, we need to
         // make sure that the block we are doing a shadow data consistency check for
         // matches the one we got the result for.
@@ -432,6 +365,7 @@ async fn function_call(
         block,
         data.max_gas_burnt,
         maybe_optimistic_data,
+        data.prefetch_state_size_limit,
     )
     .await;
 
@@ -467,6 +401,27 @@ async fn view_state(
         prefix,
         is_optimistic,
     );
+
+    let account = data
+        .db_manager
+        .get_account(account_id, block.block_height, "query_view_state")
+        .await
+        .map_err(
+            |_err| near_jsonrpc::primitives::types::query::RpcQueryError::UnknownAccount {
+                requested_account_id: account_id.clone(),
+                block_height: block.block_height,
+                block_hash: block.block_hash,
+            },
+        )?;
+    if account.data.storage_usage() > data.prefetch_state_size_limit {
+        return Err(
+            near_jsonrpc::primitives::types::query::RpcQueryError::TooLargeContractState {
+                contract_account_id: account_id.clone(),
+                block_height: block.block_height,
+                block_hash: block.block_hash,
+            },
+        );
+    }
 
     let state_item = if is_optimistic {
         optimistic_view_state(data, block, account_id, prefix).await?
@@ -508,43 +463,34 @@ async fn optimistic_view_state(
         "query_view_state",
     )
     .await;
-    if state_from_db.is_empty() && optimistic_data.is_empty() {
-        Err(
-            near_jsonrpc::primitives::types::query::RpcQueryError::UnknownAccount {
-                requested_account_id: account_id.clone(),
-                block_height: block.block_height,
-                block_hash: block.block_hash,
-            },
-        )
-    } else {
-        let mut values: Vec<near_primitives::views::StateItem> = state_from_db
-            .into_iter()
-            .filter_map(|(key, value)| {
-                let value = if let Some(value) = optimistic_data.remove(&key) {
-                    value.clone()
-                } else {
-                    Some(value)
-                };
-                value.map(|value| near_primitives::views::StateItem {
-                    key: key.into(),
-                    value: value.into(),
+
+    let mut values: Vec<near_primitives::views::StateItem> = state_from_db
+        .into_iter()
+        .filter_map(|(key, value)| {
+            let value = if let Some(value) = optimistic_data.remove(&key) {
+                value.clone()
+            } else {
+                Some(value)
+            };
+            value.map(|value| near_primitives::views::StateItem {
+                key: key.into(),
+                value: value.into(),
+            })
+        })
+        .collect();
+    let optimistic_items: Vec<near_primitives::views::StateItem> = optimistic_data
+        .iter()
+        .filter_map(|(key, value)| {
+            value
+                .clone()
+                .map(|value| near_primitives::views::StateItem {
+                    key: key.clone().into(),
+                    value: value.clone().into(),
                 })
-            })
-            .collect();
-        let optimistic_items: Vec<near_primitives::views::StateItem> = optimistic_data
-            .iter()
-            .filter_map(|(key, value)| {
-                value
-                    .clone()
-                    .map(|value| near_primitives::views::StateItem {
-                        key: key.clone().into(),
-                        value: value.clone().into(),
-                    })
-            })
-            .collect();
-        values.extend(optimistic_items);
-        Ok(values)
-    }
+        })
+        .collect();
+    values.extend(optimistic_items);
+    Ok(values)
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
@@ -565,24 +511,15 @@ async fn database_view_state(
         "query_view_state",
     )
     .await;
-    if state_from_db.is_empty() {
-        Err(
-            near_jsonrpc::primitives::types::query::RpcQueryError::UnknownAccount {
-                requested_account_id: account_id.clone(),
-                block_height: block.block_height,
-                block_hash: block.block_hash,
-            },
-        )
-    } else {
-        let values: Vec<near_primitives::views::StateItem> = state_from_db
-            .into_iter()
-            .map(|(key, value)| near_primitives::views::StateItem {
-                key: key.into(),
-                value: value.into(),
-            })
-            .collect();
-        Ok(values)
-    }
+
+    let values: Vec<near_primitives::views::StateItem> = state_from_db
+        .into_iter()
+        .map(|(key, value)| near_primitives::views::StateItem {
+            key: key.into(),
+            value: value.into(),
+        })
+        .collect();
+    Ok(values)
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
@@ -676,7 +613,6 @@ async fn database_view_access_key(
     Ok(near_primitives::views::AccessKeyView::from(access_key))
 }
 
-#[cfg(feature = "account_access_keys")]
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 async fn view_access_keys_list(
     data: &Data<ServerContext>,
@@ -692,16 +628,15 @@ async fn view_access_keys_list(
         block.block_height,
     );
 
-    let access_keys =
-        fetch_list_access_keys_from_db(&data.db_manager, account_id, block.block_height)
-            .await
-            // TODO: review this once we implement the `account_access_keys` after the redesign
-            // this error has to be the same the real NEAR JSON RPC returns in this case
-            .map_err(|err| {
-                near_jsonrpc::primitives::types::query::RpcQueryError::InternalError {
-                    error_message: format!("Failed to fetch access keys: {}", err),
-                }
-            })?;
+    let access_keys = data
+        .db_manager
+        .get_account_access_keys(account_id, block.block_height, "query_view_access_key_list")
+        .await
+        .map_err(
+            |err| near_jsonrpc::primitives::types::query::RpcQueryError::InternalError {
+                error_message: format!("Failed to fetch access keys: {}", err),
+            },
+        )?;
 
     Ok(near_jsonrpc::primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc::primitives::types::query::QueryResponseKind::AccessKeyList(

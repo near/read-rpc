@@ -38,6 +38,7 @@ pub async fn run_contract(
         readnode_primitives::StateKey,
         Option<readnode_primitives::StateValue>,
     >,
+    prefetch_state_size_limit: u64,
 ) -> Result<RunContractResponse, FunctionCallError> {
     let contract = db_manager
         .get_account(account_id, block.block_height, "query_call_function")
@@ -110,14 +111,16 @@ pub async fn run_contract(
         })
     };
 
-    // Init an external scylla interface for the Runtime logic
+    // Init an external database interface for the Runtime logic
     let code_storage = CodeStorage::init(
         db_manager.clone(),
         account_id.clone(),
         block.block_height,
         validators,
         optimistic_data,
-    );
+        contract.data.storage_usage() <= prefetch_state_size_limit,
+    )
+    .await;
 
     // Execute the contract in the near VM
     let result = run_code_in_vm_runner(

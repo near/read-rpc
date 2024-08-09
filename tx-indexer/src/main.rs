@@ -16,33 +16,42 @@ pub(crate) const INDEXER: &str = "tx_indexer";
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     configuration::init_tracing(INDEXER).await?;
+    tracing::info!(
+        "Starting {} v{}",
+        env!("CARGO_PKG_NAME"),
+        env!("CARGO_PKG_VERSION"),
+    );
+
     let indexer_config =
         configuration::read_configuration::<configuration::TxIndexerConfig>().await?;
 
     let opts = config::Opts::parse();
 
-    tracing::info!(target: INDEXER, "Connecting to db...");
-    #[cfg(feature = "scylla_db")]
-    let db_manager: std::sync::Arc<
-        Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>,
-    > = std::sync::Arc::new(Box::new(
-        database::prepare_db_manager::<database::scylladb::tx_indexer::ScyllaDBManager>(
-            &indexer_config.database,
-        )
-        .await?,
-    ));
-    #[cfg(all(feature = "postgres_db", not(feature = "scylla_db")))]
-    let db_manager: std::sync::Arc<
-        Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>,
-    > = std::sync::Arc::new(Box::new(
-        database::prepare_db_manager::<database::postgres::tx_indexer::PostgresDBManager>(
-            &indexer_config.database,
-        )
-        .await?,
-    ));
-
     let rpc_client =
         near_jsonrpc_client::JsonRpcClient::connect(&indexer_config.general.near_rpc_url);
+
+    tracing::info!(target: INDEXER, "Fetch protocol config...");
+    let protocol_config_view = rpc_client
+        .call(
+            near_jsonrpc_client::methods::EXPERIMENTAL_protocol_config::RpcProtocolConfigRequest {
+                block_reference:
+                    near_indexer_primitives::near_primitives::types::BlockReference::Finality(
+                        near_indexer_primitives::near_primitives::types::Finality::Final,
+                    ),
+            },
+        )
+        .await?;
+
+    tracing::info!(target: INDEXER, "Connecting to db...");
+    let db_manager: std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>> =
+        std::sync::Arc::new(Box::new(
+            database::prepare_db_manager::<database::PostgresDBManager>(
+                &indexer_config.database,
+                protocol_config_view.shard_layout.clone(),
+            )
+            .await?,
+        ));
+
     let start_block_height = config::get_start_block_height(
         &rpc_client,
         &db_manager,
@@ -57,13 +66,11 @@ async fn main() -> anyhow::Result<()> {
         .lake_config(start_block_height)
         .await?;
 
-    tracing::info!(target: INDEXER, "Creating hash storage...");
+    tracing::info!(target: INDEXER, "Creating cache storage...");
     let tx_collecting_storage = std::sync::Arc::new(
-        storage::HashStorageWithDB::init_with_restore(
-            db_manager.clone(),
-            start_block_height,
-            indexer_config.general.cache_restore_blocks_range,
-            indexer_config.database.max_db_parallel_queries,
+        storage::CacheStorage::init_with_restore(
+            indexer_config.general.redis_url.to_string(),
+            protocol_config_view.shard_layout,
         )
         .await?,
     );
@@ -71,7 +78,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(target: INDEXER, "Instantiating the tx_details storage client...");
     let tx_details_storage = std::sync::Arc::new(TxDetailsStorage::new(
         indexer_config.tx_details_storage.storage_client().await,
-        indexer_config.tx_details_storage.aws_bucket_name.clone(),
+        indexer_config.tx_details_storage.bucket_name.clone(),
     ));
 
     tracing::info!(target: INDEXER, "Instantiating the stream...",);
@@ -122,7 +129,7 @@ async fn main() -> anyhow::Result<()> {
 async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
-    tx_collecting_storage: &std::sync::Arc<storage::HashStorageWithDB>,
+    tx_collecting_storage: &std::sync::Arc<storage::CacheStorage>,
     tx_details_storage: &std::sync::Arc<TxDetailsStorage>,
     indexer_config: configuration::TxIndexerConfig,
     stats: std::sync::Arc<tokio::sync::RwLock<metrics::Stats>>,

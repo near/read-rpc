@@ -13,12 +13,28 @@ fn register_int_counter_vec(
     Ok(counter)
 }
 
-// TODO: Implement metrics for postgres database
-// https://github.com/near/read-rpc/issues/260
 lazy_static! {
-    pub(crate) static ref DATABASE_READ_QUERIES: IntCounterVec = register_int_counter_vec(
-        "database_read_queries_counter",
-        "Total number of database read queries by method_name and table_name",
+    pub(crate) static ref SHARD_DATABASE_READ_QUERIES: IntCounterVec = register_int_counter_vec(
+        "shard_database_read_queries_counter",
+        "Total number of shard database read queries by shard_id, method_name and table_name",
+        &["shard_id", "method_name", "table_name"]
+    )
+    .unwrap();
+    pub(crate) static ref SHARD_DATABASE_WRITE_QUERIES: IntCounterVec = register_int_counter_vec(
+        "shard_database_write_queries_counter",
+        "Total number of shard database write queries by shard_id, method_name and table_name",
+        &["shard_id", "method_name", "table_name"]
+    )
+    .unwrap();
+    pub(crate) static ref META_DATABASE_READ_QUERIES: IntCounterVec = register_int_counter_vec(
+        "meta_database_read_queries_counter",
+        "Total number of meta database read queries by method_name and table_name",
+        &["method_name", "table_name"]
+    )
+    .unwrap();
+    pub(crate) static ref META_DATABASE_WRITE_QUERIES: IntCounterVec = register_int_counter_vec(
+        "meta_database_write_queries_counter",
+        "Total number of meta database write queries by method_name and table_name",
         &["method_name", "table_name"]
     )
     .unwrap();

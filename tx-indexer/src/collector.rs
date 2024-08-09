@@ -1,6 +1,3 @@
-#[cfg(feature = "validator")]
-use borsh::BorshDeserialize;
-
 use futures::{
     future::{join_all, try_join_all},
     StreamExt,
@@ -8,53 +5,74 @@ use futures::{
 use near_indexer_primitives::IndexerTransactionWithOutcome;
 
 use crate::metrics;
+use crate::storage;
 
-/// Blocks #47317863 and #47317864 with restored receipts.
-const PROBLEMATIC_BLOCKS: [near_indexer_primitives::CryptoHash; 2] = [
-    near_indexer_primitives::CryptoHash(
-        *b"\xcd\xde\x9a\x3f\x5d\xdf\xb4\x2c\xb9\x9b\xf4\x8c\x04\x95\x6f\x5b\
-           \xa0\xb7\x29\xe2\xa5\x04\xf8\xbd\x9c\x86\x92\xd6\x16\x8c\xcf\x14",
-    ),
-    near_indexer_primitives::CryptoHash(
-        *b"\x12\xa9\x5a\x1a\x3d\x14\xa7\x36\xb3\xce\xe6\xea\x07\x20\x8e\x75\
-           \x4e\xb5\xc2\xd7\xf9\x11\xca\x29\x09\xe0\xb8\x85\xb5\x2b\x95\x6a",
-    ),
-];
+const SAVE_ATTEMPTS: usize = 20;
 
-const TRANSACTION_SAVE_ATTEMPTS: usize = 20;
-
+#[allow(unused_variables)]
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 pub(crate) async fn index_transactions(
     streamer_message: &near_indexer_primitives::StreamerMessage,
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
-    tx_collecting_storage: &std::sync::Arc<crate::storage::HashStorageWithDB>,
+    tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorage>,
     tx_details_storage: &std::sync::Arc<crate::TxDetailsStorage>,
     indexer_config: &configuration::TxIndexerConfig,
 ) -> anyhow::Result<()> {
-    extract_transactions_to_collect(
-        streamer_message,
-        db_manager,
-        tx_collecting_storage,
-        indexer_config,
-    )
-    .await?;
-    collect_receipts_and_outcomes(
-        &indexer_config.general.chain_id,
-        streamer_message,
-        db_manager,
-        tx_collecting_storage,
-    )
-    .await?;
+    extract_transactions_to_collect(streamer_message, tx_collecting_storage, indexer_config)
+        .await?;
+    collect_receipts_and_outcomes(streamer_message, tx_collecting_storage).await?;
 
-    let finished_transaction_details = tx_collecting_storage.transactions_to_save().await?;
+    let save_finished_tx_details_future =
+        save_finished_transaction_details(tx_collecting_storage, tx_details_storage);
+
+    let save_outcomes_and_receipts_future = {
+        #[cfg(feature = "save_outcomes_and_receipts")]
+        {
+            save_outcomes_and_receipts(db_manager, tx_collecting_storage)
+        }
+        #[cfg(not(feature = "save_outcomes_and_receipts"))]
+        {
+            // if feature is disabled just return Ok(()) to skip saving outcomes and receipts
+            // to the database, this is useful for testing and reindexing only transaction details
+            futures::future::ready(Ok(()))
+        }
+    };
+    futures::try_join!(
+        save_finished_tx_details_future,
+        save_outcomes_and_receipts_future
+    )?;
+
+    Ok(())
+}
+
+async fn save_finished_transaction_details(
+    tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorage>,
+    tx_details_storage: &std::sync::Arc<crate::TxDetailsStorage>,
+) -> anyhow::Result<()> {
+    let finished_transaction_details =
+        tx_collecting_storage
+            .transactions_to_save()
+            .await
+            .map_err(|err| {
+                tracing::error!(
+                    target: crate::INDEXER,
+                    "Failed to get transactions to save\n{:#?}",
+                    err
+                );
+                err
+            })?;
 
     if !finished_transaction_details.is_empty() {
-        let db_manager = db_manager.clone();
+        let tx_collecting_storage = tx_collecting_storage.clone();
         let tx_details_storage = tx_details_storage.clone();
         tokio::spawn(async move {
             let send_finished_transaction_details_futures =
                 finished_transaction_details.into_iter().map(|tx_details| {
-                    save_transaction_details(&db_manager, &tx_details_storage, tx_details)
+                    save_transaction_details(
+                        &tx_collecting_storage,
+                        &tx_details_storage,
+                        tx_details,
+                    )
                 });
 
             join_all(send_finished_transaction_details_futures).await;
@@ -64,16 +82,147 @@ pub(crate) async fn index_transactions(
     Ok(())
 }
 
+#[cfg(feature = "save_outcomes_and_receipts")]
+async fn save_outcomes_and_receipts(
+    db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
+    tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorage>,
+) -> anyhow::Result<()> {
+    let receipts_and_outcomes_to_save = tx_collecting_storage
+        .outcomes_and_receipts_to_save()
+        .await
+        .map_err(|err| {
+            tracing::error!(
+                target: crate::INDEXER,
+                "Failed to get receipts and outcomes to save\n{:#?}",
+                err
+            );
+            err
+        })?;
+
+    if !receipts_and_outcomes_to_save.is_empty() {
+        let db_manager_clone = db_manager.clone();
+        let tx_collecting_storage_clone = tx_collecting_storage.clone();
+        tokio::spawn(async move {
+            let save_receipts_and_outcomes_futures = receipts_and_outcomes_to_save.into_iter().map(
+                |(shard_id, receipts_and_outcomes)| {
+                    save_receipts_and_outcomes_details(
+                        &db_manager_clone,
+                        &tx_collecting_storage_clone,
+                        shard_id,
+                        receipts_and_outcomes.receipts,
+                        receipts_and_outcomes.outcomes,
+                    )
+                },
+            );
+
+            join_all(save_receipts_and_outcomes_futures).await;
+        });
+    }
+    Ok(())
+}
+
+#[cfg(feature = "save_outcomes_and_receipts")]
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
+async fn save_receipts_and_outcomes_details(
+    db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
+    tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorage>,
+    shard_id: database::primitives::ShardId,
+    receipts: Vec<readnode_primitives::ReceiptRecord>,
+    outcomes: Vec<readnode_primitives::OutcomeRecord>,
+) {
+    match save_outcome_and_receipt_to_shard(
+        db_manager,
+        shard_id,
+        receipts.clone(),
+        outcomes.clone(),
+    )
+    .await
+    {
+        Ok(_) => {
+            tracing::debug!(
+                target: crate::INDEXER,
+                "Receipts and outcomes for shard {} were saved",
+                shard_id
+            );
+        }
+        Err(err) => {
+            tracing::error!(
+                target: crate::INDEXER,
+                "Failed to save receipts and outcomes for shard {}: Error {}",
+                shard_id,
+                err
+            );
+
+            tx_collecting_storage
+                .return_outcomes_to_save(shard_id, outcomes)
+                .await;
+            tx_collecting_storage
+                .return_receipts_to_save(shard_id, receipts)
+                .await;
+        }
+    }
+}
+
+#[cfg(feature = "save_outcomes_and_receipts")]
+async fn save_outcome_and_receipt_to_shard(
+    db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
+    shard_id: database::primitives::ShardId,
+    receipts: Vec<readnode_primitives::ReceiptRecord>,
+    outcomes: Vec<readnode_primitives::OutcomeRecord>,
+) -> anyhow::Result<()> {
+    let mut save_attempts = 0;
+    'retry: loop {
+        save_attempts += 1;
+        if save_attempts >= SAVE_ATTEMPTS {
+            anyhow::bail!(
+                "Failed to save receipts and outcomes for shard {} after {} attempts",
+                shard_id,
+                save_attempts,
+            );
+        }
+        match db_manager
+            .save_outcome_and_receipt(shard_id, receipts.clone(), outcomes.clone())
+            .await
+        {
+            Ok(_) => {
+                if save_attempts > 1 {
+                    // If the receipts and outcomes wasn't saved after first attempt we want to inform
+                    // a log reader about it
+                    tracing::info!(
+                        target: crate::INDEXER,
+                        "Receipts and outcomes for shard {} were saved after {} attempts",
+                        shard_id,
+                        save_attempts,
+                    );
+                }
+                break 'retry Ok(());
+            }
+            Err(err) => {
+                tracing::warn!(
+                    target: crate::INDEXER,
+                    "Failed to save receipts and outcomes for shard {}: Error {}",
+                    shard_id,
+                    err
+                );
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                continue 'retry;
+            }
+        }
+    }
+}
+
 // Extracts all Transactions from the given `StreamerMessage` and pushes them to the memory storage
 // by calling the function `new_transaction_details_to_collecting_pool`.
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn extract_transactions_to_collect(
     streamer_message: &near_indexer_primitives::StreamerMessage,
-    db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
-    tx_collecting_storage: &std::sync::Arc<crate::storage::HashStorageWithDB>,
+    tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorage>,
     indexer_config: &configuration::TxIndexerConfig,
 ) -> anyhow::Result<()> {
-    let block_height = streamer_message.block.header.height;
+    let block = readnode_primitives::BlockRecord {
+        height: streamer_message.block.header.height,
+        hash: streamer_message.block.header.hash,
+    };
 
     let txs_in_block = streamer_message
         .shards
@@ -96,9 +245,8 @@ async fn extract_transactions_to_collect(
             transactions.map(move |tx| {
                 new_transaction_details_to_collecting_pool(
                     tx,
-                    block_height,
+                    block,
                     shard_id,
-                    db_manager,
                     tx_collecting_storage,
                     indexer_config,
                 )
@@ -113,10 +261,9 @@ async fn extract_transactions_to_collect(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn new_transaction_details_to_collecting_pool(
     transaction: &IndexerTransactionWithOutcome,
-    block_height: u64,
+    block: readnode_primitives::BlockRecord,
     shard_id: u64,
-    db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
-    tx_collecting_storage: &std::sync::Arc<crate::storage::HashStorageWithDB>,
+    tx_collecting_storage: &std::sync::Arc<storage::CacheStorage>,
     indexer_config: &configuration::TxIndexerConfig,
 ) -> anyhow::Result<()> {
     if !indexer_config.tx_should_be_indexed(transaction) {
@@ -129,28 +276,32 @@ async fn new_transaction_details_to_collecting_pool(
         .outcome
         .receipt_ids
         .first()
-        .expect("`receipt_ids` must contain one Receipt ID")
-        .to_string();
+        .expect("`receipt_ids` must contain one Receipt ID");
 
     // Save the Receipt produced by the Transaction to the DB Map
-    save_receipt(
-        db_manager,
-        &converted_into_receipt_id,
-        &transaction.transaction.hash.to_string(),
-        block_height,
+    add_outcome_and_receipt_to_save(
+        tx_collecting_storage,
+        &transaction.outcome.execution_outcome.id,
+        converted_into_receipt_id,
+        &transaction.transaction.hash,
+        &transaction.transaction.receiver_id,
+        block,
         shard_id,
     )
     .await?;
 
     let transaction_details = readnode_primitives::CollectingTransactionDetails::from_indexer_tx(
         transaction.clone(),
-        block_height,
+        block.height,
     );
     let transaction_key = transaction_details.transaction_key();
     match tx_collecting_storage.set_tx(transaction_details).await {
         Ok(_) => {
             tx_collecting_storage
-                .push_receipt_to_watching_list(converted_into_receipt_id, transaction_key)
+                .push_receipt_to_watching_list(
+                    converted_into_receipt_id.to_string(),
+                    transaction_key,
+                )
                 .await?
         }
         Err(e) => tracing::error!(
@@ -165,24 +316,17 @@ async fn new_transaction_details_to_collecting_pool(
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn collect_receipts_and_outcomes(
-    chain_id: &configuration::ChainId,
     streamer_message: &near_indexer_primitives::StreamerMessage,
-    db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
-    tx_collecting_storage: &std::sync::Arc<crate::storage::HashStorageWithDB>,
+    tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorage>,
 ) -> anyhow::Result<()> {
-    let block_height = streamer_message.block.header.height;
-    let block_hash = streamer_message.block.header.hash;
-
-    let shard_futures = streamer_message.shards.iter().map(|shard| {
-        process_shard(
-            chain_id,
-            db_manager,
-            tx_collecting_storage,
-            block_height,
-            block_hash,
-            shard,
-        )
-    });
+    let block = readnode_primitives::BlockRecord {
+        height: streamer_message.block.header.height,
+        hash: streamer_message.block.header.hash,
+    };
+    let shard_futures = streamer_message
+        .shards
+        .iter()
+        .map(|shard| process_shard(tx_collecting_storage, block, shard));
 
     futures::future::try_join_all(shard_futures).await?;
 
@@ -191,11 +335,8 @@ async fn collect_receipts_and_outcomes(
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn process_shard(
-    chain_id: &configuration::ChainId,
-    db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
-    tx_collecting_storage: &std::sync::Arc<crate::storage::HashStorageWithDB>,
-    block_height: u64,
-    block_hash: near_indexer_primitives::CryptoHash,
+    tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorage>,
+    block: readnode_primitives::BlockRecord,
     shard: &near_indexer_primitives::IndexerShard,
 ) -> anyhow::Result<()> {
     let process_receipt_execution_outcome_futures =
@@ -204,11 +345,8 @@ async fn process_shard(
             .iter()
             .map(|receipt_execution_outcome| {
                 process_receipt_execution_outcome(
-                    chain_id,
-                    db_manager,
                     tx_collecting_storage,
-                    block_height,
-                    block_hash,
+                    block,
                     shard.shard_id,
                     receipt_execution_outcome,
                 )
@@ -221,35 +359,24 @@ async fn process_shard(
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn process_receipt_execution_outcome(
-    chain_id: &configuration::ChainId,
-    db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
-    tx_collecting_storage: &std::sync::Arc<crate::storage::HashStorageWithDB>,
-    block_height: u64,
-    block_hash: near_indexer_primitives::CryptoHash,
+    tx_collecting_storage: &std::sync::Arc<storage::CacheStorage>,
+    block: readnode_primitives::BlockRecord,
     shard_id: u64,
     receipt_execution_outcome: &near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
 ) -> anyhow::Result<()> {
-    if PROBLEMATIC_BLOCKS.contains(&block_hash) {
-        if let configuration::ChainId::Mainnet = chain_id {
-            tx_collecting_storage
-                .restore_transaction_by_receipt_id(
-                    &receipt_execution_outcome.receipt.receipt_id.to_string(),
-                )
-                .await?;
-        }
-    }
-
     if let Ok(transaction_key) = tx_collecting_storage
         .get_transaction_hash_by_receipt_id(
             &receipt_execution_outcome.receipt.receipt_id.to_string(),
         )
         .await
     {
-        save_receipt(
-            db_manager,
-            &receipt_execution_outcome.receipt.receipt_id.to_string(),
+        add_outcome_and_receipt_to_save(
+            tx_collecting_storage,
+            &receipt_execution_outcome.execution_outcome.id,
+            &receipt_execution_outcome.receipt.receipt_id,
             &transaction_key.transaction_hash,
-            block_height,
+            &receipt_execution_outcome.receipt.receiver_id,
+            block,
             shard_id,
         )
         .await?;
@@ -295,44 +422,68 @@ async fn process_receipt_execution_outcome(
     Ok(())
 }
 
-// Save transaction detail into the db
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn save_transaction_details(
-    db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
+    tx_collecting_storage: &std::sync::Arc<storage::CacheStorage>,
     tx_details_storage: &std::sync::Arc<crate::TxDetailsStorage>,
     tx_details: readnode_primitives::CollectingTransactionDetails,
-) -> bool {
-    let transaction_details = match tx_details.to_final_transaction_result() {
-        Ok(details) => details,
+) {
+    let tx_key = tx_details.transaction_key();
+    match save_transaction_details_to_storage(tx_details_storage, tx_details.clone()).await {
+        Ok(_) => {
+            // We assume that the transaction is saved correctly
+            // We can remove the transaction from the cache storage
+            if let Err(err) = tx_collecting_storage
+                .remove_transaction_from_cache(tx_key.clone())
+                .await
+            {
+                tracing::error!(
+                    target: crate::INDEXER,
+                    "Failed to remove transaction from cache {}: Error {}",
+                    tx_key.transaction_hash,
+                    err
+                );
+            }
+        }
         Err(err) => {
             tracing::error!(
                 target: crate::INDEXER,
-                "Failed to get final transaction {} \n{:#?}",
-                tx_details.transaction.hash,
+                "Failed to save transaction {}: Error {}",
+                tx_key.transaction_hash,
                 err
             );
-            return false;
+            // If the transaction wasn't saved correctly, we will move it back to the save queue
+            if let Err(err) = tx_collecting_storage.move_tx_to_save(tx_details).await {
+                tracing::error!(
+                    target: crate::INDEXER,
+                    "Failed to move transaction to save {}: Error {}",
+                    tx_key.transaction_hash,
+                    err
+                );
+            };
         }
-    };
-    let transaction_hash = transaction_details.transaction.hash.to_string();
-    let tx_bytes = borsh::to_vec(&transaction_details).expect("Failed to serialize transaction");
+    }
+}
 
-    // We faced the issue when the transaction was saved to the storage but later
-    // was failing to deserialize. To avoid this issue and monitor the situation
-    // without runing the user experience, we will try to save the transaction
-    // to the storage and validate that it is saved correctly for 3 attempts
-    // before we throw an error.
+// Save transaction detail into the storage
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
+async fn save_transaction_details_to_storage(
+    tx_details_storage: &std::sync::Arc<crate::TxDetailsStorage>,
+    tx_details: readnode_primitives::CollectingTransactionDetails,
+) -> anyhow::Result<()> {
+    let transaction_details = tx_details.to_final_transaction_result()?;
+    let transaction_hash = transaction_details.transaction.hash.to_string();
+    let tx_bytes = transaction_details.tx_serialize()?;
+
     let mut save_attempts = 0;
     'retry: loop {
         save_attempts += 1;
-        if save_attempts >= TRANSACTION_SAVE_ATTEMPTS {
-            tracing::error!(
-                target: crate::INDEXER,
+        if save_attempts >= SAVE_ATTEMPTS {
+            anyhow::bail!(
                 "Failed to save transaction {} after {} attempts",
                 transaction_hash,
                 save_attempts,
             );
-            break false;
         }
         match tx_details_storage
             .store(&transaction_hash, tx_bytes.clone())
@@ -349,73 +500,9 @@ async fn save_transaction_details(
                         save_attempts,
                     );
                 }
-                #[cfg(feature = "validator")]
-                {
-                    // At this moment transaction seems to be stored, and we want to validate the correctness of the stored data
-                    // To validate we will try to retrieve the transaction from the storage and validate that it is deserializable
-                    // If the transaction is not deserializable, we will try to save it again
-                    let mut retrieve_attempts = 0;
-                    'validator: loop {
-                        retrieve_attempts += 1;
-                        if retrieve_attempts >= TRANSACTION_SAVE_ATTEMPTS {
-                            tracing::error!(
-                                target: crate::INDEXER,
-                                "Failed to retrieve transaction {} for validation after {} attempts",
-                                transaction_hash,
-                                retrieve_attempts,
-                            );
-                            break 'validator;
-                        }
-                        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
-                        let Ok(tx_details_bytes_from_storage) =
-                            tx_details_storage.retrieve(&transaction_hash).await
-                        else {
-                            tracing::error!(
-                                target: crate::INDEXER,
-                                "Failed to retrieve transaction {} from storage",
-                                transaction_hash,
-                            );
-                            continue 'validator;
-                        };
 
-                        match readnode_primitives::TransactionDetails::try_from_slice(
-                            &tx_details_bytes_from_storage,
-                        ) {
-                            Ok(_) => {
-                                // We assume that the transaction is saved correctly
-                                // We can remove the transaction from the cache storage
-                                metrics::TX_IN_MEMORY_CACHE.dec();
-                                db_manager
-                                    .cache_delete_transaction(
-                                        &transaction_hash,
-                                        tx_details.block_height,
-                                    )
-                                    .await
-                                    .expect("Failed to delete transaction from memory storage");
-                                break 'retry true;
-                            }
-                            Err(err) => {
-                                tracing::warn!(
-                                    target: crate::INDEXER,
-                                    "Failed to validate transaction {} \n{:#?}",
-                                    transaction_hash,
-                                    err
-                                );
-                                // If the transaction is not deserializable, we will try to save it again
-                                continue 'retry;
-                            }
-                        }
-                    }
-                }
-                #[cfg(not(feature = "validator"))]
-                {
-                    metrics::TX_IN_MEMORY_CACHE.dec();
-                    db_manager
-                        .cache_delete_transaction(&transaction_hash, tx_details.block_height)
-                        .await
-                        .expect("Failed to delete transaction from memory storage");
-                    break 'retry true;
-                }
+                metrics::TX_IN_MEMORY_CACHE.dec();
+                break 'retry Ok(());
             }
             Err(err) => {
                 crate::metrics::TX_STORE_ERRORS_TOTAL.inc();
@@ -432,28 +519,37 @@ async fn save_transaction_details(
         }
     }
 }
-
 // Save receipt_id, parent_transaction_hash, block_height and shard_id to the Db
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
-async fn save_receipt(
-    db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
-    receipt_id: &str,
-    parent_tx_hash: &str,
-    block_height: u64,
+async fn add_outcome_and_receipt_to_save(
+    tx_collecting_storage: &std::sync::Arc<storage::CacheStorage>,
+    outcome_id: &near_indexer_primitives::CryptoHash,
+    receipt_id: &near_indexer_primitives::CryptoHash,
+    parent_tx_hash: &near_indexer_primitives::CryptoHash,
+    receiver_id: &near_indexer_primitives::types::AccountId,
+    block: readnode_primitives::BlockRecord,
     shard_id: u64,
 ) -> anyhow::Result<()> {
     tracing::debug!(
         target: crate::INDEXER,
-        "Saving receipt_id: {} to `receipts_map` in DB",
+        "Push outcome: {}, and receipt: {} to save",
+        outcome_id,
         receipt_id,
     );
-    db_manager
-        .add_receipt(receipt_id, parent_tx_hash, block_height, shard_id)
+    tx_collecting_storage
+        .push_outcome_and_receipt_to_save(
+            outcome_id,
+            receipt_id,
+            parent_tx_hash,
+            receiver_id,
+            block,
+            shard_id,
+        )
         .await
         .map_err(|err| {
             tracing::error!(
                 target: crate::INDEXER,
-                "Failed to save receipt \n{:#?}",
+                "Failed to push outcome_and_receipt to save \n{:#?}",
                 err
             );
             err

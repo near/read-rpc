@@ -1,6 +1,7 @@
 use std::string::ToString;
 
 use futures::executor::block_on;
+use near_primitives::epoch_manager::{AllEpochConfig, EpochConfig};
 
 use crate::modules::blocks::{BlocksInfoByFinality, CacheBlock};
 
@@ -54,6 +55,8 @@ pub struct ServerContext {
     pub db_manager: std::sync::Arc<Box<dyn database::ReaderDbManager + Sync + Send + 'static>>,
     /// TransactionDetails storage
     pub tx_details_storage: std::sync::Arc<tx_details_storage::TxDetailsStorage>,
+    /// Connection to cache storage with transactions in process
+    pub tx_cache_storage: Option<cache_storage::TxIndexerCache>,
     /// Genesis info include genesis_config and genesis_block
     pub genesis_info: GenesisInfo,
     /// Near rpc client
@@ -73,7 +76,10 @@ pub struct ServerContext {
     /// Max gas burnt for contract function call
     pub max_gas_burnt: near_primitives::types::Gas,
     /// How many requests we should check for data consistency
+    #[cfg(feature = "shadow_data_consistency")]
     pub shadow_data_consistency_rate: f64,
+    /// Max size for state prefetch during a view_call
+    pub prefetch_state_size_limit: u64,
     /// Port of the server.
     pub server_port: u16,
     /// Timestamp of starting server.
@@ -105,22 +111,18 @@ impl ServerContext {
 
         let s3_client = rpc_server_config.lake_config.lake_s3_client().await;
 
-        #[cfg(feature = "scylla_db")]
-        let db_manager = database::prepare_db_manager::<
-            database::scylladb::rpc_server::ScyllaDBManager,
-        >(&rpc_server_config.database)
-        .await?;
-
-        #[cfg(all(feature = "postgres_db", not(feature = "scylla_db")))]
-        let db_manager = database::prepare_db_manager::<
-            database::postgres::rpc_server::PostgresDBManager,
-        >(&rpc_server_config.database)
-        .await?;
-
         let tx_details_storage = tx_details_storage::TxDetailsStorage::new(
             rpc_server_config.tx_details_storage.storage_client().await,
-            rpc_server_config.tx_details_storage.aws_bucket_name.clone(),
+            rpc_server_config.tx_details_storage.bucket_name.clone(),
         );
+
+        let tx_cache_storage =
+            cache_storage::TxIndexerCache::new(rpc_server_config.general.redis_url.to_string())
+                .await
+                .map_err(|err| {
+                    tracing::warn!("Failed to connect to Redis: {:?}", err);
+                })
+                .ok();
 
         let genesis_info = GenesisInfo::get(
             &near_rpc_client,
@@ -128,6 +130,26 @@ impl ServerContext {
             &rpc_server_config.lake_config.aws_bucket_name,
         )
         .await;
+
+        let default_epoch_config = EpochConfig::from(&genesis_info.genesis_config);
+        let all_epoch_config = AllEpochConfig::new(
+            true,
+            default_epoch_config,
+            &genesis_info.genesis_config.chain_id,
+        );
+        let epoch_config = all_epoch_config.for_protocol_version(
+            blocks_info_by_finality
+                .final_cache_block()
+                .await
+                .latest_protocol_version,
+        );
+
+        let db_manager = database::prepare_db_manager::<database::PostgresDBManager>(
+            &rpc_server_config.database,
+            epoch_config.shard_layout,
+        )
+        .await?;
+
         let compiled_contract_code_cache =
             std::sync::Arc::new(CompiledCodeCache::new(contract_code_cache_size_in_bytes));
 
@@ -135,6 +157,7 @@ impl ServerContext {
             s3_client,
             db_manager: std::sync::Arc::new(Box::new(db_manager)),
             tx_details_storage: std::sync::Arc::new(tx_details_storage),
+            tx_cache_storage,
             genesis_info,
             near_rpc_client,
             s3_bucket_name: rpc_server_config.lake_config.aws_bucket_name.clone(),
@@ -143,7 +166,9 @@ impl ServerContext {
             compiled_contract_code_cache,
             contract_code_cache,
             max_gas_burnt: rpc_server_config.general.max_gas_burnt,
+            #[cfg(feature = "shadow_data_consistency")]
             shadow_data_consistency_rate: rpc_server_config.general.shadow_data_consistency_rate,
+            prefetch_state_size_limit: rpc_server_config.general.prefetch_state_size_limit,
             server_port: rpc_server_config.general.server_port,
             boot_time_seconds: chrono::Utc::now().timestamp(),
             version: near_primitives::version::Version {

@@ -6,15 +6,14 @@ This workspace holds the collection of components for the Read RPC.
 
 ### [rpc-server](rpc-server/README.md)
 
-
 The JSON RPC server implementation that repeats all the APIs current real NEAR JSON RPC but using a different data sources:
-- The Read RPC Storage (ScyllaDB currently)
+- The Read RPC Storage (PostgresDB currently)
 - NEAR Lake Data buckets (AWS S3 currently)
 - real NEAR JSON RPC
 
 ### [state-indexer](state-indexer/README.md)
 
-The indexer built on top of Lake Framework that watches the network and stores the `StateChanges` into the Storage (ScyllaDB) using the designed data schemas.
+The indexer built on top of Lake Framework that watches the network and stores the `StateChanges` into the Storage using the designed data schemas.
 
 ### [near-state-indexer](near-state-indexer/README.md)
 
@@ -22,7 +21,7 @@ The indexer built on [NEAR Indexer Framework](https://github.com/nearprotocol/ne
 
 ### [tx-indexer](tx-indexer/README.md)
 
-The indexer built on top of Lake Framework that watches the network and stores the `Transactions` along with all the related entities (`Receipts`, `ExecutionOutcomes`) into the Storage (ScyllaDB) using the specifically defined `TransactionDetails` structure in a dumped way (using the simplest key-value schema)
+The indexer built on top of Lake Framework that watches the network and stores the `Transactions` along with all the related entities (`Receipts`, `ExecutionOutcomes`) into the Storage using the specifically defined `TransactionDetails` structure in a dumped way (using the simplest key-value schema)
 
 ### [config](configuration/README.md)
 
@@ -45,8 +44,8 @@ $ docker-compose up
 
 This will spin up:
 - `read-rpc-server` - the JSON RPC server
-- `state-indexer` - the indexer that watches the network and stores the `StateChanges` into the Storage (ScyllaDB) using the designed data schemas.
-- `tx-indexer` - the indexer that watches the network and stores the `Transactions` along with all the related entities (`Receipts`, `ExecutionOutcomes`) into the Storage (ScyllaDB) using the specifically defined `TransactionDetails` structure in a dumped way (using the simplest key-value schema)
+- `state-indexer` - the indexer that watches the network and stores the `StateChanges` into the Storage using the designed data schemas.
+- `tx-indexer` - the indexer that watches the network and stores the `Transactions` along with all the related entities (`Receipts`, `ExecutionOutcomes`) into the Storage using the specifically defined `TransactionDetails` structure in a dumped way (using the simplest key-value schema)
 - `jaeger` - the Jaeger instance for tracing (http://localhost:16686)
 
 ### Examples: 
@@ -82,7 +81,7 @@ cargo run --package <package_name>
 Example:
 
 ```
-cargo run --release --package rpc-server
+cargo run --profile dev-release --package rpc-server
 ```
 
 **Please don't forget** to handle `.env` files properly if you're running the package from the root using the proposed approach.
@@ -98,7 +97,7 @@ cd rpc-server/
 And run a package as usually from the folder
 
 ```
-cargo run --release
+cargo run --profile dev-release
 ```
 
 **In this case** you would want to have an `.env` file in the package folder.

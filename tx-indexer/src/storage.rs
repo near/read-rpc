@@ -1,9 +1,41 @@
-use futures::StreamExt;
-
 pub const STORAGE: &str = "storage_tx";
 
-pub struct HashStorageWithDB {
-    db_manager: std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
+#[derive(Default)]
+pub struct ReceiptsAndOutcomesCacheStorage {
+    pub receipts: std::collections::HashMap<String, readnode_primitives::ReceiptRecord>,
+    pub outcomes: std::collections::HashMap<String, readnode_primitives::OutcomeRecord>,
+}
+
+impl ReceiptsAndOutcomesCacheStorage {
+    pub fn new(
+        receipt_record: readnode_primitives::ReceiptRecord,
+        outcome_record: readnode_primitives::OutcomeRecord,
+    ) -> Self {
+        let mut receipts = std::collections::HashMap::new();
+        receipts.insert(receipt_record.receipt_id.to_string(), receipt_record);
+        let mut outcomes = std::collections::HashMap::new();
+        outcomes.insert(outcome_record.outcome_id.to_string(), outcome_record);
+        Self { receipts, outcomes }
+    }
+}
+
+impl From<&ReceiptsAndOutcomesCacheStorage> for ReceiptsAndOutcomesToSave {
+    fn from(receipts_and_outcomes: &ReceiptsAndOutcomesCacheStorage) -> Self {
+        Self {
+            receipts: receipts_and_outcomes.receipts.values().cloned().collect(),
+            outcomes: receipts_and_outcomes.outcomes.values().cloned().collect(),
+        }
+    }
+}
+
+pub struct ReceiptsAndOutcomesToSave {
+    pub receipts: Vec<readnode_primitives::ReceiptRecord>,
+    pub outcomes: Vec<readnode_primitives::OutcomeRecord>,
+}
+
+pub struct CacheStorage {
+    storage: cache_storage::TxIndexerCache,
+    shard_layout: near_indexer_primitives::near_primitives::shard_layout::ShardLayout,
     transactions: futures_locks::RwLock<
         std::collections::HashMap<
             readnode_primitives::TransactionKey,
@@ -21,183 +53,146 @@ pub struct HashStorageWithDB {
             readnode_primitives::CollectingTransactionDetails,
         >,
     >,
+    outcomes_and_receipts_to_save: futures_locks::RwLock<
+        std::collections::HashMap<database::primitives::ShardId, ReceiptsAndOutcomesCacheStorage>,
+    >,
 }
 
-impl HashStorageWithDB {
+impl CacheStorage {
     /// Init storage without restore transactions with receipts after interruption
     pub(crate) async fn init_storage(
-        db_manager: std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
+        redis_url: String,
+        shard_layout: near_indexer_primitives::near_primitives::shard_layout::ShardLayout,
     ) -> Self {
+        let cache_storage = cache_storage::TxIndexerCache::new(redis_url)
+            .await
+            .expect("Failed connecting to redis");
         Self {
-            db_manager,
+            storage: cache_storage,
+            shard_layout,
             transactions: futures_locks::RwLock::new(std::collections::HashMap::new()),
             receipts_counters: futures_locks::RwLock::new(std::collections::HashMap::new()),
             receipts_watching_list: futures_locks::RwLock::new(std::collections::HashMap::new()),
             transactions_to_save: futures_locks::RwLock::new(std::collections::HashMap::new()),
+            outcomes_and_receipts_to_save: futures_locks::RwLock::new(
+                std::collections::HashMap::new(),
+            ),
         }
     }
 
     /// Init storage with restore transactions with receipts after interruption
     pub(crate) async fn init_with_restore(
-        db_manager: std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
-        start_block_height: u64,
-        cache_restore_blocks_range: u64,
-        max_db_parallel_queries: i64,
+        redis_url: String,
+        shard_layout: near_indexer_primitives::near_primitives::shard_layout::ShardLayout,
     ) -> anyhow::Result<Self> {
-        let storage = Self::init_storage(db_manager).await;
+        let storage = Self::init_storage(redis_url, shard_layout).await;
         storage
-            .restore_transactions_with_receipts_after_interruption(
-                start_block_height,
-                cache_restore_blocks_range,
-                max_db_parallel_queries,
-            )
+            .restore_transactions_with_receipts_after_interruption()
             .await?;
         Ok(storage)
+    }
+
+    /// Restore transactions with receipts after interruption
+    async fn restore_transactions_with_receipts_after_interruption(&self) -> anyhow::Result<()> {
+        let tx_in_process = self.storage.get_txs_in_process().await.unwrap_or_default();
+        let tx_futures = tx_in_process
+            .iter()
+            .map(|tx_key| self.restore_transaction_with_receipts(tx_key));
+        futures::future::try_join_all(tx_futures).await?;
+        tracing::info!(
+            target: STORAGE,
+            "Restored {} transactions after interruption",
+            tx_in_process.len()
+        );
+        Ok(())
     }
 
     async fn restore_transaction_with_receipts(
         &self,
         transaction_key: &readnode_primitives::TransactionKey,
-        transaction_details: &readnode_primitives::CollectingTransactionDetails,
     ) -> anyhow::Result<()> {
-        self.update_tx(transaction_details.clone()).await?;
-        let receipt_id = transaction_details
-            .execution_outcomes
-            .first()
-            .expect("No execution outcomes")
-            .outcome
-            .receipt_ids
-            .first()
-            .expect("`receipt_ids` must contain one Receipt ID")
-            .to_string();
-        self.push_receipt_to_watching_list(receipt_id.clone(), transaction_key.clone())
-            .await?;
-
-        for indexer_execution_outcome_with_receipt in self
-            .db_manager
-            .get_receipts_in_cache(transaction_key)
-            .await?
-            .iter()
-        {
-            let mut tasks = futures::stream::FuturesUnordered::new();
-            tasks.extend(
-                indexer_execution_outcome_with_receipt
-                    .execution_outcome
-                    .outcome
-                    .receipt_ids
-                    .iter()
-                    .map(|receipt_id| {
-                        self.push_receipt_to_watching_list(
-                            receipt_id.to_string(),
-                            transaction_key.clone(),
-                        )
-                    }),
-            );
-            while let Some(result) = tasks.next().await {
-                let _ = result.map_err(|e| {
-                    tracing::debug!(
-                        target: crate::INDEXER,
-                        "Task encountered an error: {:#?}",
-                        e
-                    )
-                });
-            }
-
-            self.push_outcome_and_receipt_to_hash(
-                transaction_key,
-                indexer_execution_outcome_with_receipt.clone(),
-            )
-            .await?;
-        }
-        Ok(())
-    }
-
-    /// Restore transactions with receipts after interruption
-    async fn restore_transactions_with_receipts_after_interruption(
-        &self,
-        start_block_height: u64,
-        cache_restore_blocks_range: u64,
-        max_db_parallel_queries: i64,
-    ) -> anyhow::Result<()> {
-        for (transaction_key, transaction_details) in self
-            .db_manager
-            .get_transactions_to_cache(
-                start_block_height,
-                cache_restore_blocks_range,
-                max_db_parallel_queries,
-            )
-            .await?
-            .iter()
-        {
-            self.restore_transaction_with_receipts(transaction_key, transaction_details)
+        tracing::debug!(
+            target: STORAGE,
+            "Transaction restoring from storage {}",
+            transaction_key.transaction_hash,
+        );
+        // The indexers work pretty fast.
+        // We use the KEYS method to get the list of transactions, which is relatively slow.
+        // And sometimes we get into a situation where the indexer already running has time to save the transaction
+        // and we get an error `Unexpected length of input`.
+        // This hook will help to avoid such situations when launching several indexers.
+        if let Ok(tx_details) = self.storage.get_tx(transaction_key).await {
+            self.update_tx(tx_details.clone()).await?;
+            let receipt_id = tx_details
+                .execution_outcomes
+                .first()
+                .expect("No execution outcomes")
+                .outcome
+                .receipt_ids
+                .first()
+                .expect("`receipt_ids` must contain one Receipt ID")
+                .to_string();
+            self.push_receipt_to_watching_list(receipt_id.clone(), transaction_key.clone())
                 .await?;
-            tracing::info!(
-                target: crate::storage::STORAGE,
-                "Transaction collected from db {}",
-                transaction_key.transaction_hash,
-            );
+            for outcome in self.storage.get_tx_outcomes(transaction_key).await? {
+                let indexed_outcome = near_indexer_primitives::IndexerExecutionOutcomeWithReceipt {
+                    execution_outcome: outcome.execution_outcome.clone(),
+                    receipt: outcome.receipt.clone(),
+                };
+                for receipt_id in indexed_outcome.execution_outcome.outcome.receipt_ids.iter() {
+                    self.push_receipt_to_watching_list(
+                        receipt_id.to_string(),
+                        transaction_key.clone(),
+                    )
+                    .await?;
+                }
+                self.push_outcome_and_receipt_to_cache(transaction_key, indexed_outcome)
+                    .await?;
+            }
         }
         Ok(())
     }
 
-    async fn push_outcome_and_receipt_to_db(
+    async fn push_outcome_and_receipt_to_storage(
         &self,
         transaction_key: readnode_primitives::TransactionKey,
         indexer_execution_outcome_with_receipt: near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
     ) {
-        let db_manager = self.db_manager.clone();
+        let storage = self.storage.clone();
         tokio::spawn(async move {
-            db_manager
-                .cache_add_receipt(transaction_key, indexer_execution_outcome_with_receipt)
+            storage
+                .set_outcomes_and_receipts(&transaction_key, indexer_execution_outcome_with_receipt)
                 .await
         });
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
-    async fn push_outcome_and_receipt_to_hash(
+    async fn push_outcome_and_receipt_to_cache(
         &self,
         transaction_key: &readnode_primitives::TransactionKey,
         indexer_execution_outcome_with_receipt: near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
     ) -> anyhow::Result<()> {
-        let mut transaction_details = self.get_tx(transaction_key).await?;
-        self.remove_receipt_from_watching_list(
-            &indexer_execution_outcome_with_receipt
-                .receipt
-                .receipt_id
-                .to_string(),
-        )
-        .await?;
-        transaction_details
-            .receipts
-            .push(indexer_execution_outcome_with_receipt.receipt);
-        transaction_details
-            .execution_outcomes
-            .push(indexer_execution_outcome_with_receipt.execution_outcome);
-        let transaction_receipts_watching_count = self
-            .receipts_transaction_hash_count(transaction_key)
-            .await?;
-        if transaction_receipts_watching_count == 0 {
-            self.move_tx_to_save(transaction_details.clone()).await?;
-        } else {
-            self.update_tx(transaction_details.clone()).await?;
-        }
-        Ok(())
-    }
-
-    pub(crate) async fn restore_transaction_by_receipt_id(
-        &self,
-        receipt_id: &str,
-    ) -> anyhow::Result<()> {
-        if let Ok(transaction_details) = self
-            .db_manager
-            .get_transaction_by_receipt_id(receipt_id)
-            .await
-        {
-            self.restore_transaction_with_receipts(
-                &transaction_details.transaction_key(),
-                &transaction_details,
+        if let Ok(mut transaction_details) = self.get_tx(transaction_key).await {
+            self.remove_receipt_from_watching_list(
+                &indexer_execution_outcome_with_receipt
+                    .receipt
+                    .receipt_id
+                    .to_string(),
             )
             .await?;
+            transaction_details
+                .receipts
+                .push(indexer_execution_outcome_with_receipt.receipt);
+            transaction_details
+                .execution_outcomes
+                .push(indexer_execution_outcome_with_receipt.execution_outcome);
+            let transaction_receipts_watching_count =
+                self.receipts_transaction_count(transaction_key).await?;
+            if transaction_receipts_watching_count == 0 {
+                self.move_tx_to_save(transaction_details.clone()).await?;
+            } else {
+                self.update_tx(transaction_details.clone()).await?;
+            }
         }
         Ok(())
     }
@@ -220,7 +215,7 @@ impl HashStorageWithDB {
             .await
             .insert(receipt_id.clone(), transaction_key.clone());
         tracing::debug!(
-            target: crate::storage::STORAGE,
+            target: STORAGE,
             "+R {} - {}",
             receipt_id,
             transaction_key.transaction_hash
@@ -229,7 +224,10 @@ impl HashStorageWithDB {
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
-    async fn remove_receipt_from_watching_list(&self, receipt_id: &str) -> anyhow::Result<()> {
+    pub(crate) async fn remove_receipt_from_watching_list(
+        &self,
+        receipt_id: &str,
+    ) -> anyhow::Result<()> {
         if let Some(transaction_key) = self.receipts_watching_list.write().await.remove(receipt_id)
         {
             if let Some(receipts_counter) = self
@@ -242,7 +240,7 @@ impl HashStorageWithDB {
             }
             crate::metrics::RECEIPTS_IN_MEMORY_CACHE.dec();
             tracing::debug!(
-                target: crate::storage::STORAGE,
+                target: STORAGE,
                 "-R {} - {}",
                 receipt_id,
                 transaction_key.transaction_hash
@@ -252,7 +250,7 @@ impl HashStorageWithDB {
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
-    async fn receipts_transaction_hash_count(
+    async fn receipts_transaction_count(
         &self,
         transaction_key: &readnode_primitives::TransactionKey,
     ) -> anyhow::Result<u64> {
@@ -262,7 +260,7 @@ impl HashStorageWithDB {
             .get(transaction_key)
             .copied()
             .ok_or(anyhow::anyhow!(
-                "No such transaction hash `receipts_transaction_hash_count` {}",
+                "No such transaction hash `receipts_transaction_count` {}",
                 transaction_key.transaction_hash
             ))
     }
@@ -283,15 +281,11 @@ impl HashStorageWithDB {
         transaction_details: readnode_primitives::CollectingTransactionDetails,
     ) -> anyhow::Result<()> {
         let transaction_details_clone = transaction_details.clone();
-        let db_manager = self.db_manager.clone();
-        tokio::spawn(async move {
-            db_manager
-                .cache_add_transaction(transaction_details_clone)
-                .await
-        });
+        let storage = self.storage.clone();
+        tokio::spawn(async move { storage.set_tx(transaction_details_clone).await });
         let transaction_hash = transaction_details.transaction.hash.clone().to_string();
         self.update_tx(transaction_details).await?;
-        tracing::debug!(target: crate::storage::STORAGE, "+T {}", transaction_hash,);
+        tracing::debug!(target: STORAGE, "+T {}", transaction_hash,);
         Ok(())
     }
 
@@ -310,7 +304,7 @@ impl HashStorageWithDB {
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
-    async fn move_tx_to_save(
+    pub(crate) async fn move_tx_to_save(
         &self,
         transaction_details: readnode_primitives::CollectingTransactionDetails,
     ) -> anyhow::Result<()> {
@@ -325,11 +319,19 @@ impl HashStorageWithDB {
             .await
             .remove(&transaction_key);
         tracing::debug!(
-            target: crate::storage::STORAGE,
+            target: STORAGE,
             "-T {}",
             transaction_key.transaction_hash
         );
         Ok(())
+    }
+
+    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
+    pub(crate) async fn remove_transaction_from_cache(
+        &self,
+        transaction_key: readnode_primitives::TransactionKey,
+    ) -> anyhow::Result<()> {
+        self.storage.del_tx(&transaction_key).await
     }
 
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
@@ -369,18 +371,148 @@ impl HashStorageWithDB {
         Ok(transactions)
     }
 
+    #[cfg(feature = "save_outcomes_and_receipts")]
+    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
+    pub(crate) async fn outcomes_and_receipts_to_save(
+        &self,
+    ) -> anyhow::Result<
+        std::collections::HashMap<database::primitives::ShardId, ReceiptsAndOutcomesToSave>,
+    > {
+        let mut outcomes_and_receipts: std::collections::HashMap<
+            database::primitives::ShardId,
+            ReceiptsAndOutcomesToSave,
+        > = std::collections::HashMap::new();
+
+        for (shard_id, receipts_and_outcomes) in
+            self.outcomes_and_receipts_to_save.read().await.iter()
+        {
+            outcomes_and_receipts.insert(*shard_id, receipts_and_outcomes.into());
+        }
+
+        for (shard_id, receipts_and_outcomes_to_save) in outcomes_and_receipts.iter() {
+            self.outcomes_and_receipts_to_save
+                .write()
+                .await
+                .entry(*shard_id)
+                .and_modify(|receipts_and_outcomes| {
+                    for receipt in receipts_and_outcomes_to_save.receipts.iter() {
+                        receipts_and_outcomes
+                            .receipts
+                            .remove(&receipt.receipt_id.to_string());
+                    }
+                    for outcome in receipts_and_outcomes_to_save.outcomes.iter() {
+                        receipts_and_outcomes
+                            .outcomes
+                            .remove(&outcome.outcome_id.to_string());
+                    }
+                });
+        }
+        Ok(outcomes_and_receipts)
+    }
+
+    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
+    pub(crate) async fn push_outcome_and_receipt_to_save(
+        &self,
+        outcome_id: &near_indexer_primitives::CryptoHash,
+        receipt_id: &near_indexer_primitives::CryptoHash,
+        parent_tx_hash: &near_indexer_primitives::CryptoHash,
+        receiver_id: &near_indexer_primitives::types::AccountId,
+        block: readnode_primitives::BlockRecord,
+        shard_id: u64,
+    ) -> anyhow::Result<()> {
+        let database_shard_id =
+            near_indexer_primitives::near_primitives::shard_layout::account_id_to_shard_id(
+                receiver_id,
+                &self.shard_layout,
+            );
+
+        let receipt_record = readnode_primitives::ReceiptRecord {
+            receipt_id: *receipt_id,
+            parent_transaction_hash: *parent_tx_hash,
+            receiver_id: receiver_id.clone(),
+            block_height: block.height,
+            block_hash: block.hash,
+            shard_id,
+        };
+        let outcome_record = readnode_primitives::OutcomeRecord {
+            outcome_id: *outcome_id,
+            parent_transaction_hash: *parent_tx_hash,
+            receiver_id: receiver_id.clone(),
+            block_height: block.height,
+            block_hash: block.hash,
+            shard_id,
+        };
+        self.outcomes_and_receipts_to_save
+            .write()
+            .await
+            .entry(database_shard_id)
+            .and_modify(|receipts_and_outcomes| {
+                receipts_and_outcomes
+                    .receipts
+                    .insert(receipt_id.to_string(), receipt_record.clone());
+                receipts_and_outcomes
+                    .outcomes
+                    .insert(outcome_id.to_string(), outcome_record.clone());
+            })
+            .or_insert(ReceiptsAndOutcomesCacheStorage::new(
+                receipt_record,
+                outcome_record,
+            ));
+        Ok(())
+    }
+
+    #[cfg(feature = "save_outcomes_and_receipts")]
+    pub(crate) async fn return_outcomes_to_save(
+        &self,
+        shard_id: u64,
+        outcomes: Vec<readnode_primitives::OutcomeRecord>,
+    ) {
+        let outcomes = outcomes
+            .into_iter()
+            .map(|outcome| (outcome.outcome_id.to_string(), outcome))
+            .collect::<std::collections::HashMap<_, _>>();
+
+        self.outcomes_and_receipts_to_save
+            .write()
+            .await
+            .entry(shard_id)
+            .and_modify(|receipts_and_outcomes| {
+                receipts_and_outcomes.outcomes.extend(outcomes);
+            });
+    }
+
+    #[cfg(feature = "save_outcomes_and_receipts")]
+    pub(crate) async fn return_receipts_to_save(
+        &self,
+        shard_id: u64,
+        receipts: Vec<readnode_primitives::ReceiptRecord>,
+    ) {
+        let receipts = receipts
+            .into_iter()
+            .map(|receipt| (receipt.receipt_id.to_string(), receipt))
+            .collect::<std::collections::HashMap<_, _>>();
+
+        self.outcomes_and_receipts_to_save
+            .write()
+            .await
+            .entry(shard_id)
+            .and_modify(|receipts_and_outcomes| {
+                receipts_and_outcomes.receipts.extend(receipts);
+            });
+    }
+
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
     pub(crate) async fn push_outcome_and_receipt(
         &self,
         transaction_key: &readnode_primitives::TransactionKey,
         indexer_execution_outcome_with_receipt: near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
     ) -> anyhow::Result<()> {
-        self.push_outcome_and_receipt_to_db(
+        self.push_outcome_and_receipt_to_storage(
             transaction_key.clone(),
             indexer_execution_outcome_with_receipt.clone(),
         )
         .await;
-        self.push_outcome_and_receipt_to_hash(
+        self.push_outcome_and_receipt_to_cache(
             transaction_key,
             indexer_execution_outcome_with_receipt,
         )

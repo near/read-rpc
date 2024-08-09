@@ -25,7 +25,7 @@ pub async fn tx(
     let tx_status_request =
         near_jsonrpc::primitives::types::transactions::RpcTransactionStatusRequest::parse(params)?;
 
-    let result = tx_status_common(&data, &tx_status_request.transaction_info, false, "tx").await;
+    let result = tx_status_common(&data, &tx_status_request.transaction_info, false).await;
 
     #[cfg(feature = "shadow_data_consistency")]
     {
@@ -60,13 +60,7 @@ pub async fn tx_status(
     let tx_status_request =
         near_jsonrpc::primitives::types::transactions::RpcTransactionStatusRequest::parse(params)?;
 
-    let result = tx_status_common(
-        &data,
-        &tx_status_request.transaction_info,
-        true,
-        "EXPERIMENTAL_tx_status",
-    )
-    .await;
+    let result = tx_status_common(&data, &tx_status_request.transaction_info, true).await;
 
     #[cfg(feature = "shadow_data_consistency")]
     {
@@ -95,27 +89,19 @@ pub async fn broadcast_tx_async(
     Params(params): Params<serde_json::Value>,
 ) -> Result<near_primitives::hash::CryptoHash, RPCError> {
     tracing::debug!("`broadcast_tx_async` call. Params: {:?}", params);
-    if cfg!(feature = "send_tx_methods") {
-        let tx_async_request =
-            near_jsonrpc::primitives::types::transactions::RpcSendTransactionRequest::parse(
-                params,
-            )?;
-        let proxy_params =
-            near_jsonrpc_client::methods::broadcast_tx_async::RpcBroadcastTxAsyncRequest {
-                signed_transaction: tx_async_request.signed_transaction,
-            };
-        match data
-            .near_rpc_client
-            .call(proxy_params, Some("broadcast_tx_async"))
-            .await
-        {
-            Ok(resp) => Ok(resp),
-            Err(err) => Err(RPCError::internal_error(&err.to_string())),
-        }
-    } else {
-        Err(RPCError::internal_error(
-            "This method is not available because the `send_tx_methods` feature flag is disabled",
-        ))
+    let tx_async_request =
+        near_jsonrpc::primitives::types::transactions::RpcSendTransactionRequest::parse(params)?;
+    let proxy_params =
+        near_jsonrpc_client::methods::broadcast_tx_async::RpcBroadcastTxAsyncRequest {
+            signed_transaction: tx_async_request.signed_transaction,
+        };
+    match data
+        .near_rpc_client
+        .call(proxy_params, Some("broadcast_tx_async"))
+        .await
+    {
+        Ok(resp) => Ok(resp),
+        Err(err) => Err(RPCError::internal_error(&err.to_string())),
     }
 }
 
@@ -125,30 +111,22 @@ pub async fn broadcast_tx_commit(
     Params(params): Params<serde_json::Value>,
 ) -> Result<near_jsonrpc::primitives::types::transactions::RpcTransactionResponse, RPCError> {
     tracing::debug!("`broadcast_tx_commit` call. Params: {:?}", params);
-    if cfg!(feature = "send_tx_methods") {
-        let tx_commit_request =
-            near_jsonrpc::primitives::types::transactions::RpcSendTransactionRequest::parse(
-                params,
-            )?;
-        let proxy_params =
-            near_jsonrpc_client::methods::broadcast_tx_commit::RpcBroadcastTxCommitRequest {
-                signed_transaction: tx_commit_request.signed_transaction,
-            };
-        let result = data
-            .near_rpc_client
-            .call(proxy_params, Some("broadcast_tx_commit"))
-            .await?;
-        Ok(
-            near_jsonrpc::primitives::types::transactions::RpcTransactionResponse {
-                final_execution_outcome: Some(FinalExecutionOutcome(result)),
-                final_execution_status: near_primitives::views::TxExecutionStatus::Final,
-            },
-        )
-    } else {
-        Err(RPCError::internal_error(
-            "This method is not available because the `send_tx_methods` feature flag is disabled",
-        ))
-    }
+    let tx_commit_request =
+        near_jsonrpc::primitives::types::transactions::RpcSendTransactionRequest::parse(params)?;
+    let proxy_params =
+        near_jsonrpc_client::methods::broadcast_tx_commit::RpcBroadcastTxCommitRequest {
+            signed_transaction: tx_commit_request.signed_transaction,
+        };
+    let result = data
+        .near_rpc_client
+        .call(proxy_params, Some("broadcast_tx_commit"))
+        .await?;
+    Ok(
+        near_jsonrpc::primitives::types::transactions::RpcTransactionResponse {
+            final_execution_outcome: Some(FinalExecutionOutcome(result)),
+            final_execution_status: near_primitives::views::TxExecutionStatus::Final,
+        },
+    )
 }
 
 #[cfg_attr(
@@ -159,7 +137,6 @@ async fn tx_status_common(
     data: &Data<ServerContext>,
     transaction_info: &near_jsonrpc::primitives::types::transactions::TransactionInfo,
     fetch_receipt: bool,
-    method_name: &str,
 ) -> Result<
     near_jsonrpc::primitives::types::transactions::RpcTransactionResponse,
     near_jsonrpc::primitives::types::transactions::RpcTransactionError,
@@ -175,21 +152,17 @@ async fn tx_status_common(
         } => *tx_hash,
     };
 
-    let transaction_details = super::try_get_transaction_details_by_hash(
-        data,
-        &tx_hash,
-        method_name,
-    )
-    .await
-    .map_err(|err| {
-        // logging the error at debug level since it's expected to see some "not found"
-        // errors in the logs that doesn't mean that something is really wrong, but want to
-        // keep track of them to see if there are any patterns
-        tracing::debug!("Error while fetching transaction details: {:?}", err);
-        near_jsonrpc::primitives::types::transactions::RpcTransactionError::UnknownTransaction {
-            requested_transaction_hash: tx_hash,
-        }
-    })?;
+    let transaction_details = super::try_get_transaction_details_by_hash(data, &tx_hash)
+        .await
+        .map_err(|err| {
+            // logging the error at debug level since it's expected to see some "not found"
+            // errors in the logs that doesn't mean that something is really wrong, but want to
+            // keep track of them to see if there are any patterns
+            tracing::debug!("Error while fetching transaction details: {:?}", err);
+            near_jsonrpc::primitives::types::transactions::RpcTransactionError::UnknownTransaction {
+                requested_transaction_hash: tx_hash,
+            }
+        })?;
 
     // TODO (@kobayurii): rewrite this since we support optimistic finalities already
     if fetch_receipt {

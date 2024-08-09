@@ -11,14 +11,14 @@ redis_url = "${REDIS_URL}"
 [general.rpc_server]
 server_port = "${SERVER_PORT}"
 max_gas_burnt = "${MAX_GAS_BURNT}"
-contract_code_cache_size = "${CONTRACT_CODE_CAHCE_SIZE}"
+contract_code_cache_size = "${CONTRACT_CODE_CACHE_SIZE}"
 block_cache_size = "${BLOCK_CACHE_SIZE}"
 shadow_data_consistency_rate = "${SHADOW_DATA_CONSISTENCY_RATE}"
+prefetch_state_size_limit = "${PREFETCH_STATE_SIZE_LIMIT}"
 
 [general.tx_indexer]
 indexer_id = "${TX_INDEXER_ID}"
 metrics_server_port = "${TX_SERVER_PORT}"
-cache_restore_blocks_range = "${CACHE_RESTORE_BLOCKS_RANGE}"
 
 [general.state_indexer]
 indexer_id = "${STATE_INDEXER_ID}"
@@ -28,9 +28,6 @@ concurrency = "${CONCURRENCY}"
 [general.near_state_indexer]
 metrics_server_port = "${NEAR_STATE_SERVER_PORT}"
 concurrency = "${NEAR_STATE_CONCURRENCY}"
-
-[general.epoch_indexer]
-indexer_id = "${EPOCH_INDEXER_ID}"
 
 [rightsizing]
 tracked_accounts = "${TRACKED_ACCOUNTS}"
@@ -43,31 +40,32 @@ aws_default_region = "${AWS_DEFAULT_REGION}"
 aws_bucket_name = "${AWS_BUCKET_NAME}"
 
 [tx_details_storage]
-aws_access_key_id = "${TX_AWS_ACCESS_KEY_ID}"
-aws_secret_access_key = "${TX_AWS_SECRET_ACCESS_KEY}"
-aws_default_region = "${TX_AWS_DEFAULT_REGION}"
-aws_bucket_name = "${TX_AWS_BUCKET_NAME}"
-aws_endpoint = "${TX_AWS_ENDPOINT}"
+bucket_name = "${TX_BUCKET_NAME}"
 
 [database]
-database_url = "${DATABASE_URL}"
-database_user = "${DATABASE_USER}"
-database_password = "${DATABASE_PASSWORD}"
-database_name = "${DATABASE_NAME}"
+database_url = "${META_DATABASE_URL}"
+max_connections = "${MAX_CONNECTIONS}"
 
-[database.rpc_server]
-preferred_dc = "${RPC_PREFERRED_DC}"
-max_retry = "${RPC_MAX_RETRY}"
-strict_mode = "${RPC_STRICT_MODE}"
-keepalive_interval = "${KEEPALIVE_INTERVAL}"
+[[database.shards]]
+shard_id = 0
+database_url = "${SHARD_0_DATABASE_URL}"
 
-[database.tx_indexer]
-preferred_dc = "${TX_PREFERRED_DC}"
-max_retry = "${TX_MAX_RETRY}"
-strict_mode = "${TX_STRICT_MODE}"
-max_db_parallel_queries = "${MAX_DB_PARALLEL_QUERIES}"
+[[database.shards]]
+shard_id = 1
+database_url = "${SHARD_1_DATABASE_URL}"
 
-[database.state_indexer]
-preferred_dc = "${STATE_PREFERRED_DC}"
-max_retry = "${STATE_MAX_RETRY}"
-strict_mode = "${STATE_STRICT_MODE}"
+[[database.shards]]
+shard_id = 2
+database_url = "${SHARD_2_DATABASE_URL}"
+
+[[database.shards]]
+shard_id = 3
+database_url = "${SHARD_3_DATABASE_URL}"
+
+[[database.shards]]
+shard_id = 4
+database_url = "${SHARD_4_DATABASE_URL}"
+
+[[database.shards]]
+shard_id = 5
+database_url = "${SHARD_5_DATABASE_URL}"

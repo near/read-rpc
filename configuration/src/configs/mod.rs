@@ -4,6 +4,7 @@ use near_lake_framework::{
     near_indexer_primitives, near_indexer_primitives::views::StateChangeValueView,
 };
 use serde::Deserialize;
+use validator::Validate;
 
 pub(crate) mod database;
 pub(crate) mod general;
@@ -74,12 +75,14 @@ where
     })
 }
 
-#[derive(Deserialize, Debug, Clone, Default)]
+#[derive(Validate, Deserialize, Debug, Clone, Default)]
 pub struct CommonConfig {
+    #[validate(nested)]
     pub general: general::CommonGeneralConfig,
     #[serde(default)]
     pub rightsizing: rightsizing::CommonRightsizingConfig,
     pub lake_config: lake::CommonLakeConfig,
+    #[validate(nested)]
     pub database: database::CommonDatabaseConfig,
     // Set as default to avoid breaking changes
     // This options needs only for tx_indexer and rpc_server
@@ -89,6 +92,26 @@ pub struct CommonConfig {
 
 pub trait Config {
     fn from_common_config(common_config: CommonConfig) -> Self;
+}
+
+/// This trait is used to provide the methods for rightsizing feature,
+/// which determines the filters the setup of the ReadRPC needs to track
+pub trait RightsizingConfig {
+    /// Checks the `StateChangeValueView` against the rightsizing parameters
+    /// to return the `bool` whether the provided change should be indexed or ignored
+    fn state_should_be_indexed(&self, state_change_value: &StateChangeValueView) -> bool;
+    /// Checks the transaction agains the rightsizing parameters to return the `bool`
+    /// whether the provided transaction should be indexer or ignored
+    fn tx_should_be_indexed(
+        &self,
+        transaction: &near_indexer_primitives::IndexerTransactionWithOutcome,
+    ) -> bool;
+}
+
+/// This trait is used to provide the common methods for different indexer configs
+/// For instance, `indexer_id()` to get the id of the indexer
+pub trait IndexerConfig {
+    fn indexer_id(&self) -> &str;
 }
 
 #[derive(Debug, Clone)]
@@ -104,7 +127,7 @@ impl Config for RpcServerConfig {
         Self {
             general: common_config.general.into(),
             lake_config: common_config.lake_config.into(),
-            database: database::DatabaseRpcServerConfig::from(common_config.database).into(),
+            database: database::DatabaseConfig::from(common_config.database).to_read_only(),
             tx_details_storage: tx_details_storage::TxDetailsStorageConfig::from(
                 common_config.tx_details_storage,
             ),
@@ -136,7 +159,7 @@ impl Config for TxIndexerConfig {
             general: common_config.general.into(),
             rightsizing: common_config.rightsizing.into(),
             lake_config: common_config.lake_config.into(),
-            database: database::DatabaseTxIndexerConfig::from(common_config.database).into(),
+            database: database::DatabaseConfig::from(common_config.database),
             tx_details_storage: tx_details_storage::TxDetailsStorageConfig::from(
                 common_config.tx_details_storage,
             ),
@@ -152,9 +175,23 @@ pub struct StateIndexerConfig {
     pub database: database::DatabaseConfig,
 }
 
-impl StateIndexerConfig {
-    pub fn state_should_be_indexed(&self, state_change_value: &StateChangeValueView) -> bool {
+impl IndexerConfig for StateIndexerConfig {
+    fn indexer_id(&self) -> &str {
+        &self.general.indexer_id
+    }
+}
+
+impl RightsizingConfig for StateIndexerConfig {
+    fn state_should_be_indexed(&self, state_change_value: &StateChangeValueView) -> bool {
         self.rightsizing.state_should_be_indexed(state_change_value)
+    }
+
+    fn tx_should_be_indexed(
+        &self,
+        _transaction: &near_indexer_primitives::IndexerTransactionWithOutcome,
+    ) -> bool {
+        // this method is not used by any of the state-indexers, no need to implement it
+        unimplemented!("StateIndexerConfig does not implement tx_should_be_indexed")
     }
 }
 
@@ -164,7 +201,7 @@ impl Config for StateIndexerConfig {
             general: common_config.general.into(),
             rightsizing: common_config.rightsizing.into(),
             lake_config: common_config.lake_config.into(),
-            database: database::DatabaseStateIndexerConfig::from(common_config.database).into(),
+            database: database::DatabaseConfig::from(common_config.database),
         }
     }
 }
@@ -176,9 +213,27 @@ pub struct NearStateIndexerConfig {
     pub database: database::DatabaseConfig,
 }
 
-impl NearStateIndexerConfig {
-    pub fn state_should_be_indexed(&self, state_change_value: &StateChangeValueView) -> bool {
+impl IndexerConfig for NearStateIndexerConfig {
+    // indexer_id is used to store the data about last indexed block in the meta-table of
+    // the database. Since nearcore-based state-indexer doesn't read that database for
+    // `from-interruption` start option we hardcode the value to avoid complexity of if-statements
+    // around the `update_meta` function
+    fn indexer_id(&self) -> &str {
+        "near_state_indexer"
+    }
+}
+
+impl RightsizingConfig for NearStateIndexerConfig {
+    fn state_should_be_indexed(&self, state_change_value: &StateChangeValueView) -> bool {
         self.rightsizing.state_should_be_indexed(state_change_value)
+    }
+
+    fn tx_should_be_indexed(
+        &self,
+        _transaction: &near_indexer_primitives::IndexerTransactionWithOutcome,
+    ) -> bool {
+        // this method is not used by any of the state-indexers, no need to implement it
+        unimplemented!("NearStateIndexerConfig does not implement tx_should_be_indexed")
     }
 }
 
@@ -187,24 +242,7 @@ impl Config for NearStateIndexerConfig {
         Self {
             general: common_config.general.into(),
             rightsizing: common_config.rightsizing.into(),
-            database: database::DatabaseStateIndexerConfig::from(common_config.database).into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct EpochIndexerConfig {
-    pub general: general::GeneralEpochIndexerConfig,
-    pub lake_config: lake::LakeConfig,
-    pub database: database::DatabaseConfig,
-}
-
-impl Config for EpochIndexerConfig {
-    fn from_common_config(common_config: CommonConfig) -> Self {
-        Self {
-            general: common_config.general.into(),
-            lake_config: common_config.lake_config.into(),
-            database: database::DatabaseStateIndexerConfig::from(common_config.database).into(),
+            database: database::DatabaseConfig::from(common_config.database),
         }
     }
 }

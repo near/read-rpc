@@ -1,4 +1,4 @@
-use jsonrpc_v2::{Data, Server};
+use jsonrpc_v2::{Data, Params, Router, Server};
 use mimalloc::MiMalloc;
 
 #[global_allocator]
@@ -19,9 +19,63 @@ mod utils;
 // Categories for logging
 pub(crate) const RPC_SERVER: &str = "read_rpc_server";
 
+#[easy_ext::ext(WithMethodAndMetrics)]
+impl<R> jsonrpc_v2::ServerBuilder<R>
+where
+    R: Router,
+{
+    fn with_method_and_metrics<F, T, P>(self, name: &'static str, handler: &'static F) -> Self
+    where
+        F: jsonrpc_v2::Factory<T, errors::RPCError, (Data<config::ServerContext>, Params<P>)>
+            + Send
+            + Sync
+            + 'static,
+        T: serde::Serialize + Send + 'static,
+        P: serde::de::DeserializeOwned + Send + 'static,
+    {
+        self.with_method(name, |data, params| async {
+            let result = handler.call((data, params)).await;
+
+            if let Err(err) = &result {
+                match &err.error_struct {
+                    Some(near_jsonrpc::primitives::errors::RpcErrorKind::RequestValidationError(
+                        near_jsonrpc::primitives::errors::RpcRequestValidationErrorKind::ParseError { .. },
+                    )) => {
+                        metrics::METHOD_ERRORS_TOTAL
+                            .with_label_values(&[name, "PARSE_ERROR"])
+                            .inc();
+                    }
+                    Some(near_jsonrpc::primitives::errors::RpcErrorKind::HandlerError(error_struct)) => {
+                        if let Some(stringified_error_name) = error_struct.get("name").and_then(serde_json::Value::as_str) {
+                            metrics::METHOD_ERRORS_TOTAL
+                                .with_label_values(&[name, stringified_error_name])
+                                .inc();
+                        }
+                    }
+                    Some(near_jsonrpc::primitives::errors::RpcErrorKind::InternalError(_)) => {
+                        metrics::METHOD_ERRORS_TOTAL
+                            .with_label_values(&[name, "INTERNAL_ERROR"])
+                            .inc();
+                    }
+                    Some(near_jsonrpc::primitives::errors::RpcErrorKind::RequestValidationError(_))
+                    | None => {}
+                }
+            }
+
+            result
+        })
+    }
+}
+
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
     configuration::init_tracing(RPC_SERVER).await?;
+    tracing::info!(
+        "Starting {} v{}",
+        env!("CARGO_PKG_NAME"),
+        env!("CARGO_PKG_VERSION"),
+    );
+
     let rpc_server_config =
         configuration::read_configuration::<configuration::RpcServerConfig>().await?;
 
@@ -45,26 +99,26 @@ async fn main() -> anyhow::Result<()> {
         std::sync::Arc::clone(&server_context.blocks_info_by_finality);
     let near_rpc_client_clone = near_rpc_client.clone();
 
-    let redis_client = redis::Client::open(rpc_server_config.general.redis_url.clone())?
-        .get_connection_manager()
-        .await
-        .map_err(|err| {
-            crate::metrics::OPTIMISTIC_UPDATING.set_not_working();
-            tracing::warn!("Failed to connect to Redis: {:?}", err);
-        })
-        .ok();
+    let finality_blocks_storage =
+        cache_storage::BlocksByFinalityCache::new(rpc_server_config.general.redis_url.to_string())
+            .await
+            .map_err(|err| {
+                crate::metrics::OPTIMISTIC_UPDATING.set_not_working();
+                tracing::warn!("Failed to connect to Redis: {:?}", err);
+            })
+            .ok();
 
     // We need to update final block from Redis and Lake
     // Because we can't be sure that Redis has the latest block
     // And Lake can be used as a backup source
 
     // Update final block from Redis if Redis is available
-    if let Some(redis_client) = redis_client.clone() {
+    if let Some(finality_blocks_storage) = finality_blocks_storage.clone() {
         tokio::spawn(async move {
             utils::update_final_block_regularly_from_redis(
                 blocks_cache_clone,
                 blocks_info_by_finality_clone,
-                redis_client,
+                finality_blocks_storage,
                 near_rpc_client_clone,
             )
             .await
@@ -86,92 +140,99 @@ async fn main() -> anyhow::Result<()> {
     });
 
     // Update optimistic block from Redis if Redis is available
-    if let Some(redis_client) = redis_client {
+    if let Some(finality_blocks_storage) = finality_blocks_storage {
         let blocks_info_by_finality =
             std::sync::Arc::clone(&server_context.blocks_info_by_finality);
         tokio::spawn(async move {
-            utils::update_optimistic_block_regularly(blocks_info_by_finality, redis_client).await
+            utils::update_optimistic_block_regularly(
+                blocks_info_by_finality,
+                finality_blocks_storage,
+            )
+            .await
         });
     }
 
     let rpc = Server::new()
         .with_data(Data::new(server_context.clone()))
         // custom requests methods
-        .with_method(
+        .with_method_and_metrics(
             "view_state_paginated",
-            modules::state::methods::view_state_paginated,
+            &modules::state::methods::view_state_paginated,
         )
-        .with_method(
+        .with_method_and_metrics(
             "view_receipt_record",
-            modules::receipts::methods::view_receipt_record,
+            &modules::receipts::methods::view_receipt_record,
         )
         // requests methods
-        .with_method("query", modules::queries::methods::query)
+        .with_method_and_metrics("query", &modules::queries::methods::query)
         // basic requests methods
-        .with_method("block", modules::blocks::methods::block)
-        .with_method(
+        .with_method_and_metrics("block", &modules::blocks::methods::block)
+        .with_method_and_metrics(
             "broadcast_tx_async",
-            modules::transactions::methods::broadcast_tx_async,
+            &modules::transactions::methods::broadcast_tx_async,
         )
-        .with_method(
+        .with_method_and_metrics(
             "broadcast_tx_commit",
-            modules::transactions::methods::broadcast_tx_commit,
+            &modules::transactions::methods::broadcast_tx_commit,
         )
-        .with_method("chunk", modules::blocks::methods::chunk)
-        .with_method("gas_price", modules::gas::methods::gas_price)
-        .with_method("health", modules::network::methods::health)
-        .with_method(
+        .with_method_and_metrics("chunk", &modules::blocks::methods::chunk)
+        .with_method_and_metrics("gas_price", &modules::gas::methods::gas_price)
+        .with_method_and_metrics("health", &modules::network::methods::health)
+        .with_method_and_metrics(
             "light_client_proof",
-            modules::clients::methods::light_client_proof,
+            &modules::clients::methods::light_client_proof,
         )
-        .with_method(
+        .with_method_and_metrics(
             "next_light_client_block",
-            modules::clients::methods::next_light_client_block,
+            &modules::clients::methods::next_light_client_block,
         )
-        .with_method("network_info", modules::network::methods::network_info)
-        .with_method("send_tx", modules::transactions::methods::send_tx)
-        .with_method("status", modules::network::methods::status)
-        .with_method("tx", modules::transactions::methods::tx)
-        .with_method("validators", modules::network::methods::validators)
-        .with_method("client_config", modules::network::methods::client_config)
-        .with_method(
+        .with_method_and_metrics("network_info", &modules::network::methods::network_info)
+        .with_method_and_metrics("send_tx", &modules::transactions::methods::send_tx)
+        .with_method_and_metrics("status", &modules::network::methods::status)
+        .with_method_and_metrics("tx", &modules::transactions::methods::tx)
+        .with_method_and_metrics("validators", &modules::network::methods::validators)
+        .with_method_and_metrics("client_config", &modules::network::methods::client_config)
+        .with_method_and_metrics(
             "EXPERIMENTAL_changes",
-            modules::blocks::methods::changes_in_block_by_type,
+            &modules::blocks::methods::changes_in_block_by_type,
         )
-        .with_method(
+        .with_method_and_metrics(
             "EXPERIMENTAL_changes_in_block",
-            modules::blocks::methods::changes_in_block,
+            &modules::blocks::methods::changes_in_block,
         )
-        .with_method(
+        .with_method_and_metrics(
             "EXPERIMENTAL_genesis_config",
-            modules::network::methods::genesis_config,
+            &modules::network::methods::genesis_config,
         )
-        .with_method(
+        .with_method_and_metrics(
             "EXPERIMENTAL_light_client_proof",
-            modules::clients::methods::light_client_proof,
+            &modules::clients::methods::light_client_proof,
         )
-        .with_method(
+        .with_method_and_metrics(
             "EXPERIMENTAL_protocol_config",
-            modules::network::methods::protocol_config,
+            &modules::network::methods::protocol_config,
         )
-        .with_method("EXPERIMENTAL_receipt", modules::receipts::methods::receipt)
-        .with_method(
+        .with_method_and_metrics("EXPERIMENTAL_receipt", &modules::receipts::methods::receipt)
+        .with_method_and_metrics(
             "EXPERIMENTAL_tx_status",
-            modules::transactions::methods::tx_status,
+            &modules::transactions::methods::tx_status,
         )
-        .with_method(
+        .with_method_and_metrics(
             "EXPERIMENTAL_validators_ordered",
-            modules::network::methods::validators_ordered,
+            &modules::network::methods::validators_ordered,
         )
-        .with_method(
+        .with_method_and_metrics(
             "EXPERIMENTAL_maintenance_windows",
-            modules::network::methods::maintenance_windows,
+            &modules::network::methods::maintenance_windows,
         )
-        .with_method(
+        .with_method_and_metrics(
             "EXPERIMENTAL_split_storage_info",
-            modules::network::methods::split_storage_info,
+            &modules::network::methods::split_storage_info,
         )
         .finish();
+
+    // Insert all rpc methods to the hashmap after init the server
+    metrics::RPC_METHODS.insert(rpc.router.routers()).await;
 
     actix_web::HttpServer::new(move || {
         let rpc = rpc.clone();

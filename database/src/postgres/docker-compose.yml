@@ -1,0 +1,72 @@
+version: '3.7'
+
+services:
+  metadata:
+    image: postgres:15.5
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: near_data
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5422:5432"
+
+  shard_0:
+    image: postgres:15.5
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: near_data
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5430:5432"
+
+  shard_1:
+    image: postgres:15.5
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: near_data
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5431:5432"
+
+  shard_2:
+    image: postgres:15.5
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: near_data
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+
+  shard_3:
+    image: postgres:15.5
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: near_data
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5433:5432"
+
+  shard_4:
+    image: postgres:15.5
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: near_data
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5434:5432"
+
+  shard_5:
+    image: postgres:15.5
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: near_data
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5435:5432"
