@@ -269,17 +269,21 @@ impl TxIndexerCache {
         transaction_key: &readnode_primitives::TransactionKey,
         indexer_execution_outcome_with_receipt: near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
     ) -> anyhow::Result<()> {
-        let execution_outcome_with_receipt = readnode_primitives::ExecutionOutcomeWithReceipt {
-            execution_outcome: indexer_execution_outcome_with_receipt
-                .execution_outcome
-                .clone(),
-            receipt: indexer_execution_outcome_with_receipt.receipt,
+        // We should not store outcomes for not indexed transactions
+        if let Ok(_) = self.get_tx(transaction_key).await {
+            let execution_outcome_with_receipt = readnode_primitives::ExecutionOutcomeWithReceipt {
+                execution_outcome: indexer_execution_outcome_with_receipt
+                    .execution_outcome
+                    .clone(),
+                receipt: indexer_execution_outcome_with_receipt.receipt,
+            };
+            self.cache_storage
+                .rpush(
+                    format!("outcomes_{}", transaction_key),
+                    borsh::to_vec(&execution_outcome_with_receipt)?,
+                )
+                .await?
         };
-        self.cache_storage
-            .rpush(
-                format!("outcomes_{}", transaction_key),
-                borsh::to_vec(&execution_outcome_with_receipt)?,
-            )
-            .await
+        Ok(())
     }
 }
