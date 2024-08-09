@@ -190,8 +190,10 @@ struct ShardedStateChangesWithCause {
 pub async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
     db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
-    near_client: &impl NearClient,
-    indexer_config: impl configuration::RightsizingConfig + configuration::IndexerConfig,
+    near_client: &(impl NearClient + std::fmt::Debug),
+    indexer_config: impl configuration::RightsizingConfig
+        + configuration::IndexerConfig
+        + std::fmt::Debug,
     stats: std::sync::Arc<tokio::sync::RwLock<metrics::Stats>>,
     shard_layout: &near_primitives::shard_layout::ShardLayout,
 ) -> anyhow::Result<()> {
@@ -348,7 +350,7 @@ async fn handle_epoch(
     stats_current_epoch_height: u64,
     current_epoch_id: CryptoHash,
     next_epoch_id: CryptoHash,
-    near_client: &impl NearClient,
+    near_client: &(impl NearClient + std::fmt::Debug),
     db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
 ) -> anyhow::Result<()> {
     if let Some(stats_epoch_id) = stats_current_epoch_id {
@@ -383,7 +385,7 @@ async fn handle_state_changes(
     db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
     block_height: u64,
     block_hash: CryptoHash,
-    indexer_config: &impl configuration::RightsizingConfig,
+    indexer_config: &(impl configuration::RightsizingConfig + std::fmt::Debug),
     shard_layout: &near_primitives::shard_layout::ShardLayout,
 ) -> anyhow::Result<()> {
     let mut state_changes_to_store = StateChangesToStore {

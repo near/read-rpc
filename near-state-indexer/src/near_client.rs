@@ -2,7 +2,7 @@ use actix::Addr;
 use near_indexer::near_primitives;
 use near_o11y::WithSpanContextExt;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct NearViewClient {
     view_client: Addr<near_client::ViewClientActor>,
 }
