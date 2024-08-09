@@ -173,82 +173,6 @@ pub struct TransactionDetails {
     pub transaction_outcome: views::ExecutionOutcomeWithIdView,
 }
 
-#[derive(borsh::BorshDeserialize, serde::Serialize, Debug, Clone)]
-pub struct TransactionDetailsV0201 {
-    pub receipts: Vec<near_indexer_primitives_0_20_1::views::ReceiptView>,
-    pub receipts_outcome: Vec<near_indexer_primitives_0_20_1::views::ExecutionOutcomeWithIdView>,
-    pub status: near_indexer_primitives_0_20_1::views::FinalExecutionStatus,
-    pub transaction: near_indexer_primitives_0_20_1::views::SignedTransactionView,
-    pub transaction_outcome: near_indexer_primitives_0_20_1::views::ExecutionOutcomeWithIdView,
-}
-
-#[derive(borsh::BorshDeserialize, serde::Serialize, Debug, Clone)]
-pub struct TransactionDetailsV0212 {
-    pub receipts: Vec<near_indexer_primitives_0_21_2::views::ReceiptView>,
-    pub receipts_outcome: Vec<near_indexer_primitives_0_21_2::views::ExecutionOutcomeWithIdView>,
-    pub status: near_indexer_primitives_0_21_2::views::FinalExecutionStatus,
-    pub transaction: near_indexer_primitives_0_21_2::views::SignedTransactionView,
-    pub transaction_outcome: near_indexer_primitives_0_21_2::views::ExecutionOutcomeWithIdView,
-}
-
-#[derive(borsh::BorshDeserialize, serde::Serialize, Debug, Clone)]
-pub struct TransactionDetailsV0220 {
-    pub receipts: Vec<near_indexer_primitives_0_22_0::views::ReceiptView>,
-    pub receipts_outcome: Vec<near_indexer_primitives_0_22_0::views::ExecutionOutcomeWithIdView>,
-    pub status: near_indexer_primitives_0_22_0::views::FinalExecutionStatus,
-    pub transaction: near_indexer_primitives_0_22_0::views::SignedTransactionView,
-    pub transaction_outcome: near_indexer_primitives_0_22_0::views::ExecutionOutcomeWithIdView,
-}
-
-#[derive(borsh::BorshDeserialize, serde::Serialize, Debug, Clone)]
-pub struct TransactionDetailsV0230 {
-    pub receipts: Vec<near_indexer_primitives_0_23_0::views::ReceiptView>,
-    pub receipts_outcome: Vec<near_indexer_primitives_0_23_0::views::ExecutionOutcomeWithIdView>,
-    pub status: near_indexer_primitives_0_23_0::views::FinalExecutionStatus,
-    pub transaction: near_indexer_primitives_0_23_0::views::SignedTransactionView,
-    pub transaction_outcome: near_indexer_primitives_0_23_0::views::ExecutionOutcomeWithIdView,
-}
-
-// Deserialize old versions of the TransactionDetails
-// This is needed to handle the backward incompatible changes in the TransactionDetails
-enum TransactionDetailsOldVersion {
-    V0201(TransactionDetailsV0201),
-    V0212(TransactionDetailsV0212),
-    V0220(TransactionDetailsV0220),
-    V0230(TransactionDetailsV0230),
-}
-
-impl TransactionDetailsOldVersion {
-    fn borsh_deserialize(data: &[u8]) -> anyhow::Result<Self> {
-        match borsh::from_slice::<TransactionDetailsV0201>(data) {
-            Ok(tx_details) => Ok(TransactionDetailsOldVersion::V0201(tx_details)),
-            Err(_) => match borsh::from_slice::<TransactionDetailsV0212>(data) {
-                Ok(tx_details) => Ok(TransactionDetailsOldVersion::V0212(tx_details)),
-                Err(_) => match borsh::from_slice::<TransactionDetailsV0220>(data) {
-                    Ok(tx_details) => Ok(TransactionDetailsOldVersion::V0220(tx_details)),
-                    Err(_) => match borsh::from_slice::<TransactionDetailsV0230>(data) {
-                        Ok(tx_details) => Ok(TransactionDetailsOldVersion::V0230(tx_details)),
-                        Err(err) => Err(anyhow::anyhow!(
-                            "Failed to deserialize TransactionDetails: {}",
-                            err
-                        )),
-                    },
-                },
-            },
-        }
-    }
-
-    fn to_latest(&self) -> anyhow::Result<TransactionDetails> {
-        let value = match self {
-            TransactionDetailsOldVersion::V0201(tx_details) => serde_json::to_value(tx_details)?,
-            TransactionDetailsOldVersion::V0212(tx_details) => serde_json::to_value(tx_details)?,
-            TransactionDetailsOldVersion::V0220(tx_details) => serde_json::to_value(tx_details)?,
-            TransactionDetailsOldVersion::V0230(tx_details) => serde_json::to_value(tx_details)?,
-        };
-        Ok(serde_json::from_value(value)?)
-    }
-}
-
 impl TransactionDetails {
     pub fn to_final_execution_outcome(&self) -> views::FinalExecutionOutcomeView {
         views::FinalExecutionOutcomeView {
@@ -288,16 +212,17 @@ impl TransactionDetails {
         }
     }
 
-    // Deserialize TransactionDetails from bytes
-    // If the deserialization fails, try to deserialize the old version of the TransactionDetails
-    // and convert it to the new version
+    // Serialize TransactionDetails to json bytes
     // This is needed to handle the backward incompatible changes in the TransactionDetails
-    // https://github.com/near/nearcore/pull/10676/files#diff-1e4fc99d32e48420a9bd37050fa1412758cba37825851edea40cbdfcab406944R1927
-    pub fn borsh_deserialize(data: &[u8]) -> anyhow::Result<Self> {
-        match borsh::from_slice::<Self>(data) {
-            Ok(tx_details) => Ok(tx_details),
-            Err(_) => TransactionDetailsOldVersion::borsh_deserialize(data)?.to_latest(),
-        }
+    pub fn tx_serialize(&self) -> anyhow::Result<Vec<u8>> {
+        let transaction_json = serde_json::to_value(self)?.to_string();
+        Ok(transaction_json.into_bytes())
+    }
+
+    // Deserialize TransactionDetails from json bytes
+    // This is needed to handle the backward incompatible changes in the TransactionDetails
+    pub fn tx_deserialize(data: &[u8]) -> anyhow::Result<Self> {
+        Ok(serde_json::from_slice(data)?)
     }
 }
 
