@@ -1,8 +1,6 @@
-use futures::{
-    future::{join_all, try_join_all},
-    StreamExt,
-};
 use near_indexer_primitives::IndexerTransactionWithOutcome;
+
+use futures::{FutureExt, StreamExt};
 
 use crate::metrics;
 use crate::storage;
@@ -37,12 +35,13 @@ pub(crate) async fn index_transactions(
             futures::future::ready(Ok(()))
         }
     };
-    futures::try_join!(
-        save_finished_tx_details_future,
-        save_outcomes_and_receipts_future
-    )?;
-
-    Ok(())
+    futures::future::join_all([
+        save_finished_tx_details_future.boxed(),
+        save_outcomes_and_receipts_future.boxed(),
+    ])
+    .await
+    .into_iter()
+    .collect::<anyhow::Result<_>>()
 }
 
 async fn save_finished_transaction_details(
@@ -75,7 +74,7 @@ async fn save_finished_transaction_details(
                     )
                 });
 
-            join_all(send_finished_transaction_details_futures).await;
+            futures::future::join_all(send_finished_transaction_details_futures).await;
         });
     }
 
@@ -115,9 +114,10 @@ async fn save_outcomes_and_receipts(
                 },
             );
 
-            join_all(save_receipts_and_outcomes_futures).await;
+            futures::future::join_all(save_receipts_and_outcomes_futures).await;
         });
     }
+
     Ok(())
 }
 
@@ -252,7 +252,11 @@ async fn extract_transactions_to_collect(
                 )
             })
         });
-    try_join_all(futures).await.map(|_| ())
+
+    futures::future::join_all(futures)
+        .await
+        .into_iter()
+        .collect::<anyhow::Result<_>>()
 }
 
 // Converts Transaction into CollectingTransactionDetails and puts it into memory storage.
@@ -328,9 +332,10 @@ async fn collect_receipts_and_outcomes(
         .iter()
         .map(|shard| process_shard(tx_collecting_storage, block, shard));
 
-    futures::future::try_join_all(shard_futures).await?;
-
-    Ok(())
+    futures::future::join_all(shard_futures)
+        .await
+        .into_iter()
+        .collect::<anyhow::Result<_>>()
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
@@ -352,9 +357,10 @@ async fn process_shard(
                 )
             });
 
-    futures::future::try_join_all(process_receipt_execution_outcome_futures).await?;
-
-    Ok(())
+    futures::future::join_all(process_receipt_execution_outcome_futures)
+        .await
+        .into_iter()
+        .collect::<anyhow::Result<_>>()
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]

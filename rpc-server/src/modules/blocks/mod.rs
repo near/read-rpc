@@ -295,16 +295,31 @@ impl BlocksInfoByFinality {
         let final_block_future = crate::utils::get_final_block(near_rpc_client, false);
         let optimistic_block_future = crate::utils::get_final_block(near_rpc_client, true);
         let validators_future = crate::utils::get_current_validators(near_rpc_client);
-        let (final_block, optimistic_block, validators) = tokio::try_join!(
+        let (final_block, optimistic_block, validators) = futures::future::join3(
             final_block_future,
             optimistic_block_future,
             validators_future,
         )
-        .map_err(|err| {
-            tracing::error!("Error to fetch final block info: {:?}", err);
-            err
-        })
-        .expect("Error to get final block info");
+        .await;
+
+        let final_block = final_block
+            .map_err(|err| {
+                tracing::error!("Error to fetch final block info: {:?}", err);
+                err
+            })
+            .expect("Error to get final block info");
+        let optimistic_block = optimistic_block
+            .map_err(|err| {
+                tracing::error!("Error to fetch optimistic block info: {:?}", err);
+                err
+            })
+            .expect("Error to get optimistic block info");
+        let validators = validators
+            .map_err(|err| {
+                tracing::error!("Error to fetch validators info: {:?}", err);
+                err
+            })
+            .expect("Error to get validators info");
 
         blocks_cache
             .put(final_block.header.height, CacheBlock::from(&final_block))

@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use near_indexer_primitives::views::StateChangeValueView;
 use near_indexer_primitives::CryptoHash;
 
+use futures::FutureExt;
 use itertools::Itertools;
 
 #[macro_use]
@@ -32,7 +33,7 @@ struct StateChangesToStore {
 
 impl StateChangesToStore {
     // Unpack the state_changes_data into futures split by shard_id
-    // and store them asynchronously using try_join!
+    // and store them asynchronously using join_all
     async fn save_data(
         &self,
         db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
@@ -57,13 +58,16 @@ impl StateChangesToStore {
                     )
                 })
                 .collect();
-            futures::future::try_join_all(futures).await?;
+            futures::future::join_all(futures)
+                .await
+                .into_iter()
+                .collect::<anyhow::Result<_>>()?;
         }
         Ok(())
     }
 
     // Unpack the state_changes_access_key into futures split by shard_id
-    // and store them asynchronously using try_join!
+    // and store them asynchronously using join_all
     async fn save_access_key(
         &self,
         db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
@@ -88,13 +92,17 @@ impl StateChangesToStore {
                     )
                 })
                 .collect();
-            futures::future::try_join_all(futures).await?;
+
+            futures::future::join_all(futures)
+                .await
+                .into_iter()
+                .collect::<anyhow::Result<_>>()?;
         }
         Ok(())
     }
 
     // Unpack the state_changes_contract into futures split by shard_id
-    // and store them asynchronously using try_join!
+    // and store them asynchronously using join_all
     async fn save_contract(
         &self,
         db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
@@ -119,13 +127,17 @@ impl StateChangesToStore {
                     )
                 })
                 .collect();
-            futures::future::try_join_all(futures).await?;
+
+            futures::future::join_all(futures)
+                .await
+                .into_iter()
+                .collect::<anyhow::Result<_>>()?;
         }
         Ok(())
     }
 
     // Unpack the state_changes_account into futures split by shard_id
-    // and store them asynchronously using try_join!
+    // and store them asynchronously using join_all
     async fn save_account(
         &self,
         db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
@@ -150,7 +162,11 @@ impl StateChangesToStore {
                     )
                 })
                 .collect();
-            futures::future::try_join_all(futures).await?;
+
+            futures::future::join_all(futures)
+                .await
+                .into_iter()
+                .collect::<anyhow::Result<_>>()?;
         }
         Ok(())
     }
@@ -165,12 +181,17 @@ impl StateChangesToStore {
         let save_access_key_future = self.save_access_key(db_manager, block_height, block_hash);
         let save_contract_future = self.save_contract(db_manager, block_height, block_hash);
         let save_account_future = self.save_account(db_manager, block_height, block_hash);
-        futures::try_join!(
-            save_data_future,
-            save_access_key_future,
-            save_contract_future,
-            save_account_future
-        )?;
+
+        futures::future::join_all([
+            save_data_future.boxed(),
+            save_access_key_future.boxed(),
+            save_contract_future.boxed(),
+            save_account_future.boxed(),
+        ])
+        .await
+        .into_iter()
+        .collect::<anyhow::Result<_>>()?;
+
         Ok(())
     }
 }
@@ -307,12 +328,17 @@ pub async fn handle_streamer_message(
     let update_meta_future =
         db_manager.update_meta(indexer_config.indexer_id().as_ref(), block_height);
 
-    futures::try_join!(
+    let (handle_epoch, handle_block, handle_state_change, update_meta) = futures::join!(
         handle_epoch_future,
         handle_block_future,
         handle_state_change_future,
         update_meta_future
-    )?;
+    );
+
+    handle_epoch?;
+    handle_block?;
+    handle_state_change?;
+    update_meta?;
 
     metrics::BLOCK_PROCESSED_TOTAL.inc();
     // Prometheus Gauge Metric type do not support u64

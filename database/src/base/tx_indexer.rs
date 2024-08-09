@@ -20,8 +20,11 @@ pub trait TxIndexerDbManager {
     ) -> anyhow::Result<()> {
         let save_outcome_future = self.save_outcomes(shard_id, outcomes);
         let save_receipt_future = self.save_receipts(shard_id, receipts);
-        futures::try_join!(save_outcome_future, save_receipt_future)?;
-        Ok(())
+
+        futures::future::join_all([save_outcome_future, save_receipt_future])
+            .await
+            .into_iter()
+            .collect::<anyhow::Result<()>>()
     }
 
     async fn update_meta(&self, indexer_id: &str, block_height: u64) -> anyhow::Result<()>;

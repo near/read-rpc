@@ -48,8 +48,10 @@ pub trait StateIndexerDbManager {
         let add_block_future = self.save_block(block_height, block_hash);
         let add_chunks_future = self.save_chunks(block_height, chunks);
 
-        futures::try_join!(add_block_future, add_chunks_future)?;
-        Ok(())
+        futures::future::join_all([add_block_future, add_chunks_future])
+            .await
+            .into_iter()
+            .collect::<anyhow::Result<()>>()
     }
 
     async fn save_state_changes_data(

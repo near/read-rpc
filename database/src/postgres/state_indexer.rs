@@ -1,4 +1,5 @@
 use bigdecimal::ToPrimitive;
+use futures::FutureExt;
 
 impl crate::PostgresDBManager {
     async fn save_chunks_unique(
@@ -107,8 +108,14 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
     ) -> anyhow::Result<()> {
         let save_chunks_unique_future = self.save_chunks_unique(block_height, chunks.clone());
         let save_chunks_duplicate_future = self.save_chunks_duplicate(block_height, chunks);
-        futures::try_join!(save_chunks_unique_future, save_chunks_duplicate_future)?;
-        Ok(())
+
+        futures::future::join_all([
+            save_chunks_unique_future.boxed(),
+            save_chunks_duplicate_future.boxed(),
+        ])
+        .await
+        .into_iter()
+        .collect::<anyhow::Result<()>>()
     }
 
     async fn get_block_height_by_hash(
