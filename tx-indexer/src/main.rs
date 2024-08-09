@@ -68,17 +68,21 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!(target: INDEXER, "Creating cache storage...");
     let tx_collecting_storage = std::sync::Arc::new(
-        storage::CacheStorage::init_with_restore(
+        storage::CacheStorage::init_storage(
             indexer_config.general.redis_url.to_string(),
             protocol_config_view.shard_layout,
         )
-        .await?,
+        .await,
     );
 
     tracing::info!(target: INDEXER, "Instantiating the tx_details storage client...");
     let tx_details_storage = std::sync::Arc::new(TxDetailsStorage::new(
         indexer_config.tx_details_storage.storage_client().await,
         indexer_config.tx_details_storage.bucket_name.clone(),
+    ));
+    let legacy_tx_details_storage = std::sync::Arc::new(TxDetailsStorage::new(
+        indexer_config.tx_details_storage.storage_client().await,
+        "readrpc-mainnet-tx-details".to_string(),
     ));
 
     tracing::info!(target: INDEXER, "Instantiating the stream...",);
@@ -104,6 +108,7 @@ async fn main() -> anyhow::Result<()> {
                 &db_manager,
                 &tx_collecting_storage,
                 &tx_details_storage,
+                &legacy_tx_details_storage,
                 indexer_config.clone(),
                 std::sync::Arc::clone(&stats),
             )
@@ -131,6 +136,7 @@ async fn handle_streamer_message(
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<storage::CacheStorage>,
     tx_details_storage: &std::sync::Arc<TxDetailsStorage>,
+    legacy_tx_details_storage: &std::sync::Arc<TxDetailsStorage>,
     indexer_config: configuration::TxIndexerConfig,
     stats: std::sync::Arc<tokio::sync::RwLock<metrics::Stats>>,
 ) -> anyhow::Result<u64> {
@@ -148,6 +154,7 @@ async fn handle_streamer_message(
         db_manager,
         tx_collecting_storage,
         tx_details_storage,
+        legacy_tx_details_storage,
         &indexer_config,
     );
 
