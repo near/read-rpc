@@ -28,7 +28,7 @@ pub(crate) async fn index_transactions(
     let save_outcomes_and_receipts_future = {
         #[cfg(feature = "save_outcomes_and_receipts")]
         {
-            save_outcomes_and_receipts(db_manager, tx_collecting_storage);
+            save_outcomes_and_receipts(db_manager, tx_collecting_storage)
         }
         #[cfg(not(feature = "save_outcomes_and_receipts"))]
         {

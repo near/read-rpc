@@ -41,7 +41,7 @@ near-jsonrpc-client.workspace = true
 near-lake-framework.workspace = true
 
 [features]
-default = ["save_receipts_outcomes"]
+default = ["save_outcomes_and_receipts"]
 # this feature enables storing receipt and outcome data to DB
-save_receipts_outcomes = []
+save_outcomes_and_receipts = []
 tracing-instrumentation = ["configuration/tracing-instrumentation"]
