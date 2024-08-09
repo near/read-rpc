@@ -462,7 +462,7 @@ async fn save_transaction_details_to_storage(
 ) -> anyhow::Result<()> {
     let transaction_details = tx_details.to_final_transaction_result()?;
     let transaction_hash = transaction_details.transaction.hash.to_string();
-    let tx_bytes = borsh::to_vec(&transaction_details)?;
+    let tx_bytes = transaction_details.tx_serialize()?;
 
     // We faced the issue when the transaction was saved to the storage but later
     // was failing to deserialize. To avoid this issue and monitor the situation

@@ -212,6 +212,13 @@ impl TransactionDetails {
         }
     }
 
+    // Serialize TransactionDetails to json bytes
+    // This is needed to handle the backward incompatible changes in the TransactionDetails
+    pub fn tx_serialize(&self) -> anyhow::Result<Vec<u8>> {
+        let transaction_json = serde_json::to_value(self)?.to_string();
+        Ok(transaction_json.into_bytes())
+    }
+
     // Deserialize TransactionDetails from json bytes
     // This is needed to handle the backward incompatible changes in the TransactionDetails
     pub fn tx_deserialize(data: &[u8]) -> anyhow::Result<Self> {
