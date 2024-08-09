@@ -18,22 +18,71 @@ pub(crate) async fn index_transactions(
     db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorage>,
     tx_details_storage: &std::sync::Arc<crate::TxDetailsStorage>,
+    legacy_tx_details_storage: &std::sync::Arc<crate::TxDetailsStorage>,
     indexer_config: &configuration::TxIndexerConfig,
 ) -> anyhow::Result<()> {
-    extract_transactions_to_collect(streamer_message, tx_collecting_storage, indexer_config)
-        .await?;
-    collect_receipts_and_outcomes(streamer_message, tx_collecting_storage).await?;
+    // extract_transactions_to_collect(streamer_message, tx_collecting_storage, indexer_config)
+    // .await?;
+    let hashes = extract_transactions_hashes(streamer_message).await?;
 
-    let save_finished_tx_details_future =
-        save_finished_transaction_details(tx_collecting_storage, tx_details_storage);
-    let save_outcomes_and_receipts_future =
-        save_outcomes_and_receipts(db_manager, tx_collecting_storage);
-    futures::try_join!(
-        save_finished_tx_details_future,
-        save_outcomes_and_receipts_future
-    )?;
+    let futures = hashes
+        .iter()
+        .map(|tx_hash| tranfer_transaction(tx_hash, tx_details_storage, legacy_tx_details_storage));
+
+    futures::future::join_all(futures).await;
+    // collect_receipts_and_outcomes(streamer_message, tx_collecting_storage).await?;
+
+    // let save_finished_tx_details_future =
+    //     save_finished_transaction_details(tx_collecting_storage, tx_details_storage);
+    // let save_outcomes_and_receipts_future =
+    //     save_outcomes_and_receipts(db_manager, tx_collecting_storage);
+    // futures::try_join!(
+    //     save_finished_tx_details_future,
+    //     save_outcomes_and_receipts_future
+    // )?;
 
     Ok(())
+}
+
+async fn tranfer_transaction(
+    tx_hash: &str,
+    tx_details_storage: &std::sync::Arc<crate::TxDetailsStorage>,
+    legacy_tx_details_storage: &std::sync::Arc<crate::TxDetailsStorage>,
+) -> anyhow::Result<()> {
+    // retrieve transactions bytes from the storage
+    let tx_bytes = match legacy_tx_details_storage.retrieve(tx_hash).await {
+        Ok(res) => res,
+        Err(err) => {
+            tracing::warn!(
+                target: crate::INDEXER,
+                "Failed to retrieve transaction {} from legacy storage\n{:#?}",
+                tx_hash,
+                err
+            );
+            anyhow::bail!(
+                "Failed to retrieve transaction {} from legacy storage",
+                tx_hash
+            );
+        }
+    };
+    let tx_details = match readnode_primitives::TransactionDetails::borsh_deserialize(&tx_bytes) {
+        Ok(res) => res,
+        Err(err) => {
+            tracing::warn!(
+                target: crate::INDEXER,
+                "Failed to borsh-deserialize transaction {} from legacy storage\n{:#?}",
+                tx_hash,
+                err
+            );
+            return Ok(());
+        }
+    };
+
+    let transaction_json = serde_json::to_value(&tx_details)?.to_string();
+
+    tx_details_storage
+        .store(&tx_hash, transaction_json.clone().into_bytes())
+        .await
 }
 
 async fn save_finished_transaction_details(
@@ -242,6 +291,33 @@ async fn extract_transactions_to_collect(
             })
         });
     try_join_all(futures).await.map(|_| ())
+}
+
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
+async fn extract_transactions_hashes(
+    streamer_message: &near_indexer_primitives::StreamerMessage,
+) -> anyhow::Result<Vec<String>> {
+    let txs_in_block = streamer_message
+        .shards
+        .iter()
+        .map(|shard| {
+            shard
+                .chunk
+                .as_ref()
+                .map_or(0, |chunk| chunk.transactions.len())
+        })
+        .sum::<usize>();
+    crate::metrics::TX_IN_BLOCK_TOTAL.set(txs_in_block as i64);
+
+    Ok(streamer_message
+        .shards
+        .iter()
+        .filter_map(|shard| shard.chunk.as_ref())
+        .map(|chunk| (chunk.header.shard_id, chunk.transactions.iter()))
+        .flat_map(|(_shard_id, transactions)| {
+            transactions.map(|tx| tx.transaction.hash.to_string())
+        })
+        .collect())
 }
 
 // Converts Transaction into CollectingTransactionDetails and puts it into memory storage.
@@ -462,7 +538,9 @@ async fn save_transaction_details_to_storage(
 ) -> anyhow::Result<()> {
     let transaction_details = tx_details.to_final_transaction_result()?;
     let transaction_hash = transaction_details.transaction.hash.to_string();
-    let tx_bytes = borsh::to_vec(&transaction_details)?;
+
+    // let tx_bytes = borsh::to_vec(&transaction_details)?;
+    let transaction_json = serde_json::to_value(&transaction_details)?.to_string();
 
     // We faced the issue when the transaction was saved to the storage but later
     // was failing to deserialize. To avoid this issue and monitor the situation
@@ -480,7 +558,7 @@ async fn save_transaction_details_to_storage(
             );
         }
         match tx_details_storage
-            .store(&transaction_hash, tx_bytes.clone())
+            .store(&transaction_hash, transaction_json.clone().into_bytes())
             .await
         {
             Ok(_) => {
