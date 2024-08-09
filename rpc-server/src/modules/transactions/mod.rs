@@ -3,6 +3,18 @@ use jsonrpc_v2::Data;
 
 pub mod methods;
 
+async fn fetch_tx_details(
+    tx_hash: &near_indexer_primitives::CryptoHash,
+) -> anyhow::Result<readnode_primitives::TransactionDetails> {
+    let tx_web_server_url =
+        std::env::var("TX_WEB_SERVER_URL").unwrap_or("http://localhost:9099".to_string());
+    let data: serde_json::Value = reqwest::get(format!("{}/get-tx/{}", tx_web_server_url, tx_hash))
+        .await?
+        .json()
+        .await?;
+    Ok(serde_json::from_value(data)?)
+}
+
 /// MIGRATION NOTE: Additionally this method will try to find the transaction
 /// in the legacy database table between object storage and cache table.
 /// REMOVE this comment after the migration to the new object storage is completely finished.
@@ -16,27 +28,8 @@ pub(crate) async fn try_get_transaction_details_by_hash(
     tx_hash: &near_indexer_primitives::CryptoHash,
     method_name: &str,
 ) -> anyhow::Result<readnode_primitives::TransactionDetails> {
-    match data.tx_details_storage.retrieve(&tx_hash.to_string()).await {
-        Ok(transaction_details_bytes) => {
-            match readnode_primitives::TransactionDetails::borsh_deserialize(
-                &transaction_details_bytes,
-            ) {
-                Ok(transaction_details) => Ok(transaction_details),
-                Err(err) => {
-                    tracing::warn!(
-                        "Failed to deserialize transaction details for hash {}: {}. Trying legacy database",
-                        tx_hash,
-                        err
-                    );
-                    Ok(legacy_try_get_transaction_details_by_hash(
-                        data,
-                        &tx_hash.to_string(),
-                        method_name,
-                    )
-                    .await?)
-                }
-            }
-        }
+    match fetch_tx_details(tx_hash).await {
+        Ok(transaction_details) => Ok(transaction_details),
         Err(_) => {
             tracing::debug!(
                 "Transaction with hash {} is not found in the object storage. Trying to find it in the legacy database table.",
