@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
-use itertools::Itertools;
 use near_indexer_primitives::views::StateChangeValueView;
 use near_indexer_primitives::CryptoHash;
+
+use itertools::Itertools;
 
 #[macro_use]
 extern crate lazy_static;
@@ -13,6 +14,8 @@ pub mod configs;
 mod epoch;
 pub mod metrics;
 mod near_client;
+
+const SAVE_ATTEMPTS: usize = 20;
 
 // Target for tracing logs
 pub const INDEXER: &str = "state_indexer";
@@ -214,31 +217,91 @@ pub async fn handle_streamer_message(
         near_client,
         db_manager,
     );
-    let handle_block_future = db_manager.save_block_with_chunks(
-        block_height,
-        block_hash,
-        streamer_message
-            .block
-            .chunks
-            .iter()
-            .map(|chunk| {
-                (
-                    chunk.chunk_hash.to_string(),
-                    chunk.shard_id,
-                    chunk.height_included,
+    let handle_block_future = async {
+        for attempt in 1..=SAVE_ATTEMPTS {
+            match db_manager
+                .save_block_with_chunks(
+                    block_height,
+                    block_hash,
+                    streamer_message
+                        .block
+                        .chunks
+                        .iter()
+                        .map(|chunk| {
+                            (
+                                chunk.chunk_hash.to_string(),
+                                chunk.shard_id,
+                                chunk.height_included,
+                            )
+                        })
+                        .collect(),
                 )
-            })
-            .collect(),
-    );
-    let handle_state_change_future = handle_state_changes(
-        &streamer_message,
-        db_manager,
-        block_height,
-        block_hash,
-        &indexer_config,
-        shard_layout,
-    );
-
+                .await
+            {
+                Ok(result) if attempt > 1 => {
+                    tracing::info!(
+                        target: crate::INDEXER,
+                        "Block with chunks saved after {} attempts",
+                        attempt
+                    );
+                    return Ok(result);
+                }
+                Ok(result) => return Ok(result),
+                Err(err) if attempt < SAVE_ATTEMPTS => {
+                    tracing::warn!(
+                        target: crate::INDEXER,
+                        "Failed to save block with chunks (attempt {}): {}",
+                        attempt,
+                        err
+                    );
+                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                }
+                Err(err) => return Err(err),
+            }
+        }
+        Err(anyhow::anyhow!(
+            "Failed to save block with chunks after {} attempts",
+            SAVE_ATTEMPTS
+        ))
+    };
+    let handle_state_change_future = async {
+        for attempt in 1..=SAVE_ATTEMPTS {
+            match handle_state_changes(
+                &streamer_message,
+                db_manager,
+                block_height,
+                block_hash,
+                &indexer_config,
+                shard_layout,
+            )
+            .await
+            {
+                Ok(_) if attempt > 1 => {
+                    tracing::info!(
+                        target: crate::INDEXER,
+                        "State changes saved after {} attempts",
+                        attempt
+                    );
+                    return Ok(());
+                }
+                Ok(_) => return Ok(()),
+                Err(err) if attempt < SAVE_ATTEMPTS => {
+                    tracing::warn!(
+                        target: crate::INDEXER,
+                        "Failed to save state changes (attempt {}): {}",
+                        attempt,
+                        err
+                    );
+                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                }
+                Err(err) => return Err(err),
+            }
+        }
+        Err(anyhow::anyhow!(
+            "Failed to save state changes after {} attempts",
+            SAVE_ATTEMPTS
+        ))
+    };
     let update_meta_future =
         db_manager.update_meta(indexer_config.indexer_id().as_ref(), block_height);
 
