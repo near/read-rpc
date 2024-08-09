@@ -29,7 +29,7 @@ pub async fn gas_price(
     {
         let result = match &cache_block {
             Ok(block) => {
-                if let None = gas_price_request.block_id {
+                if gas_price_request.block_id.is_none() {
                     gas_price_request.block_id =
                         Some(near_primitives::types::BlockId::Height(block.block_height));
                 };

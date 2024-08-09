@@ -468,13 +468,13 @@ where
             let retry = match json_rpc_err {
                 near_jsonrpc_client::errors::JsonRpcError::TransportError(_) => true,
                 near_jsonrpc_client::errors::JsonRpcError::ServerError(server_error) => {
-                    match server_error {
+                    matches!(
+                        server_error,
                         near_jsonrpc_client::errors::JsonRpcServerError::NonContextualError(_)
-                        | near_jsonrpc_client::errors::JsonRpcServerError::ResponseStatusError(_) => {
-                            true
-                        }
-                        _ => false,
-                    }
+                            | near_jsonrpc_client::errors::JsonRpcServerError::ResponseStatusError(
+                                _
+                            )
+                    )
                 }
             };
             if retry {
@@ -496,7 +496,7 @@ where
         },
         Err(err) => {
             if let Some(e) = err.handler_error() {
-                match serde_json::to_value(&e) {
+                match serde_json::to_value(e) {
                     Ok(near_rpc_response_json) => {
                         if near_rpc_response_json["name"] == "TIMEOUT_ERROR" {
                             return Err(ShadowDataConsistencyError::NearRpcCallError(format!(
@@ -532,7 +532,7 @@ where
             // Both services(read_rpc and near_rpc) have a successful response but the data mismatch
             // both response objects included for future investigation
             ShadowDataConsistencyError::ResultsDontMatch {
-                error_message: format!("Success results don't match"),
+                error_message: "Success results don't match".to_string(),
                 reason: DataMismatchReason::ReadRpcSuccessNearRpcSuccess,
                 read_rpc_response: read_rpc_json,
                 near_rpc_response: near_rpc_json,
@@ -540,7 +540,7 @@ where
         } else if !read_rpc_response_is_ok && near_rpc_response_is_ok {
             // read_rpc service has error response and near_rpc has successful response
             ShadowDataConsistencyError::ResultsDontMatch {
-                error_message: format!("ReadRPC failed, NearRPC success"),
+                error_message: "ReadRPC failed, NearRPC success".to_string(),
                 reason: DataMismatchReason::ReadRpcErrorNearRpcSuccess,
                 read_rpc_response: read_rpc_json,
                 near_rpc_response: near_rpc_json,
@@ -549,7 +549,7 @@ where
             // read_rpc service has successful response and near_rpc has error response
             // Expected that all error will be related with network issues.
             ShadowDataConsistencyError::ResultsDontMatch {
-                error_message: format!("ReadRPC success, NearRPC failed"),
+                error_message: "ReadRPC success, NearRPC failed".to_string(),
                 reason: DataMismatchReason::ReadRpcSuccessNearRpcError,
                 read_rpc_response: read_rpc_json,
                 near_rpc_response: near_rpc_json,
@@ -559,7 +559,7 @@ where
             // both response objects included for future investigation.
             // Expected we will only have a difference in the error text.
             ShadowDataConsistencyError::ResultsDontMatch {
-                error_message: format!("Both services failed, but results don't match"),
+                error_message: "Both services failed, but results don't match".to_string(),
                 reason: DataMismatchReason::ReadRpcErrorNearRpcError,
                 read_rpc_response: read_rpc_json,
                 near_rpc_response: near_rpc_json,
@@ -656,9 +656,9 @@ fn json_sort_value(value: serde_json::Value) -> serde_json::Value {
                         map
                     },
                 )
-                .into_iter()
-                .map(|(_, v)| v)
+                .into_values()
                 .collect();
+
             serde_json::Value::from(new_value)
         }
         serde_json::Value::Object(mut obj) => {
