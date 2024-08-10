@@ -369,10 +369,9 @@ async fn function_call(
         maybe_optimistic_data,
         data.prefetch_state_size_limit,
     )
-    .await;
+    .await
+    .map_err(|err| err.to_rpc_query_error(block.block_height, block.block_hash))?;
 
-    let call_results =
-        call_results.map_err(|err| err.to_rpc_query_error(block.block_height, block.block_hash))?;
     Ok(near_jsonrpc::primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc::primitives::types::query::QueryResponseKind::CallResult(
             near_primitives::views::CallResult {
@@ -380,8 +379,8 @@ async fn function_call(
                 logs: call_results.logs,
             },
         ),
-        block_height: block.block_height,
-        block_hash: block.block_hash,
+        block_height: call_results.block_height,
+        block_hash: call_results.block_hash,
     })
 }
 
