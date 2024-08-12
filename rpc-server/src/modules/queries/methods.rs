@@ -250,24 +250,22 @@ async fn view_code(
         is_optimistic
     );
     let (code, account) = if is_optimistic {
-        futures::future::join(
+        futures::try_join!(
             optimistic_view_code(data, block, account_id, "query_view_code"),
             optimistic_view_account(data, block, account_id, "query_view_code"),
-        )
-        .await
+        )?
     } else {
-        futures::future::join(
+        futures::try_join!(
             database_view_code(data, block, account_id, "query_view_code"),
             database_view_account(data, block, account_id, "query_view_code"),
-        )
-        .await
+        )?
     };
 
     Ok(near_jsonrpc::primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc::primitives::types::query::QueryResponseKind::ViewCode(
             near_primitives::views::ContractCodeView {
-                code: code?,
-                hash: account?.code_hash,
+                code,
+                hash: account.code_hash,
             },
         ),
         block_height: block.block_height,
