@@ -146,52 +146,8 @@ impl CacheStorage {
                     )
                     .await?;
                 }
-                self.push_outcome_and_receipt_to_cache(transaction_key, indexed_outcome)
+                self.push_outcome_and_receipt(transaction_key, indexed_outcome, false)
                     .await?;
-            }
-        }
-        Ok(())
-    }
-
-    async fn push_outcome_and_receipt_to_storage(
-        &self,
-        transaction_key: readnode_primitives::TransactionKey,
-        indexer_execution_outcome_with_receipt: near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
-    ) {
-        let storage = self.storage.clone();
-        tokio::spawn(async move {
-            storage
-                .set_outcomes_and_receipts(&transaction_key, indexer_execution_outcome_with_receipt)
-                .await
-        });
-    }
-
-    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
-    async fn push_outcome_and_receipt_to_cache(
-        &self,
-        transaction_key: &readnode_primitives::TransactionKey,
-        indexer_execution_outcome_with_receipt: near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
-    ) -> anyhow::Result<()> {
-        if let Ok(mut transaction_details) = self.get_tx(transaction_key).await {
-            self.remove_receipt_from_watching_list(
-                &indexer_execution_outcome_with_receipt
-                    .receipt
-                    .receipt_id
-                    .to_string(),
-            )
-            .await?;
-            transaction_details
-                .receipts
-                .push(indexer_execution_outcome_with_receipt.receipt);
-            transaction_details
-                .execution_outcomes
-                .push(indexer_execution_outcome_with_receipt.execution_outcome);
-            let transaction_receipts_watching_count =
-                self.receipts_transaction_count(transaction_key).await?;
-            if transaction_receipts_watching_count == 0 {
-                self.move_tx_to_save(transaction_details.clone()).await?;
-            } else {
-                self.update_tx(transaction_details.clone()).await?;
             }
         }
         Ok(())
@@ -280,9 +236,7 @@ impl CacheStorage {
         &self,
         transaction_details: readnode_primitives::CollectingTransactionDetails,
     ) -> anyhow::Result<()> {
-        let transaction_details_clone = transaction_details.clone();
-        let storage = self.storage.clone();
-        tokio::spawn(async move { storage.set_tx(transaction_details_clone).await });
+        self.storage.set_tx(transaction_details.clone()).await?;
         let transaction_hash = transaction_details.transaction.hash.clone().to_string();
         self.update_tx(transaction_details).await?;
         tracing::debug!(target: STORAGE, "+T {}", transaction_hash,);
@@ -506,17 +460,40 @@ impl CacheStorage {
         &self,
         transaction_key: &readnode_primitives::TransactionKey,
         indexer_execution_outcome_with_receipt: near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
+        is_tx_process: bool,
     ) -> anyhow::Result<()> {
-        self.push_outcome_and_receipt_to_storage(
-            transaction_key.clone(),
-            indexer_execution_outcome_with_receipt.clone(),
-        )
-        .await;
-        self.push_outcome_and_receipt_to_cache(
-            transaction_key,
-            indexer_execution_outcome_with_receipt,
-        )
-        .await?;
+        if let Ok(mut transaction_details) = self.get_tx(transaction_key).await {
+            // we need to save outcomes and receipts only for transactions that are in process
+            // and we don't need to save outcomes and receipts again if the transaction is restored after interruption
+            if is_tx_process {
+                self.storage
+                    .set_outcomes_and_receipts(
+                        transaction_key,
+                        indexer_execution_outcome_with_receipt.clone(),
+                    )
+                    .await?;
+            };
+            self.remove_receipt_from_watching_list(
+                &indexer_execution_outcome_with_receipt
+                    .receipt
+                    .receipt_id
+                    .to_string(),
+            )
+            .await?;
+            transaction_details
+                .receipts
+                .push(indexer_execution_outcome_with_receipt.receipt);
+            transaction_details
+                .execution_outcomes
+                .push(indexer_execution_outcome_with_receipt.execution_outcome);
+            let transaction_receipts_watching_count =
+                self.receipts_transaction_count(transaction_key).await?;
+            if transaction_receipts_watching_count == 0 {
+                self.move_tx_to_save(transaction_details.clone()).await?;
+            } else {
+                self.update_tx(transaction_details.clone()).await?;
+            }
+        }
         Ok(())
     }
 }
