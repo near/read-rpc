@@ -295,7 +295,8 @@ impl BlocksInfoByFinality {
         let final_block_future = crate::utils::get_final_block(near_rpc_client, false);
         let optimistic_block_future = crate::utils::get_final_block(near_rpc_client, true);
         let validators_future = crate::utils::get_current_validators(near_rpc_client);
-        let (final_block, optimistic_block, validators) = tokio::try_join!(
+
+        let (final_block, optimistic_block, validators) = futures::try_join!(
             final_block_future,
             optimistic_block_future,
             validators_future,

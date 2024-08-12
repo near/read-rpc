@@ -1,5 +1,5 @@
 use clap::Parser;
-use futures::StreamExt;
+use futures::{FutureExt, StreamExt};
 
 use tx_details_storage::TxDetailsStorage;
 
@@ -156,7 +156,11 @@ async fn handle_streamer_message(
         streamer_message.block.header.height,
     );
 
-    match futures::try_join!(tx_future, update_meta_future) {
+    match futures::future::join_all([tx_future.boxed(), update_meta_future.boxed()])
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+    {
         Ok(_) => tracing::debug!(
             target: INDEXER,
             "#{} collecting transaction details successful",

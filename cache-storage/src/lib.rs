@@ -1,3 +1,5 @@
+use futures::FutureExt;
+
 mod utils;
 
 #[derive(Clone)]
@@ -140,8 +142,15 @@ impl BlocksByFinalityCache {
                 self.cache_storage.set(block_type, json_streamer_message);
 
             // Wait for both futures to complete
-            futures::try_join!(update_height_feature, update_stream_msg_feature)?;
+            futures::future::join_all([
+                update_height_feature.boxed(),
+                update_stream_msg_feature.boxed(),
+            ])
+            .await
+            .into_iter()
+            .collect::<anyhow::Result<_>>()?;
         };
+
         Ok(())
     }
 
@@ -260,8 +269,11 @@ impl TxIndexerCache {
         let del_tx_outcomes_future = self
             .cache_storage
             .del(format!("outcomes_{}", transaction_key));
-        futures::try_join!(del_tx_future, del_tx_outcomes_future,)?;
-        Ok(())
+
+        futures::future::join_all([del_tx_future.boxed(), del_tx_outcomes_future.boxed()])
+            .await
+            .into_iter()
+            .collect::<anyhow::Result<_>>()
     }
 
     pub async fn set_outcomes_and_receipts(

@@ -562,8 +562,11 @@ async fn fetch_shards_by_cache_block(
                 shard_id,
             )
         });
-    futures::future::try_join_all(fetch_shards_futures)
+
+    futures::future::join_all(fetch_shards_futures)
         .await
+        .into_iter()
+        .collect::<Result<_, _>>()
         .map_err(|err| {
             anyhow::anyhow!(
                 "Failed to fetch shards for block {} with error: {}",

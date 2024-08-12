@@ -250,12 +250,12 @@ async fn view_code(
         is_optimistic
     );
     let (code, account) = if is_optimistic {
-        tokio::try_join!(
+        futures::try_join!(
             optimistic_view_code(data, block, account_id, "query_view_code"),
             optimistic_view_account(data, block, account_id, "query_view_code"),
         )?
     } else {
-        tokio::try_join!(
+        futures::try_join!(
             database_view_code(data, block, account_id, "query_view_code"),
             database_view_account(data, block, account_id, "query_view_code"),
         )?
@@ -367,10 +367,9 @@ async fn function_call(
         maybe_optimistic_data,
         data.prefetch_state_size_limit,
     )
-    .await;
+    .await
+    .map_err(|err| err.to_rpc_query_error(block.block_height, block.block_hash))?;
 
-    let call_results =
-        call_results.map_err(|err| err.to_rpc_query_error(block.block_height, block.block_hash))?;
     Ok(near_jsonrpc::primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc::primitives::types::query::QueryResponseKind::CallResult(
             near_primitives::views::CallResult {
@@ -378,8 +377,8 @@ async fn function_call(
                 logs: call_results.logs,
             },
         ),
-        block_height: block.block_height,
-        block_hash: block.block_hash,
+        block_height: call_results.block_height,
+        block_hash: call_results.block_hash,
     })
 }
 

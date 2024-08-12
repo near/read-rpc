@@ -468,13 +468,13 @@ where
             let retry = match json_rpc_err {
                 near_jsonrpc_client::errors::JsonRpcError::TransportError(_) => true,
                 near_jsonrpc_client::errors::JsonRpcError::ServerError(server_error) => {
-                    match server_error {
+                    matches!(
+                        server_error,
                         near_jsonrpc_client::errors::JsonRpcServerError::NonContextualError(_)
-                        | near_jsonrpc_client::errors::JsonRpcServerError::ResponseStatusError(_) => {
-                            true
-                        }
-                        _ => false,
-                    }
+                            | near_jsonrpc_client::errors::JsonRpcServerError::ResponseStatusError(
+                                _
+                            )
+                    )
                 }
             };
             if retry {
@@ -496,7 +496,7 @@ where
         },
         Err(err) => {
             if let Some(e) = err.handler_error() {
-                match serde_json::to_value(&e) {
+                match serde_json::to_value(e) {
                     Ok(near_rpc_response_json) => {
                         if near_rpc_response_json["name"] == "TIMEOUT_ERROR" {
                             return Err(ShadowDataConsistencyError::NearRpcCallError(format!(
@@ -532,16 +532,16 @@ where
             // Both services(read_rpc and near_rpc) have a successful response but the data mismatch
             // both response objects included for future investigation
             ShadowDataConsistencyError::ResultsDontMatch {
-                error_message: format!("Success results don't match"),
-                reason: DataMismatchReason::ReadRpcSuccessNearRpcSuccess,
+                error_message: "Success results don't match".to_string(),
+                reason: DataMismatchReason::SuccessNearRpcSuccess,
                 read_rpc_response: read_rpc_json,
                 near_rpc_response: near_rpc_json,
             }
         } else if !read_rpc_response_is_ok && near_rpc_response_is_ok {
             // read_rpc service has error response and near_rpc has successful response
             ShadowDataConsistencyError::ResultsDontMatch {
-                error_message: format!("ReadRPC failed, NearRPC success"),
-                reason: DataMismatchReason::ReadRpcErrorNearRpcSuccess,
+                error_message: "ReadRPC failed, NearRPC success".to_string(),
+                reason: DataMismatchReason::ErrorNearRpcSuccess,
                 read_rpc_response: read_rpc_json,
                 near_rpc_response: near_rpc_json,
             }
@@ -549,8 +549,8 @@ where
             // read_rpc service has successful response and near_rpc has error response
             // Expected that all error will be related with network issues.
             ShadowDataConsistencyError::ResultsDontMatch {
-                error_message: format!("ReadRPC success, NearRPC failed"),
-                reason: DataMismatchReason::ReadRpcSuccessNearRpcError,
+                error_message: "ReadRPC success, NearRPC failed".to_string(),
+                reason: DataMismatchReason::SuccessNearRpcError,
                 read_rpc_response: read_rpc_json,
                 near_rpc_response: near_rpc_json,
             }
@@ -559,8 +559,8 @@ where
             // both response objects included for future investigation.
             // Expected we will only have a difference in the error text.
             ShadowDataConsistencyError::ResultsDontMatch {
-                error_message: format!("Both services failed, but results don't match"),
-                reason: DataMismatchReason::ReadRpcErrorNearRpcError,
+                error_message: "Both services failed, but results don't match".to_string(),
+                reason: DataMismatchReason::ErrorNearRpcError,
                 read_rpc_response: read_rpc_json,
                 near_rpc_response: near_rpc_json,
             }
@@ -596,13 +596,13 @@ pub enum ShadowDataConsistencyError {
 #[derive(Debug)]
 pub enum DataMismatchReason {
     /// ReadRPC returns success result and NEAR RPC returns success result but the results mismatch
-    ReadRpcSuccessNearRpcSuccess,
+    SuccessNearRpcSuccess,
     /// ReadRPC returns success result and NEAR RPC returns error result
-    ReadRpcSuccessNearRpcError,
+    SuccessNearRpcError,
     /// ReadRPC returns error result and NEAR RPC returns success result
-    ReadRpcErrorNearRpcSuccess,
+    ErrorNearRpcSuccess,
     /// ReadRPC returns error result and NEAR RPC returns error result but the results mismatch
-    ReadRpcErrorNearRpcError,
+    ErrorNearRpcError,
 }
 
 #[cfg(feature = "shadow_data_consistency")]
@@ -611,10 +611,10 @@ impl DataMismatchReason {
     /// metrics like BLOCK_ERROR_0, BLOCK_ERROR_1, BLOCK_ERROR_2, BLOCK_ERROR_3 etc.
     pub fn code(&self) -> String {
         match self {
-            DataMismatchReason::ReadRpcSuccessNearRpcSuccess => "0".to_string(),
-            DataMismatchReason::ReadRpcSuccessNearRpcError => "1".to_string(),
-            DataMismatchReason::ReadRpcErrorNearRpcSuccess => "2".to_string(),
-            DataMismatchReason::ReadRpcErrorNearRpcError => "3".to_string(),
+            DataMismatchReason::SuccessNearRpcSuccess => "0".to_string(),
+            DataMismatchReason::SuccessNearRpcError => "1".to_string(),
+            DataMismatchReason::ErrorNearRpcSuccess => "2".to_string(),
+            DataMismatchReason::ErrorNearRpcError => "3".to_string(),
         }
     }
 
@@ -622,16 +622,10 @@ impl DataMismatchReason {
     /// human readable reason for the mismatch.
     pub fn reason(&self) -> &'static str {
         match self {
-            DataMismatchReason::ReadRpcSuccessNearRpcSuccess => {
-                "Read RPC success, and NEAR RPC success"
-            }
-            DataMismatchReason::ReadRpcSuccessNearRpcError => {
-                "Read RPC success, but NEAR RPC error"
-            }
-            DataMismatchReason::ReadRpcErrorNearRpcSuccess => {
-                "Read RPC error, but NEAR RPC success"
-            }
-            DataMismatchReason::ReadRpcErrorNearRpcError => "Read RPC error, and NEAR RPC error",
+            DataMismatchReason::SuccessNearRpcSuccess => "Read RPC success, and NEAR RPC success",
+            DataMismatchReason::SuccessNearRpcError => "Read RPC success, but NEAR RPC error",
+            DataMismatchReason::ErrorNearRpcSuccess => "Read RPC error, but NEAR RPC success",
+            DataMismatchReason::ErrorNearRpcError => "Read RPC error, and NEAR RPC error",
         }
     }
 }
@@ -656,9 +650,9 @@ fn json_sort_value(value: serde_json::Value) -> serde_json::Value {
                         map
                     },
                 )
-                .into_iter()
-                .map(|(_, v)| v)
+                .into_values()
                 .collect();
+
             serde_json::Value::from(new_value)
         }
         serde_json::Value::Object(mut obj) => {

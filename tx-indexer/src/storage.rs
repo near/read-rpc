@@ -98,7 +98,10 @@ impl CacheStorage {
         let tx_futures = tx_in_process
             .iter()
             .map(|tx_key| self.restore_transaction_with_receipts(tx_key));
-        futures::future::try_join_all(tx_futures).await?;
+        futures::future::join_all(tx_futures)
+            .await
+            .into_iter()
+            .collect::<anyhow::Result<_>>()?;
         tracing::info!(
             target: STORAGE,
             "Restored {} transactions after interruption",
