@@ -79,6 +79,19 @@ impl RedisCacheStorage {
         Ok(())
     }
 
+    async fn rpushx(
+        &self,
+        key: impl redis::ToRedisArgs + std::fmt::Debug,
+        value: impl redis::ToRedisArgs + std::fmt::Debug,
+    ) -> anyhow::Result<()> {
+        redis::cmd("RPUSHX")
+            .arg(&key)
+            .arg(&value)
+            .query_async(&mut self.client.clone())
+            .await?;
+        Ok(())
+    }
+
     async fn lrange<V: redis::FromRedisValue + std::fmt::Debug>(
         &self,
         key: impl redis::ToRedisArgs + std::fmt::Debug,
@@ -222,14 +235,16 @@ impl TxIndexerCache {
     pub async fn get_tx_outcomes(
         &self,
         transaction_key: &readnode_primitives::TransactionKey,
-    ) -> anyhow::Result<Vec<readnode_primitives::ExecutionOutcomeWithReceipt>> {
+    ) -> anyhow::Result<Vec<near_indexer_primitives::IndexerExecutionOutcomeWithReceipt>> {
         Ok(self
             .cache_storage
             .lrange::<Vec<Vec<u8>>>(format!("outcomes_{}", transaction_key))
             .await?
             .iter()
             .map(|outcome| {
-                utils::from_slice::<readnode_primitives::ExecutionOutcomeWithReceipt>(outcome)
+                utils::from_slice::<near_indexer_primitives::IndexerExecutionOutcomeWithReceipt>(
+                    outcome,
+                )
             })
             .filter_map(|outcome| outcome.ok())
             .collect())
@@ -251,12 +266,16 @@ impl TxIndexerCache {
         &self,
         transaction_details: readnode_primitives::CollectingTransactionDetails,
     ) -> anyhow::Result<()> {
-        self.cache_storage
-            .set(
-                format!("transaction_{}", transaction_details.transaction_key()),
-                utils::to_vec(&transaction_details)?,
-            )
-            .await
+        let set_tx_future = self.cache_storage.set(
+            format!("transaction_{}", transaction_details.transaction_key()),
+            utils::to_vec(&transaction_details)?,
+        );
+        let set_outcomes_future = self.cache_storage.rpush(
+            format!("outcomes_{}", transaction_details.transaction_key()),
+            utils::to_vec(&transaction_details.transaction_outcome)?,
+        );
+        futures::try_join!(set_tx_future, set_outcomes_future,)?;
+        Ok(())
     }
 
     pub async fn del_tx(
@@ -281,21 +300,12 @@ impl TxIndexerCache {
         transaction_key: &readnode_primitives::TransactionKey,
         indexer_execution_outcome_with_receipt: near_indexer_primitives::IndexerExecutionOutcomeWithReceipt,
     ) -> anyhow::Result<()> {
-        // We should not store outcomes for not indexed transactions
-        if self.get_tx(transaction_key).await.is_ok() {
-            let execution_outcome_with_receipt = readnode_primitives::ExecutionOutcomeWithReceipt {
-                execution_outcome: indexer_execution_outcome_with_receipt
-                    .execution_outcome
-                    .clone(),
-                receipt: indexer_execution_outcome_with_receipt.receipt,
-            };
-            self.cache_storage
-                .rpush(
-                    format!("outcomes_{}", transaction_key),
-                    utils::to_vec(&execution_outcome_with_receipt)?,
-                )
-                .await?
-        };
+        self.cache_storage
+            .rpushx(
+                format!("outcomes_{}", transaction_key),
+                utils::to_vec(&indexer_execution_outcome_with_receipt)?,
+            )
+            .await?;
         Ok(())
     }
 }

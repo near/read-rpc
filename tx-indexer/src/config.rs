@@ -30,20 +30,20 @@ pub(crate) async fn get_start_block_height(
     start_options: &StartOptions,
     indexer_id: &str,
 ) -> anyhow::Result<u64> {
-    match start_options {
-        StartOptions::FromBlock { height } => Ok(*height),
+    let start_block_height = match start_options {
+        StartOptions::FromBlock { height } => *height,
         StartOptions::FromInterruption { height } => {
             if let Ok(block_height) = db_manager.get_last_processed_block_height(indexer_id).await {
-                Ok(block_height)
+                block_height
+            } else if let Some(height) = height {
+                *height
             } else {
-                if let Some(height) = height {
-                    return Ok(*height);
-                }
-                Ok(final_block_height(rpc_client).await?)
+                final_block_height(rpc_client).await?
             }
         }
-        StartOptions::FromLatest => Ok(final_block_height(rpc_client).await?),
-    }
+        StartOptions::FromLatest => final_block_height(rpc_client).await?,
+    };
+    Ok(start_block_height - 100) // Start just a bit earlier to avoid missing transactions
 }
 
 pub async fn final_block_height(rpc_client: &JsonRpcClient) -> anyhow::Result<u64> {
