@@ -75,6 +75,8 @@ impl CollectingTransactionDetails {
         TransactionKey::new(self.transaction.hash, self.block_height)
     }
 
+    // Finding the final status of the transaction
+    // The final status for finalized transaction should be either SuccessValue or Failure
     pub fn final_status(&self) -> Option<views::FinalExecutionStatus> {
         let mut looking_for_id = self.transaction.hash;
         let mut execution_outcomes = vec![self.transaction_outcome.clone()];
@@ -83,18 +85,22 @@ impl CollectingTransactionDetails {
         execution_outcomes.iter().find_map(|outcome_with_id| {
             if outcome_with_id.id == looking_for_id {
                 match &outcome_with_id.outcome.status {
+                    // If transaction just created and include only one outcome, the status should be NotStarted
                     views::ExecutionStatusView::Unknown if num_outcomes == 1 => {
                         Some(views::FinalExecutionStatus::NotStarted)
                     }
+                    // If transaction has more than one outcome, the status should be Started
                     views::ExecutionStatusView::Unknown => {
                         Some(views::FinalExecutionStatus::Started)
                     }
+                    // The final status for finalized transaction should be either SuccessValue or Failure
                     views::ExecutionStatusView::Failure(e) => {
                         Some(views::FinalExecutionStatus::Failure(e.clone()))
                     }
                     views::ExecutionStatusView::SuccessValue(v) => {
                         Some(views::FinalExecutionStatus::SuccessValue(v.clone()))
                     }
+                    // If status SuccessReceiptId we should find the next outcome by id and check the status
                     views::ExecutionStatusView::SuccessReceiptId(id) => {
                         looking_for_id = *id;
                         None

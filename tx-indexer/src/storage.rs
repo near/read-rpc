@@ -154,6 +154,7 @@ impl CacheStorage {
         Ok(())
     }
 
+    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
     async fn push_outcome_and_receipt_to_storage(
         &self,
         transaction_key: readnode_primitives::TransactionKey,
@@ -185,9 +186,9 @@ impl CacheStorage {
             transaction_details
                 .execution_outcomes
                 .push(indexer_execution_outcome_with_receipt.execution_outcome);
-            let transaction_receipts_watching_count =
-                self.receipts_transaction_count(transaction_key).await?;
-            if transaction_receipts_watching_count == 0 {
+            // Check receipts counter and if all receipts and outcomes already collected
+            // then we move the transaction to save otherwise update it and wait for the rest of the receipts
+            if self.receipts_transaction_count(transaction_key).await? == 0 {
                 self.move_tx_to_save(transaction_details.clone()).await?;
             } else {
                 self.update_tx(transaction_details.clone()).await?;

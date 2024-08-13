@@ -43,7 +43,7 @@ pub(crate) async fn get_start_block_height(
         }
         StartOptions::FromLatest => final_block_height(rpc_client).await?,
     };
-    Ok(start_block_height - 100) // Start just a bit earlier to avoid missing transactions
+    Ok(start_block_height - 100) // Start just a bit earlier to overlap indexed blocks to ensure we don't miss anything in-between
 }
 
 pub async fn final_block_height(rpc_client: &JsonRpcClient) -> anyhow::Result<u64> {
