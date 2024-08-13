@@ -414,7 +414,7 @@ async fn process_receipt_execution_outcome(
         }
 
         tx_collecting_storage
-            .push_outcome_and_receipt(&transaction_key, receipt_execution_outcome.clone(), true)
+            .push_outcome_and_receipt(&transaction_key, receipt_execution_outcome.clone())
             .await
             .map_err(|err| {
                 tracing::error!(

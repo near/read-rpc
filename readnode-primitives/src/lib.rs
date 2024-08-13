@@ -5,19 +5,6 @@ use std::str::FromStr;
 
 use near_indexer_primitives::{views, CryptoHash, IndexerTransactionWithOutcome};
 
-#[derive(
-    Clone,
-    Debug,
-    serde::Serialize,
-    serde::Deserialize,
-    borsh::BorshSerialize,
-    borsh::BorshDeserialize,
-)]
-pub struct ExecutionOutcomeWithReceipt {
-    pub execution_outcome: views::ExecutionOutcomeWithIdView,
-    pub receipt: views::ReceiptView,
-}
-
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 pub struct TransactionKey {
     pub transaction_hash: CryptoHash,
@@ -65,6 +52,7 @@ impl Display for TransactionKey {
 pub struct CollectingTransactionDetails {
     pub transaction: views::SignedTransactionView,
     pub receipts: Vec<views::ReceiptView>,
+    pub transaction_outcome: views::ExecutionOutcomeWithIdView,
     pub execution_outcomes: Vec<views::ExecutionOutcomeWithIdView>,
     // block_height using to handle transaction hash collisions
     pub block_height: u64,
@@ -75,7 +63,8 @@ impl CollectingTransactionDetails {
         Self {
             transaction: transaction.transaction.clone(),
             receipts: vec![],
-            execution_outcomes: vec![transaction.outcome.execution_outcome],
+            transaction_outcome: transaction.outcome.execution_outcome,
+            execution_outcomes: vec![],
             block_height,
         }
     }
@@ -86,24 +75,32 @@ impl CollectingTransactionDetails {
         TransactionKey::new(self.transaction.hash, self.block_height)
     }
 
+    // Finding the final status of the transaction
+    // The final status for finalized transaction should be either SuccessValue or Failure
     pub fn final_status(&self) -> Option<views::FinalExecutionStatus> {
         let mut looking_for_id = self.transaction.hash;
-        let num_outcomes = self.execution_outcomes.len();
-        self.execution_outcomes.iter().find_map(|outcome_with_id| {
+        let mut execution_outcomes = vec![self.transaction_outcome.clone()];
+        execution_outcomes.extend(self.execution_outcomes.clone());
+        let num_outcomes = execution_outcomes.len();
+        execution_outcomes.iter().find_map(|outcome_with_id| {
             if outcome_with_id.id == looking_for_id {
                 match &outcome_with_id.outcome.status {
+                    // If transaction just created and include only one outcome, the status should be NotStarted
                     views::ExecutionStatusView::Unknown if num_outcomes == 1 => {
                         Some(views::FinalExecutionStatus::NotStarted)
                     }
+                    // If transaction has more than one outcome, the status should be Started
                     views::ExecutionStatusView::Unknown => {
                         Some(views::FinalExecutionStatus::Started)
                     }
+                    // The final status for finalized transaction should be either SuccessValue or Failure
                     views::ExecutionStatusView::Failure(e) => {
                         Some(views::FinalExecutionStatus::Failure(e.clone()))
                     }
                     views::ExecutionStatusView::SuccessValue(v) => {
                         Some(views::FinalExecutionStatus::SuccessValue(v.clone()))
                     }
+                    // If status SuccessReceiptId we should find the next outcome by id and check the status
                     views::ExecutionStatusView::SuccessReceiptId(id) => {
                         looking_for_id = *id;
                         None
@@ -116,19 +113,14 @@ impl CollectingTransactionDetails {
     }
 
     pub fn to_final_transaction_result(&self) -> anyhow::Result<TransactionDetails> {
-        let mut outcomes = self.execution_outcomes.clone();
         match self.final_status() {
-            Some(status) => {
-                let receipts_outcome = outcomes.split_off(1);
-                let transaction_outcome = outcomes.pop().unwrap();
-                Ok(TransactionDetails {
-                    receipts: self.receipts.clone(),
-                    receipts_outcome,
-                    status,
-                    transaction: self.transaction.clone(),
-                    transaction_outcome,
-                })
-            }
+            Some(status) => Ok(TransactionDetails {
+                receipts: self.receipts.clone(),
+                receipts_outcome: self.execution_outcomes.clone(),
+                status,
+                transaction: self.transaction.clone(),
+                transaction_outcome: self.transaction_outcome.clone(),
+            }),
             None => anyhow::bail!("Results should resolve to a final outcome"),
         }
     }
@@ -136,9 +128,6 @@ impl CollectingTransactionDetails {
 
 impl From<CollectingTransactionDetails> for TransactionDetails {
     fn from(tx: CollectingTransactionDetails) -> Self {
-        let mut outcomes = tx.execution_outcomes.clone();
-        let receipts_outcome = outcomes.split_off(1);
-        let transaction_outcome = outcomes.pop().unwrap();
         // Execution status defined by nearcore/chain.rs:get_final_transaction_result
         // FinalExecutionStatus::NotStarted - the tx is not converted to the receipt yet
         // FinalExecutionStatus::Started - we have at least 1 receipt, but the first leaf receipt_id (using dfs) hasn't finished the execution
@@ -149,10 +138,10 @@ impl From<CollectingTransactionDetails> for TransactionDetails {
             .unwrap_or(views::FinalExecutionStatus::NotStarted);
         Self {
             receipts: tx.receipts,
-            receipts_outcome,
+            receipts_outcome: tx.execution_outcomes,
             status,
             transaction: tx.transaction,
-            transaction_outcome,
+            transaction_outcome: tx.transaction_outcome,
         }
     }
 }
