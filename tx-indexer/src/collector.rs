@@ -1,6 +1,7 @@
 use near_indexer_primitives::IndexerTransactionWithOutcome;
 
 use futures::{FutureExt, StreamExt};
+use tokio_retry::{strategy::FixedInterval, Retry};
 
 use crate::metrics;
 use crate::storage;
@@ -170,45 +171,39 @@ async fn save_outcome_and_receipt_to_shard(
     receipts: Vec<readnode_primitives::ReceiptRecord>,
     outcomes: Vec<readnode_primitives::OutcomeRecord>,
 ) -> anyhow::Result<()> {
-    let mut save_attempts = 0;
-    'retry: loop {
-        save_attempts += 1;
-        if save_attempts >= SAVE_ATTEMPTS {
-            anyhow::bail!(
-                "Failed to save receipts and outcomes for shard {} after {} attempts",
-                shard_id,
-                save_attempts,
-            );
-        }
-        match db_manager
+    let retry_strategy = FixedInterval::from_millis(500).take(SAVE_ATTEMPTS);
+
+    let operation = || async {
+        db_manager
             .save_outcome_and_receipt(shard_id, receipts.clone(), outcomes.clone())
             .await
-        {
-            Ok(_) => {
-                if save_attempts > 1 {
-                    // If the receipts and outcomes wasn't saved after first attempt we want to inform
-                    // a log reader about it
-                    tracing::info!(
-                        target: crate::INDEXER,
-                        "Receipts and outcomes for shard {} were saved after {} attempts",
-                        shard_id,
-                        save_attempts,
-                    );
-                }
-                break 'retry Ok(());
-            }
-            Err(err) => {
+            .map_err(|e| {
                 tracing::warn!(
                     target: crate::INDEXER,
                     "Failed to save receipts and outcomes for shard {}: Error {}",
                     shard_id,
-                    err
+                    e
                 );
-                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                continue 'retry;
-            }
-        }
-    }
+                e
+            })
+    };
+
+    Retry::spawn(retry_strategy, operation).await.map_err(|e| {
+        anyhow::anyhow!(
+            "Failed to save receipts and outcomes for shard {} after {} attempts: {}",
+            shard_id,
+            SAVE_ATTEMPTS,
+            e
+        )
+    })?;
+
+    tracing::info!(
+        target: crate::INDEXER,
+        "Receipts and outcomes for shard {} were saved successfully",
+        shard_id,
+    );
+
+    Ok(())
 }
 
 // Extracts all Transactions from the given `StreamerMessage` and pushes them to the memory storage
@@ -481,50 +476,43 @@ async fn save_transaction_details_to_storage(
     let transaction_hash = transaction_details.transaction.hash.to_string();
     let tx_bytes = transaction_details.tx_serialize()?;
 
-    let mut save_attempts = 0;
-    'retry: loop {
-        save_attempts += 1;
-        if save_attempts >= SAVE_ATTEMPTS {
-            anyhow::bail!(
-                "Failed to save transaction {} after {} attempts",
-                transaction_hash,
-                save_attempts,
-            );
-        }
-        match tx_details_storage
+    let retry_strategy = FixedInterval::from_millis(500).take(SAVE_ATTEMPTS);
+
+    let operation = || async {
+        tx_details_storage
             .store(&transaction_hash, tx_bytes.clone())
             .await
-        {
-            Ok(_) => {
-                if save_attempts > 1 {
-                    // If the transaction wasn't saved after first attempt we want to inform
-                    // a log reader about it
-                    tracing::info!(
-                        target: crate::INDEXER,
-                        "Transaction {} was saved after {} attempts",
-                        transaction_hash,
-                        save_attempts,
-                    );
-                }
-
-                metrics::TX_IN_MEMORY_CACHE.dec();
-                break 'retry Ok(());
-            }
-            Err(err) => {
+            .map_err(|e| {
                 crate::metrics::TX_STORE_ERRORS_TOTAL.inc();
-                tracing::debug!(
+                tracing::warn!(
                     target: crate::INDEXER,
-                    "[{}] Failed to save transaction {} \n{:#?}",
-                    save_attempts,
-                    tx_details.transaction.hash,
-                    err
+                    "Failed to save transaction {}: Error: {}",
+                    transaction_hash,
+                    e
                 );
-                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                continue 'retry;
-            }
-        }
-    }
+                e
+            })
+    };
+
+    Retry::spawn(retry_strategy, operation).await.map_err(|e| {
+        anyhow::anyhow!(
+            "Failed to save transaction {} after {} attempts: {}",
+            transaction_hash,
+            SAVE_ATTEMPTS,
+            e
+        )
+    })?;
+
+    metrics::TX_IN_MEMORY_CACHE.dec();
+    tracing::info!(
+        target: crate::INDEXER,
+        "Transaction {} was saved successfully",
+        transaction_hash,
+    );
+
+    Ok(())
 }
+
 // Save receipt_id, parent_transaction_hash, block_height and shard_id to the Db
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn add_outcome_and_receipt_to_save(

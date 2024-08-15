@@ -3738,6 +3738,7 @@ dependencies = [
  "prometheus",
  "readnode-primitives",
  "tokio",
+ "tokio-retry",
  "tracing",
 ]
 
@@ -8764,6 +8765,7 @@ dependencies = [
  "readnode-primitives",
  "rustc_version 0.4.0",
  "tokio",
+ "tokio-retry",
  "tokio-stream",
  "tracing",
  "tx-details-storage",

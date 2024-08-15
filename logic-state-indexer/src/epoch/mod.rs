@@ -1,27 +1,37 @@
 use near_indexer_primitives::{near_primitives, CryptoHash};
 
+use tokio_retry::{strategy::FixedInterval, Retry};
+
+const SAVE_ATTEMPTS: usize = 20;
+
 pub async fn get_epoch_validators(
     epoch_id: CryptoHash,
     near_client: &impl crate::NearClient,
 ) -> anyhow::Result<near_primitives::views::EpochValidatorInfo> {
-    let mut attempt_counter = 0;
-    loop {
-        match near_client.validators_by_epoch_id(epoch_id).await {
-            Ok(response) => return Ok(response),
-            Err(e) => {
-                attempt_counter += 1;
+    let retry_strategy = FixedInterval::from_millis(500).take(SAVE_ATTEMPTS);
+
+    let result = Retry::spawn(retry_strategy, || async {
+        near_client
+            .validators_by_epoch_id(epoch_id)
+            .await
+            .map_err(|e| {
                 tracing::debug!(
-                    "Attempt: {}.Epoch_id: {}. Error fetching epoch validators: {:?}",
-                    attempt_counter,
+                    "Error fetching epoch validators for epoch_id {}: {:?}",
                     epoch_id,
                     e
                 );
-                if attempt_counter > 20 {
-                    anyhow::bail!("Failed to fetch epoch validators. Epoch_id: {}", epoch_id)
-                }
-            }
-        }
-    }
+                e
+            })
+    })
+    .await;
+
+    result.map_err(|e| {
+        anyhow::anyhow!(
+            "Failed to fetch epoch validators for epoch_id {}: {}",
+            epoch_id,
+            e
+        )
+    })
 }
 
 pub async fn get_epoch_info_by_id(
