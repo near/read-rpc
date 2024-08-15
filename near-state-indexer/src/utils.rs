@@ -44,14 +44,26 @@ pub async fn update_block_in_redis_by_finality(
     let block_type = serde_json::to_string(&finality).unwrap();
     tracing::info!(target: crate::INDEXER, "Starting [{}] block update job...", block_type);
 
-    let mut last_stored_block_height: Option<u64> = None;
+    let mut last_stored_block_height: Option<near_primitives::types::BlockHeight> = None;
     loop {
         tokio::time::sleep(INTERVAL).await;
 
-        // If the node is not fully synced the optimistic blocks are outdated
-        // and are useless for our case. To avoid any misleading in our Redis
-        // we don't update blocks until the node is fully synced.
         if let Ok(status) = fetch_status(&client).await {
+            // Update protocol version in Redis
+            // This is need for read-rpc to know the current protocol version
+            if let Err(err) = finality_blocks_storage
+                .update_protocol_version(status.protocol_version)
+                .await
+            {
+                tracing::error!(
+                    target: crate::INDEXER,
+                    "Failed to update protocol version in Redis: {:?}", err
+                );
+            };
+
+            // If the node is not fully synced the optimistic blocks are outdated
+            // and are useless for our case. To avoid any misleading in our Redis
+            // we don't update blocks until the node is fully synced.
             if status.sync_info.syncing {
                 continue;
             }

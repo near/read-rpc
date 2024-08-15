@@ -280,11 +280,17 @@ impl OptimisticChanges {
 }
 
 #[derive(Debug, Clone)]
+pub struct CurrentProtocolVersion {
+    pub protocol_version: near_primitives::types::ProtocolVersion,
+}
+
+#[derive(Debug, Clone)]
 pub struct BlocksInfoByFinality {
     pub final_block: futures_locks::RwLock<BlockInfo>,
     pub optimistic_block: futures_locks::RwLock<BlockInfo>,
     pub optimistic_changes: futures_locks::RwLock<OptimisticChanges>,
     pub current_validators: futures_locks::RwLock<CurrentValidatorInfo>,
+    pub current_protocol_version: futures_locks::RwLock<CurrentProtocolVersion>,
 }
 
 impl BlocksInfoByFinality {
@@ -320,6 +326,9 @@ impl BlocksInfoByFinality {
             ),
             optimistic_changes: futures_locks::RwLock::new(OptimisticChanges::new()),
             current_validators: futures_locks::RwLock::new(CurrentValidatorInfo { validators }),
+            current_protocol_version: futures_locks::RwLock::new(CurrentProtocolVersion {
+                protocol_version: near_primitives::version::PROTOCOL_VERSION,
+            }),
         }
     }
 
@@ -361,6 +370,16 @@ impl BlocksInfoByFinality {
     ) -> anyhow::Result<()> {
         self.current_validators.write().await.validators =
             crate::utils::get_current_validators(near_rpc_client).await?;
+        Ok(())
+    }
+
+    // Update current protocol version in the cache.
+    // This method executes when the protocol version changes.
+    pub async fn update_current_protocol_version(
+        &self,
+        protocol_version: near_primitives::types::ProtocolVersion,
+    ) -> anyhow::Result<()> {
+        self.current_protocol_version.write().await.protocol_version = protocol_version;
         Ok(())
     }
 
@@ -450,5 +469,18 @@ impl BlocksInfoByFinality {
     // Return validators info for current epoch
     pub async fn validators(&self) -> near_primitives::views::EpochValidatorInfo {
         self.current_validators.read().await.validators.clone()
+    }
+
+    pub async fn current_epoch_start_height(&self) -> near_primitives::types::BlockHeight {
+        self.current_validators
+            .read()
+            .await
+            .validators
+            .epoch_start_height
+    }
+
+    // Return current protocol version
+    pub async fn current_protocol_version(&self) -> near_primitives::types::ProtocolVersion {
+        self.current_protocol_version.read().await.protocol_version
     }
 }
