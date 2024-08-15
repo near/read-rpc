@@ -1,4 +1,5 @@
 use futures::FutureExt;
+use near_indexer_primitives::near_primitives;
 
 mod utils;
 
@@ -182,6 +183,21 @@ impl BlocksByFinalityCache {
         let block_type = serde_json::to_string(&finality)?;
         let resp: String = self.cache_storage.get(block_type).await?;
         Ok(serde_json::from_str(&resp)?)
+    }
+
+    pub async fn update_protocol_version(
+        &self,
+        protocol_version: near_primitives::types::ProtocolVersion,
+    ) -> anyhow::Result<()> {
+        self.cache_storage
+            .set("protocol_version", protocol_version)
+            .await
+    }
+
+    pub async fn get_protocol_version(
+        &self,
+    ) -> anyhow::Result<near_primitives::types::ProtocolVersion> {
+        self.cache_storage.get("protocol_version").await
     }
 }
 

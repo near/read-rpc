@@ -5,6 +5,7 @@ use near_primitives::epoch_manager::{AllEpochConfig, EpochConfig};
 use crate::config::ServerContext;
 use crate::errors::RPCError;
 use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
+use crate::modules::network::get_protocol_version;
 
 pub async fn client_config(
     _data: Data<ServerContext>,
@@ -45,7 +46,10 @@ pub async fn status(
     Ok(near_primitives::views::StatusResponse {
         version: data.version.clone(),
         chain_id: data.genesis_info.genesis_config.chain_id.clone(),
-        protocol_version: near_primitives::version::PROTOCOL_VERSION,
+        protocol_version: data
+            .blocks_info_by_finality
+            .current_protocol_version()
+            .await,
         latest_protocol_version: final_block.latest_protocol_version,
         // Address for current read_node RPC server.
         rpc_addr: Some(format!("0.0.0.0:{}", data.server_port)),
@@ -317,8 +321,8 @@ async fn protocol_config_call(
     near_chain_configs::ProtocolConfigView,
     near_jsonrpc::primitives::types::config::RpcProtocolConfigError,
 > {
-    let block =
-        fetch_block_from_cache_or_get(data, &block_reference, "EXPERIMENTAL_protocol_config")
+    let protocol_version =
+        get_protocol_version(data, block_reference, "EXPERIMENTAL_protocol_config")
             .await
             .map_err(|err| {
                 near_jsonrpc::primitives::types::config::RpcProtocolConfigError::UnknownBlock {
@@ -335,7 +339,7 @@ async fn protocol_config_call(
     let store = near_parameters::RuntimeConfigStore::for_chain_id(
         &data.genesis_info.genesis_config.chain_id,
     );
-    let runtime_config = store.get_config(block.latest_protocol_version);
+    let runtime_config = store.get_config(protocol_version);
 
     // get default epoch config for genesis config
     let default_epoch_config = EpochConfig::from(&data.genesis_info.genesis_config);
@@ -347,12 +351,12 @@ async fn protocol_config_call(
         default_epoch_config,
         &data.genesis_info.genesis_config.chain_id,
     );
-    let epoch_config = all_epoch_config.for_protocol_version(block.latest_protocol_version);
+    let epoch_config = all_epoch_config.for_protocol_version(protocol_version);
 
     // Looks strange, but we follow the same logic as in nearcore
     // nearcore/src/runtime/mod.rs:1203
     let mut genesis_config = data.genesis_info.genesis_config.clone();
-    genesis_config.protocol_version = block.latest_protocol_version;
+    genesis_config.protocol_version = protocol_version;
 
     genesis_config.epoch_length = epoch_config.epoch_length;
     genesis_config.num_block_producer_seats = epoch_config.num_block_producer_seats;
