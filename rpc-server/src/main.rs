@@ -5,7 +5,13 @@ use actix_web::{
 use errors::RPCError;
 //use jsonrpc_v2::{Data, Params, Router, Server};
 use mimalloc::MiMalloc;
-use near_jsonrpc::{primitives::errors::RpcErrorKind, RpcRequest};
+use near_jsonrpc::{
+    primitives::{
+        errors::{RpcError, RpcErrorKind},
+        message::{Message, Request},
+    },
+    RpcRequest,
+};
 use serde_json::Value;
 
 #[global_allocator]
@@ -25,16 +31,6 @@ mod utils;
 
 // Categories for logging
 pub(crate) const RPC_SERVER: &str = "read_rpc_server";
-
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq)]
-#[serde(deny_unknown_fields)]
-pub struct Request {
-    jsonrpc: Value,
-    pub method: String,
-    #[serde(default, skip_serializing_if = "Value::is_null")]
-    pub params: Value,
-    pub id: Value,
-}
 
 /// Serialises response of a query into JSON to be sent to the client.
 ///
@@ -64,17 +60,23 @@ where
 
 async fn rpc_handler(
     data: web::Data<config::ServerContext>,
-    payload: web::Json<Request>,
+    payload: web::Json<Message>,
 ) -> HttpResponse {
-    let result = match payload.method.as_str() {
+    let Message::Request(request) = payload.0 else {
+        return HttpResponse::BadRequest().finish();
+    };
+
+    let id = request.id.clone();
+
+    let result = match request.method.as_ref() {
         "block" => {
-            process_method_call(payload.0, |params| {
+            process_method_call(request, |params| {
                 modules::blocks::methods::block(data, params)
             })
             .await
         }
         "view_receipt_record" => {
-            process_method_call(payload.0, |params| {
+            process_method_call(request, |params| {
                 modules::receipts::methods::view_receipt_record(data, params)
             })
             .await
@@ -99,7 +101,7 @@ async fn rpc_handler(
         },
     };
 
-    response.json(result)
+    response.json(Message::response(id, result.map_err(RpcError::from)))
 }
 
 #[actix_web::main]

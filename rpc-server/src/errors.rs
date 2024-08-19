@@ -8,6 +8,12 @@ type BoxedSerialize = Box<dyn erased_serde::Serialize + Send + 'static>;
 #[serde(transparent)]
 pub struct RPCError(pub(crate) near_jsonrpc::primitives::errors::RpcError);
 
+impl From<RPCError> for near_jsonrpc::primitives::errors::RpcError {
+    fn from(err: RPCError) -> Self {
+        err.0
+    }
+}
+
 impl RPCError {
     pub(crate) fn unimplemented_error(method_name: &str) -> Self {
         Self::from(near_jsonrpc::primitives::errors::RpcError::new(
