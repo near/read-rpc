@@ -89,12 +89,31 @@ where
     fn from(err: JsonRpcError<E>) -> Self {
         if let JsonRpcError::ServerError(JsonRpcServerError::HandlerError(error)) = err {
             near_jsonrpc::primitives::errors::RpcError::from(error).into()
-        } else {
-            Self(
-                near_jsonrpc::primitives::errors::RpcError::serialization_error(
-                    "Failed to serialize JsonRpcError".to_string(),
-                ),
+        } else if let JsonRpcError::ServerError(JsonRpcServerError::InternalError {
+            info: Some(info),
+        }) = err
+        {
+            let error_data_value = match serde_json::to_value(&info) {
+                Ok(value) => value,
+                Err(err) => {
+                    return near_jsonrpc::primitives::errors::RpcError::new_internal_error(
+                        None,
+                        format!("Failed to serialize JsonRpcError: {:?}", err),
+                    )
+                    .into();
+                }
+            };
+
+            near_jsonrpc::primitives::errors::RpcError::new_internal_or_handler_error(
+                Some(info.into()),
+                error_data_value,
             )
+            .into()
+        } else {
+            near_jsonrpc::primitives::errors::RpcError::serialization_error(
+                "Failed to serialize JsonRpcError".to_string(),
+            )
+            .into()
         }
     }
 }
