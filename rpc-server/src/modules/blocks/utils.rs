@@ -77,7 +77,7 @@ pub async fn fetch_chunk_from_s3(
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn fetch_block_from_cache_or_get(
-    data: &jsonrpc_v2::Data<ServerContext>,
+    data: &actix_web::web::Data<ServerContext>,
     block_reference: &near_primitives::types::BlockReference,
     method_name: &str,
 ) -> Result<CacheBlock, near_jsonrpc::primitives::types::blocks::RpcBlockError> {

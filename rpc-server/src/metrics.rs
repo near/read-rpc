@@ -171,7 +171,7 @@ lazy_static! {
 /// It should help to analyze the most popular requests
 /// And build s better caching strategy
 pub async fn increase_request_category_metrics(
-    data: &jsonrpc_v2::Data<crate::config::ServerContext>,
+    data: &actix_web::web::Data<crate::config::ServerContext>,
     block_reference: &near_primitives::types::BlockReference,
     method_name: &str,
     block_height: Option<u64>,

@@ -2,7 +2,8 @@ use crate::config::ServerContext;
 use crate::errors::RPCError;
 use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
 use crate::modules::blocks::CacheBlock;
-use jsonrpc_v2::{Data, Params};
+use actix_web::web::Data;
+use jsonrpc_v2::Params;
 use near_jsonrpc::RpcRequest;
 
 #[allow(unused_mut)]

@@ -1,4 +1,5 @@
-use jsonrpc_v2::{Data, Params};
+use actix_web::web::Data;
+use jsonrpc_v2::Params;
 use near_jsonrpc::RpcRequest;
 
 use crate::config::ServerContext;
@@ -36,13 +37,11 @@ pub async fn receipt(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn view_receipt_record(
     data: Data<ServerContext>,
-    Params(params): Params<serde_json::Value>,
+    request_data: near_jsonrpc::primitives::types::receipts::RpcReceiptRequest,
 ) -> Result<crate::modules::receipts::RpcReceiptRecordResponse, RPCError> {
-    tracing::debug!("`view_receipt_record` call. Params: {:?}", params);
-    let receipt_request =
-        near_jsonrpc::primitives::types::receipts::RpcReceiptRequest::parse(params)?;
+    tracing::debug!("`view_receipt_record` call. Params: {:?}", request_data);
 
-    let result = fetch_receipt_record(&data, &receipt_request, "view_receipt_record").await;
+    let result = fetch_receipt_record(&data, &request_data, "view_receipt_record").await;
 
     Ok(result
         .map_err(near_jsonrpc::primitives::errors::RpcError::from)?

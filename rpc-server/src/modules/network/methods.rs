@@ -1,4 +1,5 @@
-use jsonrpc_v2::{Data, Params};
+use actix_web::web::Data;
+use jsonrpc_v2::Params;
 use near_jsonrpc::RpcRequest;
 use near_primitives::epoch_manager::{AllEpochConfig, EpochConfig};
 

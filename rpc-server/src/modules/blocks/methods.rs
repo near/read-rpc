@@ -3,7 +3,8 @@ use crate::errors::RPCError;
 use crate::modules::blocks::utils::{
     fetch_block_from_cache_or_get, fetch_chunk_from_s3, is_matching_change,
 };
-use jsonrpc_v2::{Data, Params};
+use actix_web::web::Data;
+use jsonrpc_v2::Params;
 use near_jsonrpc::RpcRequest;
 use near_primitives::trie_key::TrieKey;
 use near_primitives::views::StateChangeValueView;
@@ -14,26 +15,24 @@ use near_primitives::views::StateChangeValueView;
 /// another way to get `block` from read-rpc using `block_call`
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn block(
-    data: Data<ServerContext>,
-    Params(params): Params<serde_json::Value>,
+    data: actix_web::web::Data<ServerContext>,
+    request_data: near_jsonrpc::primitives::types::blocks::RpcBlockRequest,
 ) -> Result<near_jsonrpc::primitives::types::blocks::RpcBlockResponse, RPCError> {
-    let block_request = near_jsonrpc::primitives::types::blocks::RpcBlockRequest::parse(params)?;
-
     if let near_primitives::types::BlockReference::Finality(
         near_primitives::types::Finality::None,
-    ) = &block_request.block_reference
+    ) = &request_data.block_reference
     {
         if crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
             // Proxy if the optimistic updating is not working
             let block_view = data
                 .near_rpc_client
-                .call(block_request, Some("block"))
+                .call(request_data, Some("block"))
                 .await?;
             return Ok(near_jsonrpc::primitives::types::blocks::RpcBlockResponse { block_view });
         }
     };
 
-    block_call(data, block_request).await
+    block_call(data, request_data).await
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
@@ -124,20 +123,20 @@ pub async fn changes_in_block(
 #[allow(unused_mut)]
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 async fn block_call(
-    data: Data<ServerContext>,
+    data: actix_web::web::Data<ServerContext>,
     mut block_request: near_jsonrpc::primitives::types::blocks::RpcBlockRequest,
 ) -> Result<near_jsonrpc::primitives::types::blocks::RpcBlockResponse, RPCError> {
     tracing::debug!("`block` called with parameters: {:?}", block_request);
     let result = match fetch_block(&data, &block_request.block_reference, "block").await {
         Ok(block) => {
             // increase block category metrics
-            crate::metrics::increase_request_category_metrics(
-                &data,
-                &block_request.block_reference,
-                "block",
-                Some(block.block_view.header.height),
-            )
-            .await;
+            //crate::metrics::increase_request_category_metrics(
+            //    &data,
+            //    &block_request.block_reference,
+            //    "block",
+            //    Some(block.block_view.header.height),
+            //)
+            //.await;
             Ok(block)
         }
         Err(err) => Err(err),
@@ -247,7 +246,7 @@ async fn changes_in_block_by_type_call(
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn fetch_block(
-    data: &Data<ServerContext>,
+    data: &actix_web::web::Data<ServerContext>,
     block_reference: &near_primitives::types::BlockReference,
     method_name: &str,
 ) -> Result<
@@ -325,7 +324,7 @@ pub async fn fetch_block(
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn fetch_chunk(
-    data: &Data<ServerContext>,
+    data: &actix_web::web::Data<ServerContext>,
     chunk_reference: near_jsonrpc::primitives::types::chunks::ChunkReference,
 ) -> Result<
     near_jsonrpc::primitives::types::chunks::RpcChunkResponse,

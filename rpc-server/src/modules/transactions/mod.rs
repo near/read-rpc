@@ -1,5 +1,5 @@
 use crate::config::ServerContext;
-use jsonrpc_v2::Data;
+use actix_web::web::Data;
 
 pub mod methods;
 
