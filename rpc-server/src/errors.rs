@@ -93,7 +93,7 @@ where
             info: Some(info),
         }) = err
         {
-            let error_data_value = match serde_json::to_value(&info) {
+            let error_data_value = match serde_json::to_value(info) {
                 Ok(value) => value,
                 Err(err) => {
                     return near_jsonrpc::primitives::errors::RpcError::new_internal_error(
@@ -105,7 +105,7 @@ where
             };
 
             near_jsonrpc::primitives::errors::RpcError::new_internal_or_handler_error(
-                Some(info.into()),
+                Some(error_data_value.clone()),
                 error_data_value,
             )
             .into()
