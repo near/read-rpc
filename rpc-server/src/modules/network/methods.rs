@@ -1,37 +1,26 @@
-use actix_web::web::Data;
-use jsonrpc_v2::Params;
-use near_jsonrpc::RpcRequest;
-use near_primitives::epoch_manager::{AllEpochConfig, EpochConfig};
-
 use crate::config::ServerContext;
 use crate::errors::RPCError;
 use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
 use crate::modules::network::get_protocol_version;
 
-pub async fn client_config(
-    _data: Data<ServerContext>,
-    Params(_params): Params<serde_json::Value>,
-) -> Result<(), RPCError> {
+use near_primitives::epoch_manager::{AllEpochConfig, EpochConfig};
+
+use actix_web::web::Data;
+
+pub async fn client_config(_data: Data<ServerContext>) -> Result<(), RPCError> {
     Err(RPCError::unimplemented_error("client_config"))
 }
 
-pub async fn maintenance_windows(
-    _data: Data<ServerContext>,
-    Params(_params): Params<serde_json::Value>,
-) -> Result<(), RPCError> {
+pub async fn maintenance_windows(_data: Data<ServerContext>) -> Result<(), RPCError> {
     Err(RPCError::unimplemented_error("maintenance_windows"))
 }
 
-pub async fn split_storage_info(
-    _data: Data<ServerContext>,
-    Params(_params): Params<serde_json::Value>,
-) -> Result<(), RPCError> {
+pub async fn split_storage_info(_data: Data<ServerContext>) -> Result<(), RPCError> {
     Err(RPCError::unimplemented_error("split_storage_info"))
 }
 
 pub async fn status(
     data: Data<ServerContext>,
-    Params(_params): Params<serde_json::Value>,
 ) -> Result<near_primitives::views::StatusResponse, RPCError> {
     let final_block = data.blocks_info_by_finality.final_cache_block().await;
     let validators = data.blocks_info_by_finality.validators().await;
@@ -91,14 +80,12 @@ pub async fn status(
 
 pub async fn health(
     data: Data<ServerContext>,
-    Params(_params): Params<serde_json::Value>,
 ) -> Result<crate::health::RPCHealthStatusResponse, RPCError> {
     Ok(crate::health::RPCHealthStatusResponse::new(&data).await)
 }
 
 pub async fn network_info(
     data: Data<ServerContext>,
-    Params(_params): Params<serde_json::Value>,
 ) -> Result<near_jsonrpc::primitives::types::network_info::RpcNetworkInfoResponse, RPCError> {
     Ok(data
         .near_rpc_client
@@ -111,15 +98,14 @@ pub async fn network_info(
 
 pub async fn validators(
     data: Data<ServerContext>,
-    Params(params): Params<serde_json::Value>,
+    request_data: near_jsonrpc::primitives::types::validator::RpcValidatorRequest,
 ) -> Result<near_jsonrpc::primitives::types::validator::RpcValidatorResponse, RPCError> {
-    let request = near_jsonrpc::primitives::types::validator::RpcValidatorRequest::parse(params)?;
-    tracing::debug!("`validators` called with parameters: {:?}", request);
+    tracing::debug!("`validators` called with parameters: {:?}", request_data);
     // Latest epoch validators fetches from the Near RPC node
-    if let near_primitives::types::EpochReference::Latest = &request.epoch_reference {
+    if let near_primitives::types::EpochReference::Latest = &request_data.epoch_reference {
         let validator_info = data
             .near_rpc_client
-            .call(request, Some("validators"))
+            .call(request_data, Some("validators"))
             .await?;
         return Ok(
             near_jsonrpc::primitives::types::validator::RpcValidatorResponse { validator_info },
@@ -127,7 +113,8 @@ pub async fn validators(
     };
 
     // Current epoch validators fetches from the Near RPC node
-    if let near_primitives::types::EpochReference::EpochId(epoch_id) = &request.epoch_reference {
+    if let near_primitives::types::EpochReference::EpochId(epoch_id) = &request_data.epoch_reference
+    {
         if data
             .blocks_info_by_finality
             .final_cache_block()
@@ -137,7 +124,7 @@ pub async fn validators(
         {
             let validator_info = data
                 .near_rpc_client
-                .call(request, Some("validators"))
+                .call(request_data, Some("validators"))
                 .await?;
             return Ok(
                 near_jsonrpc::primitives::types::validator::RpcValidatorResponse { validator_info },
@@ -145,7 +132,7 @@ pub async fn validators(
         }
     };
 
-    let validator_info = validators_call(&data, &request).await;
+    let validator_info = validators_call(&data, &request_data).await;
 
     #[cfg(feature = "shadow_data_consistency")]
     {
@@ -153,7 +140,7 @@ pub async fn validators(
             data.shadow_data_consistency_rate,
             &validator_info,
             data.near_rpc_client.clone(),
-            request,
+            request_data,
             "validators",
         )
         .await;
@@ -169,12 +156,9 @@ pub async fn validators(
 
 pub async fn validators_ordered(
     data: Data<ServerContext>,
-    Params(params): Params<serde_json::Value>,
+    request_data: near_jsonrpc::primitives::types::validator::RpcValidatorsOrderedRequest,
 ) -> Result<near_jsonrpc::primitives::types::validator::RpcValidatorsOrderedResponse, RPCError> {
-    let request =
-        near_jsonrpc::primitives::types::validator::RpcValidatorsOrderedRequest::parse(params)?;
-
-    if let Some(block_id) = &request.block_id {
+    if let Some(block_id) = &request_data.block_id {
         let block_reference = near_primitives::types::BlockReference::from(block_id.clone());
         if let Ok(block) = fetch_block_from_cache_or_get(
             &data,
@@ -194,19 +178,19 @@ pub async fn validators_ordered(
                 // Proxy to regular rpc if the block is available
                 Ok(data
                     .near_rpc_client
-                    .call(request, Some("EXPERIMENTAL_validators_ordered"))
+                    .call(request_data, Some("EXPERIMENTAL_validators_ordered"))
                     .await?)
             } else {
                 // Proxy to archival rpc if the block garbage collected
                 Ok(data
                     .near_rpc_client
-                    .archival_call(request, Some("EXPERIMENTAL_validators_ordered"))
+                    .archival_call(request_data, Some("EXPERIMENTAL_validators_ordered"))
                     .await?)
             }
         } else {
             Ok(data
                 .near_rpc_client
-                .call(request, Some("EXPERIMENTAL_validators_ordered"))
+                .call(request_data, Some("EXPERIMENTAL_validators_ordered"))
                 .await?)
         }
     } else {
@@ -222,31 +206,27 @@ pub async fn validators_ordered(
         .await;
         Ok(data
             .near_rpc_client
-            .call(request, Some("EXPERIMENTAL_validators_ordered"))
+            .call(request_data, Some("EXPERIMENTAL_validators_ordered"))
             .await?)
     }
 }
 
 pub async fn genesis_config(
     data: Data<ServerContext>,
-    Params(_params): Params<serde_json::Value>,
 ) -> Result<near_chain_configs::GenesisConfig, RPCError> {
     Ok(data.genesis_info.genesis_config.clone())
 }
 
 pub async fn protocol_config(
     data: Data<ServerContext>,
-    Params(params): Params<serde_json::Value>,
+    request_data: near_jsonrpc::primitives::types::config::RpcProtocolConfigRequest,
 ) -> Result<near_jsonrpc::primitives::types::config::RpcProtocolConfigResponse, RPCError> {
     tracing::debug!(
         "`EXPERIMENTAL_protocol_config` called with parameters: {:?}",
-        params
+        request_data
     );
-    let protocol_config_request =
-        near_jsonrpc::primitives::types::config::RpcProtocolConfigRequest::parse(params)?;
 
-    let config_view =
-        protocol_config_call(&data, protocol_config_request.block_reference.clone()).await;
+    let config_view = protocol_config_call(&data, request_data.block_reference.clone()).await;
 
     #[cfg(feature = "shadow_data_consistency")]
     {
@@ -254,7 +234,7 @@ pub async fn protocol_config(
             data.shadow_data_consistency_rate,
             &config_view,
             data.near_rpc_client.clone(),
-            protocol_config_request,
+            request_data,
             "EXPERIMENTAL_protocol_config",
         )
         .await;

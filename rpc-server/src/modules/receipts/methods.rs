@@ -1,22 +1,17 @@
-use actix_web::web::Data;
-use jsonrpc_v2::Params;
-use near_jsonrpc::RpcRequest;
-
 use crate::config::ServerContext;
 use crate::errors::RPCError;
 use crate::modules::transactions::try_get_transaction_details_by_hash;
+
+use actix_web::web::Data;
 
 /// Fetches a receipt by it's ID (as is, without a status or execution outcome)
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn receipt(
     data: Data<ServerContext>,
-    Params(params): Params<serde_json::Value>,
+    request_data: near_jsonrpc::primitives::types::receipts::RpcReceiptRequest,
 ) -> Result<near_jsonrpc::primitives::types::receipts::RpcReceiptResponse, RPCError> {
-    tracing::debug!("`receipt` call. Params: {:?}", params);
-    let receipt_request =
-        near_jsonrpc::primitives::types::receipts::RpcReceiptRequest::parse(params)?;
-
-    let result = fetch_receipt(&data, &receipt_request).await;
+    tracing::debug!("`receipt` call. Params: {:?}", request_data);
+    let result = fetch_receipt(&data, &request_data).await;
 
     #[cfg(feature = "shadow_data_consistency")]
     {
@@ -24,7 +19,7 @@ pub async fn receipt(
             data.shadow_data_consistency_rate,
             &result,
             data.near_rpc_client.clone(),
-            receipt_request,
+            request_data,
             "EXPERIMENTAL_receipt",
         )
         .await;

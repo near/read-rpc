@@ -2528,15 +2528,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
 
 [[package]]
-name = "extensions"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "258f70bd2b060d448403a66d420e81dcac3e5247a4928a887404a5e03715e2e0"
-dependencies = [
- "fxhash",
-]
-
-[[package]]
 name = "fallible-iterator"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3498,22 +3489,6 @@ name = "json_comments"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9dbbfed4e59ba9750e15ba154fdfd9329cee16ff3df539c2666b70f58cc32105"
-
-[[package]]
-name = "jsonrpc-v2"
-version = "0.11.0"
-source = "git+https://github.com/kobayurii/jsonrpc-v2?branch=rpc-fork#04ffc3acf990dc35acd7c292bc82834b7a85c6c7"
-dependencies = [
- "actix-service",
- "actix-web",
- "async-trait",
- "bytes",
- "erased-serde",
- "extensions",
- "futures",
- "serde",
- "serde_json",
-]
 
 [[package]]
 name = "jsonwebtoken"
@@ -6641,7 +6616,6 @@ dependencies = [
  "futures",
  "futures-locks",
  "hex",
- "jsonrpc-v2",
  "lazy_static",
  "lru 0.12.4",
  "mimalloc",

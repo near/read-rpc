@@ -2,8 +2,6 @@ use std::ops::{Deref, DerefMut};
 
 use near_jsonrpc_client::errors::{JsonRpcError, JsonRpcServerError};
 
-type BoxedSerialize = Box<dyn erased_serde::Serialize + Send + 'static>;
-
 #[derive(Debug, serde::Serialize)]
 #[serde(transparent)]
 pub struct RPCError(pub(crate) near_jsonrpc::primitives::errors::RpcError);
@@ -15,6 +13,14 @@ impl From<RPCError> for near_jsonrpc::primitives::errors::RpcError {
 }
 
 impl RPCError {
+    pub(crate) fn method_not_found() -> Self {
+        Self::from(near_jsonrpc::primitives::errors::RpcError::new(
+            -32601,
+            "Method not found".to_owned(),
+            None,
+        ))
+    }
+
     pub(crate) fn unimplemented_error(method_name: &str) -> Self {
         Self::from(near_jsonrpc::primitives::errors::RpcError::new(
             -32601,
@@ -53,24 +59,6 @@ impl DerefMut for RPCError {
 impl std::fmt::Display for RPCError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
-    }
-}
-
-impl jsonrpc_v2::ErrorLike for RPCError {
-    fn code(&self) -> i64 {
-        self.code
-    }
-
-    fn message(&self) -> String {
-        self.message.to_string()
-    }
-
-    fn data(&self) -> Option<BoxedSerialize> {
-        Some(Box::new(self.data.clone()))
-    }
-
-    fn error_struct(&self) -> Option<BoxedSerialize> {
-        Some(Box::new(self.error_struct.clone()))
     }
 }
 

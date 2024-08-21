@@ -1,37 +1,29 @@
 use crate::config::ServerContext;
 use crate::errors::RPCError;
-use jsonrpc_v2::{Data, Params};
-use near_jsonrpc::RpcRequest;
+
+use actix_web::web::Data;
 
 pub async fn light_client_proof(
     data: Data<ServerContext>,
-    Params(params): Params<serde_json::Value>,
+    request_data: near_jsonrpc::primitives::types::light_client::RpcLightClientExecutionProofRequest,
 ) -> Result<
     near_jsonrpc::primitives::types::light_client::RpcLightClientExecutionProofResponse,
     RPCError,
 > {
-    let request =
-        near_jsonrpc::primitives::types::light_client::RpcLightClientExecutionProofRequest::parse(
-            params,
-        )?;
     Ok(data
         .near_rpc_client
-        .archival_call(request, Some("light_client_proof"))
+        .archival_call(request_data, Some("light_client_proof"))
         .await?)
 }
 
 pub async fn next_light_client_block(
     data: Data<ServerContext>,
-    Params(params): Params<serde_json::Value>,
+    request_data: near_jsonrpc::primitives::types::light_client::RpcLightClientNextBlockRequest,
 ) -> Result<near_jsonrpc::primitives::types::light_client::RpcLightClientNextBlockResponse, RPCError>
 {
-    let request =
-        near_jsonrpc::primitives::types::light_client::RpcLightClientNextBlockRequest::parse(
-            params,
-        )?;
     match data
         .near_rpc_client
-        .call(request, Some("next_light_client_block"))
+        .call(request_data, Some("next_light_client_block"))
         .await?
     {
         Some(light_client_block) => Ok(

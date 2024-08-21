@@ -3,11 +3,11 @@ use crate::errors::RPCError;
 use crate::modules::blocks::utils::{
     fetch_block_from_cache_or_get, fetch_chunk_from_s3, is_matching_change,
 };
-use actix_web::web::Data;
-use jsonrpc_v2::Params;
-use near_jsonrpc::RpcRequest;
+
 use near_primitives::trie_key::TrieKey;
 use near_primitives::views::StateChangeValueView;
+
+use actix_web::web::Data;
 
 /// `block` rpc method implementation
 /// calls proxy_rpc_call to get `block` from near-rpc if request parameters not supported by read-rpc
@@ -38,18 +38,17 @@ pub async fn block(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn chunk(
     data: Data<ServerContext>,
-    Params(params): Params<serde_json::Value>,
+    request_data: near_jsonrpc::primitives::types::chunks::RpcChunkRequest,
 ) -> Result<near_jsonrpc::primitives::types::chunks::RpcChunkResponse, RPCError> {
-    tracing::debug!("`chunk` called with parameters: {:?}", params);
-    let chunk_request = near_jsonrpc::primitives::types::chunks::RpcChunkRequest::parse(params)?;
-    let result = fetch_chunk(&data, chunk_request.chunk_reference.clone()).await;
+    tracing::debug!("`chunk` called with parameters: {:?}", request_data);
+    let result = fetch_chunk(&data, request_data.chunk_reference.clone()).await;
     #[cfg(feature = "shadow_data_consistency")]
     {
         crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
             &result,
             data.near_rpc_client.clone(),
-            chunk_request,
+            request_data,
             "chunk",
         )
         .await;
@@ -64,27 +63,22 @@ pub async fn chunk(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn changes_in_block_by_type(
     data: Data<ServerContext>,
-    Params(params): Params<serde_json::Value>,
+    request_data: near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockByTypeRequest,
 ) -> Result<near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockResponse, RPCError> {
-    let changes_in_block_request =
-        near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockByTypeRequest::parse(
-            params,
-        )?;
-
     if let near_primitives::types::BlockReference::Finality(
         near_primitives::types::Finality::None,
-    ) = &changes_in_block_request.block_reference
+    ) = &request_data.block_reference
     {
         if crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
             // Proxy if the optimistic updating is not working
             return Ok(data
                 .near_rpc_client
-                .call(changes_in_block_request, Some("EXPERIMENTAL_changes"))
+                .call(request_data, Some("EXPERIMENTAL_changes"))
                 .await?);
         }
     };
 
-    changes_in_block_by_type_call(data, changes_in_block_request).await
+    changes_in_block_by_type_call(data, request_data).await
 }
 
 /// `EXPERIMENTAL_changes_in_block` rpc method implementation
@@ -94,29 +88,23 @@ pub async fn changes_in_block_by_type(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn changes_in_block(
     data: Data<ServerContext>,
-    Params(params): Params<serde_json::Value>,
+    request_data: near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockRequest,
 ) -> Result<near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockByTypeResponse, RPCError>
 {
-    let changes_in_block_request =
-        near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockRequest::parse(params)?;
-
     if let near_primitives::types::BlockReference::Finality(
         near_primitives::types::Finality::None,
-    ) = &changes_in_block_request.block_reference
+    ) = &request_data.block_reference
     {
         if crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
             // Proxy if the optimistic updating is not working
             return Ok(data
                 .near_rpc_client
-                .call(
-                    changes_in_block_request,
-                    Some("EXPERIMENTAL_changes_in_block"),
-                )
+                .call(request_data, Some("EXPERIMENTAL_changes_in_block"))
                 .await?);
         }
     };
 
-    changes_in_block_call(data, changes_in_block_request).await
+    changes_in_block_call(data, request_data).await
 }
 
 /// fetch block from read-rpc
@@ -130,13 +118,13 @@ async fn block_call(
     let result = match fetch_block(&data, &block_request.block_reference, "block").await {
         Ok(block) => {
             // increase block category metrics
-            //crate::metrics::increase_request_category_metrics(
-            //    &data,
-            //    &block_request.block_reference,
-            //    "block",
-            //    Some(block.block_view.header.height),
-            //)
-            //.await;
+            crate::metrics::increase_request_category_metrics(
+                &data,
+                &block_request.block_reference,
+                "block",
+                Some(block.block_view.header.height),
+            )
+            .await;
             Ok(block)
         }
         Err(err) => Err(err),

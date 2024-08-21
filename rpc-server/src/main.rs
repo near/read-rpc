@@ -3,11 +3,10 @@ use actix_web::{
     App, HttpResponse, HttpServer,
 };
 use errors::RPCError;
-//use jsonrpc_v2::{Data, Params, Router, Server};
 use mimalloc::MiMalloc;
 use near_jsonrpc::{
     primitives::{
-        errors::{RpcError, RpcErrorKind},
+        errors::{RpcError, RpcErrorKind, RpcRequestValidationErrorKind},
         message::{Message, Request},
     },
     RpcRequest,
@@ -68,12 +67,17 @@ async fn rpc_handler(
 
     let id = request.id.clone();
 
-    let result = match request.method.as_ref() {
-        "block" => {
-            process_method_call(request, |params| {
-                modules::blocks::methods::block(data, params)
-            })
-            .await
+    let method_name = request.method.clone();
+    let result = match method_name.as_ref() {
+        // custom request methods
+        "view_state_paginated" => {
+            if let Ok(request_data) = serde_json::from_value(request.params) {
+                serialize_response(
+                    modules::state::methods::view_state_paginated(data, request_data).await,
+                )
+            } else {
+                Err(RPCError::internal_error("Failed to parse request data"))
+            }
         }
         "view_receipt_record" => {
             process_method_call(request, |params| {
@@ -81,22 +85,191 @@ async fn rpc_handler(
             })
             .await
         }
-        _ => return HttpResponse::NotFound().finish(),
+        // request methods
+        "query" => {
+            process_method_call(request, |params| {
+                modules::queries::methods::query(data, params)
+            })
+            .await
+        }
+        // basic requests methods
+        "block" => {
+            process_method_call(request, |params| {
+                modules::blocks::methods::block(data, params)
+            })
+            .await
+        }
+        "broadcast_tx_async" => {
+            process_method_call(request, |params| {
+                modules::transactions::methods::broadcast_tx_async(data, params)
+            })
+            .await
+        }
+        "broadcast_tx_commit" => {
+            process_method_call(request, |params| {
+                modules::transactions::methods::broadcast_tx_commit(data, params)
+            })
+            .await
+        }
+        "chunk" => {
+            process_method_call(request, |params| {
+                modules::blocks::methods::chunk(data, params)
+            })
+            .await
+        }
+        "gas_price" => {
+            process_method_call(request, |params| {
+                modules::gas::methods::gas_price(data, params)
+            })
+            .await
+        }
+        "health" => {
+            process_method_call(request, |_: ()| modules::network::methods::health(data)).await
+        }
+        "light_client_proof" => {
+            process_method_call(request, |params| {
+                modules::clients::methods::light_client_proof(data, params)
+            })
+            .await
+        }
+        "next_light_client_block" => {
+            process_method_call(request, |params| {
+                modules::clients::methods::next_light_client_block(data, params)
+            })
+            .await
+        }
+        "network_info" => {
+            process_method_call(request, |_: ()| {
+                modules::network::methods::network_info(data)
+            })
+            .await
+        }
+        "send_tx" => {
+            process_method_call(request, |params| {
+                modules::transactions::methods::send_tx(data, params)
+            })
+            .await
+        }
+        "status" => {
+            process_method_call(request, |_: ()| modules::network::methods::status(data)).await
+        }
+        "tx" => {
+            process_method_call(request, |params| {
+                modules::transactions::methods::tx(data, params)
+            })
+            .await
+        }
+        "validators" => {
+            process_method_call(request, |params| {
+                modules::network::methods::validators(data, params)
+            })
+            .await
+        }
+        "client_config" => {
+            process_method_call(request, |_: ()| {
+                modules::network::methods::client_config(data)
+            })
+            .await
+        }
+        "EXPERIMENTAL_changes" => {
+            process_method_call(request, |params| {
+                modules::blocks::methods::changes_in_block_by_type(data, params)
+            })
+            .await
+        }
+        "EXPERIMENTAL_changes_in_block" => {
+            process_method_call(request, |params| {
+                modules::blocks::methods::changes_in_block(data, params)
+            })
+            .await
+        }
+        "EXPERIMENTAL_genesis_config" => {
+            process_method_call(request, |_: ()| {
+                modules::network::methods::genesis_config(data)
+            })
+            .await
+        }
+        "EXPERIMENTAL_light_client_proof" => {
+            process_method_call(request, |params| {
+                modules::clients::methods::light_client_proof(data, params)
+            })
+            .await
+        }
+        "EXPERIMENTAL_protocol_config" => {
+            process_method_call(request, |params| {
+                modules::network::methods::protocol_config(data, params)
+            })
+            .await
+        }
+        "EXPERIMENTAL_receipt" => {
+            process_method_call(request, |params| {
+                modules::receipts::methods::receipt(data, params)
+            })
+            .await
+        }
+        "EXPERIMENTAL_tx_status" => {
+            process_method_call(request, |params| {
+                modules::transactions::methods::tx_status(data, params)
+            })
+            .await
+        }
+        "EXPERIMENTAL_validators_ordered" => {
+            process_method_call(request, |params| {
+                modules::network::methods::validators_ordered(data, params)
+            })
+            .await
+        }
+        "EXPERIMENTAL_maintenance_windows" => {
+            process_method_call(request, |_: ()| {
+                modules::network::methods::maintenance_windows(data)
+            })
+            .await
+        }
+        "EXPERIMENTAL_split_storage_info" => {
+            process_method_call(request, |_: ()| {
+                modules::network::methods::split_storage_info(data)
+            })
+            .await
+        }
+        _ => Err(RPCError::method_not_found()),
     };
 
-    // TODO: add metrics here
     let mut response = match &result {
         Ok(_) => HttpResponse::Ok(),
         Err(err) => match &err.error_struct {
-            Some(RpcErrorKind::RequestValidationError(_)) => HttpResponse::BadRequest(),
+            Some(RpcErrorKind::RequestValidationError(validation_error)) => {
+                if let RpcRequestValidationErrorKind::ParseError { .. } = validation_error {
+                    metrics::METHOD_ERRORS_TOTAL
+                        .with_label_values(&[method_name.as_ref(), "PARSE_ERROR"])
+                        .inc()
+                }
+
+                HttpResponse::BadRequest()
+            }
             Some(RpcErrorKind::HandlerError(error_struct)) => {
-                if error_struct["name"] == "TIMEOUT_ERROR" {
-                    HttpResponse::RequestTimeout()
+                if let Some(error_name) =
+                    error_struct.get("name").and_then(serde_json::Value::as_str)
+                {
+                    metrics::METHOD_ERRORS_TOTAL
+                        .with_label_values(&[method_name.as_ref(), error_name])
+                        .inc();
+
+                    if error_name == "TIMEOUT_ERROR" {
+                        HttpResponse::RequestTimeout()
+                    } else {
+                        HttpResponse::Ok()
+                    }
                 } else {
                     HttpResponse::Ok()
                 }
             }
-            Some(RpcErrorKind::InternalError(_)) => HttpResponse::InternalServerError(),
+            Some(RpcErrorKind::InternalError(_)) => {
+                metrics::METHOD_ERRORS_TOTAL
+                    .with_label_values(&[method_name.as_ref(), "INTERNAL_ERROR"])
+                    .inc();
+
+                HttpResponse::InternalServerError()
+            }
             None => HttpResponse::Ok(),
         },
     };

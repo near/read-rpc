@@ -2,24 +2,25 @@ use crate::config::ServerContext;
 use crate::errors::RPCError;
 use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
 use crate::modules::state::utils::get_state_from_db_paginated;
+
 use actix_web::web::Data;
-use jsonrpc_v2::Params;
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn view_state_paginated(
     data: Data<ServerContext>,
-    Params(params): Params<crate::modules::state::RpcViewStatePaginatedRequest>,
+    request_data: crate::modules::state::RpcViewStatePaginatedRequest,
 ) -> Result<crate::modules::state::RpcViewStatePaginatedResponse, RPCError> {
-    let block_reference = near_primitives::types::BlockReference::BlockId(params.block_id.clone());
+    let block_reference =
+        near_primitives::types::BlockReference::BlockId(request_data.block_id.clone());
     let block = fetch_block_from_cache_or_get(&data, &block_reference, "view_state_paginated")
         .await
         .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
 
     let state_values = get_state_from_db_paginated(
         &data.db_manager,
-        &params.account_id,
+        &request_data.account_id,
         block.block_height,
-        params.next_page_token,
+        request_data.next_page_token,
     )
     .await;
 

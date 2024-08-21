@@ -1,32 +1,30 @@
 use crate::config::ServerContext;
 use crate::errors::RPCError;
+
 use actix_web::web::Data;
-use jsonrpc_v2::Params;
-use near_jsonrpc::RpcRequest;
 use near_primitives::views::FinalExecutionOutcomeViewEnum::{
     FinalExecutionOutcome, FinalExecutionOutcomeWithReceipt,
 };
 
 pub async fn send_tx(
     data: Data<ServerContext>,
-    Params(params): Params<serde_json::Value>,
+    request_data: near_jsonrpc::primitives::types::transactions::RpcSendTransactionRequest,
 ) -> Result<near_jsonrpc::primitives::types::transactions::RpcTransactionResponse, RPCError> {
-    let request = near_jsonrpc_client::methods::send_tx::RpcSendTransactionRequest::parse(params)?;
-    Ok(data.near_rpc_client.call(request, Some("send_tx")).await?)
+    Ok(data
+        .near_rpc_client
+        .call(request_data, Some("send_tx"))
+        .await?)
 }
 
 /// Queries status of a transaction by hash and returns the final transaction result.
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn tx(
     data: Data<ServerContext>,
-    Params(params): Params<serde_json::Value>,
+    request_data: near_jsonrpc::primitives::types::transactions::RpcTransactionStatusRequest,
 ) -> Result<near_jsonrpc::primitives::types::transactions::RpcTransactionResponse, RPCError> {
-    tracing::debug!("`tx` call. Params: {:?}", params);
+    tracing::debug!("`tx` call. Params: {:?}", request_data);
 
-    let tx_status_request =
-        near_jsonrpc::primitives::types::transactions::RpcTransactionStatusRequest::parse(params)?;
-
-    let result = tx_status_common(&data, &tx_status_request.transaction_info, false).await;
+    let result = tx_status_common(&data, &request_data.transaction_info, false).await;
 
     #[cfg(feature = "shadow_data_consistency")]
     {
@@ -39,8 +37,8 @@ pub async fn tx(
             // so we can't just pass `params` there, instead we need to craft a request manually
             // tx_status_request,
             near_jsonrpc_client::methods::tx::RpcTransactionStatusRequest {
-                transaction_info: tx_status_request.transaction_info,
-                wait_until: tx_status_request.wait_until,
+                transaction_info: request_data.transaction_info,
+                wait_until: request_data.wait_until,
             },
             "tx",
         )
@@ -54,14 +52,11 @@ pub async fn tx(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn tx_status(
     data: Data<ServerContext>,
-    Params(params): Params<serde_json::Value>,
+    request_data: near_jsonrpc::primitives::types::transactions::RpcTransactionStatusRequest,
 ) -> Result<near_jsonrpc::primitives::types::transactions::RpcTransactionResponse, RPCError> {
-    tracing::debug!("`tx_status` call. Params: {:?}", params);
+    tracing::debug!("`tx_status` call. Params: {:?}", request_data);
 
-    let tx_status_request =
-        near_jsonrpc::primitives::types::transactions::RpcTransactionStatusRequest::parse(params)?;
-
-    let result = tx_status_common(&data, &tx_status_request.transaction_info, true).await;
+    let result = tx_status_common(&data, &request_data.transaction_info, true).await;
 
     #[cfg(feature = "shadow_data_consistency")]
     {
@@ -73,8 +68,8 @@ pub async fn tx_status(
             // The method is `near_jsonrpc_client::methods::EXPERIMENTAL_tx_status` in the client
             // so we can't just pass `params` there, instead we need to craft a request manually
             near_jsonrpc_client::methods::EXPERIMENTAL_tx_status::RpcTransactionStatusRequest {
-                transaction_info: tx_status_request.transaction_info,
-                wait_until: tx_status_request.wait_until,
+                transaction_info: request_data.transaction_info,
+                wait_until: request_data.wait_until,
             },
             "EXPERIMENTAL_tx_status",
         )
@@ -87,14 +82,12 @@ pub async fn tx_status(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn broadcast_tx_async(
     data: Data<ServerContext>,
-    Params(params): Params<serde_json::Value>,
+    request_data: near_jsonrpc::primitives::types::transactions::RpcSendTransactionRequest,
 ) -> Result<near_primitives::hash::CryptoHash, RPCError> {
-    tracing::debug!("`broadcast_tx_async` call. Params: {:?}", params);
-    let tx_async_request =
-        near_jsonrpc::primitives::types::transactions::RpcSendTransactionRequest::parse(params)?;
+    tracing::debug!("`broadcast_tx_async` call. Params: {:?}", request_data);
     let proxy_params =
         near_jsonrpc_client::methods::broadcast_tx_async::RpcBroadcastTxAsyncRequest {
-            signed_transaction: tx_async_request.signed_transaction,
+            signed_transaction: request_data.signed_transaction,
         };
     match data
         .near_rpc_client
@@ -109,14 +102,12 @@ pub async fn broadcast_tx_async(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn broadcast_tx_commit(
     data: Data<ServerContext>,
-    Params(params): Params<serde_json::Value>,
+    request_data: near_jsonrpc::primitives::types::transactions::RpcSendTransactionRequest,
 ) -> Result<near_jsonrpc::primitives::types::transactions::RpcTransactionResponse, RPCError> {
-    tracing::debug!("`broadcast_tx_commit` call. Params: {:?}", params);
-    let tx_commit_request =
-        near_jsonrpc::primitives::types::transactions::RpcSendTransactionRequest::parse(params)?;
+    tracing::debug!("`broadcast_tx_commit` call. Params: {:?}", request_data);
     let proxy_params =
         near_jsonrpc_client::methods::broadcast_tx_commit::RpcBroadcastTxCommitRequest {
-            signed_transaction: tx_commit_request.signed_transaction,
+            signed_transaction: request_data.signed_transaction,
         };
     let result = data
         .near_rpc_client
