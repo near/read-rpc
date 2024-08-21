@@ -1,7 +1,7 @@
+use actix_web::web::Data;
+
 use crate::config::ServerContext;
 use crate::errors::RPCError;
-
-use actix_web::web::Data;
 
 pub async fn light_client_proof(
     data: Data<ServerContext>,

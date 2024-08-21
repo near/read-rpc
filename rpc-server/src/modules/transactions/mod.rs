@@ -1,5 +1,6 @@
-use crate::config::ServerContext;
 use actix_web::web::Data;
+
+use crate::config::ServerContext;
 
 pub mod methods;
 

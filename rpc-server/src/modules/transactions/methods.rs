@@ -1,10 +1,10 @@
-use crate::config::ServerContext;
-use crate::errors::RPCError;
-
 use actix_web::web::Data;
 use near_primitives::views::FinalExecutionOutcomeViewEnum::{
     FinalExecutionOutcome, FinalExecutionOutcomeWithReceipt,
 };
+
+use crate::config::ServerContext;
+use crate::errors::RPCError;
 
 pub async fn send_tx(
     data: Data<ServerContext>,

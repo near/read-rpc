@@ -1,3 +1,5 @@
+use actix_web::web::Data;
+
 use crate::config::ServerContext;
 use crate::errors::RPCError;
 use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
@@ -5,8 +7,6 @@ use crate::modules::blocks::CacheBlock;
 
 use super::contract_runner;
 use super::utils::get_state_from_db;
-
-use actix_web::web::Data;
 
 /// `query` rpc method implementation
 /// calls proxy_rpc_call to get `query` from near-rpc if request parameters not supported by read-rpc

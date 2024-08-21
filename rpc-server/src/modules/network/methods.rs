@@ -1,11 +1,10 @@
+use actix_web::web::Data;
+use near_primitives::epoch_manager::{AllEpochConfig, EpochConfig};
+
 use crate::config::ServerContext;
 use crate::errors::RPCError;
 use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
 use crate::modules::network::get_protocol_version;
-
-use near_primitives::epoch_manager::{AllEpochConfig, EpochConfig};
-
-use actix_web::web::Data;
 
 pub async fn client_config(_data: Data<ServerContext>) -> Result<(), RPCError> {
     Err(RPCError::unimplemented_error("client_config"))

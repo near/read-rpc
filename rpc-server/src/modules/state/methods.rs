@@ -1,9 +1,9 @@
+use actix_web::web::Data;
+
 use crate::config::ServerContext;
 use crate::errors::RPCError;
 use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
 use crate::modules::state::utils::get_state_from_db_paginated;
-
-use actix_web::web::Data;
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn view_state_paginated(

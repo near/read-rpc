@@ -1,7 +1,8 @@
+use near_primitives::views::{StateChangeValueView, StateChangesRequestView};
+
 use crate::config::ServerContext;
 use crate::modules::blocks::methods::fetch_block;
 use crate::modules::blocks::CacheBlock;
-use near_primitives::views::{StateChangeValueView, StateChangesRequestView};
 
 #[cfg_attr(
     feature = "tracing-instrumentation",
