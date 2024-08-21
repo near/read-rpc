@@ -2,7 +2,6 @@ use actix_web::{
     web::{self},
     App, HttpResponse, HttpServer,
 };
-use errors::RPCError;
 use mimalloc::MiMalloc;
 use near_jsonrpc::{
     primitives::{
@@ -12,6 +11,8 @@ use near_jsonrpc::{
     RpcRequest,
 };
 use serde_json::Value;
+
+use errors::RPCError;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -76,7 +77,9 @@ async fn rpc_handler(
                     modules::state::methods::view_state_paginated(data, request_data).await,
                 )
             } else {
-                Err(RPCError::internal_error("Failed to parse request data"))
+                Err(RPCError::parse_error(
+                    "Failed to parse request data".to_string(),
+                ))
             }
         }
         "view_receipt_record" => {
@@ -231,17 +234,30 @@ async fn rpc_handler(
             })
             .await
         }
-        _ => Err(RPCError::method_not_found()),
+        _ => Err(RPCError::method_not_found(method_name.as_ref())),
     };
 
     let mut response = match &result {
-        Ok(_) => HttpResponse::Ok(),
+        Ok(_) => {
+            metrics::METHOD_CALLS_COUNTER
+                .with_label_values(&[method_name.as_ref()])
+                .inc();
+
+            HttpResponse::Ok()
+        }
         Err(err) => match &err.error_struct {
             Some(RpcErrorKind::RequestValidationError(validation_error)) => {
-                if let RpcRequestValidationErrorKind::ParseError { .. } = validation_error {
-                    metrics::METHOD_ERRORS_TOTAL
-                        .with_label_values(&[method_name.as_ref(), "PARSE_ERROR"])
-                        .inc()
+                match validation_error {
+                    RpcRequestValidationErrorKind::ParseError { .. } => {
+                        metrics::METHOD_ERRORS_TOTAL
+                            .with_label_values(&[method_name.as_ref(), "PARSE_ERROR"])
+                            .inc()
+                    }
+                    RpcRequestValidationErrorKind::MethodNotFound { .. } => {
+                        metrics::METHOD_CALLS_COUNTER
+                            .with_label_values(&["METHOD_NOT_FOUND"])
+                            .inc()
+                    }
                 }
 
                 HttpResponse::BadRequest()
@@ -362,10 +378,6 @@ async fn main() -> anyhow::Result<()> {
             .await
         });
     }
-
-    // TODO: decide what to do with metrics here
-    // Insert all rpc methods to the hashmap after init the server
-    // metrics::RPC_METHODS.insert(rpc.router.routers()).await;
 
     HttpServer::new(move || {
         let cors = actix_cors::Cors::permissive();

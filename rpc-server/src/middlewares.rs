@@ -1,4 +1,4 @@
-use crate::metrics::{METHOD_CALLS_COUNTER, RPC_METHODS};
+use crate::metrics::METHOD_CALLS_COUNTER;
 use actix_web::dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform};
 use futures::future::LocalBoxFuture;
 use futures::StreamExt;
@@ -63,8 +63,7 @@ where
             }
 
             if let Ok(obj) = serde_json::from_slice::<Request>(&body) {
-                let method = obj.method.as_ref();
-                if method == "query" {
+                if obj.method == "query" {
                     if let Ok(query_request) =
                         near_jsonrpc::primitives::types::query::RpcQueryRequest::parse(obj.params)
                     {
@@ -90,12 +89,6 @@ where
                         };
                         METHOD_CALLS_COUNTER.with_label_values(&[method]).inc()
                     }
-                } else if RPC_METHODS.get(method).await.is_some() {
-                    METHOD_CALLS_COUNTER.with_label_values(&[method]).inc()
-                } else {
-                    METHOD_CALLS_COUNTER
-                        .with_label_values(&["method_not_found"])
-                        .inc()
                 }
             };
 

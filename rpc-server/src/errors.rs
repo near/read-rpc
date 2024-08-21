@@ -1,6 +1,8 @@
 use std::ops::{Deref, DerefMut};
 
+use near_jsonrpc::primitives::errors::{RpcError, RpcErrorKind, RpcRequestValidationErrorKind};
 use near_jsonrpc_client::errors::{JsonRpcError, JsonRpcServerError};
+use serde_json::Value;
 
 #[derive(Debug, serde::Serialize)]
 #[serde(transparent)]
@@ -13,12 +15,18 @@ impl From<RPCError> for near_jsonrpc::primitives::errors::RpcError {
 }
 
 impl RPCError {
-    pub(crate) fn method_not_found() -> Self {
-        Self::from(near_jsonrpc::primitives::errors::RpcError::new(
-            -32601,
-            "Method not found".to_owned(),
-            None,
-        ))
+    pub fn method_not_found(method_name: &str) -> Self {
+        RpcError {
+            code: -32_601,
+            message: "Method not found".to_owned(),
+            data: Some(Value::String(method_name.to_string())),
+            error_struct: Some(RpcErrorKind::RequestValidationError(
+                RpcRequestValidationErrorKind::MethodNotFound {
+                    method_name: method_name.to_string(),
+                },
+            )),
+        }
+        .into()
     }
 
     pub(crate) fn unimplemented_error(method_name: &str) -> Self {
@@ -39,6 +47,22 @@ impl RPCError {
             String::from(msg),
             None,
         ))
+    }
+
+    pub(crate) fn parse_error(msg: String) -> Self {
+        RpcError {
+            code: -32_700,
+            message: "Parse error".to_owned(),
+            data: Some(serde_json::Value::String(msg.clone())),
+            error_struct: Some(
+                near_jsonrpc::primitives::errors::RpcErrorKind::RequestValidationError(
+                    near_jsonrpc::primitives::errors::RpcRequestValidationErrorKind::ParseError {
+                        error_message: msg,
+                    },
+                ),
+            ),
+        }
+        .into()
     }
 }
 
