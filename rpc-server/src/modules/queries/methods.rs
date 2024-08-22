@@ -118,7 +118,7 @@ async fn query_call(
         }
     };
 
-    #[cfg(feature = "shadow_data_consistency")]
+    #[cfg(feature = "shadow-data-consistency")]
     {
         // Since we do queries with the clause WHERE block_height <= X, we need to
         // make sure that the block we are doing a shadow data consistency check for

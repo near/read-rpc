@@ -41,7 +41,7 @@ pub async fn chunk(
 ) -> Result<near_jsonrpc::primitives::types::chunks::RpcChunkResponse, RPCError> {
     tracing::debug!("`chunk` called with parameters: {:?}", request_data);
     let result = fetch_chunk(&data, request_data.chunk_reference.clone()).await;
-    #[cfg(feature = "shadow_data_consistency")]
+    #[cfg(feature = "shadow-data-consistency")]
     {
         crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
@@ -129,7 +129,7 @@ async fn block_call(
         Err(err) => Err(err),
     };
 
-    #[cfg(feature = "shadow_data_consistency")]
+    #[cfg(feature = "shadow-data-consistency")]
     {
         if let Ok(res) = &result {
             if let near_primitives::types::BlockReference::Finality(_) =
@@ -171,7 +171,7 @@ async fn changes_in_block_call(
     .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
 
     let result = fetch_changes_in_block(&data, cache_block, &params.block_reference).await;
-    #[cfg(feature = "shadow_data_consistency")]
+    #[cfg(feature = "shadow-data-consistency")]
     {
         if let near_primitives::types::BlockReference::Finality(_) = params.block_reference {
             params.block_reference = near_primitives::types::BlockReference::from(
@@ -211,7 +211,7 @@ async fn changes_in_block_by_type_call(
     )
     .await;
 
-    #[cfg(feature = "shadow_data_consistency")]
+    #[cfg(feature = "shadow-data-consistency")]
     {
         if let near_primitives::types::BlockReference::Finality(_) = params.block_reference {
             params.block_reference = near_primitives::types::BlockReference::from(

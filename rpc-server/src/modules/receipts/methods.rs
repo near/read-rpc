@@ -13,7 +13,7 @@ pub async fn receipt(
     tracing::debug!("`receipt` call. Params: {:?}", request_data);
     let result = fetch_receipt(&data, &request_data).await;
 
-    #[cfg(feature = "shadow_data_consistency")]
+    #[cfg(feature = "shadow-data-consistency")]
     {
         crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,

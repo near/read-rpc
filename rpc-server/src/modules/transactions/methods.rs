@@ -26,7 +26,7 @@ pub async fn tx(
 
     let result = tx_status_common(&data, &request_data.transaction_info, false).await;
 
-    #[cfg(feature = "shadow_data_consistency")]
+    #[cfg(feature = "shadow-data-consistency")]
     {
         crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
@@ -58,7 +58,7 @@ pub async fn tx_status(
 
     let result = tx_status_common(&data, &request_data.transaction_info, true).await;
 
-    #[cfg(feature = "shadow_data_consistency")]
+    #[cfg(feature = "shadow-data-consistency")]
     {
         crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,

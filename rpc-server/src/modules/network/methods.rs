@@ -133,7 +133,7 @@ pub async fn validators(
 
     let validator_info = validators_call(&data, &request_data).await;
 
-    #[cfg(feature = "shadow_data_consistency")]
+    #[cfg(feature = "shadow-data-consistency")]
     {
         crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
@@ -227,7 +227,7 @@ pub async fn protocol_config(
 
     let config_view = protocol_config_call(&data, request_data.block_reference.clone()).await;
 
-    #[cfg(feature = "shadow_data_consistency")]
+    #[cfg(feature = "shadow-data-consistency")]
     {
         crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,

@@ -20,7 +20,7 @@ pub async fn gas_price(
     };
     let cache_block = gas_price_call(&data, block_reference).await;
 
-    #[cfg(feature = "shadow_data_consistency")]
+    #[cfg(feature = "shadow-data-consistency")]
     {
         let result = match &cache_block {
             Ok(block) => {

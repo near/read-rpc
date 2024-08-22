@@ -1,9 +1,9 @@
 use crate::modules::blocks::{BlockInfo, BlocksInfoByFinality, CacheBlock};
-#[cfg(feature = "shadow_data_consistency")]
+#[cfg(feature = "shadow-data-consistency")]
 use assert_json_diff::{assert_json_matches_no_panic, CompareMode, Config, NumericMode};
 use futures::StreamExt;
 
-#[cfg(feature = "shadow_data_consistency")]
+#[cfg(feature = "shadow-data-consistency")]
 const DEFAULT_RETRY_COUNT: u8 = 3;
 
 /// JsonRpcClient represents a client capable of interacting with NEAR JSON-RPC endpoints,
@@ -93,7 +93,7 @@ impl JsonRpcClient {
     }
 
     /// Performs a RPC call to the archival endpoint for shadow comparison results.
-    #[cfg(feature = "shadow_data_consistency")]
+    #[cfg(feature = "shadow-data-consistency")]
     pub async fn shadow_comparison_call<M>(
         &self,
         params: M,
@@ -369,7 +369,7 @@ pub fn friendly_memory_size_format(memory_size_bytes: usize) -> String {
     }
 }
 
-#[cfg(feature = "shadow_data_consistency")]
+#[cfg(feature = "shadow-data-consistency")]
 pub async fn shadow_compare_results_handler<T, E, M>(
     shadow_rate: f64,
     read_rpc_result: &Result<T, E>,
@@ -445,7 +445,7 @@ pub async fn shadow_compare_results_handler<T, E, M>(
     };
 }
 
-#[cfg(feature = "shadow_data_consistency")]
+#[cfg(feature = "shadow-data-consistency")]
 pub async fn is_should_shadow_compare_results(method_total_requests: u64, rate: f64) -> bool {
     let every_request = 100.0 / rate;
     method_total_requests % every_request as u64 == 0
@@ -465,7 +465,7 @@ pub async fn is_should_shadow_compare_results(method_total_requests: u64, rate: 
 ///
 /// In case of a successful comparison, the function returns `Ok(())`.
 /// Otherwise, it returns `Err(ShadowDataConsistencyError)`.
-#[cfg(feature = "shadow_data_consistency")]
+#[cfg(feature = "shadow-data-consistency")]
 pub async fn shadow_compare_results<M>(
     read_rpc_response: Result<serde_json::Value, serde_json::Error>,
     client: JsonRpcClient,
@@ -595,7 +595,7 @@ where
 }
 
 /// Represents the error that can occur during the shadow data consistency check.
-#[cfg(feature = "shadow_data_consistency")]
+#[cfg(feature = "shadow-data-consistency")]
 #[derive(thiserror::Error, Debug)]
 pub enum ShadowDataConsistencyError {
     #[error("Failed to parse ReadRPC response: {0}")]
@@ -616,7 +616,7 @@ pub enum ShadowDataConsistencyError {
 /// This enum is used to track the mismatch between the data returned by the READ RPC server and
 /// the data returned by the NEAR RPC server. The mismatch can be caused by a limited number of
 /// reasons, and this enum is used to track them.
-#[cfg(feature = "shadow_data_consistency")]
+#[cfg(feature = "shadow-data-consistency")]
 #[derive(Debug)]
 pub enum DataMismatchReason {
     /// ReadRPC returns success result and NEAR RPC returns success result but the results mismatch
@@ -629,7 +629,7 @@ pub enum DataMismatchReason {
     ErrorNearRpcError,
 }
 
-#[cfg(feature = "shadow_data_consistency")]
+#[cfg(feature = "shadow-data-consistency")]
 impl DataMismatchReason {
     /// This method converts the reason into a number from 0 to 3. These numbers are used in the
     /// metrics like BLOCK_ERROR_0, BLOCK_ERROR_1, BLOCK_ERROR_2, BLOCK_ERROR_3 etc.
@@ -658,7 +658,7 @@ impl DataMismatchReason {
 ///
 /// 1. sort object key
 /// 2. sort array
-#[cfg(feature = "shadow_data_consistency")]
+#[cfg(feature = "shadow-data-consistency")]
 fn json_sort_value(value: serde_json::Value) -> serde_json::Value {
     match value {
         serde_json::Value::Array(array) => {
@@ -699,7 +699,7 @@ fn json_sort_value(value: serde_json::Value) -> serde_json::Value {
 }
 
 /// Generate array key for sorting
-#[cfg(feature = "shadow_data_consistency")]
+#[cfg(feature = "shadow-data-consistency")]
 fn generate_array_key(value: &serde_json::Value) -> String {
     match value {
         serde_json::Value::Null => "__null__".to_string(),
