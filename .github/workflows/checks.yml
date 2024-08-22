@@ -23,6 +23,24 @@ jobs:
       - name: Set up Rust
         uses: actions-rs/toolchain@v1
 
+      - name: Cargo update
+        run: cargo update
+
+      - name: Git log
+        run: git log
+
+      - name: Print mod
+        run: cat rpc-server/src/modules/network/mod.rs
+
+      - name: Print method
+        run: cat rpc-server/src/modules/network/method.rs
+
+      - name: Search for jsonrpc_v2 references
+        run: grep -R "jsonrpc_v2" .
+
+      - name: Print Cargo.toml
+        run: cat Cargo.toml
+
       - name: Cargo check
         run: cargo check --all-features
 
@@ -52,6 +70,9 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           components: clippy
+
+      - name: Cargo update
+        run: cargo update
 
       - name: Cargo clippy
         run: cargo clippy --all -- -D warnings
