@@ -2,6 +2,7 @@ use actix_web::web::Data;
 
 use crate::config::ServerContext;
 use crate::errors::RPCError;
+use crate::metrics::METHOD_CALLS_COUNTER;
 use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
 use crate::modules::blocks::CacheBlock;
 
@@ -32,6 +33,8 @@ pub async fn query(
             "query_view_access_key_list"
         }
     };
+
+    METHOD_CALLS_COUNTER.with_label_values(&[method_name]).inc();
 
     if let near_primitives::types::BlockReference::Finality(
         near_primitives::types::Finality::None,

@@ -25,7 +25,6 @@ mod config;
 mod errors;
 mod health;
 mod metrics;
-mod middlewares;
 mod modules;
 mod utils;
 
@@ -397,7 +396,6 @@ async fn main() -> anyhow::Result<()> {
         App::new()
             .wrap(cors)
             .wrap(tracing_actix_web::TracingLogger::default())
-            .wrap(middlewares::RequestsCounters)
             .app_data(server_context.clone())
             .service(web::scope("/").route("", web::post().to(rpc_handler)))
             .service(metrics::get_metrics)
