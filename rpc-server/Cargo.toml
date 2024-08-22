@@ -55,4 +55,5 @@ near-vm-runner.workspace = true
 [features]
 default = []
 tracing-instrumentation = ["configuration/tracing-instrumentation"]
-shadow_data_consistency = ["dep:assert-json-diff"]
+shadow-data-consistency = ["dep:assert-json-diff"]
+detailed-status-codes = []

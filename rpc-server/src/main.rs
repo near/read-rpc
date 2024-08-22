@@ -237,13 +237,11 @@ async fn rpc_handler(
         _ => Err(RPCError::method_not_found(method_name.as_ref())),
     };
 
-    let mut response = match &result {
+    match &result {
         Ok(_) => {
             metrics::METHOD_CALLS_COUNTER
                 .with_label_values(&[method_name.as_ref()])
                 .inc();
-
-            HttpResponse::Ok()
         }
         Err(err) => match &err.error_struct {
             Some(RpcErrorKind::RequestValidationError(validation_error)) => {
@@ -259,8 +257,6 @@ async fn rpc_handler(
                             .inc()
                     }
                 }
-
-                HttpResponse::BadRequest()
             }
             Some(RpcErrorKind::HandlerError(error_struct)) => {
                 if let Some(error_name) =
@@ -269,25 +265,41 @@ async fn rpc_handler(
                     metrics::METHOD_ERRORS_TOTAL
                         .with_label_values(&[method_name.as_ref(), error_name])
                         .inc();
-
-                    if error_name == "TIMEOUT_ERROR" {
-                        HttpResponse::RequestTimeout()
-                    } else {
-                        HttpResponse::Ok()
-                    }
-                } else {
-                    HttpResponse::Ok()
                 }
             }
             Some(RpcErrorKind::InternalError(_)) => {
                 metrics::METHOD_ERRORS_TOTAL
                     .with_label_values(&[method_name.as_ref(), "INTERNAL_ERROR"])
                     .inc();
-
-                HttpResponse::InternalServerError()
             }
-            None => HttpResponse::Ok(),
+            None => {}
         },
+    }
+
+    let mut response = if cfg!(not(feature = "detailed-status-codes")) {
+        HttpResponse::Ok()
+    } else {
+        match &result {
+            Ok(_) => HttpResponse::Ok(),
+            Err(err) => match &err.error_struct {
+                Some(RpcErrorKind::RequestValidationError(_)) => HttpResponse::BadRequest(),
+                Some(RpcErrorKind::HandlerError(error_struct)) => {
+                    if let Some(error_name) =
+                        error_struct.get("name").and_then(serde_json::Value::as_str)
+                    {
+                        if error_name == "TIMEOUT_ERROR" {
+                            HttpResponse::RequestTimeout()
+                        } else {
+                            HttpResponse::Ok()
+                        }
+                    } else {
+                        HttpResponse::Ok()
+                    }
+                }
+                Some(RpcErrorKind::InternalError(_)) => HttpResponse::InternalServerError(),
+                None => HttpResponse::Ok(),
+            },
+        }
     };
 
     response.json(Message::response(id, result.map_err(RpcError::from)))
