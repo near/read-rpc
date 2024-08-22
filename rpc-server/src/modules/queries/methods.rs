@@ -1,9 +1,9 @@
+use actix_web::web::Data;
+
 use crate::config::ServerContext;
 use crate::errors::RPCError;
 use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
 use crate::modules::blocks::CacheBlock;
-use jsonrpc_v2::{Data, Params};
-use near_jsonrpc::RpcRequest;
 
 use super::contract_runner;
 use super::utils::get_state_from_db;
@@ -15,16 +15,14 @@ use super::utils::get_state_from_db;
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn query(
     data: Data<ServerContext>,
-    Params(params): Params<serde_json::Value>,
+    request_data: near_jsonrpc::primitives::types::query::RpcQueryRequest,
 ) -> Result<near_jsonrpc::primitives::types::query::RpcQueryResponse, RPCError> {
-    let query_request = near_jsonrpc::primitives::types::query::RpcQueryRequest::parse(params)?;
-
     // When the data check fails, we want to emit the log message and increment the
     // corresponding metric. Despite the metrics have "proxies" in their names, we
     // are not proxying the requests anymore and respond with the error to the client.
     // Since we already have the dashboard using these metric names, we don't want to
     // change them and reuse them for the observability of the shadow data consistency checks.
-    let method_name = match &query_request.request {
+    let method_name = match &request_data.request {
         near_primitives::views::QueryRequest::ViewAccount { .. } => "query_view_account",
         near_primitives::views::QueryRequest::ViewCode { .. } => "query_view_code",
         near_primitives::views::QueryRequest::ViewAccessKey { .. } => "query_view_access_key",
@@ -37,21 +35,21 @@ pub async fn query(
 
     if let near_primitives::types::BlockReference::Finality(
         near_primitives::types::Finality::None,
-    ) = &query_request.block_reference
+    ) = &request_data.block_reference
     {
         return if crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
             // Proxy if the optimistic updating is not working
             Ok(data
                 .near_rpc_client
-                .call(query_request, Some(method_name))
+                .call(request_data, Some(method_name))
                 .await?)
         } else {
             // query_call with optimistic block
-            query_call(&data, query_request, method_name, true).await
+            query_call(&data, request_data, method_name, true).await
         };
     };
 
-    query_call(&data, query_request, method_name, false).await
+    query_call(&data, request_data, method_name, false).await
 }
 
 /// fetch query result from read-rpc
@@ -120,7 +118,7 @@ async fn query_call(
         }
     };
 
-    #[cfg(feature = "shadow_data_consistency")]
+    #[cfg(feature = "shadow-data-consistency")]
     {
         // Since we do queries with the clause WHERE block_height <= X, we need to
         // make sure that the block we are doing a shadow data consistency check for

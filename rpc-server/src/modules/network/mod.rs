@@ -2,7 +2,7 @@ pub mod methods;
 
 // Helper function to get the protocol version
 pub(crate) async fn get_protocol_version(
-    data: &jsonrpc_v2::Data<crate::config::ServerContext>,
+    data: &actix_web::web::Data<crate::config::ServerContext>,
     block_reference: near_primitives::types::BlockReference,
     method_name: &str,
 ) -> anyhow::Result<near_primitives::types::ProtocolVersion> {

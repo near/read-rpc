@@ -1,29 +1,25 @@
-use jsonrpc_v2::{Data, Params};
-use near_jsonrpc::RpcRequest;
-
 use crate::config::ServerContext;
 use crate::errors::RPCError;
 use crate::modules::transactions::try_get_transaction_details_by_hash;
+
+use actix_web::web::Data;
 
 /// Fetches a receipt by it's ID (as is, without a status or execution outcome)
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn receipt(
     data: Data<ServerContext>,
-    Params(params): Params<serde_json::Value>,
+    request_data: near_jsonrpc::primitives::types::receipts::RpcReceiptRequest,
 ) -> Result<near_jsonrpc::primitives::types::receipts::RpcReceiptResponse, RPCError> {
-    tracing::debug!("`receipt` call. Params: {:?}", params);
-    let receipt_request =
-        near_jsonrpc::primitives::types::receipts::RpcReceiptRequest::parse(params)?;
+    tracing::debug!("`receipt` call. Params: {:?}", request_data);
+    let result = fetch_receipt(&data, &request_data).await;
 
-    let result = fetch_receipt(&data, &receipt_request).await;
-
-    #[cfg(feature = "shadow_data_consistency")]
+    #[cfg(feature = "shadow-data-consistency")]
     {
         crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
             &result,
             data.near_rpc_client.clone(),
-            receipt_request,
+            request_data,
             "EXPERIMENTAL_receipt",
         )
         .await;
@@ -36,13 +32,11 @@ pub async fn receipt(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn view_receipt_record(
     data: Data<ServerContext>,
-    Params(params): Params<serde_json::Value>,
+    request_data: near_jsonrpc::primitives::types::receipts::RpcReceiptRequest,
 ) -> Result<crate::modules::receipts::RpcReceiptRecordResponse, RPCError> {
-    tracing::debug!("`view_receipt_record` call. Params: {:?}", params);
-    let receipt_request =
-        near_jsonrpc::primitives::types::receipts::RpcReceiptRequest::parse(params)?;
+    tracing::debug!("`view_receipt_record` call. Params: {:?}", request_data);
 
-    let result = fetch_receipt_record(&data, &receipt_request, "view_receipt_record").await;
+    let result = fetch_receipt_record(&data, &request_data, "view_receipt_record").await;
 
     Ok(result
         .map_err(near_jsonrpc::primitives::errors::RpcError::from)?

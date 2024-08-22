@@ -1,5 +1,6 @@
+use actix_web::web::Data;
+
 use crate::config::ServerContext;
-use jsonrpc_v2::Data;
 
 pub mod methods;
 

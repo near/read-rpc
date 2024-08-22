@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 
+use futures::executor::block_on;
+
 use crate::modules::queries::utils;
 use crate::modules::queries::utils::get_state_key_value_from_db;
 use database::ReaderDbManager;
-use futures::executor::block_on;
 
 pub type Result<T> = ::std::result::Result<T, near_vm_runner::logic::VMLogicError>;
 

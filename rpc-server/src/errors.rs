@@ -1,14 +1,34 @@
 use std::ops::{Deref, DerefMut};
 
+use near_jsonrpc::primitives::errors::{RpcError, RpcErrorKind, RpcRequestValidationErrorKind};
 use near_jsonrpc_client::errors::{JsonRpcError, JsonRpcServerError};
-
-type BoxedSerialize = Box<dyn erased_serde::Serialize + Send + 'static>;
+use serde_json::Value;
 
 #[derive(Debug, serde::Serialize)]
 #[serde(transparent)]
 pub struct RPCError(pub(crate) near_jsonrpc::primitives::errors::RpcError);
 
+impl From<RPCError> for near_jsonrpc::primitives::errors::RpcError {
+    fn from(err: RPCError) -> Self {
+        err.0
+    }
+}
+
 impl RPCError {
+    pub fn method_not_found(method_name: &str) -> Self {
+        RpcError {
+            code: -32_601,
+            message: "Method not found".to_owned(),
+            data: Some(Value::String(method_name.to_string())),
+            error_struct: Some(RpcErrorKind::RequestValidationError(
+                RpcRequestValidationErrorKind::MethodNotFound {
+                    method_name: method_name.to_string(),
+                },
+            )),
+        }
+        .into()
+    }
+
     pub(crate) fn unimplemented_error(method_name: &str) -> Self {
         Self::from(near_jsonrpc::primitives::errors::RpcError::new(
             -32601,
@@ -27,6 +47,22 @@ impl RPCError {
             String::from(msg),
             None,
         ))
+    }
+
+    pub(crate) fn parse_error(msg: String) -> Self {
+        RpcError {
+            code: -32_700,
+            message: "Parse error".to_owned(),
+            data: Some(serde_json::Value::String(msg.clone())),
+            error_struct: Some(
+                near_jsonrpc::primitives::errors::RpcErrorKind::RequestValidationError(
+                    near_jsonrpc::primitives::errors::RpcRequestValidationErrorKind::ParseError {
+                        error_message: msg,
+                    },
+                ),
+            ),
+        }
+        .into()
     }
 }
 
@@ -47,24 +83,6 @@ impl DerefMut for RPCError {
 impl std::fmt::Display for RPCError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
-    }
-}
-
-impl jsonrpc_v2::ErrorLike for RPCError {
-    fn code(&self) -> i64 {
-        self.code
-    }
-
-    fn message(&self) -> String {
-        self.message.to_string()
-    }
-
-    fn data(&self) -> Option<BoxedSerialize> {
-        Some(Box::new(self.data.clone()))
-    }
-
-    fn error_struct(&self) -> Option<BoxedSerialize> {
-        Some(Box::new(self.error_struct.clone()))
     }
 }
 

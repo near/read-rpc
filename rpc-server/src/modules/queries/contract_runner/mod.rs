@@ -5,7 +5,6 @@ use near_vm_runner::ContractRuntimeCache;
 
 use crate::errors::FunctionCallError;
 use crate::modules::blocks::BlocksInfoByFinality;
-
 use code_storage::CodeStorage;
 
 mod code_storage;

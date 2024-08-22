@@ -1,5 +1,18 @@
-use jsonrpc_v2::{Data, Params, Router, Server};
+use actix_web::{
+    web::{self},
+    App, HttpResponse, HttpServer,
+};
 use mimalloc::MiMalloc;
+use near_jsonrpc::{
+    primitives::{
+        errors::{RpcError, RpcErrorKind, RpcRequestValidationErrorKind},
+        message::{Message, Request},
+    },
+    RpcRequest,
+};
+use serde_json::Value;
+
+use errors::RPCError;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -19,52 +32,277 @@ mod utils;
 // Categories for logging
 pub(crate) const RPC_SERVER: &str = "read_rpc_server";
 
-#[easy_ext::ext(WithMethodAndMetrics)]
-impl<R> jsonrpc_v2::ServerBuilder<R>
-where
-    R: Router,
-{
-    fn with_method_and_metrics<F, T, P>(self, name: &'static str, handler: &'static F) -> Self
-    where
-        F: jsonrpc_v2::Factory<T, errors::RPCError, (Data<config::ServerContext>, Params<P>)>
-            + Send
-            + Sync
-            + 'static,
-        T: serde::Serialize + Send + 'static,
-        P: serde::de::DeserializeOwned + Send + 'static,
-    {
-        self.with_method(name, |data, params| async {
-            let result = handler.call((data, params)).await;
+/// Serialises response of a query into JSON to be sent to the client.
+///
+/// Returns an internal server error if the value fails to serialise.
+fn serialize_response(value: impl serde::ser::Serialize) -> Result<Value, RPCError> {
+    serde_json::to_value(value).map_err(|err| RPCError::internal_error(&err.to_string()))
+}
 
-            if let Err(err) = &result {
-                match &err.error_struct {
-                    Some(near_jsonrpc::primitives::errors::RpcErrorKind::RequestValidationError(
-                        near_jsonrpc::primitives::errors::RpcRequestValidationErrorKind::ParseError { .. },
-                    )) => {
+/// Processes a specific method call.
+///
+/// The arguments for the method (which is implemented by the `callback`) will
+/// be parsed (using [`RpcRequest::parse`]) from the `request.params`.  Ok
+/// results of the `callback` will be converted into a [`Value`] via serde
+/// serialisation.
+async fn process_method_call<R, V, E, F>(
+    request: Request,
+    callback: impl FnOnce(R) -> F,
+) -> Result<Value, RPCError>
+where
+    R: RpcRequest,
+    V: serde::ser::Serialize,
+    RPCError: std::convert::From<E>,
+    F: std::future::Future<Output = Result<V, E>>,
+{
+    serialize_response(callback(R::parse(request.params)?).await?)
+}
+
+async fn rpc_handler(
+    data: web::Data<config::ServerContext>,
+    payload: web::Json<Message>,
+) -> HttpResponse {
+    let Message::Request(request) = payload.0 else {
+        return HttpResponse::BadRequest().finish();
+    };
+
+    let id = request.id.clone();
+
+    let method_name = request.method.clone();
+    let result = match method_name.as_ref() {
+        // custom request methods
+        "view_state_paginated" => {
+            if let Ok(request_data) = serde_json::from_value(request.params) {
+                serialize_response(
+                    modules::state::methods::view_state_paginated(data, request_data).await,
+                )
+            } else {
+                Err(RPCError::parse_error(
+                    "Failed to parse request data".to_string(),
+                ))
+            }
+        }
+        "view_receipt_record" => {
+            process_method_call(request, |params| {
+                modules::receipts::methods::view_receipt_record(data, params)
+            })
+            .await
+        }
+        // request methods
+        "query" => {
+            process_method_call(request, |params| {
+                modules::queries::methods::query(data, params)
+            })
+            .await
+        }
+        // basic requests methods
+        "block" => {
+            process_method_call(request, |params| {
+                modules::blocks::methods::block(data, params)
+            })
+            .await
+        }
+        "broadcast_tx_async" => {
+            process_method_call(request, |params| {
+                modules::transactions::methods::broadcast_tx_async(data, params)
+            })
+            .await
+        }
+        "broadcast_tx_commit" => {
+            process_method_call(request, |params| {
+                modules::transactions::methods::broadcast_tx_commit(data, params)
+            })
+            .await
+        }
+        "chunk" => {
+            process_method_call(request, |params| {
+                modules::blocks::methods::chunk(data, params)
+            })
+            .await
+        }
+        "gas_price" => {
+            process_method_call(request, |params| {
+                modules::gas::methods::gas_price(data, params)
+            })
+            .await
+        }
+        "health" => {
+            process_method_call(request, |_: ()| modules::network::methods::health(data)).await
+        }
+        "light_client_proof" => {
+            process_method_call(request, |params| {
+                modules::clients::methods::light_client_proof(data, params)
+            })
+            .await
+        }
+        "next_light_client_block" => {
+            process_method_call(request, |params| {
+                modules::clients::methods::next_light_client_block(data, params)
+            })
+            .await
+        }
+        "network_info" => {
+            process_method_call(request, |_: ()| {
+                modules::network::methods::network_info(data)
+            })
+            .await
+        }
+        "send_tx" => {
+            process_method_call(request, |params| {
+                modules::transactions::methods::send_tx(data, params)
+            })
+            .await
+        }
+        "status" => {
+            process_method_call(request, |_: ()| modules::network::methods::status(data)).await
+        }
+        "tx" => {
+            process_method_call(request, |params| {
+                modules::transactions::methods::tx(data, params)
+            })
+            .await
+        }
+        "validators" => {
+            process_method_call(request, |params| {
+                modules::network::methods::validators(data, params)
+            })
+            .await
+        }
+        "client_config" => {
+            process_method_call(request, |_: ()| {
+                modules::network::methods::client_config(data)
+            })
+            .await
+        }
+        "EXPERIMENTAL_changes" => {
+            process_method_call(request, |params| {
+                modules::blocks::methods::changes_in_block_by_type(data, params)
+            })
+            .await
+        }
+        "EXPERIMENTAL_changes_in_block" => {
+            process_method_call(request, |params| {
+                modules::blocks::methods::changes_in_block(data, params)
+            })
+            .await
+        }
+        "EXPERIMENTAL_genesis_config" => {
+            process_method_call(request, |_: ()| {
+                modules::network::methods::genesis_config(data)
+            })
+            .await
+        }
+        "EXPERIMENTAL_light_client_proof" => {
+            process_method_call(request, |params| {
+                modules::clients::methods::light_client_proof(data, params)
+            })
+            .await
+        }
+        "EXPERIMENTAL_protocol_config" => {
+            process_method_call(request, |params| {
+                modules::network::methods::protocol_config(data, params)
+            })
+            .await
+        }
+        "EXPERIMENTAL_receipt" => {
+            process_method_call(request, |params| {
+                modules::receipts::methods::receipt(data, params)
+            })
+            .await
+        }
+        "EXPERIMENTAL_tx_status" => {
+            process_method_call(request, |params| {
+                modules::transactions::methods::tx_status(data, params)
+            })
+            .await
+        }
+        "EXPERIMENTAL_validators_ordered" => {
+            process_method_call(request, |params| {
+                modules::network::methods::validators_ordered(data, params)
+            })
+            .await
+        }
+        "EXPERIMENTAL_maintenance_windows" => {
+            process_method_call(request, |_: ()| {
+                modules::network::methods::maintenance_windows(data)
+            })
+            .await
+        }
+        "EXPERIMENTAL_split_storage_info" => {
+            process_method_call(request, |_: ()| {
+                modules::network::methods::split_storage_info(data)
+            })
+            .await
+        }
+        _ => Err(RPCError::method_not_found(method_name.as_ref())),
+    };
+
+    match &result {
+        Ok(_) => {
+            metrics::METHOD_CALLS_COUNTER
+                .with_label_values(&[method_name.as_ref()])
+                .inc();
+        }
+        Err(err) => match &err.error_struct {
+            Some(RpcErrorKind::RequestValidationError(validation_error)) => {
+                match validation_error {
+                    RpcRequestValidationErrorKind::ParseError { .. } => {
                         metrics::METHOD_ERRORS_TOTAL
-                            .with_label_values(&[name, "PARSE_ERROR"])
-                            .inc();
+                            .with_label_values(&[method_name.as_ref(), "PARSE_ERROR"])
+                            .inc()
                     }
-                    Some(near_jsonrpc::primitives::errors::RpcErrorKind::HandlerError(error_struct)) => {
-                        if let Some(stringified_error_name) = error_struct.get("name").and_then(serde_json::Value::as_str) {
-                            metrics::METHOD_ERRORS_TOTAL
-                                .with_label_values(&[name, stringified_error_name])
-                                .inc();
-                        }
+                    RpcRequestValidationErrorKind::MethodNotFound { .. } => {
+                        metrics::METHOD_CALLS_COUNTER
+                            .with_label_values(&["METHOD_NOT_FOUND"])
+                            .inc()
                     }
-                    Some(near_jsonrpc::primitives::errors::RpcErrorKind::InternalError(_)) => {
-                        metrics::METHOD_ERRORS_TOTAL
-                            .with_label_values(&[name, "INTERNAL_ERROR"])
-                            .inc();
-                    }
-                    Some(near_jsonrpc::primitives::errors::RpcErrorKind::RequestValidationError(_))
-                    | None => {}
                 }
             }
-
-            result
-        })
+            Some(RpcErrorKind::HandlerError(error_struct)) => {
+                if let Some(error_name) =
+                    error_struct.get("name").and_then(serde_json::Value::as_str)
+                {
+                    metrics::METHOD_ERRORS_TOTAL
+                        .with_label_values(&[method_name.as_ref(), error_name])
+                        .inc();
+                }
+            }
+            Some(RpcErrorKind::InternalError(_)) => {
+                metrics::METHOD_ERRORS_TOTAL
+                    .with_label_values(&[method_name.as_ref(), "INTERNAL_ERROR"])
+                    .inc();
+            }
+            None => {}
+        },
     }
+
+    let mut response = if cfg!(not(feature = "detailed-status-codes")) {
+        HttpResponse::Ok()
+    } else {
+        match &result {
+            Ok(_) => HttpResponse::Ok(),
+            Err(err) => match &err.error_struct {
+                Some(RpcErrorKind::RequestValidationError(_)) => HttpResponse::BadRequest(),
+                Some(RpcErrorKind::HandlerError(error_struct)) => {
+                    if let Some(error_name) =
+                        error_struct.get("name").and_then(serde_json::Value::as_str)
+                    {
+                        if error_name == "TIMEOUT_ERROR" {
+                            HttpResponse::RequestTimeout()
+                        } else {
+                            HttpResponse::Ok()
+                        }
+                    } else {
+                        HttpResponse::Ok()
+                    }
+                }
+                Some(RpcErrorKind::InternalError(_)) => HttpResponse::InternalServerError(),
+                None => HttpResponse::Ok(),
+            },
+        }
+    };
+
+    response.json(Message::response(id, result.map_err(RpcError::from)))
 }
 
 #[actix_web::main]
@@ -91,8 +329,9 @@ async fn main() -> anyhow::Result<()> {
 
     let server_port = rpc_server_config.general.server_port;
 
-    let server_context =
-        config::ServerContext::init(rpc_server_config.clone(), near_rpc_client.clone()).await?;
+    let server_context = web::Data::new(
+        config::ServerContext::init(rpc_server_config.clone(), near_rpc_client.clone()).await?,
+    );
 
     let blocks_cache_clone = std::sync::Arc::clone(&server_context.blocks_cache);
     let blocks_info_by_finality_clone =
@@ -152,105 +391,15 @@ async fn main() -> anyhow::Result<()> {
         });
     }
 
-    let rpc = Server::new()
-        .with_data(Data::new(server_context.clone()))
-        // custom requests methods
-        .with_method_and_metrics(
-            "view_state_paginated",
-            &modules::state::methods::view_state_paginated,
-        )
-        .with_method_and_metrics(
-            "view_receipt_record",
-            &modules::receipts::methods::view_receipt_record,
-        )
-        // requests methods
-        .with_method_and_metrics("query", &modules::queries::methods::query)
-        // basic requests methods
-        .with_method_and_metrics("block", &modules::blocks::methods::block)
-        .with_method_and_metrics(
-            "broadcast_tx_async",
-            &modules::transactions::methods::broadcast_tx_async,
-        )
-        .with_method_and_metrics(
-            "broadcast_tx_commit",
-            &modules::transactions::methods::broadcast_tx_commit,
-        )
-        .with_method_and_metrics("chunk", &modules::blocks::methods::chunk)
-        .with_method_and_metrics("gas_price", &modules::gas::methods::gas_price)
-        .with_method_and_metrics("health", &modules::network::methods::health)
-        .with_method_and_metrics(
-            "light_client_proof",
-            &modules::clients::methods::light_client_proof,
-        )
-        .with_method_and_metrics(
-            "next_light_client_block",
-            &modules::clients::methods::next_light_client_block,
-        )
-        .with_method_and_metrics("network_info", &modules::network::methods::network_info)
-        .with_method_and_metrics("send_tx", &modules::transactions::methods::send_tx)
-        .with_method_and_metrics("status", &modules::network::methods::status)
-        .with_method_and_metrics("tx", &modules::transactions::methods::tx)
-        .with_method_and_metrics("validators", &modules::network::methods::validators)
-        .with_method_and_metrics("client_config", &modules::network::methods::client_config)
-        .with_method_and_metrics(
-            "EXPERIMENTAL_changes",
-            &modules::blocks::methods::changes_in_block_by_type,
-        )
-        .with_method_and_metrics(
-            "EXPERIMENTAL_changes_in_block",
-            &modules::blocks::methods::changes_in_block,
-        )
-        .with_method_and_metrics(
-            "EXPERIMENTAL_genesis_config",
-            &modules::network::methods::genesis_config,
-        )
-        .with_method_and_metrics(
-            "EXPERIMENTAL_light_client_proof",
-            &modules::clients::methods::light_client_proof,
-        )
-        .with_method_and_metrics(
-            "EXPERIMENTAL_protocol_config",
-            &modules::network::methods::protocol_config,
-        )
-        .with_method_and_metrics("EXPERIMENTAL_receipt", &modules::receipts::methods::receipt)
-        .with_method_and_metrics(
-            "EXPERIMENTAL_tx_status",
-            &modules::transactions::methods::tx_status,
-        )
-        .with_method_and_metrics(
-            "EXPERIMENTAL_validators_ordered",
-            &modules::network::methods::validators_ordered,
-        )
-        .with_method_and_metrics(
-            "EXPERIMENTAL_maintenance_windows",
-            &modules::network::methods::maintenance_windows,
-        )
-        .with_method_and_metrics(
-            "EXPERIMENTAL_split_storage_info",
-            &modules::network::methods::split_storage_info,
-        )
-        .finish();
-
-    // Insert all rpc methods to the hashmap after init the server
-    metrics::RPC_METHODS.insert(rpc.router.routers()).await;
-
-    actix_web::HttpServer::new(move || {
-        let rpc = rpc.clone();
-
-        // Configure CORS
+    HttpServer::new(move || {
         let cors = actix_cors::Cors::permissive();
 
-        actix_web::App::new()
+        App::new()
             .wrap(cors)
             .wrap(tracing_actix_web::TracingLogger::default())
-            // wrapper to count rpc total requests
             .wrap(middlewares::RequestsCounters)
-            .app_data(actix_web::web::Data::new(server_context.clone()))
-            .service(
-                actix_web::web::service("/")
-                    .guard(actix_web::guard::Post())
-                    .finish(rpc.into_web_service()),
-            )
+            .app_data(server_context.clone())
+            .service(web::scope("/").route("", web::post().to(rpc_handler)))
             .service(metrics::get_metrics)
             .service(health::get_health_status)
     })

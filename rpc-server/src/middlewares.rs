@@ -1,10 +1,8 @@
-use crate::metrics::{METHOD_CALLS_COUNTER, RPC_METHODS};
+use crate::metrics::METHOD_CALLS_COUNTER;
 use actix_web::dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform};
 use futures::future::LocalBoxFuture;
 use futures::StreamExt;
-use jsonrpc_v2::{Params, RequestObject};
-use near_jsonrpc::RpcRequest;
-use serde_json::Value;
+use near_jsonrpc::{primitives::message::Request, RpcRequest};
 use std::future::{ready, Ready};
 
 // Middleware to count requests and methods calls
@@ -64,18 +62,10 @@ where
                 };
             }
 
-            if let Ok(obj) = serde_json::from_slice::<RequestObject>(&body) {
-                let method = obj.method_ref();
-                if method == "query" {
-                    let params = match Params::from_request_object(&obj) {
-                        Ok(Params(params)) => params,
-                        Err(_) => {
-                            tracing::error!("Error parsing request params");
-                            Value::default()
-                        }
-                    };
+            if let Ok(obj) = serde_json::from_slice::<Request>(&body) {
+                if obj.method == "query" {
                     if let Ok(query_request) =
-                        near_jsonrpc::primitives::types::query::RpcQueryRequest::parse(params)
+                        near_jsonrpc::primitives::types::query::RpcQueryRequest::parse(obj.params)
                     {
                         let method = match &query_request.request {
                             near_primitives::views::QueryRequest::ViewAccount { .. } => {
@@ -99,12 +89,6 @@ where
                         };
                         METHOD_CALLS_COUNTER.with_label_values(&[method]).inc()
                     }
-                } else if RPC_METHODS.get(method).await.is_some() {
-                    METHOD_CALLS_COUNTER.with_label_values(&[method]).inc()
-                } else {
-                    METHOD_CALLS_COUNTER
-                        .with_label_values(&["method_not_found"])
-                        .inc()
                 }
             };
 
