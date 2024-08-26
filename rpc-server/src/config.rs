@@ -47,7 +47,6 @@ impl GenesisInfo {
     }
 }
 
-#[allow(unused)]
 #[derive(Clone)]
 pub struct ServerContext {
     /// Lake s3 client

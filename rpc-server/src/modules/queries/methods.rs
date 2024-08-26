@@ -375,8 +375,8 @@ async fn function_call(
                 logs: call_results.logs,
             },
         ),
-        block_height: call_results.block_height,
-        block_hash: call_results.block_hash,
+        block_height: block.block_height,
+        block_hash: block.block_hash,
     })
 }
 
