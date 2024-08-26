@@ -13,7 +13,7 @@ rustc_version = "0.4"
 
 [dependencies]
 anyhow = "1.0.70"
-clap = "4.4.18"
+clap = { version = "4.5.16", features = ["derive"] }
 futures = "0.3.5"
 openssl-probe = "0.1.5"
 tokio = { version = "1.36.0", features = [
