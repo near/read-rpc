@@ -1,5 +1,5 @@
 [workspace.package]
-version = "0.2.14"
+version = "0.2.15"
 authors = ["Near Inc <hello@nearprotocol.com>"]
 edition = "2021"
 rust-version = "1.79.0"
@@ -42,22 +42,22 @@ epoch-indexer = { path = "epoch-indexer" }
 tx-details-storage = { path = "tx-details-storage" }
 
 # Please, update the supported nearcore version in .cargo/config.toml file
-near-async = { git = 'https://github.com/kobayurii/nearcore.git', branch = "2.1.1-fork" }
-near-indexer = { git = 'https://github.com/kobayurii/nearcore.git', branch = "2.1.1-fork" }
-near-client = { git = 'https://github.com/kobayurii/nearcore.git', branch = "2.1.1-fork" }
-near-o11y = { git = 'https://github.com/kobayurii/nearcore.git', branch = "2.1.1-fork" }
-near-indexer-primitives = { git = 'https://github.com/kobayurii/nearcore.git', branch = "2.1.1-fork" }
-near-primitives = { git = 'https://github.com/kobayurii/nearcore.git', branch = "2.1.1-fork" }
-near-chain-configs = { git = 'https://github.com/kobayurii/nearcore.git', branch = "2.1.1-fork" }
-near-crypto = { git = 'https://github.com/kobayurii/nearcore.git', branch = "2.1.1-fork" }
-near-jsonrpc = { git = 'https://github.com/kobayurii/nearcore.git', branch = "2.1.1-fork" }
-near-parameters = { git = 'https://github.com/kobayurii/nearcore.git', branch = "2.1.1-fork" }
-near-vm-runner = { git = 'https://github.com/kobayurii/nearcore.git', branch = "2.1.1-fork", features = [
+near-async = { git = 'https://github.com/kobayurii/nearcore.git', branch = "2.2.0-fork" }
+near-indexer = { git = 'https://github.com/kobayurii/nearcore.git', branch = "2.2.0-fork" }
+near-client = { git = 'https://github.com/kobayurii/nearcore.git', branch = "2.2.0-fork" }
+near-o11y = { git = 'https://github.com/kobayurii/nearcore.git', branch = "2.2.0-fork" }
+near-indexer-primitives = { git = 'https://github.com/kobayurii/nearcore.git', branch = "2.2.0-fork" }
+near-primitives = { git = 'https://github.com/kobayurii/nearcore.git', branch = "2.2.0-fork" }
+near-chain-configs = { git = 'https://github.com/kobayurii/nearcore.git', branch = "2.2.0-fork" }
+near-crypto = { git = 'https://github.com/kobayurii/nearcore.git', branch = "2.2.0-fork" }
+near-jsonrpc = { git = 'https://github.com/kobayurii/nearcore.git', branch = "2.2.0-fork" }
+near-parameters = { git = 'https://github.com/kobayurii/nearcore.git', branch = "2.2.0-fork" }
+near-vm-runner = { git = 'https://github.com/kobayurii/nearcore.git', branch = "2.2.0-fork", features = [
     "wasmer0_vm",
     "wasmer2_vm",
     "wasmtime_vm",
     "near_vm",
 ] }
 
-near-lake-framework = { git = 'https://github.com/kobayurii/near-lake-framework-rs.git', branch = '0.7.17' }
-near-jsonrpc-client = { git = 'https://github.com/kobayurii/near-jsonrpc-client-rs.git', branch = '0.12.1' }
+near-lake-framework = { git = 'https://github.com/kobayurii/near-lake-framework-rs.git', branch = '0.7.18' }
+near-jsonrpc-client = { git = 'https://github.com/kobayurii/near-jsonrpc-client-rs.git', branch = '0.13.1' }
