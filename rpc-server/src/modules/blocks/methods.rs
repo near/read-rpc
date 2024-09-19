@@ -3,7 +3,6 @@ use near_primitives::trie_key::TrieKey;
 use near_primitives::views::StateChangeValueView;
 
 use crate::config::ServerContext;
-use crate::errors::RPCError;
 use crate::modules::blocks::utils::{
     fetch_block_from_cache_or_get, fetch_chunk_from_s3, is_matching_change,
 };
@@ -14,9 +13,12 @@ use crate::modules::blocks::utils::{
 /// another way to get `block` from read-rpc using `block_call`
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn block(
-    data: actix_web::web::Data<ServerContext>,
+    data: Data<ServerContext>,
     request_data: near_jsonrpc::primitives::types::blocks::RpcBlockRequest,
-) -> Result<near_jsonrpc::primitives::types::blocks::RpcBlockResponse, RPCError> {
+) -> Result<
+    near_jsonrpc::primitives::types::blocks::RpcBlockResponse,
+    near_jsonrpc::primitives::types::blocks::RpcBlockError,
+> {
     if let near_primitives::types::BlockReference::Finality(
         near_primitives::types::Finality::None,
     ) = &request_data.block_reference
@@ -26,7 +28,14 @@ pub async fn block(
             let block_view = data
                 .near_rpc_client
                 .call(request_data, Some("block"))
-                .await?;
+                .await
+                .map_err(|err| {
+                    err.handler_error().cloned().unwrap_or(
+                        near_jsonrpc::primitives::types::blocks::RpcBlockError::InternalError {
+                            error_message: err.to_string(),
+                        },
+                    )
+                })?;
             return Ok(near_jsonrpc::primitives::types::blocks::RpcBlockResponse { block_view });
         }
     };
@@ -38,21 +47,24 @@ pub async fn block(
 pub async fn chunk(
     data: Data<ServerContext>,
     request_data: near_jsonrpc::primitives::types::chunks::RpcChunkRequest,
-) -> Result<near_jsonrpc::primitives::types::chunks::RpcChunkResponse, RPCError> {
+) -> Result<
+    near_jsonrpc::primitives::types::chunks::RpcChunkResponse,
+    near_jsonrpc::primitives::types::chunks::RpcChunkError,
+> {
     tracing::debug!("`chunk` called with parameters: {:?}", request_data);
-    let result = fetch_chunk(&data, request_data.chunk_reference.clone()).await;
+    let chunk_result = fetch_chunk(&data, request_data.chunk_reference.clone()).await;
     #[cfg(feature = "shadow-data-consistency")]
     {
         crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
-            &result,
+            &chunk_result,
             data.near_rpc_client.clone(),
             request_data,
             "chunk",
         )
         .await;
     }
-    Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)
+    chunk_result
 }
 
 /// `EXPERIMENTAL_changes` rpc method implementation
@@ -63,7 +75,10 @@ pub async fn chunk(
 pub async fn changes_in_block_by_type(
     data: Data<ServerContext>,
     request_data: near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockByTypeRequest,
-) -> Result<near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockResponse, RPCError> {
+) -> Result<
+    near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockResponse,
+    near_jsonrpc::primitives::types::changes::RpcStateChangesError,
+> {
     if let near_primitives::types::BlockReference::Finality(
         near_primitives::types::Finality::None,
     ) = &request_data.block_reference
@@ -73,7 +88,13 @@ pub async fn changes_in_block_by_type(
             return Ok(data
                 .near_rpc_client
                 .call(request_data, Some("EXPERIMENTAL_changes"))
-                .await?);
+                .await.map_err(|err| {
+                    err.handler_error().cloned().unwrap_or(
+                        near_jsonrpc::primitives::types::changes::RpcStateChangesError::InternalError {
+                            error_message: err.to_string(),
+                        },
+                    )
+                })?);
         }
     };
 
@@ -88,8 +109,10 @@ pub async fn changes_in_block_by_type(
 pub async fn changes_in_block(
     data: Data<ServerContext>,
     request_data: near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockRequest,
-) -> Result<near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockByTypeResponse, RPCError>
-{
+) -> Result<
+    near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockByTypeResponse,
+    near_jsonrpc::primitives::types::changes::RpcStateChangesError,
+> {
     if let near_primitives::types::BlockReference::Finality(
         near_primitives::types::Finality::None,
     ) = &request_data.block_reference
@@ -99,7 +122,13 @@ pub async fn changes_in_block(
             return Ok(data
                 .near_rpc_client
                 .call(request_data, Some("EXPERIMENTAL_changes_in_block"))
-                .await?);
+                .await.map_err(|err| {
+                    err.handler_error().cloned().unwrap_or(
+                        near_jsonrpc::primitives::types::changes::RpcStateChangesError::InternalError {
+                            error_message: err.to_string(),
+                        },
+                    )
+                })?);
         }
     };
 
@@ -110,11 +139,14 @@ pub async fn changes_in_block(
 #[allow(unused_mut)]
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 async fn block_call(
-    data: actix_web::web::Data<ServerContext>,
+    data: Data<ServerContext>,
     mut block_request: near_jsonrpc::primitives::types::blocks::RpcBlockRequest,
-) -> Result<near_jsonrpc::primitives::types::blocks::RpcBlockResponse, RPCError> {
+) -> Result<
+    near_jsonrpc::primitives::types::blocks::RpcBlockResponse,
+    near_jsonrpc::primitives::types::blocks::RpcBlockError,
+> {
     tracing::debug!("`block` called with parameters: {:?}", block_request);
-    let result = match fetch_block(&data, &block_request.block_reference, "block").await {
+    let block_result = match fetch_block(&data, &block_request.block_reference, "block").await {
         Ok(block) => {
             // increase block category metrics
             crate::metrics::increase_request_category_metrics(
@@ -131,7 +163,7 @@ async fn block_call(
 
     #[cfg(feature = "shadow-data-consistency")]
     {
-        if let Ok(res) = &result {
+        if let Ok(res) = &block_result {
             if let near_primitives::types::BlockReference::Finality(_) =
                 block_request.block_reference
             {
@@ -143,7 +175,7 @@ async fn block_call(
 
         crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
-            &result,
+            &block_result,
             data.near_rpc_client.clone(),
             block_request,
             "block",
@@ -151,7 +183,7 @@ async fn block_call(
         .await;
     };
 
-    Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)
+    block_result
 }
 
 /// fetch changes_in_block from read-rpc
@@ -160,15 +192,21 @@ async fn block_call(
 async fn changes_in_block_call(
     data: Data<ServerContext>,
     mut params: near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockRequest,
-) -> Result<near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockByTypeResponse, RPCError>
-{
+) -> Result<
+    near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockByTypeResponse,
+    near_jsonrpc::primitives::types::changes::RpcStateChangesError,
+> {
     let cache_block = fetch_block_from_cache_or_get(
         &data,
         &params.block_reference,
         "EXPERIMENTAL_changes_in_block",
     )
     .await
-    .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
+    .map_err(|err| {
+        near_jsonrpc::primitives::types::changes::RpcStateChangesError::UnknownBlock {
+            error_message: err.to_string(),
+        }
+    })?;
 
     let result = fetch_changes_in_block(&data, cache_block, &params.block_reference).await;
     #[cfg(feature = "shadow-data-consistency")]
@@ -188,7 +226,7 @@ async fn changes_in_block_call(
         .await;
     }
 
-    Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)
+    result
 }
 
 /// fetch changes_in_block_by_type from read-rpc
@@ -197,11 +235,18 @@ async fn changes_in_block_call(
 async fn changes_in_block_by_type_call(
     data: Data<ServerContext>,
     mut params: near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockByTypeRequest,
-) -> Result<near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockResponse, RPCError> {
+) -> Result<
+    near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockResponse,
+    near_jsonrpc::primitives::types::changes::RpcStateChangesError,
+> {
     let cache_block =
         fetch_block_from_cache_or_get(&data, &params.block_reference, "EXPERIMENTAL_changes")
             .await
-            .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
+            .map_err(|err| {
+                near_jsonrpc::primitives::types::changes::RpcStateChangesError::UnknownBlock {
+                    error_message: err.to_string(),
+                }
+            })?;
 
     let result = fetch_changes_in_block_by_type(
         &data,
@@ -228,12 +273,12 @@ async fn changes_in_block_by_type_call(
         .await;
     }
 
-    Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)
+    result
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn fetch_block(
-    data: &actix_web::web::Data<ServerContext>,
+    data: &Data<ServerContext>,
     block_reference: &near_primitives::types::BlockReference,
     method_name: &str,
 ) -> Result<
@@ -311,7 +356,7 @@ pub async fn fetch_block(
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn fetch_chunk(
-    data: &actix_web::web::Data<ServerContext>,
+    data: &Data<ServerContext>,
     chunk_reference: near_jsonrpc::primitives::types::chunks::ChunkReference,
 ) -> Result<
     near_jsonrpc::primitives::types::chunks::RpcChunkResponse,

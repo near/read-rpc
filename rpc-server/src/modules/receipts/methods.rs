@@ -1,5 +1,4 @@
 use crate::config::ServerContext;
-use crate::errors::RPCError;
 use crate::modules::transactions::try_get_transaction_details_by_hash;
 
 use actix_web::web::Data;
@@ -9,15 +8,18 @@ use actix_web::web::Data;
 pub async fn receipt(
     data: Data<ServerContext>,
     request_data: near_jsonrpc::primitives::types::receipts::RpcReceiptRequest,
-) -> Result<near_jsonrpc::primitives::types::receipts::RpcReceiptResponse, RPCError> {
+) -> Result<
+    near_jsonrpc::primitives::types::receipts::RpcReceiptResponse,
+    near_jsonrpc::primitives::types::receipts::RpcReceiptError,
+> {
     tracing::debug!("`receipt` call. Params: {:?}", request_data);
-    let result = fetch_receipt(&data, &request_data).await;
+    let receipt_result = fetch_receipt(&data, &request_data).await;
 
     #[cfg(feature = "shadow-data-consistency")]
     {
         crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
-            &result,
+            &receipt_result,
             data.near_rpc_client.clone(),
             request_data,
             "EXPERIMENTAL_receipt",
@@ -25,7 +27,7 @@ pub async fn receipt(
         .await;
     }
 
-    Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)
+    receipt_result
 }
 
 /// Fetches a receipt record by it's ID
@@ -33,14 +35,16 @@ pub async fn receipt(
 pub async fn view_receipt_record(
     data: Data<ServerContext>,
     request_data: near_jsonrpc::primitives::types::receipts::RpcReceiptRequest,
-) -> Result<crate::modules::receipts::RpcReceiptRecordResponse, RPCError> {
+) -> Result<
+    crate::modules::receipts::RpcReceiptRecordResponse,
+    near_jsonrpc::primitives::types::receipts::RpcReceiptError,
+> {
     tracing::debug!("`view_receipt_record` call. Params: {:?}", request_data);
-
-    let result = fetch_receipt_record(&data, &request_data, "view_receipt_record").await;
-
-    Ok(result
-        .map_err(near_jsonrpc::primitives::errors::RpcError::from)?
-        .into())
+    Ok(
+        fetch_receipt_record(&data, &request_data, "view_receipt_record")
+            .await?
+            .into(),
+    )
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]

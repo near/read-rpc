@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use near_vm_runner::ContractRuntimeCache;
 
-use crate::errors::FunctionCallError;
 use crate::modules::blocks::BlocksInfoByFinality;
 use code_storage::CodeStorage;
 
@@ -65,13 +64,17 @@ pub async fn run_contract(
         Option<readnode_primitives::StateValue>,
     >,
     prefetch_state_size_limit: u64,
-) -> Result<RunContractResponse, FunctionCallError> {
+) -> Result<RunContractResponse, near_jsonrpc::primitives::types::query::RpcQueryError> {
     let contract = db_manager
         .get_account(account_id, block.block_height, "query_call_function")
         .await
-        .map_err(|_| FunctionCallError::AccountDoesNotExist {
-            requested_account_id: account_id.clone(),
-        })?;
+        .map_err(
+            |_| near_jsonrpc::primitives::types::query::RpcQueryError::UnknownAccount {
+                requested_account_id: account_id.clone(),
+                block_height: block.block_height,
+                block_hash: block.block_hash,
+            },
+        )?;
 
     let (epoch_height, validators) =
         epoch_height_and_validators_with_balances(db_manager, blocks_info_by_finality, block)
@@ -127,8 +130,12 @@ pub async fn run_contract(
                 let code = db_manager
                     .get_contract_code(account_id, block.block_height, "query_call_function")
                     .await
-                    .map_err(|_| FunctionCallError::InvalidAccountId {
-                        requested_account_id: account_id.clone(),
+                    .map_err(|_| {
+                        near_jsonrpc::primitives::types::query::RpcQueryError::InvalidAccount {
+                            requested_account_id: account_id.clone(),
+                            block_height: block.block_height,
+                            block_hash: block.block_hash,
+                        }
                     })?;
                 contract_code_cache.put(code_hash, code.data.clone()).await;
                 Contract::new(Some(code.data), code_hash)
@@ -157,15 +164,21 @@ pub async fn run_contract(
         compiled_contract_code_cache,
     )
     .await
-    .map_err(|e| FunctionCallError::InternalError {
-        error_message: e.to_string(),
-    })?;
+    .map_err(
+        |e| near_jsonrpc::primitives::types::query::RpcQueryError::InternalError {
+            error_message: e.to_string(),
+        },
+    )?;
 
     if let Some(err) = result.aborted {
         let message = format!("wasm execution failed with error: {:?}", err);
-        Err(FunctionCallError::VMError {
-            error_message: message,
-        })
+        Err(
+            near_jsonrpc::primitives::types::query::RpcQueryError::ContractExecutionError {
+                vm_error: message,
+                block_height: block.block_height,
+                block_hash: block.block_hash,
+            },
+        )
     } else {
         let logs = result.logs;
         let result = match result.return_data {
@@ -181,7 +194,10 @@ async fn epoch_height_and_validators_with_balances(
     db_manager: &std::sync::Arc<Box<dyn database::ReaderDbManager + Sync + Send + 'static>>,
     blocks_info_by_finality: &std::sync::Arc<BlocksInfoByFinality>,
     block: crate::modules::blocks::CacheBlock,
-) -> Result<(u64, HashMap<near_primitives::types::AccountId, u128>), FunctionCallError> {
+) -> Result<
+    (u64, HashMap<near_primitives::types::AccountId, u128>),
+    near_jsonrpc::primitives::types::query::RpcQueryError,
+> {
     let (epoch_height, epoch_validators) =
         if blocks_info_by_finality.final_cache_block().await.epoch_id == block.epoch_id {
             let validators = blocks_info_by_finality.validators().await;
@@ -190,8 +206,10 @@ async fn epoch_height_and_validators_with_balances(
             let validators = db_manager
                 .get_validators_by_epoch_id(block.epoch_id, "query_call_function")
                 .await
-                .map_err(|_| FunctionCallError::InternalError {
-                    error_message: "Failed to get epoch info".to_string(),
+                .map_err(|_| {
+                    near_jsonrpc::primitives::types::query::RpcQueryError::InternalError {
+                        error_message: "Failed to get epoch info".to_string(),
+                    }
                 })?;
             (
                 validators.epoch_height,

@@ -12,8 +12,6 @@ use near_jsonrpc::{
 };
 use serde_json::Value;
 
-use errors::RPCError;
-
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
@@ -22,7 +20,6 @@ extern crate lazy_static;
 
 mod cache;
 mod config;
-mod errors;
 mod health;
 mod metrics;
 mod middlewares;
@@ -35,8 +32,8 @@ pub(crate) const RPC_SERVER: &str = "read_rpc_server";
 /// Serialises response of a query into JSON to be sent to the client.
 ///
 /// Returns an internal server error if the value fails to serialise.
-fn serialize_response(value: impl serde::ser::Serialize) -> Result<Value, RPCError> {
-    serde_json::to_value(value).map_err(|err| RPCError::internal_error(&err.to_string()))
+fn serialize_response(value: impl serde::ser::Serialize) -> Result<Value, RpcError> {
+    serde_json::to_value(value).map_err(|err| RpcError::serialization_error(err.to_string()))
 }
 
 /// Processes a specific method call.
@@ -48,11 +45,11 @@ fn serialize_response(value: impl serde::ser::Serialize) -> Result<Value, RPCErr
 async fn process_method_call<R, V, E, F>(
     request: Request,
     callback: impl FnOnce(R) -> F,
-) -> Result<Value, RPCError>
+) -> Result<Value, RpcError>
 where
     R: RpcRequest,
     V: serde::ser::Serialize,
-    RPCError: std::convert::From<E>,
+    RpcError: std::convert::From<E>,
     F: std::future::Future<Output = Result<V, E>>,
 {
     serialize_response(callback(R::parse(request.params)?).await?)
@@ -77,7 +74,7 @@ async fn rpc_handler(
                     modules::state::methods::view_state_paginated(data, request_data).await,
                 )
             } else {
-                Err(RPCError::parse_error(
+                Err(RpcError::parse_error(
                     "Failed to parse request data".to_string(),
                 ))
             }
@@ -234,7 +231,7 @@ async fn rpc_handler(
             })
             .await
         }
-        _ => Err(RPCError::method_not_found(method_name.as_ref())),
+        _ => Err(RpcError::method_not_found(method_name.clone())),
     };
 
     match &result {
