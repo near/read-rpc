@@ -85,7 +85,7 @@ pub async fn changes_in_block_by_type(
     {
         if crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
             // Proxy if the optimistic updating is not working
-            return Ok(data
+            return data
                 .near_rpc_client
                 .call(request_data, Some("EXPERIMENTAL_changes"))
                 .await.map_err(|err| {
@@ -94,7 +94,7 @@ pub async fn changes_in_block_by_type(
                             error_message: err.to_string(),
                         },
                     )
-                })?);
+                });
         }
     };
 
@@ -119,7 +119,7 @@ pub async fn changes_in_block(
     {
         if crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
             // Proxy if the optimistic updating is not working
-            return Ok(data
+            return data
                 .near_rpc_client
                 .call(request_data, Some("EXPERIMENTAL_changes_in_block"))
                 .await.map_err(|err| {
@@ -128,7 +128,7 @@ pub async fn changes_in_block(
                             error_message: err.to_string(),
                         },
                     )
-                })?);
+                });
         }
     };
 

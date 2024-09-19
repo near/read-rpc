@@ -109,8 +109,7 @@ pub async fn network_info(
     near_jsonrpc::primitives::types::network_info::RpcNetworkInfoResponse,
     near_jsonrpc::primitives::types::network_info::RpcNetworkInfoError,
 > {
-    Ok(data
-        .near_rpc_client
+    data.near_rpc_client
         .call(
             near_jsonrpc_client::methods::network_info::RpcNetworkInfoRequest,
             Some("network_info"),
@@ -122,7 +121,7 @@ pub async fn network_info(
                     error_message: err.to_string(),
                 },
             )
-        })?)
+        })
 }
 
 pub async fn validators(

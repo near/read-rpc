@@ -174,7 +174,7 @@ async fn query_call(
         .await;
     }
 
-    Ok(result?)
+    result
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]

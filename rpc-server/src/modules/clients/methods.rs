@@ -9,7 +9,7 @@ pub async fn light_client_proof(
     near_jsonrpc::primitives::types::light_client::RpcLightClientExecutionProofResponse,
     near_jsonrpc::primitives::types::light_client::RpcLightClientProofError,
 > {
-    Ok(data
+    data
         .near_rpc_client
         .archival_call(request_data, Some("light_client_proof"))
         .await.map_err(|err| {
@@ -17,8 +17,7 @@ pub async fn light_client_proof(
                 near_jsonrpc::primitives::types::light_client::RpcLightClientProofError::InternalError {
                     error_message: err.to_string(),
             })
-        })?
-    )
+        })
 }
 
 pub async fn next_light_client_block(

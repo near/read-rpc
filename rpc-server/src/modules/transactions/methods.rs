@@ -12,8 +12,7 @@ pub async fn send_tx(
     near_jsonrpc::primitives::types::transactions::RpcTransactionResponse,
     near_jsonrpc::primitives::types::transactions::RpcTransactionError,
 > {
-    Ok(data
-        .near_rpc_client
+    data.near_rpc_client
         .call(request_data, Some("send_tx"))
         .await
         .map_err(|err| {
@@ -22,7 +21,7 @@ pub async fn send_tx(
                     debug_info: err.to_string(),
                 },
             )
-        })?)
+        })
 }
 
 /// Queries status of a transaction by hash and returns the final transaction result.
