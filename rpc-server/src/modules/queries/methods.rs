@@ -439,7 +439,7 @@ async fn view_state(
                 block_hash: block.block_hash,
             },
         )?;
-    if account.data.storage_usage() > data.prefetch_state_size_limit {
+    if prefix.is_empty() && account.data.storage_usage() > data.prefetch_state_size_limit {
         return Err(
             near_jsonrpc::primitives::types::query::RpcQueryError::TooLargeContractState {
                 contract_account_id: account_id.clone(),
