@@ -1,7 +1,6 @@
 use actix_web::web::Data;
 
 use crate::config::ServerContext;
-use crate::errors::RPCError;
 use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
 use crate::modules::state::utils::get_state_from_db_paginated;
 
@@ -9,12 +8,14 @@ use crate::modules::state::utils::get_state_from_db_paginated;
 pub async fn view_state_paginated(
     data: Data<ServerContext>,
     request_data: crate::modules::state::RpcViewStatePaginatedRequest,
-) -> Result<crate::modules::state::RpcViewStatePaginatedResponse, RPCError> {
+) -> Result<
+    crate::modules::state::RpcViewStatePaginatedResponse,
+    near_jsonrpc::primitives::errors::RpcError,
+> {
     let block_reference =
         near_primitives::types::BlockReference::BlockId(request_data.block_id.clone());
-    let block = fetch_block_from_cache_or_get(&data, &block_reference, "view_state_paginated")
-        .await
-        .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
+    let block =
+        fetch_block_from_cache_or_get(&data, &block_reference, "view_state_paginated").await?;
 
     let state_values = get_state_from_db_paginated(
         &data.db_manager,

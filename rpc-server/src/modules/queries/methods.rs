@@ -1,7 +1,6 @@
 use actix_web::web::Data;
 
 use crate::config::ServerContext;
-use crate::errors::RPCError;
 use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
 use crate::modules::blocks::CacheBlock;
 
@@ -16,7 +15,10 @@ use super::utils::get_state_from_db;
 pub async fn query(
     data: Data<ServerContext>,
     request_data: near_jsonrpc::primitives::types::query::RpcQueryRequest,
-) -> Result<near_jsonrpc::primitives::types::query::RpcQueryResponse, RPCError> {
+) -> Result<
+    near_jsonrpc::primitives::types::query::RpcQueryResponse,
+    near_jsonrpc::primitives::types::query::RpcQueryError,
+> {
     // When the data check fails, we want to emit the log message and increment the
     // corresponding metric. Despite the metrics have "proxies" in their names, we
     // are not proxying the requests anymore and respond with the error to the client.
@@ -42,7 +44,14 @@ pub async fn query(
             Ok(data
                 .near_rpc_client
                 .call(request_data, Some(method_name))
-                .await?)
+                .await
+                .map_err(|err| {
+                    err.handler_error().cloned().unwrap_or(
+                        near_jsonrpc::primitives::types::query::RpcQueryError::InternalError {
+                            error_message: err.to_string(),
+                        },
+                    )
+                })?)
         } else {
             // query_call with optimistic block
             query_call(&data, request_data, method_name, true).await
@@ -60,11 +69,18 @@ async fn query_call(
     mut query_request: near_jsonrpc::primitives::types::query::RpcQueryRequest,
     method_name: &str,
     is_optimistic: bool,
-) -> Result<near_jsonrpc::primitives::types::query::RpcQueryResponse, RPCError> {
+) -> Result<
+    near_jsonrpc::primitives::types::query::RpcQueryResponse,
+    near_jsonrpc::primitives::types::query::RpcQueryError,
+> {
     tracing::debug!("`query` call. Params: {:?}", query_request,);
     let block = fetch_block_from_cache_or_get(data, &query_request.block_reference, method_name)
         .await
-        .map_err(near_jsonrpc::primitives::errors::RpcError::from)?;
+        .map_err(
+            |_err| near_jsonrpc::primitives::types::query::RpcQueryError::UnknownBlock {
+                block_reference: query_request.block_reference.clone(),
+            },
+        )?;
 
     let result = match &query_request.request {
         near_primitives::views::QueryRequest::ViewAccount { account_id } => {
@@ -96,13 +112,27 @@ async fn query_call(
                     Ok(data
                         .near_rpc_client
                         .call(query_request, Some("query_view_state_proofs"))
-                        .await?)
+                        .await
+                        .map_err(|err| {
+                            err.handler_error().cloned().unwrap_or(
+                            near_jsonrpc::primitives::types::query::RpcQueryError::InternalError {
+                                error_message: err.to_string(),
+                            },
+                        )
+                        })?)
                 } else {
                     // Proxy to archival rpc if the block garbage collected
                     Ok(data
                         .near_rpc_client
                         .archival_call(query_request, Some("query_view_state_proofs"))
-                        .await?)
+                        .await
+                        .map_err(|err| {
+                            err.handler_error().cloned().unwrap_or(
+                            near_jsonrpc::primitives::types::query::RpcQueryError::InternalError {
+                                error_message: err.to_string(),
+                            },
+                        )
+                        })?)
                 };
             } else {
                 view_state(data, block, account_id, prefix, is_optimistic).await
@@ -144,7 +174,7 @@ async fn query_call(
         .await;
     }
 
-    Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)
+    result
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
@@ -365,8 +395,7 @@ async fn function_call(
         maybe_optimistic_data,
         data.prefetch_state_size_limit,
     )
-    .await
-    .map_err(|err| err.to_rpc_query_error(block.block_height, block.block_hash))?;
+    .await?;
 
     Ok(near_jsonrpc::primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc::primitives::types::query::QueryResponseKind::CallResult(

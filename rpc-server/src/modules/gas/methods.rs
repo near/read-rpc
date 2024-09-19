@@ -1,7 +1,6 @@
 use actix_web::web::Data;
 
 use crate::config::ServerContext;
-use crate::errors::RPCError;
 use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
 use crate::modules::blocks::CacheBlock;
 
@@ -10,7 +9,10 @@ use crate::modules::blocks::CacheBlock;
 pub async fn gas_price(
     data: Data<ServerContext>,
     mut request_data: near_jsonrpc::primitives::types::gas_price::RpcGasPriceRequest,
-) -> Result<near_jsonrpc::primitives::types::gas_price::RpcGasPriceResponse, RPCError> {
+) -> Result<
+    near_jsonrpc::primitives::types::gas_price::RpcGasPriceResponse,
+    near_jsonrpc::primitives::types::gas_price::RpcGasPriceError,
+> {
     tracing::debug!("`gas_price` called with parameters: {:?}", request_data);
     let block_reference = match request_data.block_id.clone() {
         Some(block_id) => near_primitives::types::BlockReference::BlockId(block_id),
@@ -45,9 +47,7 @@ pub async fn gas_price(
         .await;
     };
     let gas_price_view = near_primitives::views::GasPriceView {
-        gas_price: cache_block
-            .map_err(near_jsonrpc::primitives::errors::RpcError::from)?
-            .gas_price,
+        gas_price: cache_block?.gas_price,
     };
     Ok(near_jsonrpc::primitives::types::gas_price::RpcGasPriceResponse { gas_price_view })
 }

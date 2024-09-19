@@ -4,16 +4,24 @@ use near_primitives::views::FinalExecutionOutcomeViewEnum::{
 };
 
 use crate::config::ServerContext;
-use crate::errors::RPCError;
 
 pub async fn send_tx(
     data: Data<ServerContext>,
     request_data: near_jsonrpc::primitives::types::transactions::RpcSendTransactionRequest,
-) -> Result<near_jsonrpc::primitives::types::transactions::RpcTransactionResponse, RPCError> {
-    Ok(data
-        .near_rpc_client
+) -> Result<
+    near_jsonrpc::primitives::types::transactions::RpcTransactionResponse,
+    near_jsonrpc::primitives::types::transactions::RpcTransactionError,
+> {
+    data.near_rpc_client
         .call(request_data, Some("send_tx"))
-        .await?)
+        .await
+        .map_err(|err| {
+            err.handler_error().cloned().unwrap_or(
+                near_jsonrpc::primitives::types::transactions::RpcTransactionError::InternalError {
+                    debug_info: err.to_string(),
+                },
+            )
+        })
 }
 
 /// Queries status of a transaction by hash and returns the final transaction result.
@@ -21,16 +29,19 @@ pub async fn send_tx(
 pub async fn tx(
     data: Data<ServerContext>,
     request_data: near_jsonrpc::primitives::types::transactions::RpcTransactionStatusRequest,
-) -> Result<near_jsonrpc::primitives::types::transactions::RpcTransactionResponse, RPCError> {
+) -> Result<
+    near_jsonrpc::primitives::types::transactions::RpcTransactionResponse,
+    near_jsonrpc::primitives::types::transactions::RpcTransactionError,
+> {
     tracing::debug!("`tx` call. Params: {:?}", request_data);
 
-    let result = tx_status_common(&data, &request_data.transaction_info, false).await;
+    let tx_result = tx_status_common(&data, &request_data.transaction_info, false).await;
 
     #[cfg(feature = "shadow-data-consistency")]
     {
         crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
-            &result,
+            &tx_result,
             data.near_rpc_client.clone(),
             // Note there is a difference in the implementation of the `tx` method in the `near_jsonrpc_client`
             // The method is `near_jsonrpc_client::methods::tx::RpcTransactionStatusRequest` in the client
@@ -44,8 +55,7 @@ pub async fn tx(
         )
         .await;
     }
-
-    Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)
+    tx_result
 }
 
 /// Queries status of a transaction by hash, returning the final transaction result and details of all receipts.
@@ -53,16 +63,19 @@ pub async fn tx(
 pub async fn tx_status(
     data: Data<ServerContext>,
     request_data: near_jsonrpc::primitives::types::transactions::RpcTransactionStatusRequest,
-) -> Result<near_jsonrpc::primitives::types::transactions::RpcTransactionResponse, RPCError> {
+) -> Result<
+    near_jsonrpc::primitives::types::transactions::RpcTransactionResponse,
+    near_jsonrpc::primitives::types::transactions::RpcTransactionError,
+> {
     tracing::debug!("`tx_status` call. Params: {:?}", request_data);
 
-    let result = tx_status_common(&data, &request_data.transaction_info, true).await;
+    let tx_result = tx_status_common(&data, &request_data.transaction_info, true).await;
 
     #[cfg(feature = "shadow-data-consistency")]
     {
         crate::utils::shadow_compare_results_handler(
             data.shadow_data_consistency_rate,
-            &result,
+            &tx_result,
             data.near_rpc_client.clone(),
             // Note there is a difference in the implementation of the `EXPERIMENTAL_tx_status` method in the `near_jsonrpc_client`
             // The method is `near_jsonrpc_client::methods::EXPERIMENTAL_tx_status` in the client
@@ -76,14 +89,14 @@ pub async fn tx_status(
         .await;
     }
 
-    Ok(result.map_err(near_jsonrpc::primitives::errors::RpcError::from)?)
+    tx_result
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn broadcast_tx_async(
     data: Data<ServerContext>,
     request_data: near_jsonrpc::primitives::types::transactions::RpcSendTransactionRequest,
-) -> Result<near_primitives::hash::CryptoHash, RPCError> {
+) -> Result<near_primitives::hash::CryptoHash, near_jsonrpc::primitives::errors::RpcError> {
     tracing::debug!("`broadcast_tx_async` call. Params: {:?}", request_data);
     let proxy_params =
         near_jsonrpc_client::methods::broadcast_tx_async::RpcBroadcastTxAsyncRequest {
@@ -95,7 +108,9 @@ pub async fn broadcast_tx_async(
         .await
     {
         Ok(resp) => Ok(resp),
-        Err(err) => Err(RPCError::internal_error(&err.to_string())),
+        Err(err) => Err(
+            near_jsonrpc::primitives::errors::RpcError::new_internal_error(None, err.to_string()),
+        ),
     }
 }
 
@@ -103,7 +118,10 @@ pub async fn broadcast_tx_async(
 pub async fn broadcast_tx_commit(
     data: Data<ServerContext>,
     request_data: near_jsonrpc::primitives::types::transactions::RpcSendTransactionRequest,
-) -> Result<near_jsonrpc::primitives::types::transactions::RpcTransactionResponse, RPCError> {
+) -> Result<
+    near_jsonrpc::primitives::types::transactions::RpcTransactionResponse,
+    near_jsonrpc::primitives::types::transactions::RpcTransactionError,
+> {
     tracing::debug!("`broadcast_tx_commit` call. Params: {:?}", request_data);
     let proxy_params =
         near_jsonrpc_client::methods::broadcast_tx_commit::RpcBroadcastTxCommitRequest {
@@ -112,7 +130,14 @@ pub async fn broadcast_tx_commit(
     let result = data
         .near_rpc_client
         .call(proxy_params, Some("broadcast_tx_commit"))
-        .await?;
+        .await
+        .map_err(|err| {
+            err.handler_error().cloned().unwrap_or(
+                near_jsonrpc::primitives::types::transactions::RpcTransactionError::InternalError {
+                    debug_info: err.to_string(),
+                },
+            )
+        })?;
     Ok(
         near_jsonrpc::primitives::types::transactions::RpcTransactionResponse {
             final_execution_outcome: Some(FinalExecutionOutcome(result)),
