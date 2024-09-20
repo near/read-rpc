@@ -1,16 +1,4 @@
-use actix_web::{
-    web::{self},
-    App, HttpResponse, HttpServer,
-};
 use mimalloc::MiMalloc;
-use near_jsonrpc::{
-    primitives::{
-        errors::{RpcError, RpcErrorKind, RpcRequestValidationErrorKind},
-        message::{Message, Request},
-    },
-    RpcRequest,
-};
-use serde_json::Value;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -22,7 +10,6 @@ mod cache;
 mod config;
 mod health;
 mod metrics;
-mod middlewares;
 mod modules;
 mod utils;
 
@@ -32,8 +19,12 @@ pub(crate) const RPC_SERVER: &str = "read_rpc_server";
 /// Serialises response of a query into JSON to be sent to the client.
 ///
 /// Returns an internal server error if the value fails to serialise.
-fn serialize_response(value: impl serde::ser::Serialize) -> Result<Value, RpcError> {
-    serde_json::to_value(value).map_err(|err| RpcError::serialization_error(err.to_string()))
+fn serialize_response(
+    value: impl serde::ser::Serialize,
+) -> Result<serde_json::Value, near_jsonrpc::primitives::errors::RpcError> {
+    serde_json::to_value(value).map_err(|err| {
+        near_jsonrpc::primitives::errors::RpcError::serialization_error(err.to_string())
+    })
 }
 
 /// Processes a specific method call.
@@ -43,29 +34,31 @@ fn serialize_response(value: impl serde::ser::Serialize) -> Result<Value, RpcErr
 /// results of the `callback` will be converted into a [`Value`] via serde
 /// serialisation.
 async fn process_method_call<R, V, E, F>(
-    request: Request,
+    request: near_jsonrpc::primitives::message::Request,
     callback: impl FnOnce(R) -> F,
-) -> Result<Value, RpcError>
+) -> Result<serde_json::Value, near_jsonrpc::primitives::errors::RpcError>
 where
-    R: RpcRequest,
+    R: near_jsonrpc::RpcRequest,
     V: serde::ser::Serialize,
-    RpcError: std::convert::From<E>,
+    near_jsonrpc::primitives::errors::RpcError: From<E>,
     F: std::future::Future<Output = Result<V, E>>,
 {
     serialize_response(callback(R::parse(request.params)?).await?)
 }
 
 async fn rpc_handler(
-    data: web::Data<config::ServerContext>,
-    payload: web::Json<Message>,
-) -> HttpResponse {
-    let Message::Request(request) = payload.0 else {
-        return HttpResponse::BadRequest().finish();
+    data: actix_web::web::Data<config::ServerContext>,
+    payload: actix_web::web::Json<near_jsonrpc::primitives::message::Message>,
+) -> actix_web::HttpResponse {
+    let near_jsonrpc::primitives::message::Message::Request(request) = payload.0 else {
+        return actix_web::HttpResponse::BadRequest().finish();
     };
 
     let id = request.id.clone();
 
     let method_name = request.method.clone();
+    let mut method_not_found = false;
+    
     let result = match method_name.as_ref() {
         // custom request methods
         "view_state_paginated" => {
@@ -74,7 +67,7 @@ async fn rpc_handler(
                     modules::state::methods::view_state_paginated(data, request_data).await,
                 )
             } else {
-                Err(RpcError::parse_error(
+                Err(near_jsonrpc::primitives::errors::RpcError::parse_error(
                     "Failed to parse request data".to_string(),
                 ))
             }
@@ -231,31 +224,36 @@ async fn rpc_handler(
             })
             .await
         }
-        _ => Err(RpcError::method_not_found(method_name.clone())),
-    };
-
-    match &result {
-        Ok(_) => {
-            metrics::METHOD_CALLS_COUNTER
-                .with_label_values(&[method_name.as_ref()])
-                .inc();
+        _ => {
+            method_not_found = true;
+            Err(near_jsonrpc::primitives::errors::RpcError::method_not_found(method_name.clone()))
         }
-        Err(err) => match &err.error_struct {
-            Some(RpcErrorKind::RequestValidationError(validation_error)) => {
-                match validation_error {
-                    RpcRequestValidationErrorKind::ParseError { .. } => {
-                        metrics::METHOD_ERRORS_TOTAL
-                            .with_label_values(&[method_name.as_ref(), "PARSE_ERROR"])
-                            .inc()
-                    }
-                    RpcRequestValidationErrorKind::MethodNotFound { .. } => {
-                        metrics::METHOD_CALLS_COUNTER
-                            .with_label_values(&["METHOD_NOT_FOUND"])
-                            .inc()
-                    }
+    };
+    
+    // increase METHOD_CALLS_COUNTER for each method call
+    if method_not_found {
+        metrics::METHOD_CALLS_COUNTER
+            .with_label_values(&["METHOD_NOT_FOUND"])
+            .inc();
+    } else {
+        // For query method we calculate the number of total calls in the method
+        // and calculate the number of query by types in the inside query handler
+        metrics::METHOD_CALLS_COUNTER
+            .with_label_values(&[method_name.as_ref()])
+            .inc();
+    };
+    
+    // calculate method error metrics
+    if let Err(err) = &result {
+        match &err.error_struct {
+            Some(near_jsonrpc::primitives::errors::RpcErrorKind::RequestValidationError(validation_error)) => {
+                if let near_jsonrpc::primitives::errors::RpcRequestValidationErrorKind::ParseError { .. } = validation_error {
+                    metrics::METHOD_ERRORS_TOTAL
+                        .with_label_values(&[method_name.as_ref(), "PARSE_ERROR"])
+                        .inc()
                 }
             }
-            Some(RpcErrorKind::HandlerError(error_struct)) => {
+            Some(near_jsonrpc::primitives::errors::RpcErrorKind::HandlerError(error_struct)) => {
                 if let Some(error_name) =
                     error_struct.get("name").and_then(serde_json::Value::as_str)
                 {
@@ -264,42 +262,51 @@ async fn rpc_handler(
                         .inc();
                 }
             }
-            Some(RpcErrorKind::InternalError(_)) => {
+            Some(near_jsonrpc::primitives::errors::RpcErrorKind::InternalError(_)) => {
                 metrics::METHOD_ERRORS_TOTAL
                     .with_label_values(&[method_name.as_ref(), "INTERNAL_ERROR"])
                     .inc();
             }
             None => {}
-        },
+        }
     }
 
     let mut response = if cfg!(not(feature = "detailed-status-codes")) {
-        HttpResponse::Ok()
+        actix_web::HttpResponse::Ok()
     } else {
         match &result {
-            Ok(_) => HttpResponse::Ok(),
+            Ok(_) => actix_web::HttpResponse::Ok(),
             Err(err) => match &err.error_struct {
-                Some(RpcErrorKind::RequestValidationError(_)) => HttpResponse::BadRequest(),
-                Some(RpcErrorKind::HandlerError(error_struct)) => {
+                Some(near_jsonrpc::primitives::errors::RpcErrorKind::RequestValidationError(_)) => {
+                    actix_web::HttpResponse::BadRequest()
+                }
+                Some(near_jsonrpc::primitives::errors::RpcErrorKind::HandlerError(
+                    error_struct,
+                )) => {
                     if let Some(error_name) =
                         error_struct.get("name").and_then(serde_json::Value::as_str)
                     {
                         if error_name == "TIMEOUT_ERROR" {
-                            HttpResponse::RequestTimeout()
+                            actix_web::HttpResponse::RequestTimeout()
                         } else {
-                            HttpResponse::Ok()
+                            actix_web::HttpResponse::Ok()
                         }
                     } else {
-                        HttpResponse::Ok()
+                        actix_web::HttpResponse::Ok()
                     }
                 }
-                Some(RpcErrorKind::InternalError(_)) => HttpResponse::InternalServerError(),
-                None => HttpResponse::Ok(),
+                Some(near_jsonrpc::primitives::errors::RpcErrorKind::InternalError(_)) => {
+                    actix_web::HttpResponse::InternalServerError()
+                }
+                None => actix_web::HttpResponse::Ok(),
             },
         }
     };
 
-    response.json(Message::response(id, result.map_err(RpcError::from)))
+    response.json(near_jsonrpc::primitives::message::Message::response(
+        id,
+        result.map_err(near_jsonrpc::primitives::errors::RpcError::from),
+    ))
 }
 
 #[actix_web::main]
@@ -326,7 +333,7 @@ async fn main() -> anyhow::Result<()> {
 
     let server_port = rpc_server_config.general.server_port;
 
-    let server_context = web::Data::new(
+    let server_context = actix_web::web::Data::new(
         config::ServerContext::init(rpc_server_config.clone(), near_rpc_client.clone()).await?,
     );
 
@@ -388,15 +395,14 @@ async fn main() -> anyhow::Result<()> {
         });
     }
 
-    HttpServer::new(move || {
+    actix_web::HttpServer::new(move || {
         let cors = actix_cors::Cors::permissive();
 
-        App::new()
+        actix_web::App::new()
             .wrap(cors)
             .wrap(tracing_actix_web::TracingLogger::default())
-            .wrap(middlewares::RequestsCounters)
             .app_data(server_context.clone())
-            .service(web::scope("/").route("", web::post().to(rpc_handler)))
+            .service(actix_web::web::scope("/").route("", actix_web::web::post().to(rpc_handler)))
             .service(metrics::get_metrics)
             .service(health::get_health_status)
     })

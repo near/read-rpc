@@ -34,6 +34,10 @@ pub async fn query(
             "query_view_access_key_list"
         }
     };
+    // increase query method calls counter
+    crate::metrics::METHOD_CALLS_COUNTER
+        .with_label_values(&[method_name])
+        .inc();
 
     if let near_primitives::types::BlockReference::Finality(
         near_primitives::types::Finality::None,
