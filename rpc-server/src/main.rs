@@ -58,7 +58,7 @@ async fn rpc_handler(
 
     let method_name = request.method.clone();
     let mut method_not_found = false;
-    
+
     let result = match method_name.as_ref() {
         // custom request methods
         "view_state_paginated" => {
@@ -229,7 +229,7 @@ async fn rpc_handler(
             Err(near_jsonrpc::primitives::errors::RpcError::method_not_found(method_name.clone()))
         }
     };
-    
+
     // increase METHOD_CALLS_COUNTER for each method call
     if method_not_found {
         metrics::METHOD_CALLS_COUNTER
@@ -242,17 +242,17 @@ async fn rpc_handler(
             .with_label_values(&[method_name.as_ref()])
             .inc();
     };
-    
+
     // calculate method error metrics
     if let Err(err) = &result {
         match &err.error_struct {
-            Some(near_jsonrpc::primitives::errors::RpcErrorKind::RequestValidationError(validation_error)) => {
-                if let near_jsonrpc::primitives::errors::RpcRequestValidationErrorKind::ParseError { .. } = validation_error {
-                    metrics::METHOD_ERRORS_TOTAL
-                        .with_label_values(&[method_name.as_ref(), "PARSE_ERROR"])
-                        .inc()
-                }
-            }
+            Some(near_jsonrpc::primitives::errors::RpcErrorKind::RequestValidationError(
+                near_jsonrpc::primitives::errors::RpcRequestValidationErrorKind::ParseError {
+                    ..
+                },
+            )) => metrics::METHOD_ERRORS_TOTAL
+                .with_label_values(&[method_name.as_ref(), "PARSE_ERROR"])
+                .inc(),
             Some(near_jsonrpc::primitives::errors::RpcErrorKind::HandlerError(error_struct)) => {
                 if let Some(error_name) =
                     error_struct.get("name").and_then(serde_json::Value::as_str)
@@ -268,6 +268,7 @@ async fn rpc_handler(
                     .inc();
             }
             None => {}
+            _ => {}
         }
     }
 
