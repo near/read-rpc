@@ -44,7 +44,7 @@ impl GenesisInfo {
 
 #[derive(Clone)]
 pub struct ServerContext {
-    /// Lake s3 client
+    /// Fastnear client
     pub fastnear_client: near_lake_framework::fastnear_client::FastNearClient,
     /// Database manager
     pub db_manager: std::sync::Arc<Box<dyn database::ReaderDbManager + Sync + Send + 'static>>,
@@ -109,6 +109,7 @@ impl ServerContext {
                     .optimistic_cache_block()
                     .await
                     .block_height,
+                rpc_server_config.general.chain_id.clone(),
             )
             .await?
             .client();
