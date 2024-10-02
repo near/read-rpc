@@ -4,7 +4,7 @@ use near_primitives::views::StateChangeValueView;
 
 use crate::config::ServerContext;
 use crate::modules::blocks::utils::{
-    check_block_height, fetch_block_from_cache_or_get, fetch_chunk_from_s3, is_matching_change,
+    check_block_height, fetch_block_from_cache_or_get, fetch_chunk_from_fastnear, is_matching_change,
 };
 
 /// `block` rpc method implementation
@@ -411,18 +411,17 @@ pub async fn fetch_block(
     {
         data.blocks_info_by_finality.optimistic_block_view().await
     } else {
-        near_lake_framework::s3::fetchers::fetch_block(
-            &data.s3_client,
-            &data.s3_bucket_name,
+        near_lake_framework::fastnear::fetchers::fetch_block_or_retry(
+            &data.fastnear_client,
             block_height,
         )
-        .await
-        .map_err(|err| {
-            tracing::error!("Failed to fetch block from S3: {}", err);
-            near_jsonrpc::primitives::types::blocks::RpcBlockError::UnknownBlock {
-                error_message: format!("BLOCK HEIGHT: {:?}", block_height),
-            }
-        })?
+            .await
+            .map_err(|err| {
+                tracing::error!("Failed to fetch block from fastnear: {}", err);
+                near_jsonrpc::primitives::types::blocks::RpcBlockError::UnknownBlock {
+                    error_message: format!("BLOCK HEIGHT: {:?}", block_height),
+                }
+            })?
     };
     Ok(near_jsonrpc::primitives::types::blocks::RpcBlockResponse { block_view })
 }
@@ -484,13 +483,8 @@ pub async fn fetch_chunk(
             )
             .map(|block_height_shard_id| (block_height_shard_id.0, block_height_shard_id.1))?,
     };
-    let chunk_view = fetch_chunk_from_s3(
-        &data.s3_client,
-        &data.s3_bucket_name,
-        block_height,
-        shard_id.into(),
-    )
-    .await?;
+    let chunk_view =
+        fetch_chunk_from_fastnear(&data.fastnear_client, block_height, shard_id).await?;
     // increase block category metrics
     crate::metrics::increase_request_category_metrics(
         data,
@@ -664,27 +658,16 @@ async fn fetch_shards_by_cache_block(
     data: &Data<ServerContext>,
     cache_block: crate::modules::blocks::CacheBlock,
 ) -> anyhow::Result<Vec<near_indexer_primitives::IndexerShard>> {
-    let fetch_shards_futures = (0..cache_block.chunks_included)
-        .collect::<Vec<u64>>()
-        .into_iter()
-        .map(|shard_id| {
-            near_lake_framework::s3::fetchers::fetch_shard(
-                &data.s3_client,
-                &data.s3_bucket_name,
-                cache_block.block_height,
-                shard_id,
-            )
-        });
-
-    futures::future::join_all(fetch_shards_futures)
-        .await
-        .into_iter()
-        .collect::<Result<_, _>>()
-        .map_err(|err| {
-            anyhow::anyhow!(
-                "Failed to fetch shards for block {} with error: {}",
-                cache_block.block_height,
-                err
-            )
-        })
+    match near_lake_framework::fastnear::fetchers::fetch_streamer_message(
+        &data.fastnear_client,
+        cache_block.block_height,
+    )
+    .await
+    {
+        Some(streamer_message) => Ok(streamer_message.shards),
+        None => Err(anyhow::anyhow!(
+            "Failed to fetch shards for block {}",
+            cache_block.block_height,
+        )),
+    }
 }
