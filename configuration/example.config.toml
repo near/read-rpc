@@ -115,18 +115,9 @@ near_rpc_url = "https://beta.rpc.mainnet.near.org"
 
 ### Lake framework configuration
 [lake_config]
-
-## Lake framework AWS access key id
-aws_access_key_id = "${AWS_ACCESS_KEY_ID}"
-
-## Lake framework AWS secret access key
-aws_secret_access_key = "${AWS_SECRET_ACCESS_KEY}"
-
-## Lake framework AWS default region
-aws_default_region = "eu-central-1"
-
-## Lake framework bucket name
-aws_bucket_name = "near-lake-data-mainnet"
+# Number of threads to use for fetching data from fatnear
+# Default: 2 * available threads
+#num_threads = 8
 
 [tx_details_storage]
 ## Transaction details are stored in the S3-compatibe object storage (Google Cloud Storage by default)
