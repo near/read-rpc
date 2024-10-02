@@ -192,30 +192,7 @@ pub async fn update_final_block_regularly(
     near_rpc_client: JsonRpcClient,
 ) {
     tracing::info!("Task to get and store final block in the cache started");
-    // let mut current_protocol_version = blocks_info_by_finality.current_protocol_version().await;
     loop {
-        // TODO:
-        // Update protocol version from redis regularly
-        // match finality_blocks_storage.get_protocol_version().await {
-        //     Ok(protocol_version) => {
-        //         if protocol_version != current_protocol_version {
-        //             if let Err(err) = blocks_info_by_finality
-        //                 .update_current_protocol_version(protocol_version)
-        //                 .await
-        //             {
-        //                 tracing::error!("Failed to update protocol version from Redis: {:?}", err);
-        //             } else {
-        //                 // If the protocol version is updated from the Redis, update the local value
-        //                 // otherwise, we will keep trying to update from the Redis
-        //                 current_protocol_version = protocol_version;
-        //             };
-        //         };
-        //     }
-        //     Err(err) => {
-        //         tracing::error!("Failed to get protocol version from Redis: {:?}", err);
-        //     }
-        // }
-
         // Update final block from fastnear regularly
         let streamer_message =
             near_lake_framework::providers::fastnear::fetchers::fetch_last_block(&fastnear_client)
