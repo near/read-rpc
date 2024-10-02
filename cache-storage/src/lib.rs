@@ -1,5 +1,4 @@
 use futures::FutureExt;
-use near_indexer_primitives::near_primitives;
 
 mod utils;
 
@@ -112,92 +111,6 @@ impl RedisCacheStorage {
             .query_async(&mut self.client.clone())
             .await?;
         Ok(value)
-    }
-}
-
-#[derive(Clone)]
-pub struct BlocksByFinalityCache {
-    cache_storage: RedisCacheStorage,
-}
-
-/// Sets the keys in Redis shared between the ReadRPC components about the most recent
-/// blocks based on finalities (final or optimistic).
-/// `final_height` of `optimistic_height` depending on `block_type` passed.
-/// Additionally, sets the JSON serialized `StreamerMessage` into keys `final` or `optimistic`
-/// accordingly.
-impl BlocksByFinalityCache {
-    // Use redis database 0(default for redis) for handling the blocks by finality cache.
-    pub async fn new(redis_url: String) -> anyhow::Result<Self> {
-        Ok(Self {
-            cache_storage: RedisCacheStorage::new(redis_url, 0).await?,
-        })
-    }
-
-    pub async fn update_block_by_finality(
-        &self,
-        finality: near_indexer_primitives::near_primitives::types::Finality,
-        streamer_message: &near_indexer_primitives::StreamerMessage,
-    ) -> anyhow::Result<()> {
-        let block_height = streamer_message.block.header.height;
-        let block_type = serde_json::to_string(&finality)?;
-
-        let last_height = self
-            .cache_storage
-            .get(format!("{}_height", block_type))
-            .await
-            .unwrap_or(0);
-
-        // If the block height is greater than the last height, update the block streamer message
-        // if we have a few indexers running, we need to make sure that we are not updating the same block
-        // or block which is already processed or block less than the last processed block
-        if block_height > last_height {
-            let json_streamer_message = serde_json::to_string(streamer_message)?;
-            // Update the last block height
-            // Create a clone of the redis client and redis cmd to avoid borrowing issues
-            let update_height_feature = self
-                .cache_storage
-                .set(format!("{}_height", block_type), block_height);
-
-            // Update the block streamer message
-            // Create a clone of the redis client and redis cmd to avoid borrowing issues
-            let update_stream_msg_feature =
-                self.cache_storage.set(block_type, json_streamer_message);
-
-            // Wait for both futures to complete
-            futures::future::join_all([
-                update_height_feature.boxed(),
-                update_stream_msg_feature.boxed(),
-            ])
-            .await
-            .into_iter()
-            .collect::<anyhow::Result<()>>()?;
-        };
-
-        Ok(())
-    }
-
-    pub async fn get_block_by_finality(
-        &self,
-        finality: near_indexer_primitives::near_primitives::types::Finality,
-    ) -> anyhow::Result<near_indexer_primitives::StreamerMessage> {
-        let block_type = serde_json::to_string(&finality)?;
-        let resp: String = self.cache_storage.get(block_type).await?;
-        Ok(serde_json::from_str(&resp)?)
-    }
-
-    pub async fn update_protocol_version(
-        &self,
-        protocol_version: near_primitives::types::ProtocolVersion,
-    ) -> anyhow::Result<()> {
-        self.cache_storage
-            .set("protocol_version", protocol_version)
-            .await
-    }
-
-    pub async fn get_protocol_version(
-        &self,
-    ) -> anyhow::Result<near_primitives::types::ProtocolVersion> {
-        self.cache_storage.get("protocol_version").await
     }
 }
 

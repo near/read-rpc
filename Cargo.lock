@@ -1574,9 +1574,6 @@ name = "configuration"
 version = "0.3.3"
 dependencies = [
  "anyhow",
- "aws-credential-types",
- "aws-sdk-s3",
- "aws-types",
  "dotenv",
  "google-cloud-storage",
  "lazy_static",
@@ -5108,7 +5105,6 @@ dependencies = [
  "actix",
  "actix-web",
  "anyhow",
- "cache-storage",
  "clap",
  "configuration",
  "database",

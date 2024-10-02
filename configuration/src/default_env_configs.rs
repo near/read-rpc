@@ -120,6 +120,7 @@ tracked_changes = "${TRACKED_CHANGES}"
 
 ### Lake framework configuration
 [lake_config]
+<<<<<<< HEAD:configuration/src/default_env_configs.rs
 
 ## Lake framework AWS access key id
 aws_access_key_id = "${AWS_ACCESS_KEY_ID}"
@@ -132,6 +133,11 @@ aws_default_region = "${AWS_DEFAULT_REGION}"
 
 ## Lake framework bucket name
 aws_bucket_name = "${AWS_BUCKET_NAME}"
+=======
+# Number of threads to use for fetching data from fatnear
+# Default: 2 * available threads
+#num_threads = 8
+>>>>>>> 6909c65 (migrate to fastnear):configuration/example.config.toml
 
 ## Transaction details are stored in the Google Cloud Storage
 [tx_details_storage]
