@@ -4,7 +4,8 @@ use near_primitives::views::StateChangeValueView;
 
 use crate::config::ServerContext;
 use crate::modules::blocks::utils::{
-    check_block_height, fetch_block_from_cache_or_get, fetch_chunk_from_fastnear, is_matching_change,
+    check_block_height, fetch_block_from_cache_or_get, fetch_chunk_from_fastnear,
+    is_matching_change,
 };
 
 /// `block` rpc method implementation
@@ -415,13 +416,13 @@ pub async fn fetch_block(
             &data.fastnear_client,
             block_height,
         )
-            .await
-            .map_err(|err| {
-                tracing::error!("Failed to fetch block from fastnear: {}", err);
-                near_jsonrpc::primitives::types::blocks::RpcBlockError::UnknownBlock {
-                    error_message: format!("BLOCK HEIGHT: {:?}", block_height),
-                }
-            })?
+        .await
+        .map_err(|err| {
+            tracing::error!("Failed to fetch block from fastnear: {}", err);
+            near_jsonrpc::primitives::types::blocks::RpcBlockError::UnknownBlock {
+                error_message: format!("BLOCK HEIGHT: {:?}", block_height),
+            }
+        })?
     };
     Ok(near_jsonrpc::primitives::types::blocks::RpcBlockResponse { block_view })
 }
