@@ -115,7 +115,7 @@ near_rpc_url = "https://beta.rpc.mainnet.near.org"
 
 ### Lake framework configuration
 [lake_config]
-# Number of threads to use for fetching data from fatnear
+# Number of threads to use for fetching data from fastnear
 # Default: 2 * available threads
 #num_threads = 8
 
