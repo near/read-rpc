@@ -102,7 +102,7 @@ impl CacheStorage {
             .await
             .into_iter()
             .collect::<anyhow::Result<_>>()?;
-        tracing::info!(
+        tracing::debug!(
             target: STORAGE,
             "Restored {} transactions after interruption",
             tx_in_process.len()

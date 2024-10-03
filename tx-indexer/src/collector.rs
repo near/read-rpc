@@ -197,7 +197,7 @@ async fn save_outcome_and_receipt_to_shard(
         )
     })?;
 
-    tracing::info!(
+    tracing::debug!(
         target: crate::INDEXER,
         "Receipts and outcomes for shard {} were saved successfully",
         shard_id,
@@ -504,7 +504,7 @@ async fn save_transaction_details_to_storage(
     })?;
 
     metrics::TX_IN_MEMORY_CACHE.dec();
-    tracing::info!(
+    tracing::debug!(
         target: crate::INDEXER,
         "Transaction {} was saved successfully",
         transaction_hash,
