@@ -149,7 +149,9 @@ pub async fn get_current_protocol_version(
     near_rpc_client: &JsonRpcClient,
 ) -> anyhow::Result<near_primitives::version::ProtocolVersion> {
     let params = near_jsonrpc_client::methods::status::RpcStatusRequest;
-    Ok(near_rpc_client.call(params, None).await?.protocol_version)
+    let protocol_version = near_rpc_client.call(params, None).await?.protocol_version;
+    crate::metrics::CURRENT_PROTOCOL_VERSION.set(protocol_version as i64);
+    Ok(protocol_version)
 }
 
 async fn handle_streamer_message(
@@ -205,7 +207,7 @@ pub async fn update_final_block_regularly(
         )
         .await
         {
-            tracing::error!("Error to handle_streamer_message: {:?}", err);
+            tracing::error!("Error in fn handle_streamer_message(): {:?}", err);
         };
         // Sleep for 500ms before the next iteration
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
