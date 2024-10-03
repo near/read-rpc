@@ -1,7 +1,6 @@
 use crate::modules::blocks::{BlockInfo, BlocksInfoByFinality, CacheBlock};
 #[cfg(feature = "shadow-data-consistency")]
 use assert_json_diff::{assert_json_matches_no_panic, CompareMode, Config, NumericMode};
-use futures::StreamExt;
 
 #[cfg(feature = "shadow-data-consistency")]
 const DEFAULT_RETRY_COUNT: u8 = 3;
@@ -146,20 +145,29 @@ pub async fn get_current_validators(
     Ok(near_rpc_client.call(params, None).await?)
 }
 
+pub async fn get_current_protocol_version(
+    near_rpc_client: &JsonRpcClient,
+) -> anyhow::Result<near_primitives::version::ProtocolVersion> {
+    let params = near_jsonrpc_client::methods::status::RpcStatusRequest;
+    let protocol_version = near_rpc_client.call(params, None).await?.protocol_version;
+    crate::metrics::CURRENT_PROTOCOL_VERSION.set(protocol_version as i64);
+    Ok(protocol_version)
+}
+
 async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
     blocks_cache: std::sync::Arc<crate::cache::RwLockLruMemoryCache<u64, CacheBlock>>,
     blocks_info_by_finality: std::sync::Arc<BlocksInfoByFinality>,
     near_rpc_client: &JsonRpcClient,
 ) -> anyhow::Result<()> {
-    let block = BlockInfo::new_from_streamer_message(streamer_message).await;
-    let block_cache = block.block_cache;
-
-    if block_cache.block_height as i64
+    if streamer_message.block.header.height as i64
         > crate::metrics::LATEST_BLOCK_HEIGHT_BY_FINALITIY
             .with_label_values(&["final"])
             .get()
     {
+        let block = BlockInfo::new_from_streamer_message(streamer_message).await;
+        let block_cache = block.block_cache;
+
         if blocks_info_by_finality.final_cache_block().await.epoch_id != block_cache.epoch_id {
             tracing::info!("New epoch started: {:?}", block_cache.epoch_id);
             blocks_info_by_finality
@@ -178,142 +186,62 @@ async fn handle_streamer_message(
     Ok(())
 }
 
-pub async fn update_final_block_regularly_from_lake(
-    blocks_cache: std::sync::Arc<crate::cache::RwLockLruMemoryCache<u64, CacheBlock>>,
-    blocks_info_by_finality: std::sync::Arc<BlocksInfoByFinality>,
-    rpc_server_config: configuration::RpcServerConfig,
-    near_rpc_client: JsonRpcClient,
-) -> anyhow::Result<()> {
-    tracing::info!("Task to get final block from lake and store in the cache started");
-    let lake_config = rpc_server_config
-        .lake_config
-        .lake_config(
-            blocks_info_by_finality
-                .optimistic_cache_block()
-                .await
-                .block_height,
-        )
-        .await?;
-    let (sender, stream) = near_lake_framework::streamer(lake_config);
-    let mut handlers = tokio_stream::wrappers::ReceiverStream::new(stream)
-        .map(|streamer_message| {
-            handle_streamer_message(
-                streamer_message,
-                std::sync::Arc::clone(&blocks_cache),
-                std::sync::Arc::clone(&blocks_info_by_finality),
-                &near_rpc_client,
-            )
-        })
-        .buffer_unordered(1usize);
-
-    while let Some(_handle_message) = handlers.next().await {
-        if let Err(err) = _handle_message {
-            tracing::warn!("{:?}", err);
-        }
-    }
-    drop(handlers); // close the channel so the sender will stop
-
-    // propagate errors from the sender
-    match sender.await {
-        Ok(Ok(())) => Ok(()),
-        Ok(Err(e)) => Err(e),
-        Err(e) => Err(anyhow::Error::from(e)), // JoinError
-    }
-}
-
 // Task to get and store final block in the cache
-// Subscribe to the redis channel and update the final block in the cache
-pub async fn update_final_block_regularly_from_redis(
+pub async fn update_final_block_regularly(
     blocks_cache: std::sync::Arc<crate::cache::RwLockLruMemoryCache<u64, CacheBlock>>,
     blocks_info_by_finality: std::sync::Arc<BlocksInfoByFinality>,
-    finality_blocks_storage: cache_storage::BlocksByFinalityCache,
+    fastnear_client: near_lake_framework::fastnear_client::FastNearClient,
     near_rpc_client: JsonRpcClient,
 ) {
     tracing::info!("Task to get and store final block in the cache started");
-    let mut current_protocol_version = blocks_info_by_finality.current_protocol_version().await;
     loop {
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
-        // Update protocol version from redis regularly
-        match finality_blocks_storage.get_protocol_version().await {
-            Ok(protocol_version) => {
-                if protocol_version != current_protocol_version {
-                    if let Err(err) = blocks_info_by_finality
-                        .update_current_protocol_version(protocol_version)
-                        .await
-                    {
-                        tracing::error!("Failed to update protocol version from Redis: {:?}", err);
-                    } else {
-                        // If the protocol version is updated from the Redis, update the local value
-                        // otherwise, we will keep trying to update from the Redis
-                        current_protocol_version = protocol_version;
-                    };
-                };
-            }
-            Err(err) => {
-                tracing::error!("Failed to get protocol version from Redis: {:?}", err);
-            }
-        }
-
-        // Update final block from Redis regularly
-        match finality_blocks_storage
-            .get_block_by_finality(near_primitives::types::Finality::Final)
-            .await
+        // Update final block from fastnear regularly
+        let streamer_message =
+            near_lake_framework::providers::fastnear::fetchers::fetch_last_block(&fastnear_client)
+                .await;
+        if let Err(err) = handle_streamer_message(
+            streamer_message,
+            std::sync::Arc::clone(&blocks_cache),
+            std::sync::Arc::clone(&blocks_info_by_finality),
+            &near_rpc_client,
+        )
+        .await
         {
-            Ok(streamer_message) => {
-                if let Err(err) = handle_streamer_message(
-                    streamer_message,
-                    std::sync::Arc::clone(&blocks_cache),
-                    std::sync::Arc::clone(&blocks_info_by_finality),
-                    &near_rpc_client,
-                )
-                .await
-                {
-                    tracing::error!("Error to handle_streamer_message: {:?}", err);
-                }
-            }
-            Err(err) => {
-                tracing::warn!("Error to get final block from redis: {:?}", err);
-            }
-        }
+            tracing::error!("Error in fn handle_streamer_message(): {:?}", err);
+        };
+        // Sleep for 500ms before the next iteration
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     }
 }
 
 // Task to get and store optimistic block in the cache
-// Subscribe to the redis channel and update the optimistic block in the cache
 pub async fn update_optimistic_block_regularly(
     blocks_info_by_finality: std::sync::Arc<BlocksInfoByFinality>,
-    finality_blocks_storage: cache_storage::BlocksByFinalityCache,
+    fastnear_client: near_lake_framework::fastnear_client::FastNearClient,
 ) {
     tracing::info!("Task to get and store optimistic block in the cache started");
     loop {
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-        match finality_blocks_storage
-            .get_block_by_finality(near_primitives::types::Finality::None)
-            .await
+        let streamer_message =
+            near_lake_framework::providers::fastnear::fetchers::fetch_optimistic_block(
+                &fastnear_client,
+            )
+            .await;
+        if streamer_message.block.header.height as i64
+            > crate::metrics::LATEST_BLOCK_HEIGHT_BY_FINALITIY
+                .with_label_values(&["optimistic"])
+                .get()
         {
-            Ok(streamer_message) => {
-                let optimistic_block = BlockInfo::new_from_streamer_message(streamer_message).await;
-                let optimistic_block_cache = optimistic_block.block_cache;
-                if optimistic_block_cache.block_height as i64
-                    > crate::metrics::LATEST_BLOCK_HEIGHT_BY_FINALITIY
-                        .with_label_values(&["optimistic"])
-                        .get()
-                {
-                    blocks_info_by_finality
-                        .update_optimistic_block(optimistic_block)
-                        .await;
-                    crate::metrics::LATEST_BLOCK_HEIGHT_BY_FINALITIY
-                        .with_label_values(&["optimistic"])
-                        .set(
-                            i64::try_from(optimistic_block_cache.block_height)
-                                .expect("Invalid optimistic block height"),
-                        );
-                }
-            }
-            Err(err) => {
-                tracing::warn!("Error to get optimistic block from redis: {:?}", err);
-            }
+            let optimistic_block = BlockInfo::new_from_streamer_message(streamer_message).await;
+            let optimistic_block_cache = optimistic_block.block_cache;
+            blocks_info_by_finality
+                .update_optimistic_block(optimistic_block)
+                .await;
+            crate::metrics::LATEST_BLOCK_HEIGHT_BY_FINALITIY
+                .with_label_values(&["optimistic"])
+                .set(
+                    i64::try_from(optimistic_block_cache.block_height)
+                        .expect("Invalid optimistic block height"),
+                );
         }
 
         // When an optimistic block is not updated, or it is lower than the final block
@@ -345,6 +273,8 @@ pub async fn update_optimistic_block_regularly(
             crate::metrics::OPTIMISTIC_UPDATING.set_working();
             tracing::info!("Optimistic block updating is resumed.");
         };
+        // Sleep for 500ms before the next iteration
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     }
 }
 
