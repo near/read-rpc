@@ -6,10 +6,11 @@ use crate::modules::blocks::CacheBlock;
 
 #[cfg_attr(
     feature = "tracing-instrumentation",
-    tracing::instrument(skip(fastnear_client))
+    tracing::instrument(skip(s3_client))
 )]
-pub async fn fetch_chunk_from_fastnear(
-    fastnear_client: &near_lake_framework::fastnear_client::FastNearClient,
+pub async fn fetch_chunk_from_s3(
+    s3_client: &near_lake_framework::s3_fetchers::LakeS3Client,
+    s3_bucket_name: &str,
     block_height: near_primitives::types::BlockHeight,
     shard_id: near_primitives::types::ShardId,
 ) -> Result<near_primitives::views::ChunkView, near_jsonrpc::primitives::types::chunks::RpcChunkError>
@@ -19,8 +20,9 @@ pub async fn fetch_chunk_from_fastnear(
         block_height,
         shard_id
     );
-    match near_lake_framework::providers::fastnear::fetchers::fetch_shard_or_retry(
-        fastnear_client,
+    match near_lake_framework::s3_fetchers::fetch_shard(
+        s3_client,
+        s3_bucket_name,
         block_height,
         shard_id,
     )

@@ -20,7 +20,8 @@ pub struct GenesisInfo {
 impl GenesisInfo {
     pub async fn get(
         near_rpc_client: &crate::utils::JsonRpcClient,
-        fastnear_client: &near_lake_framework::fastnear_client::FastNearClient,
+        s3_client: &near_lake_framework::s3_fetchers::LakeS3Client,
+        s3_bucket_name: &str,
     ) -> Self {
         tracing::info!("Get genesis config...");
         let genesis_config = near_rpc_client
@@ -31,21 +32,25 @@ impl GenesisInfo {
             .await
             .expect("Error to get genesis config");
 
-        let genesis_block =
-            near_lake_framework::providers::fastnear::fetchers::fetch_first_block(fastnear_client)
-                .await;
+        let genesis_block = near_lake_framework::s3_fetchers::fetch_block(
+            s3_client,
+            s3_bucket_name,
+            genesis_config.genesis_height,
+        )
+        .await
+        .expect("Error to get genesis block");
 
         Self {
             genesis_config,
-            genesis_block_cache: CacheBlock::from(&genesis_block.block),
+            genesis_block_cache: CacheBlock::from(&genesis_block),
         }
     }
 }
 
 #[derive(Clone)]
 pub struct ServerContext {
-    /// Fastnear client
-    pub fastnear_client: near_lake_framework::fastnear_client::FastNearClient,
+    /// Lake s3 client
+    pub s3_client: near_lake_framework::s3_fetchers::LakeS3Client,
     /// Database manager
     pub db_manager: std::sync::Arc<Box<dyn database::ReaderDbManager + Sync + Send + 'static>>,
     /// TransactionDetails storage
@@ -56,6 +61,8 @@ pub struct ServerContext {
     pub genesis_info: GenesisInfo,
     /// Near rpc client
     pub near_rpc_client: crate::utils::JsonRpcClient,
+    /// AWS s3 lake bucket name
+    pub s3_bucket_name: String,
     /// Blocks cache
     pub blocks_cache: std::sync::Arc<crate::cache::RwLockLruMemoryCache<u64, CacheBlock>>,
     /// Final block info include final_block_cache and current_validators_info
@@ -102,17 +109,7 @@ impl ServerContext {
         let blocks_info_by_finality =
             std::sync::Arc::new(BlocksInfoByFinality::new(&near_rpc_client, &blocks_cache).await);
 
-        let fastnear_client = rpc_server_config
-            .lake_config
-            .lake_config(
-                blocks_info_by_finality
-                    .optimistic_cache_block()
-                    .await
-                    .block_height,
-                rpc_server_config.general.chain_id.clone(),
-            )
-            .await?
-            .client();
+        let s3_client = rpc_server_config.lake_config.lake_s3_client().await;
 
         let tx_details_storage = tx_details_storage::TxDetailsStorage::new(
             rpc_server_config.tx_details_storage.storage_client().await,
@@ -127,7 +124,12 @@ impl ServerContext {
                 })
                 .ok();
 
-        let genesis_info = GenesisInfo::get(&near_rpc_client, &fastnear_client).await;
+        let genesis_info = GenesisInfo::get(
+            &near_rpc_client,
+            &s3_client,
+            &rpc_server_config.lake_config.aws_bucket_name,
+        )
+        .await;
 
         let default_epoch_config = EpochConfig::from(&genesis_info.genesis_config);
         let all_epoch_config = AllEpochConfig::new(
@@ -152,12 +154,13 @@ impl ServerContext {
             std::sync::Arc::new(CompiledCodeCache::new(contract_code_cache_size_in_bytes));
 
         Ok(Self {
-            fastnear_client,
+            s3_client,
             db_manager: std::sync::Arc::new(Box::new(db_manager)),
             tx_details_storage: std::sync::Arc::new(tx_details_storage),
             tx_cache_storage,
             genesis_info,
             near_rpc_client,
+            s3_bucket_name: rpc_server_config.lake_config.aws_bucket_name.clone(),
             blocks_cache,
             blocks_info_by_finality,
             compiled_contract_code_cache,

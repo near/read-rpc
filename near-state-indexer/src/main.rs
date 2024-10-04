@@ -8,6 +8,7 @@ use logic_state_indexer::{handle_streamer_message, NearClient, INDEXER};
 mod configs;
 mod metrics;
 mod near_client;
+mod utils;
 
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
@@ -58,6 +59,12 @@ async fn run(home_dir: std::path::PathBuf) -> anyhow::Result<()> {
     let state_indexer_config =
         configuration::read_configuration::<configuration::NearStateIndexerConfig>().await?;
 
+    tracing::info!(target: INDEXER, "Connecting to redis...");
+    let finality_blocks_storage = cache_storage::BlocksByFinalityCache::new(
+        state_indexer_config.general.redis_url.to_string(),
+    )
+    .await?;
+
     tracing::info!(target: INDEXER, "Setup near_indexer...");
     let indexer_config = near_indexer::IndexerConfig {
         home_dir,
@@ -73,7 +80,7 @@ async fn run(home_dir: std::path::PathBuf) -> anyhow::Result<()> {
     // Regular indexer process starts here
     tracing::info!(target: INDEXER, "Instantiating the stream...");
     let stream = indexer.streamer();
-    let (view_client, _) = indexer.client_actors();
+    let (view_client, client) = indexer.client_actors();
 
     let near_client = near_client::NearViewClient::new(view_client.clone());
     let protocol_config_view = near_client.protocol_config().await?;
@@ -89,6 +96,21 @@ async fn run(home_dir: std::path::PathBuf) -> anyhow::Result<()> {
     tokio::spawn(metrics::state_logger(
         std::sync::Arc::clone(&stats),
         near_client.clone(),
+    ));
+
+    // Initiate the job of updating the optimistic blocks to Redis
+    tokio::spawn(utils::update_block_in_redis_by_finality(
+        view_client.clone(),
+        client.clone(),
+        finality_blocks_storage.clone(),
+        near_indexer_primitives::near_primitives::types::Finality::None,
+    ));
+    // And the same job for the final blocks
+    tokio::spawn(utils::update_block_in_redis_by_finality(
+        view_client.clone(),
+        client.clone(),
+        finality_blocks_storage.clone(),
+        near_indexer_primitives::near_primitives::types::Finality::Final,
     ));
 
     // ! Note that the `handle_streamer_message` doesn't interact with the Redis
