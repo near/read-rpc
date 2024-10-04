@@ -36,10 +36,7 @@ async fn main() -> anyhow::Result<()> {
     )
     .await?;
 
-    let lake_config = indexer_config
-        .lake_config
-        .lake_config(start_block_height, indexer_config.general.chain_id.clone())
-        .await?;
+    let lake_config = indexer_config.lake_config.lake_config(start_block_height).await?;
     let (sender, stream) = near_lake_framework::streamer(lake_config);
 
     // Initiate metrics http server
