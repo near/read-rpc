@@ -1,10 +1,11 @@
 use actix_web::web::Data;
+use near_primitives::block;
 use near_primitives::trie_key::TrieKey;
 use near_primitives::views::StateChangeValueView;
 
 use crate::config::ServerContext;
 use crate::modules::blocks::utils::{
-    fetch_block_from_cache_or_get, fetch_chunk_from_s3, is_matching_change,
+    check_block_height, fetch_block_from_cache_or_get, fetch_chunk_from_s3, is_matching_change,
 };
 
 /// `block` rpc method implementation
@@ -288,7 +289,10 @@ pub async fn fetch_block(
     tracing::debug!("`fetch_block` call");
     let block_height = match block_reference {
         near_primitives::types::BlockReference::BlockId(block_id) => match block_id {
-            near_primitives::types::BlockId::Height(block_height) => Ok(*block_height),
+            near_primitives::types::BlockId::Height(block_height) => {
+                check_block_height(data, block_height.clone()).await?;
+                Ok(*block_height)
+            }
             near_primitives::types::BlockId::Hash(block_hash) => {
                 match data
                     .db_manager
@@ -339,18 +343,36 @@ pub async fn fetch_block(
             Ok(data.genesis_info.genesis_block_cache.block_height)
         }
     }?;
-    let block_view = near_lake_framework::s3_fetchers::fetch_block(
-        &data.s3_client,
-        &data.s3_bucket_name,
-        block_height,
-    )
-    .await
-    .map_err(|err| {
-        tracing::error!("Failed to fetch block from S3: {}", err);
-        near_jsonrpc::primitives::types::blocks::RpcBlockError::UnknownBlock {
-            error_message: format!("BLOCK HEIGHT: {:?}", block_height),
-        }
-    })?;
+    let block_view = if block_height
+        == data
+            .blocks_info_by_finality
+            .final_cache_block()
+            .await
+            .block_height
+    {
+        data.blocks_info_by_finality.final_block_view().await
+    } else if block_height
+        == data
+            .blocks_info_by_finality
+            .optimistic_cache_block()
+            .await
+            .block_height
+    {
+        data.blocks_info_by_finality.optimistic_block_view().await
+    } else {
+        near_lake_framework::s3_fetchers::fetch_block(
+            &data.s3_client,
+            &data.s3_bucket_name,
+            block_height,
+        )
+        .await
+        .map_err(|err| {
+            tracing::error!("Failed to fetch block from S3: {}", err);
+            near_jsonrpc::primitives::types::blocks::RpcBlockError::UnknownBlock {
+                error_message: format!("BLOCK HEIGHT: {:?}", block_height),
+            }
+        })?
+    };
     Ok(near_jsonrpc::primitives::types::blocks::RpcBlockResponse { block_view })
 }
 
@@ -366,31 +388,39 @@ pub async fn fetch_chunk(
         near_jsonrpc::primitives::types::chunks::ChunkReference::BlockShardId {
             block_id,
             shard_id,
-        } => match block_id {
-            near_primitives::types::BlockId::Height(block_height) => data
+        } => {
+            let block_height =
+                match block_id {
+                    near_primitives::types::BlockId::Height(block_height) => {
+                        check_block_height(data, block_height.clone()).await.map_err(|err| {
+                        near_jsonrpc::primitives::types::chunks::RpcChunkError::UnknownBlock {
+                            error_message: err.to_string(),
+                        }
+                    })?;
+                        block_height
+                    }
+                    near_primitives::types::BlockId::Hash(block_hash) => data
+                        .db_manager
+                        .get_block_height_by_hash(block_hash, "chunk")
+                        .await
+                        .map_err(|err| {
+                            tracing::error!("Failed to fetch block by hash: {}", err);
+                            near_jsonrpc::primitives::types::chunks::RpcChunkError::UnknownBlock {
+                                error_message: format!("BLOCK: {:?}", block_hash),
+                            }
+                        })?,
+                };
+            // Check if the chunk stored in block with the given height
+            if let Ok(block_height_shard_id) = data
                 .db_manager
                 .get_block_by_height_and_shard_id(block_height, shard_id, "chunk")
                 .await
-                .map_err(|_err| {
-                    near_jsonrpc::primitives::types::chunks::RpcChunkError::InvalidShardId {
-                        shard_id,
-                    }
-                })
-                .map(|block_height_shard_id| (block_height_shard_id.0, block_height_shard_id.1))?,
-            near_primitives::types::BlockId::Hash(block_hash) => {
-                let block_height = data
-                    .db_manager
-                    .get_block_height_by_hash(block_hash, "chunk")
-                    .await
-                    .map_err(|err| {
-                        tracing::error!("Failed to fetch block by hash: {}", err);
-                        near_jsonrpc::primitives::types::chunks::RpcChunkError::UnknownBlock {
-                            error_message: format!("BLOCK: {:?}", block_hash),
-                        }
-                    })?;
+            {
+                (block_height_shard_id.0, block_height_shard_id.1)
+            } else {
                 (block_height, shard_id)
             }
-        },
+        }
         near_jsonrpc::primitives::types::chunks::ChunkReference::ChunkHash { chunk_id } => data
             .db_manager
             .get_block_by_chunk_hash(chunk_id, "chunk")
