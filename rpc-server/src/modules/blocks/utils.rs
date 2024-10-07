@@ -4,6 +4,43 @@ use crate::config::ServerContext;
 use crate::modules::blocks::methods::fetch_block;
 use crate::modules::blocks::CacheBlock;
 
+// Helper function to check if the requested block height is within the range of the available blocks
+// If block height is lower than genesis block height, return an error block height is too low
+// If block height is higher than optimistic block height, return an error block height is too high
+// Otherwise return Ok(())
+pub async fn check_block_height(
+    data: &actix_web::web::Data<ServerContext>,
+    block_height: near_primitives::types::BlockHeight,
+) -> Result<(), near_jsonrpc::primitives::types::blocks::RpcBlockError> {
+    let optimistic_block_height = data
+        .blocks_info_by_finality
+        .optimistic_cache_block()
+        .await
+        .block_height;
+    let genesis_block_height = data.genesis_info.genesis_block_cache.block_height;
+    if block_height < genesis_block_height {
+        return Err(
+            near_jsonrpc::primitives::types::blocks::RpcBlockError::UnknownBlock {
+                error_message: format!(
+                    "Requested block height {} is to low, genesis block height is {}",
+                    block_height, genesis_block_height
+                ),
+            },
+        );
+    }
+    if block_height > optimistic_block_height {
+        return Err(
+            near_jsonrpc::primitives::types::blocks::RpcBlockError::UnknownBlock {
+                error_message: format!(
+                    "Requested block height {} is to high, optimistic block height is {}",
+                    block_height, optimistic_block_height
+                ),
+            },
+        );
+    }
+    Ok(())
+}
+
 #[cfg_attr(
     feature = "tracing-instrumentation",
     tracing::instrument(skip(s3_client))
@@ -85,7 +122,10 @@ pub async fn fetch_block_from_cache_or_get(
     let block = match block_reference {
         near_primitives::types::BlockReference::BlockId(block_id) => {
             let block_height = match block_id {
-                near_primitives::types::BlockId::Height(block_height) => *block_height,
+                near_primitives::types::BlockId::Height(block_height) => {
+                    check_block_height(data, *block_height).await?;
+                    *block_height
+                }
                 near_primitives::types::BlockId::Hash(hash) => data
                     .db_manager
                     .get_block_height_by_hash(*hash, method_name)
