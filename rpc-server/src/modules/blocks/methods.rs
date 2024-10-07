@@ -1,5 +1,4 @@
 use actix_web::web::Data;
-use near_primitives::block;
 use near_primitives::trie_key::TrieKey;
 use near_primitives::views::StateChangeValueView;
 
@@ -290,7 +289,7 @@ pub async fn fetch_block(
     let block_height = match block_reference {
         near_primitives::types::BlockReference::BlockId(block_id) => match block_id {
             near_primitives::types::BlockId::Height(block_height) => {
-                check_block_height(data, block_height.clone()).await?;
+                check_block_height(data, *block_height).await?;
                 Ok(*block_height)
             }
             near_primitives::types::BlockId::Hash(block_hash) => {
@@ -392,7 +391,7 @@ pub async fn fetch_chunk(
             let block_height =
                 match block_id {
                     near_primitives::types::BlockId::Height(block_height) => {
-                        check_block_height(data, block_height.clone()).await.map_err(|err| {
+                        check_block_height(data, block_height).await.map_err(|err| {
                         near_jsonrpc::primitives::types::chunks::RpcChunkError::UnknownBlock {
                             error_message: err.to_string(),
                         }

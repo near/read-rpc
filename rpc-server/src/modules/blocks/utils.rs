@@ -123,7 +123,7 @@ pub async fn fetch_block_from_cache_or_get(
         near_primitives::types::BlockReference::BlockId(block_id) => {
             let block_height = match block_id {
                 near_primitives::types::BlockId::Height(block_height) => {
-                    check_block_height(data, block_height.clone()).await?;
+                    check_block_height(data, *block_height).await?;
                     *block_height
                 }
                 near_primitives::types::BlockId::Hash(hash) => data
