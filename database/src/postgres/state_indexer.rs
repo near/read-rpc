@@ -254,9 +254,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                         .push_bind(hex::encode(data_key).to_string())
                         .push_bind(data_value);
                 }
-                _ => {
-                    println!("Alarm! Unknown state change value: {:?}", state_change.value);
-                }
+                _ => {}
             }
         });
         query_builder.push(" ON CONFLICT DO NOTHING;");
@@ -319,9 +317,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                         .push_bind(hex::encode(data_key).to_string())
                         .push_bind(data_value);
                 }
-                _ => {
-                    println!("Alarm! Unknown state change value: {:?}", state_change.value);
-                }
+                _ => {}
             }
         });
         query_builder.push(" ON CONFLICT DO NOTHING;");
@@ -375,9 +371,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                         .push_bind(block_hash.to_string())
                         .push_bind(data_value);
                 }
-                _ => {
-                    println!("Alarm! Unknown state change value: {:?}", state_change.value);
-                }
+                _ => {}
             }
         });
         query_builder.push(" ON CONFLICT DO NOTHING;");
@@ -431,9 +425,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                         .push_bind(block_hash.to_string())
                         .push_bind(data_value);
                 }
-                _ => {
-                    println!("Alarm! Unknown state change value: {:?}", state_change.value);
-                }
+                _ => {}
             }
         });
         query_builder.push(" ON CONFLICT DO NOTHING;");
