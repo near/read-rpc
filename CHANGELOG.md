@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased](https://github.com/near/read-rpc/compare/main...develop)
 
+## [0.3.0](https://github.com/near/read-rpc/releases/tag/v0.2.17)
+
+### BREAKING CHANGES
+
+Please, see the [PostgreSQL & ShardLayout Pull Request](https://github.com/near/read-rpc/pull/282) for details. This is a completely new version of the ReadRPC with a new data storage layout and a new data storage engine. The main changes are:
+- **Migrate from ScyllaDB to PostgreSQL for storing the data**. We adopted the ShardLayout from the `nearcore` and split the data to separate PostgreSQL databases for each shard.
+- Changed the way we store `TransactionDetails` (JSON blobs again, but it might change soon)
+
+All the work in this release allowed us to increase the performance of the ReadRPC and make it more reliable. We are still working on the performance improvements and will continue to work on the ReadRPC to make it even better.
+
+### Supported Nearcore Version (not changed)
+- nearcore v2.2.1
+- rust v1.79.0
+
 ## [0.2.16](https://github.com/near/read-rpc/releases/tag/v0.2.16)
 ### Supported Nearcore Version
 - nearcore v2.2.1
