@@ -5,12 +5,10 @@ on:
     branches:
       - main
       - develop
-      - database-new
   push:
     branches:
       - main
       - develop
-      - database-new
 
 jobs:
   check:
