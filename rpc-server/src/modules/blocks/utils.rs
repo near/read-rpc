@@ -46,7 +46,7 @@ pub async fn check_block_height(
     tracing::instrument(skip(fastnear_client))
 )]
 pub async fn fetch_chunk_from_fastnear(
-    fastnear_client: &near_lake_framework::fastnear_client::FastNearClient,
+    fastnear_client: &near_lake_framework::FastNearClient,
     block_height: near_primitives::types::BlockHeight,
     shard_id: near_primitives::types::ShardId,
 ) -> Result<near_primitives::views::ChunkView, near_jsonrpc::primitives::types::chunks::RpcChunkError>
@@ -56,7 +56,7 @@ pub async fn fetch_chunk_from_fastnear(
         block_height,
         shard_id
     );
-    match near_lake_framework::providers::fastnear::fetchers::fetch_shard_or_retry(
+    match near_lake_framework::fastnear::fetchers::fetch_shard_or_retry(
         fastnear_client,
         block_height,
         shard_id,
