@@ -360,7 +360,7 @@ pub async fn fetch_block(
     {
         data.blocks_info_by_finality.optimistic_block_view().await
     } else {
-        near_lake_framework::providers::fastnear::fetchers::fetch_block_or_retry(
+        near_lake_framework::fastnear::fetchers::fetch_block_or_retry(
             &data.fastnear_client,
             block_height,
         )
@@ -606,7 +606,7 @@ async fn fetch_shards_by_cache_block(
     data: &Data<ServerContext>,
     cache_block: crate::modules::blocks::CacheBlock,
 ) -> anyhow::Result<Vec<near_indexer_primitives::IndexerShard>> {
-    match near_lake_framework::providers::fastnear::fetchers::fetch_streamer_message(
+    match near_lake_framework::fastnear::fetchers::fetch_streamer_message(
         &data.fastnear_client,
         cache_block.block_height,
     )
