@@ -5,6 +5,7 @@ use near_lake_framework::FastNearClient;
 use near_primitives::epoch_manager::{AllEpochConfig, EpochConfig};
 
 use crate::modules::blocks::{BlocksInfoByFinality, CacheBlock};
+use crate::utils;
 
 static NEARD_VERSION: &str = env!("CARGO_PKG_VERSION");
 static NEARD_BUILD: &str = env!("BUILD_VERSION");
@@ -83,38 +84,33 @@ pub struct ServerContext {
 }
 
 impl ServerContext {
-    pub async fn init(
-        rpc_server_config: configuration::RpcServerConfig,
-        near_rpc_client: crate::utils::JsonRpcClient,
-    ) -> anyhow::Result<Self> {
+    pub async fn init(rpc_server_config: configuration::RpcServerConfig) -> anyhow::Result<Self> {
         let contract_code_cache_size_in_bytes =
-            crate::utils::gigabytes_to_bytes(rpc_server_config.general.contract_code_cache_size)
-                .await;
+            utils::gigabytes_to_bytes(rpc_server_config.general.contract_code_cache_size).await;
         let contract_code_cache = std::sync::Arc::new(crate::cache::RwLockLruMemoryCache::new(
             contract_code_cache_size_in_bytes,
         ));
 
         let block_cache_size_in_bytes =
-            crate::utils::gigabytes_to_bytes(rpc_server_config.general.block_cache_size).await;
+            utils::gigabytes_to_bytes(rpc_server_config.general.block_cache_size).await;
         let blocks_cache = std::sync::Arc::new(crate::cache::RwLockLruMemoryCache::new(
             block_cache_size_in_bytes,
         ));
-
-        let blocks_info_by_finality =
-            std::sync::Arc::new(BlocksInfoByFinality::new(&near_rpc_client, &blocks_cache).await);
-
-        let fastnear_config = rpc_server_config
-            .lake_config
-            .lake_config(
-                blocks_info_by_finality
-                    .optimistic_cache_block()
-                    .await
-                    .block_height,
-                rpc_server_config.general.chain_id.clone(),
-            )
-            .await?;
+        let near_rpc_client = utils::JsonRpcClient::new(
+            rpc_server_config.general.near_rpc_url.clone(),
+            rpc_server_config.general.near_archival_rpc_url.clone(),
+        );
+        // We want to set a custom referer to let NEAR JSON RPC nodes know that we are a read-rpc instance
+        let near_rpc_client = near_rpc_client.header(
+            "Referer".to_string(),
+            rpc_server_config.general.referer_header_value.clone(),
+        )?;
         
-        let fastnear_client = FastNearClient::from_conf(&fastnear_config);
+        let fastnear_client = rpc_server_config.lake_config.lake_client(rpc_server_config.general.chain_id).await?;
+
+        let blocks_info_by_finality = std::sync::Arc::new(
+            BlocksInfoByFinality::new(&near_rpc_client, &fastnear_client).await,
+        );
 
         let tx_details_storage = tx_details_storage::TxDetailsStorage::new(
             rpc_server_config.tx_details_storage.storage_client().await,
