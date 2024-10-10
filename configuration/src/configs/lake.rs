@@ -26,6 +26,18 @@ impl LakeConfig {
             .start_block_height(start_block_height)
             .build()?)
     }
+
+    pub async fn lake_client(
+        &self,
+        chain_id: crate::ChainId,
+    ) -> anyhow::Result<near_lake_framework::FastNearClient> {
+        let fast_near_endpoint = match chain_id {
+            crate::ChainId::Mainnet => String::from("https://mainnet.neardata.xyz"),
+            // Testnet is the default chain for other chain_id
+            _ => String::from("https://testnet.neardata.xyz"),
+        };
+        Ok(near_lake_framework::FastNearClient::new(fast_near_endpoint))
+    }
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]
