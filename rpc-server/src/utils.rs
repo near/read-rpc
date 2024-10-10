@@ -236,7 +236,7 @@ async fn task_optimistic_block_status() {
     loop {
         // check every 2 seconds
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-        
+
         // When an optimistic block is not updated, or it is lower than the final block
         // we need to mark that optimistic updating is not working
         if crate::metrics::LATEST_BLOCK_HEIGHT_BY_FINALITIY
