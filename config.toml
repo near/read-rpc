@@ -34,10 +34,7 @@ tracked_accounts = "${TRACKED_ACCOUNTS}"
 tracked_changes = "${TRACKED_CHANGES}"
 
 [lake_config]
-aws_access_key_id = "${AWS_ACCESS_KEY_ID}"
-aws_secret_access_key = "${AWS_SECRET_ACCESS_KEY}"
-aws_default_region = "${AWS_DEFAULT_REGION}"
-aws_bucket_name = "${AWS_BUCKET_NAME}"
+num_threads = "${LAKE_NUM_THREADS}"
 
 [tx_details_storage]
 bucket_name = "${TX_BUCKET_NAME}"
