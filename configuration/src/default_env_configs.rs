@@ -1,6 +1,8 @@
-# This file to present all confiuration around th environment variables
-# Not present environment variables will be set to default values
-# See more details and information about each parameter in configuration/README.md and configuration/example.config.toml
+// This file to present all confiuration around th environment variables
+// Not present environment variables will be set to default values
+// See more details and information about each parameter in configuration/README.md and configuration/example.config.toml
+
+pub const DEFAULT_CONFIG: &str = r#"
 [general]
 chain_id = "${CHAIN_ID}"
 near_rpc_url = "${NEAR_RPC_URL}"
@@ -69,3 +71,4 @@ database_url = "${SHARD_4_DATABASE_URL}"
 [[database.shards]]
 shard_id = 5
 database_url = "${SHARD_5_DATABASE_URL}"
+"#;
