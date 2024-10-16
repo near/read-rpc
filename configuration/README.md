@@ -13,10 +13,9 @@ For example, `${DATABASE_URL}` specifies the `DATABASE_URL` environment variable
 
 ## Files
 
-- `example.config.toml`: This file contains an example configuration for the NEAR ReadRPC. 
+- `default_env_config.rs`: This file contains an example configuration for the NEAR ReadRPC. 
 It includes settings for the general configuration, 
-RPC server, transaction indexer, state indexer, epoch indexer, rightsizing, lake framework, and database.
-
+RPC server, tx-indexer, state-indexer, rightsizing, lake-framework, and database.
 
 ## Configuration
 
@@ -41,7 +40,7 @@ Configuration improvement. Create default config.toml on start application to lo
 If `config.toml` is not found, the application will create default config toml with env variables.
 This file to present all configuration around th environment variables [default_env_config.rs](configuration/src/default_env_config.rs)
 Not present environment variables will be set to default values
-See more details and information about each parameter in [example.config.toml](configuration/example.config.toml)
+See more details and information about each parameter in [default_env_config.rs](configuration/src/default_env_config.rs)
 
 ## Note
 

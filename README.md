@@ -34,7 +34,7 @@ The configuration module is responsible for managing the configuration settings 
 ### Run the entire project
 
 Put TOML file `config.toml` with configuration in the home root of the project.
-See the example [here](./configuration/example.config.toml).
+See the example [here](./configuration/src/default_env_configs.rs).
 
 Run the docker compose:
 
