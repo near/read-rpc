@@ -39,7 +39,7 @@ Put TOML file `config.toml` with configuration in the home root of the project.
 ## Default Configuration
 
 If `config.toml` is not found, the application will create default config toml with env variables.
-This file to present all confiuration around th environment variables [default_env_config.rs](configuration/src/default_env_config.rs)
+This file to present all configuration around th environment variables [default_env_config.rs](configuration/src/default_env_config.rs)
 Not present environment variables will be set to default values
 See more details and information about each parameter in [example.config.toml](configuration/example.config.toml)
 
