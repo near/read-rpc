@@ -42,6 +42,7 @@ If `config.toml` is not found, the application will create default config toml w
 This file to present all confiuration around th environment variables [default_env_config.rs](configuration/src/default_env_config.rs)
 Not present environment variables will be set to default values
 See more details and information about each parameter in [example.config.toml](configuration/example.config.toml)
+
 ## Note
 
 Please ensure that the configuration file is correctly formatted and all the required settings are provided. 

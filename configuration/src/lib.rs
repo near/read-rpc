@@ -5,8 +5,8 @@ use tracing_subscriber::util::SubscriberInitExt;
 
 use validator::Validate;
 
-mod default_env_configs;
 mod configs;
+mod default_env_configs;
 
 pub use crate::configs::database::DatabaseConfig;
 pub use crate::configs::general::ChainId;
@@ -134,13 +134,13 @@ async fn find_configs_root() -> anyhow::Result<PathBuf> {
             return Ok(PathBuf::from(path_config));
         }
     }
-    
-    tracing::warn!("Config file dose not exist. Creating new default.");
-    
+
+    tracing::warn!("Config file does not exist. Creating new default.");
+
     let mut path_config = current_path.clone();
     path_config.push("config.toml");
     let mut file = std::fs::File::create(path_config)?;
     file.write_all(default_env_configs::DEFAULT_CONFIG.as_bytes())?;
-    
+
     Ok(current_path)
 }
