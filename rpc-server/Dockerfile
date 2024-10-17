@@ -6,7 +6,6 @@ WORKDIR /tmp/
 COPY .cargo .cargo
 COPY Cargo.lock ./
 COPY Cargo.toml ./
-COPY config.toml ./
 RUN sed '/perf-testing/d; /state-indexer/d; /tx-indexer/d; /near-state-indexer/d; /logic-state-indexer/d' Cargo.toml > Cargo.toml.new && mv Cargo.toml.new Cargo.toml
 COPY rpc-server/Cargo.toml rpc-server/Cargo.toml
 COPY configuration configuration
@@ -29,5 +28,4 @@ FROM ubuntu:24.04
 ARG profile="release"
 RUN apt update && apt install -yy openssl ca-certificates libcurl4 libpq5
 COPY --from=builder /tmp/target/$profile/read-rpc-server .
-COPY --from=builder /tmp/config.toml .
 ENTRYPOINT ["./read-rpc-server"]
