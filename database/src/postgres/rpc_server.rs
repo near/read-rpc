@@ -118,7 +118,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         let mut last_data_key = String::new();
         while let Some(row) = stream.next().await {
             let (key, value): (String, Vec<u8>) = row?;
-            last_data_key = key.clone();
+            last_data_key.clone_from(&key);
             items.insert(hex::decode(key)?, value);
         }
         if items.len() < page_state.page_size as usize {
@@ -126,7 +126,9 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         } else {
             Ok((
                 items,
-                Some(hex::encode(borsh::to_vec(&page_state.next_page(last_data_key))?)),
+                Some(hex::encode(borsh::to_vec(
+                    &page_state.next_page(last_data_key),
+                )?)),
             ))
         }
     }
