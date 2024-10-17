@@ -100,19 +100,25 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 WHERE
                     sc.account_id = $1
                     AND sc.data_value IS NOT NULL
+                    AND (
+                        $3 IS NULL OR
+                        sc.data_key > $3
+                    )
                 ORDER BY 
-                    sc.data_key
-                LIMIT $3 OFFSET $4;
+                    sc.data_key ASC
+                LIMIT $4;
                 ",
         )
         .bind(account_id.to_string())
         .bind(bigdecimal::BigDecimal::from(block_height))
+        .bind(page_state.last_data_key.clone())
         .bind(page_state.page_size)
-        .bind(page_state.offset)
         .fetch(shard_id_pool.pool);
         let mut items = std::collections::HashMap::new();
+        let mut last_data_key = String::new();
         while let Some(row) = stream.next().await {
             let (key, value): (String, Vec<u8>) = row?;
+            last_data_key.clone_from(&key);
             items.insert(hex::decode(key)?, value);
         }
         if items.len() < page_state.page_size as usize {
@@ -120,7 +126,9 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         } else {
             Ok((
                 items,
-                Some(hex::encode(borsh::to_vec(&page_state.next_page())?)),
+                Some(hex::encode(borsh::to_vec(
+                    &page_state.next_page(last_data_key),
+                )?)),
             ))
         }
     }
