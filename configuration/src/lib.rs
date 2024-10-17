@@ -1,3 +1,4 @@
+use std::io::Write;
 use std::path::PathBuf;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -5,6 +6,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 use validator::Validate;
 
 mod configs;
+mod default_env_configs;
 
 pub use crate::configs::database::DatabaseConfig;
 pub use crate::configs::general::ChainId;
@@ -13,6 +15,10 @@ pub use crate::configs::{
     TxIndexerConfig,
 };
 
+// Read the configuration file and parse it into a struct
+// Validate the struct and return it
+// If the config file does not exist, create a default one
+// If the config file is invalid, panic
 pub async fn read_configuration<T>() -> anyhow::Result<T>
 where
     T: configs::Config + Send + Sync + 'static,
@@ -28,6 +34,8 @@ where
     Ok(T::from_common_config(common_config))
 }
 
+// Initialize the tracing subscriber with the given service name
+// and the environment variables
 pub async fn init_tracing(service_name: &str) -> anyhow::Result<()> {
     let path_root = find_configs_root().await?;
     load_env(path_root.clone()).await?;
@@ -88,6 +96,7 @@ pub async fn init_tracing(service_name: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
+// Load the environment variables from the .env file
 async fn load_env(mut path_root: PathBuf) -> anyhow::Result<()> {
     path_root.push(".env");
     if path_root.exists() {
@@ -98,6 +107,7 @@ async fn load_env(mut path_root: PathBuf) -> anyhow::Result<()> {
     Ok(())
 }
 
+// Read the config file and parse it into a struct
 async fn read_toml_file(mut path_root: PathBuf) -> anyhow::Result<configs::CommonConfig> {
     path_root.push("config.toml");
     match std::fs::read_to_string(path_root.as_path()) {
@@ -121,6 +131,17 @@ async fn read_toml_file(mut path_root: PathBuf) -> anyhow::Result<configs::Commo
     }
 }
 
+// Create default config file if it does not exist
+async fn create_default_config_file(mut path_config: PathBuf) -> anyhow::Result<()> {
+    path_config.push("config.toml");
+    let mut file = std::fs::File::create(path_config.clone())?;
+    file.write_all(default_env_configs::DEFAULT_CONFIG.as_bytes())?;
+    tracing::info!("Config file created at: {:?}", path_config);
+    Ok(())
+}
+
+// Find the root of the project where the config file is located
+// If the config file does not exist, create a default one
 async fn find_configs_root() -> anyhow::Result<PathBuf> {
     let current_path = std::env::current_dir()?;
 
@@ -132,5 +153,9 @@ async fn find_configs_root() -> anyhow::Result<PathBuf> {
             return Ok(PathBuf::from(path_config));
         }
     }
-    anyhow::bail!("Ran out of places to find config.toml")
+
+    tracing::warn!("Config file does not exist. Creating new default...");
+    create_default_config_file(current_path.clone()).await?;
+
+    Ok(current_path)
 }

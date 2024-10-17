@@ -152,7 +152,7 @@ impl CommonGeneralRpcServerConfig {
     }
 
     pub fn default_prefetch_state_size_limit() -> u64 {
-        1_000_000
+        100_000
     }
 }
 

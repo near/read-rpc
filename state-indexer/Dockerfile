@@ -6,7 +6,6 @@ WORKDIR /tmp/
 COPY .cargo .cargo
 COPY Cargo.lock ./
 COPY Cargo.toml ./
-COPY config.toml ./
 RUN sed '/perf-testing/d; /rpc-server/d; /tx-indexer/d; /near-state-indexer/d; /tx-details-storage/d; /cache-storage/d' Cargo.toml > Cargo.toml.new && mv Cargo.toml.new Cargo.toml
 COPY state-indexer/Cargo.toml state-indexer/Cargo.toml
 COPY configuration configuration
@@ -25,5 +24,4 @@ FROM ubuntu:24.04
 ARG profile="release"
 RUN apt update && apt install -yy openssl ca-certificates libcurl4 libpq5
 COPY --from=builder /tmp/target/$profile/state-indexer .
-COPY --from=builder /tmp/config.toml .
 ENTRYPOINT ["./state-indexer"]

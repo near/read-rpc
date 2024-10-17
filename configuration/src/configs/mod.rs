@@ -69,7 +69,7 @@ where
     Ok(match deserialize_data_or_env(data) {
         Ok(value) => Some(value),
         Err(err) => {
-            tracing::warn!("Failed to deserialize_optional_data_or_env: {:?}", err);
+            tracing::debug!("Failed to deserialize_optional_data_or_env: {:?}", err);
             None
         }
     })

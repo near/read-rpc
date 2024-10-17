@@ -5,3 +5,4 @@
 .env.*
 *.log
 credentials.json
+config.toml

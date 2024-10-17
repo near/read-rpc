@@ -9,22 +9,22 @@ static SHARD_DB_MIGRATOR: sqlx::migrate::Migrator =
 
 #[derive(borsh::BorshSerialize, borsh::BorshDeserialize, Clone, Debug)]
 struct PageState {
+    pub last_data_key: Option<String>,
     pub page_size: i64,
-    pub offset: i64,
 }
 
 impl PageState {
     fn new(page_size: i64) -> Self {
         Self {
+            last_data_key: None,
             page_size,
-            offset: 0,
         }
     }
 
-    fn next_page(&self) -> Self {
+    fn next_page(&self, last_data_key: String) -> Self {
         Self {
+            last_data_key: Some(last_data_key),
             page_size: self.page_size,
-            offset: self.offset + self.page_size,
         }
     }
 }
