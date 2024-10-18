@@ -7,28 +7,31 @@ pub async fn get_state_from_db_paginated(
     account_id: &near_primitives::types::AccountId,
     block_height: near_primitives::types::BlockHeight,
     page_token: database::PageToken,
-) -> crate::modules::state::PageStateValues {
+) -> Result<crate::modules::state::PageStateValues, near_jsonrpc::primitives::errors::RpcError> {
     tracing::debug!(
         "`get_state_from_db_paginated` call. AccountId {}, block {}, page_token {:?}",
         account_id,
         block_height,
         page_token,
     );
-    if let Ok((values, next_page_token)) = db_manager
+
+    let (values, next_page_token) = db_manager
         .get_state_by_page(account_id, block_height, page_token, "view_state_paginated")
         .await
-    {
-        crate::modules::state::PageStateValues {
-            values: values
-                .into_iter()
-                .map(|(k, v)| near_primitives::views::StateItem {
-                    key: k.into(),
-                    value: v.into(),
-                })
-                .collect(),
-            next_page_token,
-        }
-    } else {
-        crate::modules::state::PageStateValues::default()
-    }
+        .map_err(|err| {
+            near_jsonrpc::primitives::errors::RpcError::new_internal_error(
+                Some(serde_json::Value::String(err.to_string())),
+                "Failed to get page state from DB. Please try again!".to_string(),
+            )
+        })?;
+    Ok(crate::modules::state::PageStateValues {
+        values: values
+            .into_iter()
+            .map(|(k, v)| near_primitives::views::StateItem {
+                key: k.into(),
+                value: v.into(),
+            })
+            .collect(),
+        next_page_token,
+    })
 }

@@ -23,7 +23,7 @@ pub async fn view_state_paginated(
         block.block_height,
         request_data.next_page_token,
     )
-    .await;
+    .await?;
 
     Ok(crate::modules::state::RpcViewStatePaginatedResponse {
         values: state_values.values,
