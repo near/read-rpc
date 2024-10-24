@@ -63,7 +63,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(target: INDEXER, "Generating LakeConfig...");
     let lake_config = indexer_config
         .lake_config
-        .lake_config(start_block_height)
+        .lake_config(start_block_height, indexer_config.general.chain_id.clone())
         .await?;
 
     tracing::info!(target: INDEXER, "Creating cache storage...");
