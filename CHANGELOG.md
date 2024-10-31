@@ -7,10 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased](https://github.com/near/read-rpc/compare/main...develop)
 
+## [0.3.1](https://github.com/near/read-rpc/releases/tag/v0.3.1)
+
+### Supported Nearcore Version
+- nearcore v2.3.0
+- rust v1.81.0
+
 ### What's Changed
 * Improved bulk insertion of state_changes, reducing database requests from hundreds to a maximum of 7 per block.
 * Configuration improvement. Create default config.toml on start application to loaded parameters from the environment variables.
 * Fix to fetch state by pages (view_state_paginated).
+* Change logic to get `shard_layout` for indexers. Main idea to avoid request `protocol_config` via RPC, `protocol_config` could be changed with new nearcore release and we should support old and new versions of `protocol_config`.
 
 ## [0.3.0](https://github.com/near/read-rpc/releases/tag/v0.3.0)
 

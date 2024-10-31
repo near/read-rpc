@@ -6,11 +6,6 @@ pub trait NearClient {
     /// Returns the final block height from the NEAR Protocol or an error if the call fails.
     fn final_block_height(&self) -> impl std::future::Future<Output = anyhow::Result<u64>> + Send;
 
-    /// Returns the ProtocolConfigView from the NEAR Protocol or an error if the call fails.
-    fn protocol_config(
-        &self,
-    ) -> impl std::future::Future<Output = anyhow::Result<near_chain_configs::ProtocolConfigView>> + Send;
-
     /// Returns the current epoch information from the NEAR Protocol or an error if the call fails.
     fn validators_by_epoch_id(
         &self,
@@ -44,19 +39,6 @@ impl NearClient for NearJsonRpc {
             .await
             .map_err(|e| anyhow::anyhow!("Failed to get final block via JSON-RPC: {:?}", e))?;
         Ok(block_height.header.height)
-    }
-
-    async fn protocol_config(&self) -> anyhow::Result<near_chain_configs::ProtocolConfigView> {
-        let protocol_config = self
-            .client
-            .call(near_jsonrpc_client::methods::EXPERIMENTAL_protocol_config::RpcProtocolConfigRequest {
-                block_reference: near_primitives::types::BlockReference::Finality(
-                    near_primitives::types::Finality::Final,
-                ),
-            })
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to get protocol config: {:?}", e))?;
-        Ok(protocol_config)
     }
 
     async fn validators_by_epoch_id(

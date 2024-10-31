@@ -400,6 +400,7 @@ async fn protocol_config_call(
     // and returns the EpochConfig that should be used for this protocol version.
     let all_epoch_config = AllEpochConfig::new(
         true,
+        data.genesis_info.genesis_config.protocol_version,
         default_epoch_config,
         &data.genesis_info.genesis_config.chain_id,
     );
@@ -442,6 +443,7 @@ async fn protocol_config_call(
             account_creation_config: runtime_config.account_creation_config.clone(),
             congestion_control_config: runtime_config.congestion_control_config,
             witness_config: runtime_config.witness_config,
+            use_state_stored_receipt: runtime_config.use_state_stored_receipt,
         },
     };
     Ok(protocol_config.into())
