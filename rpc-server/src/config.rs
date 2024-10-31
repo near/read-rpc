@@ -134,7 +134,6 @@ impl ServerContext {
         let default_epoch_config = EpochConfig::from(&genesis_info.genesis_config);
         let all_epoch_config = AllEpochConfig::new(
             true,
-            genesis_info.genesis_config.protocol_version,
             default_epoch_config,
             &genesis_info.genesis_config.chain_id,
         );

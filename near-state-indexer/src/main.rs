@@ -82,14 +82,13 @@ async fn run(home_dir: std::path::PathBuf) -> anyhow::Result<()> {
     let stream = indexer.streamer();
     let (view_client, client) = indexer.client_actors();
 
-    let genesis_config = indexer.near_config().genesis.config.clone();
-    let shard_layout = logic_state_indexer::configs::shard_layout(genesis_config).await?;
     let near_client = near_client::NearViewClient::new(view_client.clone());
+    let protocol_config_view = near_client.protocol_config().await?;
 
     tracing::info!(target: INDEXER, "Connecting to db...");
     let db_manager = database::prepare_db_manager::<database::PostgresDBManager>(
         &state_indexer_config.database,
-        shard_layout.clone(),
+        protocol_config_view.shard_layout.clone(),
     )
     .await?;
 
@@ -124,7 +123,7 @@ async fn run(home_dir: std::path::PathBuf) -> anyhow::Result<()> {
                 &near_client,
                 state_indexer_config.clone(),
                 std::sync::Arc::clone(&stats),
-                &shard_layout,
+                &protocol_config_view.shard_layout,
             )
         })
         .buffer_unordered(state_indexer_config.general.concurrency);

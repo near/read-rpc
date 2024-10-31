@@ -1,7 +1,7 @@
 use clap::Parser;
 use futures::StreamExt;
 
-use logic_state_indexer::{configs, handle_streamer_message, metrics, INDEXER};
+use logic_state_indexer::{configs, handle_streamer_message, metrics, NearClient, INDEXER};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -19,15 +19,15 @@ async fn main() -> anyhow::Result<()> {
     // we use the Referer header to ensure we take it from the native RPC node
     let rpc_client = near_jsonrpc_client::JsonRpcClient::connect(&indexer_config.general.near_rpc_url)
         .header(("Referer", indexer_config.general.referer_header_value.clone()))?;
-    let genesis_config = rpc_client
-        .call(near_jsonrpc_client::methods::EXPERIMENTAL_genesis_config::RpcGenesisConfigRequest)
-        .await?;
-    let shard_layout = configs::shard_layout(genesis_config).await?;
     let near_client = logic_state_indexer::NearJsonRpc::new(rpc_client);
 
-    let db_manager =
-        database::prepare_db_manager::<database::PostgresDBManager>(&indexer_config.database, shard_layout.clone())
-            .await?;
+    let protocol_config_view = near_client.protocol_config().await?;
+
+    let db_manager = database::prepare_db_manager::<database::PostgresDBManager>(
+        &indexer_config.database,
+        protocol_config_view.shard_layout.clone(),
+    )
+    .await?;
     let start_block_height = configs::get_start_block_height(
         &near_client,
         &db_manager,
@@ -55,7 +55,7 @@ async fn main() -> anyhow::Result<()> {
                 &near_client,
                 indexer_config.clone(),
                 std::sync::Arc::clone(&stats),
-                &shard_layout,
+                &protocol_config_view.shard_layout,
             )
         })
         .buffer_unordered(indexer_config.general.concurrency);

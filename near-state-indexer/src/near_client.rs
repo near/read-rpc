@@ -27,6 +27,18 @@ impl crate::NearClient for NearViewClient {
         Ok(block.header.height)
     }
 
+    async fn protocol_config(&self) -> anyhow::Result<near_chain_configs::ProtocolConfigView> {
+        Ok(self
+            .view_client
+            .send(
+                near_client::GetProtocolConfig(near_primitives::types::BlockReference::Finality(
+                    near_primitives::types::Finality::Final,
+                ))
+                .with_span_context(),
+            )
+            .await??)
+    }
+
     async fn validators_by_epoch_id(
         &self,
         epoch_id: near_indexer_primitives::CryptoHash,

@@ -64,7 +64,7 @@ impl StateChangesToStore {
             futures::future::join_all(futures)
                 .await
                 .into_iter()
-                .collect::<anyhow::Result<()>>()?;
+                .collect::<anyhow::Result<_>>()?;
         }
         Ok(())
     }
@@ -89,7 +89,7 @@ impl StateChangesToStore {
             futures::future::join_all(futures)
                 .await
                 .into_iter()
-                .collect::<anyhow::Result<()>>()?;
+                .collect::<anyhow::Result<_>>()?;
         }
         Ok(())
     }
@@ -114,7 +114,7 @@ impl StateChangesToStore {
             futures::future::join_all(futures)
                 .await
                 .into_iter()
-                .collect::<anyhow::Result<()>>()?;
+                .collect::<anyhow::Result<_>>()?;
         }
         Ok(())
     }
@@ -139,7 +139,7 @@ impl StateChangesToStore {
             futures::future::join_all(futures)
                 .await
                 .into_iter()
-                .collect::<anyhow::Result<()>>()?;
+                .collect::<anyhow::Result<_>>()?;
         }
         Ok(())
     }
@@ -163,7 +163,7 @@ impl StateChangesToStore {
         ])
         .await
         .into_iter()
-        .collect::<anyhow::Result<()>>()?;
+        .collect::<anyhow::Result<_>>()?;
 
         Ok(())
     }
@@ -267,7 +267,7 @@ pub async fn handle_streamer_message(
     ])
     .await
     .into_iter()
-    .collect::<anyhow::Result<()>>()?;
+    .collect::<anyhow::Result<_>>()?;
 
     metrics::BLOCK_PROCESSED_TOTAL.inc();
     // Prometheus Gauge Metric type do not support u64

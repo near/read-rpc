@@ -1,4 +1,4 @@
-FROM rust:1.81 AS builder
+FROM rust:1.79 AS builder
 ARG features="default"
 ARG profile="release"
 WORKDIR /tmp/
