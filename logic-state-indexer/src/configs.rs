@@ -53,6 +53,7 @@ pub(crate) async fn final_block_height(
     near_client.final_block_height().await
 }
 
+// Helper function to get shard layout for latest protocol version
 pub async fn shard_layout(
     genesis_config: GenesisConfig,
 ) -> anyhow::Result<near_primitives::shard_layout::ShardLayout> {
