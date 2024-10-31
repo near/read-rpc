@@ -1,4 +1,6 @@
 pub use clap::{Parser, Subcommand};
+use near_chain_configs::GenesisConfig;
+use near_primitives::epoch_manager::{AllEpochConfig, EpochConfig};
 
 /// NEAR Indexer for Explorer
 /// Watches for stream of blocks from the chain
@@ -49,4 +51,19 @@ pub(crate) async fn final_block_height(
 ) -> anyhow::Result<u64> {
     tracing::debug!(target: crate::INDEXER, "Fetching final block from NEAR RPC",);
     near_client.final_block_height().await
+}
+
+pub async fn shard_layout(
+    genesis_config: GenesisConfig,
+) -> anyhow::Result<near_primitives::shard_layout::ShardLayout> {
+    let default_epoch_config = EpochConfig::from(&genesis_config);
+    let all_epoch_config = AllEpochConfig::new(
+        true,
+        genesis_config.protocol_version,
+        default_epoch_config,
+        &genesis_config.chain_id,
+    );
+    let epoch_config =
+        all_epoch_config.for_protocol_version(near_primitives::version::PROTOCOL_VERSION);
+    Ok(epoch_config.shard_layout)
 }
