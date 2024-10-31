@@ -101,7 +101,7 @@ impl CacheStorage {
         futures::future::join_all(tx_futures)
             .await
             .into_iter()
-            .collect::<anyhow::Result<_>>()?;
+            .collect::<anyhow::Result<()>>()?;
         tracing::debug!(
             target: STORAGE,
             "Restored {} transactions after interruption",

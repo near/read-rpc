@@ -21,7 +21,7 @@ impl RedisCacheStorage {
             .await?;
         redis::cmd("SELECT")
             .arg(database_number)
-            .query_async(&mut redis_client.clone())
+            .query_async::<()>(&mut redis_client.clone())
             .await?;
         Ok(Self {
             client: redis_client,
@@ -54,7 +54,7 @@ impl RedisCacheStorage {
         redis::cmd("SET")
             .arg(&key)
             .arg(&value)
-            .query_async(&mut self.client.clone())
+            .query_async::<()>(&mut self.client.clone())
             .await?;
         Ok(())
     }
@@ -65,7 +65,7 @@ impl RedisCacheStorage {
     ) -> anyhow::Result<()> {
         redis::cmd("DEL")
             .arg(&key)
-            .query_async(&mut self.client.clone())
+            .query_async::<()>(&mut self.client.clone())
             .await?;
         Ok(())
     }
@@ -80,7 +80,7 @@ impl RedisCacheStorage {
         redis::cmd("RPUSH")
             .arg(&key)
             .arg(&value)
-            .query_async(&mut self.client.clone())
+            .query_async::<()>(&mut self.client.clone())
             .await?;
         Ok(())
     }
@@ -95,7 +95,7 @@ impl RedisCacheStorage {
         redis::cmd("RPUSHX")
             .arg(&key)
             .arg(&value)
-            .query_async(&mut self.client.clone())
+            .query_async::<()>(&mut self.client.clone())
             .await?;
         Ok(())
     }
@@ -170,7 +170,7 @@ impl BlocksByFinalityCache {
             ])
             .await
             .into_iter()
-            .collect::<anyhow::Result<_>>()?;
+            .collect::<anyhow::Result<()>>()?;
         };
 
         Ok(())
