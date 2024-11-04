@@ -93,6 +93,14 @@ pub trait ReaderDbManager {
         method_name: &str,
     ) -> anyhow::Result<readnode_primitives::QueryData<Vec<u8>>>;
 
+    // Returns the contract code size at the given block height
+    async fn get_contract_code_size(
+        &self,
+        account_id: &near_primitives::types::AccountId,
+        request_block_height: near_primitives::types::BlockHeight,
+        method_name: &str,
+    ) -> anyhow::Result<u64>;
+
     /// Returns the near_primitives::account::AccessKey at the given block height
     async fn get_access_key(
         &self,

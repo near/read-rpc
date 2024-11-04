@@ -443,7 +443,17 @@ async fn view_state(
                 block_hash: block.block_hash,
             },
         )?;
-    if prefix.is_empty() && account.data.storage_usage() > data.prefetch_state_size_limit {
+
+    // Calculate the state size excluding the contract code size to check if it's too large to fetch.
+    // The state size is the storage usage minus the code size.
+    let contract_code_size = data
+        .db_manager
+        .get_contract_code_size(account_id, block.block_height, "query_call_function")
+        .await
+        .unwrap_or(0);
+    let state_size = account.data.storage_usage() - contract_code_size;
+    // If the prefix is empty and the state size is larger than the limit, return an error.
+    if prefix.is_empty() && state_size > data.prefetch_state_size_limit {
         return Err(
             near_jsonrpc::primitives::types::query::RpcQueryError::TooLargeContractState {
                 contract_account_id: account_id.clone(),

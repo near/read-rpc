@@ -357,6 +357,37 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         })
     }
 
+    async fn get_contract_code_size(
+        &self,
+        account_id: &near_primitives::types::AccountId,
+        request_block_height: near_primitives::types::BlockHeight,
+        method_name: &str,
+    ) -> anyhow::Result<u64> {
+        let shard_id_pool = self.get_shard_connection(account_id).await?;
+        crate::metrics::SHARD_DATABASE_READ_QUERIES
+            .with_label_values(&[
+                &shard_id_pool.shard_id.to_string(),
+                method_name,
+                "state_changes_contract",
+            ])
+            .inc();
+        let (code_size,): (bigdecimal::BigDecimal,) = sqlx::query_as(
+            "
+                SELECT pg_column_size(data_value)
+                FROM state_changes_contract
+                WHERE account_id = $1 
+                    AND block_height <= $2
+                ORDER BY block_height DESC
+                LIMIT 1;
+                ",
+        )
+        .bind(account_id.to_string())
+        .bind(bigdecimal::BigDecimal::from(request_block_height))
+        .fetch_one(shard_id_pool.pool)
+        .await?;
+        Ok(code_size.to_u64().map(|size| size).unwrap_or_default())
+    }
+
     async fn get_access_key(
         &self,
         account_id: &near_primitives::types::AccountId,
