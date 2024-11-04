@@ -371,9 +371,9 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 "state_changes_contract",
             ])
             .inc();
-        let (code_size,): (bigdecimal::BigDecimal,) = sqlx::query_as(
+        let (code_size,): (i32,) = sqlx::query_as(
             "
-                SELECT pg_column_size(data_value)
+                SELECT pg_column_size(data_value) as code_size
                 FROM state_changes_contract
                 WHERE account_id = $1 
                     AND block_height <= $2
@@ -385,7 +385,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         .bind(bigdecimal::BigDecimal::from(request_block_height))
         .fetch_one(shard_id_pool.pool)
         .await?;
-        Ok(code_size.to_u64().map(|size| size).unwrap_or_default())
+        Ok(code_size.to_u64().unwrap_or_default())
     }
 
     async fn get_access_key(
