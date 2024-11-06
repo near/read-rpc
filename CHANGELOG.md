@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased](https://github.com/near/read-rpc/compare/main...develop)
 
+### What's Changed
+* Corrected state size calculation logic.
+* Integrated cargo_pkg_version metric to reflect the current server version.
+* Delete unnecessary debug logs about update blocks by finalities
+
 ## [0.3.1](https://github.com/near/read-rpc/releases/tag/v0.3.1)
 
 ### Supported Nearcore Version
