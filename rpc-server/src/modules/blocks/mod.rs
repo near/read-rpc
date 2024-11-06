@@ -335,10 +335,6 @@ impl BlocksInfoByFinality {
     // Update final block info in the cache.
     // Executes every second.
     pub async fn update_final_block(&self, block_info: BlockInfo) {
-        tracing::debug!(
-            "Update final block info: {:?}",
-            block_info.block_cache.block_height
-        );
         let mut final_block_lock = self.final_block.write().await;
         final_block_lock.block_cache = block_info.block_cache;
         final_block_lock.block_view = block_info.block_view;
@@ -348,11 +344,6 @@ impl BlocksInfoByFinality {
     // Update optimistic block changes and optimistic block info in the cache.
     // Executes every second.
     pub async fn update_optimistic_block(&self, block_info: BlockInfo) {
-        tracing::debug!(
-            "Update optimistic block info: {:?}",
-            block_info.block_cache.block_height
-        );
-
         let mut optimistic_changes_lock = self.optimistic_changes.write().await;
         optimistic_changes_lock.account_changes = block_info.changes_in_block_account_map().await;
 
