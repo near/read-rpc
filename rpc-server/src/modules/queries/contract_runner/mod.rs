@@ -136,6 +136,7 @@ pub async fn run_contract(
                             block_hash: block.block_hash,
                         }
                     })?;
+                println!("Contract code len {}", code.data.len());
                 contract_code_cache.put(code_hash, code.data.clone()).await;
                 Contract::new(Some(code.data), code_hash)
             }
@@ -145,17 +146,21 @@ pub async fn run_contract(
     // We need to calculate the state size of the contract to determine if we should prefetch the state or not.
     // The state size is the storage usage minus the code size.
     // If the state size is less than the prefetch_state_size_limit, we prefetch the state.
-    let code_size = if let Some(contract_code) = &contract_code.contract_code {
-        size_of_val(contract_code.code()) as u64
+    let code_len = if let Some(contract_code) = &contract_code.contract_code {
+        contract_code.code().len()
     } else if let Some(code) = contract_code_cache.get(&code_hash).await {
-        size_of_val(&code) as u64
+        code.len()
     } else {
         db_manager
-            .get_contract_code_size(account_id, block.block_height, "query_call_function")
+            .get_contract_code(account_id, block.block_height, "query_call_function")
             .await
-            .unwrap_or(0)
+            .map(|code| code.data.len())
+            .unwrap_or_default()
     };
-    let state_size = contract.data.storage_usage() - code_size;
+    let state_size = contract
+        .data
+        .storage_usage()
+        .saturating_sub(code_len as u64);
     // Init an external database interface for the Runtime logic
     let code_storage = CodeStorage::init(
         db_manager.clone(),

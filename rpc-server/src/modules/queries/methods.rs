@@ -446,12 +446,14 @@ async fn view_state(
 
     // Calculate the state size excluding the contract code size to check if it's too large to fetch.
     // The state size is the storage usage minus the code size.
-    let contract_code_size = data
+    // more details: nearcore/runtime/runtime/src/state_viewer/mod.rs:150
+    let code_len = data
         .db_manager
-        .get_contract_code_size(account_id, block.block_height, "query_call_function")
+        .get_contract_code(account_id, block.block_height, "query_view_state")
         .await
-        .unwrap_or(0);
-    let state_size = account.data.storage_usage() - contract_code_size;
+        .map(|code| code.data.len() as u64)
+        .unwrap_or_default();
+    let state_size = account.data.storage_usage().saturating_sub(code_len);
     // If the prefix is empty and the state size is larger than the limit, return an error.
     if prefix.is_empty() && state_size > data.prefetch_state_size_limit {
         return Err(
