@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased](https://github.com/near/read-rpc/compare/main...develop)
 
 ### What's Changed
+* Corrected state size calculation logic.
+* Integrated cargo_pkg_version metric to reflect the current server version.
+* Delete unnecessary debug logs about update blocks by finalities
+
+## [0.3.1](https://github.com/near/read-rpc/releases/tag/v0.3.1)
+
+### Supported Nearcore Version
+- nearcore v2.3.0
+- rust v1.81.0
+
+### What's Changed
 * Improved bulk insertion of state_changes, reducing database requests from hundreds to a maximum of 7 per block.
 * Configuration improvement. Create default config.toml on start application to loaded parameters from the environment variables.
 * Fix to fetch state by pages (view_state_paginated).

@@ -153,6 +153,10 @@ impl ServerContext {
         let compiled_contract_code_cache =
             std::sync::Arc::new(CompiledCodeCache::new(contract_code_cache_size_in_bytes));
 
+        crate::metrics::CARGO_PKG_VERSION
+            .with_label_values(&[NEARD_VERSION])
+            .inc();
+
         Ok(Self {
             s3_client,
             db_manager: std::sync::Arc::new(Box::new(db_manager)),
