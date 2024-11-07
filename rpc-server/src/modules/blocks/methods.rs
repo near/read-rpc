@@ -485,7 +485,7 @@ pub async fn fetch_chunk(
             .map(|block_height_shard_id| (block_height_shard_id.0, block_height_shard_id.1))?,
     };
     let chunk_view =
-        fetch_chunk_from_fastnear(&data.fastnear_client, block_height, shard_id).await?;
+        fetch_chunk_from_fastnear(&data.fastnear_client, block_height, shard_id.into()).await?;
     // increase block category metrics
     crate::metrics::increase_request_category_metrics(
         data,

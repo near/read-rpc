@@ -1,7 +1,6 @@
 use std::string::ToString;
 
 use futures::executor::block_on;
-use near_lake_framework::FastNearClient;
 use near_primitives::epoch_manager::{AllEpochConfig, EpochConfig};
 
 use crate::modules::blocks::{BlocksInfoByFinality, CacheBlock};
@@ -32,10 +31,9 @@ impl GenesisInfo {
             )
             .await
             .expect("Error to get genesis config");
-        
+
         let genesis_block =
-            near_lake_framework::fastnear::fetchers::fetch_first_block(fastnear_client)
-                .await;
+            near_lake_framework::fastnear::fetchers::fetch_first_block(fastnear_client).await;
 
         Self {
             genesis_config,
@@ -105,8 +103,11 @@ impl ServerContext {
             "Referer".to_string(),
             rpc_server_config.general.referer_header_value.clone(),
         )?;
-        
-        let fastnear_client = rpc_server_config.lake_config.lake_client(rpc_server_config.general.chain_id).await?;
+
+        let fastnear_client = rpc_server_config
+            .lake_config
+            .lake_client(rpc_server_config.general.chain_id)
+            .await?;
 
         let blocks_info_by_finality = std::sync::Arc::new(
             BlocksInfoByFinality::new(&near_rpc_client, &fastnear_client).await,
