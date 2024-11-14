@@ -359,7 +359,7 @@ pub async fn fetch_block(
     {
         data.blocks_info_by_finality.optimistic_block_view().await
     } else {
-        near_lake_framework::s3_fetchers::fetch_block(
+        near_lake_framework::s3::fetchers::fetch_block(
             &data.s3_client,
             &data.s3_bucket_name,
             block_height,
@@ -615,7 +615,7 @@ async fn fetch_shards_by_cache_block(
         .collect::<Vec<u64>>()
         .into_iter()
         .map(|shard_id| {
-            near_lake_framework::s3_fetchers::fetch_shard(
+            near_lake_framework::s3::fetchers::fetch_shard(
                 &data.s3_client,
                 &data.s3_bucket_name,
                 cache_block.block_height,
