@@ -297,7 +297,12 @@ pub async fn protocol_config(
         request_data
     );
 
-    let config_view = protocol_config_call(&data, request_data.block_reference.clone()).await;
+    let config_view = protocol_config_call(
+        &data,
+        request_data.block_reference.clone(),
+        "EXPERIMENTAL_protocol_config",
+    )
+    .await;
 
     #[cfg(feature = "shadow-data-consistency")]
     {
@@ -366,21 +371,21 @@ async fn validators_call(
     Ok(validators.validators_info)
 }
 
-async fn protocol_config_call(
+pub async fn protocol_config_call(
     data: &Data<ServerContext>,
     block_reference: near_primitives::types::BlockReference,
+    method_name: &str,
 ) -> Result<
     near_chain_configs::ProtocolConfigView,
     near_jsonrpc::primitives::types::config::RpcProtocolConfigError,
 > {
-    let protocol_version =
-        get_protocol_version(data, block_reference, "EXPERIMENTAL_protocol_config")
-            .await
-            .map_err(|err| {
-                near_jsonrpc::primitives::types::config::RpcProtocolConfigError::UnknownBlock {
-                    error_message: err.to_string(),
-                }
-            })?;
+    let protocol_version = get_protocol_version(data, block_reference, method_name)
+        .await
+        .map_err(|err| {
+            near_jsonrpc::primitives::types::config::RpcProtocolConfigError::UnknownBlock {
+                error_message: err.to_string(),
+            }
+        })?;
     // Stores runtime config for each protocol version
     // Create store of runtime configs for the given chain id.
     //
