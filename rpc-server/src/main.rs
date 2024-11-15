@@ -176,6 +176,12 @@ async fn rpc_handler(
             })
             .await
         }
+        "EXPERIMENTAL_congestion_level" => {
+            process_method_call(request, |params| {
+                modules::blocks::methods::congestion_level(data, params)
+            })
+            .await
+        }
         "EXPERIMENTAL_genesis_config" => {
             process_method_call(request, |_: ()| {
                 modules::network::methods::genesis_config(data)
