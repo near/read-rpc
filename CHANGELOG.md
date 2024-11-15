@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Corrected state size calculation logic.
 * Integrated cargo_pkg_version metric to reflect the current server version.
 * Delete unnecessary debug logs about update blocks by finalities
+* Support new method `EXPERIMENTAL_congestion_level`
 
 ### Supported Nearcore Version
 - nearcore v2.3.1
