@@ -52,7 +52,7 @@ pub async fn chunk(
     near_jsonrpc::primitives::types::chunks::RpcChunkError,
 > {
     tracing::debug!("`chunk` called with parameters: {:?}", request_data);
-    let chunk_result = fetch_chunk(&data, request_data.chunk_reference.clone()).await;
+    let chunk_result = fetch_chunk(&data, request_data.chunk_reference.clone(), "chunk").await;
     #[cfg(feature = "shadow-data-consistency")]
     {
         crate::utils::shadow_compare_results_handler(
@@ -65,6 +65,58 @@ pub async fn chunk(
         .await;
     }
     chunk_result
+}
+
+// EXPERIMENTAL_congestion_level rpc method implementation
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
+pub async fn congestion_level(
+    data: Data<ServerContext>,
+    request_data: near_jsonrpc::primitives::types::congestion::RpcCongestionLevelRequest,
+) -> Result<
+    near_jsonrpc::primitives::types::congestion::RpcCongestionLevelResponse,
+    near_jsonrpc::primitives::types::congestion::RpcCongestionLevelError,
+> {
+    tracing::debug!(
+        "`EXPERIMENTAL_congestion_level` called with parameters: {:?}",
+        request_data
+    );
+    let chunk_view = fetch_chunk(
+        &data,
+        request_data.chunk_reference.clone(),
+        "EXPERIMENTAL_congestion_level",
+    )
+    .await?
+    .chunk_view;
+    let config_result = crate::modules::network::methods::protocol_config_call(
+        &data,
+        near_primitives::types::BlockReference::BlockId(near_primitives::types::BlockId::Height(
+            chunk_view.header.height_included,
+        )),
+        "EXPERIMENTAL_congestion_level",
+    )
+    .await;
+    let config = config_result.map_err(|err: near_jsonrpc::primitives::types::config::RpcProtocolConfigError| match err {
+        near_jsonrpc::primitives::types::config::RpcProtocolConfigError::UnknownBlock { error_message } => {
+            near_jsonrpc::primitives::types::congestion::RpcCongestionLevelError::UnknownBlock {
+                error_message,
+            }
+        }
+        near_jsonrpc::primitives::types::config::RpcProtocolConfigError::InternalError { error_message } => {
+            near_jsonrpc::primitives::types::congestion::RpcCongestionLevelError::InternalError {
+                error_message,
+            }
+        }
+    })?;
+    let congestion_level = chunk_view
+        .header
+        .congestion_info
+        .map(|info| info.congestion_level(config.runtime_config.congestion_control_config))
+        .unwrap_or(0.0);
+    Ok(
+        near_jsonrpc::primitives::types::congestion::RpcCongestionLevelResponse {
+            congestion_level,
+        },
+    )
 }
 
 /// `EXPERIMENTAL_changes` rpc method implementation
@@ -359,7 +411,7 @@ pub async fn fetch_block(
     {
         data.blocks_info_by_finality.optimistic_block_view().await
     } else {
-        near_lake_framework::s3_fetchers::fetch_block(
+        near_lake_framework::s3::fetchers::fetch_block(
             &data.s3_client,
             &data.s3_bucket_name,
             block_height,
@@ -379,6 +431,7 @@ pub async fn fetch_block(
 pub async fn fetch_chunk(
     data: &Data<ServerContext>,
     chunk_reference: near_jsonrpc::primitives::types::chunks::ChunkReference,
+    method_name: &str,
 ) -> Result<
     near_jsonrpc::primitives::types::chunks::RpcChunkResponse,
     near_jsonrpc::primitives::types::chunks::RpcChunkError,
@@ -400,7 +453,7 @@ pub async fn fetch_chunk(
                     }
                     near_primitives::types::BlockId::Hash(block_hash) => data
                         .db_manager
-                        .get_block_height_by_hash(block_hash, "chunk")
+                        .get_block_height_by_hash(block_hash, method_name)
                         .await
                         .map_err(|err| {
                             tracing::error!("Failed to fetch block by hash: {}", err);
@@ -412,7 +465,7 @@ pub async fn fetch_chunk(
             // Check if the chunk stored in block with the given height
             if let Ok(block_height_shard_id) = data
                 .db_manager
-                .get_block_by_height_and_shard_id(block_height, shard_id, "chunk")
+                .get_block_by_height_and_shard_id(block_height, shard_id, method_name)
                 .await
             {
                 (block_height_shard_id.0, block_height_shard_id.1)
@@ -422,7 +475,7 @@ pub async fn fetch_chunk(
         }
         near_jsonrpc::primitives::types::chunks::ChunkReference::ChunkHash { chunk_id } => data
             .db_manager
-            .get_block_by_chunk_hash(chunk_id, "chunk")
+            .get_block_by_chunk_hash(chunk_id, method_name)
             .await
             .map_err(
                 |_err| near_jsonrpc::primitives::types::chunks::RpcChunkError::UnknownChunk {
@@ -444,7 +497,7 @@ pub async fn fetch_chunk(
         &near_primitives::types::BlockReference::BlockId(near_primitives::types::BlockId::Height(
             block_height,
         )),
-        "chunk",
+        method_name,
         Some(block_height),
     )
     .await;
@@ -615,7 +668,7 @@ async fn fetch_shards_by_cache_block(
         .collect::<Vec<u64>>()
         .into_iter()
         .map(|shard_id| {
-            near_lake_framework::s3_fetchers::fetch_shard(
+            near_lake_framework::s3::fetchers::fetch_shard(
                 &data.s3_client,
                 &data.s3_bucket_name,
                 cache_block.block_height,

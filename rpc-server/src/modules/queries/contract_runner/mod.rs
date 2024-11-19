@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 
-use near_vm_runner::ContractRuntimeCache;
-
 use crate::modules::blocks::BlocksInfoByFinality;
 use code_storage::CodeStorage;
+use near_vm_runner::ContractRuntimeCache;
 
 mod code_storage;
 
@@ -143,6 +142,24 @@ pub async fn run_contract(
         }
     };
 
+    // We need to calculate the state size of the contract to determine if we should prefetch the state or not.
+    // The state size is the storage usage minus the code size.
+    // If the state size is less than the prefetch_state_size_limit, we prefetch the state.
+    let code_len = if let Some(contract_code) = &contract_code.contract_code {
+        contract_code.code().len()
+    } else if let Some(code) = contract_code_cache.get(&code_hash).await {
+        code.len()
+    } else {
+        db_manager
+            .get_contract_code(account_id, block.block_height, "query_call_function")
+            .await
+            .map(|code| code.data.len())
+            .unwrap_or_default()
+    };
+    let state_size = contract
+        .data
+        .storage_usage()
+        .saturating_sub(code_len as u64);
     // Init an external database interface for the Runtime logic
     let code_storage = CodeStorage::init(
         db_manager.clone(),
@@ -150,7 +167,7 @@ pub async fn run_contract(
         block.block_height,
         validators,
         optimistic_data,
-        contract.data.storage_usage() <= prefetch_state_size_limit,
+        state_size <= prefetch_state_size_limit,
     )
     .await;
 

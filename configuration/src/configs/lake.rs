@@ -44,11 +44,9 @@ impl LakeConfig {
             .expect("Failed to build LakeConfig"))
     }
 
-    pub async fn lake_s3_client(&self) -> near_lake_framework::s3_fetchers::LakeS3Client {
+    pub async fn lake_s3_client(&self) -> near_lake_framework::LakeS3Client {
         let s3_config = self.s3_config().await;
-        near_lake_framework::s3_fetchers::LakeS3Client::new(aws_sdk_s3::Client::from_conf(
-            s3_config,
-        ))
+        near_lake_framework::LakeS3Client::new(aws_sdk_s3::Client::from_conf(s3_config))
     }
 }
 
