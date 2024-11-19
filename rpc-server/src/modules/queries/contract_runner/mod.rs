@@ -136,7 +136,6 @@ pub async fn run_contract(
                             block_hash: block.block_hash,
                         }
                     })?;
-                println!("Contract code len {}", code.data.len());
                 contract_code_cache.put(code_hash, code.data.clone()).await;
                 Contract::new(Some(code.data), code_hash)
             }
