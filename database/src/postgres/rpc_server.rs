@@ -69,6 +69,14 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 "state_changes_data",
             ])
             .inc();
+        crate::metrics::ACCOUTS_DATABASE_READ_QUERIES
+            .with_label_values(&[
+                account_id.as_ref(),
+                &shard_id_pool.shard_id.to_string(),
+                method_name,
+                "state_changes_data",
+            ])
+            .inc();
         let page_state = if let Some(page_state_token) = page_token {
             borsh::from_slice::<crate::postgres::PageState>(&hex::decode(page_state_token)?)?
         } else {
@@ -150,6 +158,14 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 "state_changes_data",
             ])
             .inc();
+        crate::metrics::ACCOUTS_DATABASE_READ_QUERIES
+            .with_label_values(&[
+                account_id.as_ref(),
+                &shard_id_pool.shard_id.to_string(),
+                method_name,
+                "state_changes_data",
+            ])
+            .inc();
         let mut items = std::collections::HashMap::new();
         let mut stream = sqlx::query_as::<_, (String, Vec<u8>)>(
             "
@@ -202,6 +218,14 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         let shard_id_pool = self.get_shard_connection(account_id).await?;
         crate::metrics::SHARD_DATABASE_READ_QUERIES
             .with_label_values(&[
+                &shard_id_pool.shard_id.to_string(),
+                method_name,
+                "state_changes_data",
+            ])
+            .inc();
+        crate::metrics::ACCOUTS_DATABASE_READ_QUERIES
+            .with_label_values(&[
+                account_id.as_ref(),
                 &shard_id_pool.shard_id.to_string(),
                 method_name,
                 "state_changes_data",
@@ -264,6 +288,14 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 "state_changes_data",
             ])
             .inc();
+        crate::metrics::ACCOUTS_DATABASE_READ_QUERIES
+            .with_label_values(&[
+                account_id.as_ref(),
+                &shard_id_pool.shard_id.to_string(),
+                method_name,
+                "state_changes_data",
+            ])
+            .inc();
         let (data_value,): (Vec<u8>,) = sqlx::query_as(
             "
                 SELECT data_value 
@@ -292,6 +324,14 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         let shard_id_pool = self.get_shard_connection(account_id).await?;
         crate::metrics::SHARD_DATABASE_READ_QUERIES
             .with_label_values(&[
+                &shard_id_pool.shard_id.to_string(),
+                method_name,
+                "state_changes_account",
+            ])
+            .inc();
+        crate::metrics::ACCOUTS_DATABASE_READ_QUERIES
+            .with_label_values(&[
+                account_id.as_ref(),
                 &shard_id_pool.shard_id.to_string(),
                 method_name,
                 "state_changes_account",
@@ -329,6 +369,14 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         let shard_id_pool = self.get_shard_connection(account_id).await?;
         crate::metrics::SHARD_DATABASE_READ_QUERIES
             .with_label_values(&[
+                &shard_id_pool.shard_id.to_string(),
+                method_name,
+                "state_changes_contract",
+            ])
+            .inc();
+        crate::metrics::ACCOUTS_DATABASE_READ_QUERIES
+            .with_label_values(&[
+                account_id.as_ref(),
                 &shard_id_pool.shard_id.to_string(),
                 method_name,
                 "state_changes_contract",
@@ -372,6 +420,14 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 "state_changes_access_key",
             ])
             .inc();
+        crate::metrics::ACCOUTS_DATABASE_READ_QUERIES
+            .with_label_values(&[
+                account_id.as_ref(),
+                &shard_id_pool.shard_id.to_string(),
+                method_name,
+                "state_changes_access_key",
+            ])
+            .inc();
         let key_data = borsh::to_vec(&public_key)?;
         let (block_height, block_hash, data_value): (bigdecimal::BigDecimal, String, Vec<u8>) =
             sqlx::query_as(
@@ -407,6 +463,14 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         let shard_id_pool = self.get_shard_connection(account_id).await?;
         crate::metrics::SHARD_DATABASE_READ_QUERIES
             .with_label_values(&[
+                &shard_id_pool.shard_id.to_string(),
+                method_name,
+                "state_changes_access_key",
+            ])
+            .inc();
+        crate::metrics::ACCOUTS_DATABASE_READ_QUERIES
+            .with_label_values(&[
+                account_id.as_ref(),
                 &shard_id_pool.shard_id.to_string(),
                 method_name,
                 "state_changes_access_key",

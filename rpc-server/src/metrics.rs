@@ -1,5 +1,5 @@
 use actix_web::{get, Responder};
-use prometheus::{Encoder, IntCounterVec, IntGauge, IntGaugeVec, Opts};
+use prometheus::{CounterVec, Encoder, IntCounterVec, IntGauge, IntGaugeVec, Opts};
 
 type Result<T, E> = std::result::Result<T, E>;
 
@@ -113,12 +113,13 @@ lazy_static! {
         "Optimistic updating status. 0: working, 1: not working",
     ).unwrap();
 
-    pub(crate) static ref LEGACY_DATABASE_TX_DETAILS: IntCounterVec = register_int_counter_vec(
-        "legacy_database_tx_details",
-        "Total number of calls to the legacy database for transaction details",
-        // This declares a label named `lookup_type` to differentiate "finished" and "in_progress" transaction lookups
-        &["lookup_type"]
-    ).unwrap();
+    pub(crate) static ref CARGO_PKG_VERSION: CounterVec = {
+        let opts = Opts::new("cargo_pkg_version", "Cargo package version. This is used to track the version of the running server.")
+            .variable_label("version");
+        let counter_vec = CounterVec::new(opts, &["version"]).expect("metric can be created");
+        prometheus::register(Box::new(counter_vec.clone())).unwrap();
+        counter_vec
+    };
 
     // Error metrics
     // 0: ReadRPC success, NEAR RPC success"
