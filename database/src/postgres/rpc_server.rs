@@ -69,7 +69,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 "state_changes_data",
             ])
             .inc();
-        crate::metrics::ACCOUTS_DATABASE_READ_QUERIES
+        crate::metrics::ACCOUNTS_DATABASE_READ_QUERIES
             .with_label_values(&[
                 account_id.as_ref(),
                 &shard_id_pool.shard_id.to_string(),
@@ -158,7 +158,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 "state_changes_data",
             ])
             .inc();
-        crate::metrics::ACCOUTS_DATABASE_READ_QUERIES
+        crate::metrics::ACCOUNTS_DATABASE_READ_QUERIES
             .with_label_values(&[
                 account_id.as_ref(),
                 &shard_id_pool.shard_id.to_string(),
@@ -223,7 +223,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 "state_changes_data",
             ])
             .inc();
-        crate::metrics::ACCOUTS_DATABASE_READ_QUERIES
+        crate::metrics::ACCOUNTS_DATABASE_READ_QUERIES
             .with_label_values(&[
                 account_id.as_ref(),
                 &shard_id_pool.shard_id.to_string(),
@@ -288,7 +288,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 "state_changes_data",
             ])
             .inc();
-        crate::metrics::ACCOUTS_DATABASE_READ_QUERIES
+        crate::metrics::ACCOUNTS_DATABASE_READ_QUERIES
             .with_label_values(&[
                 account_id.as_ref(),
                 &shard_id_pool.shard_id.to_string(),
@@ -329,7 +329,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 "state_changes_account",
             ])
             .inc();
-        crate::metrics::ACCOUTS_DATABASE_READ_QUERIES
+        crate::metrics::ACCOUNTS_DATABASE_READ_QUERIES
             .with_label_values(&[
                 account_id.as_ref(),
                 &shard_id_pool.shard_id.to_string(),
@@ -374,7 +374,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 "state_changes_contract",
             ])
             .inc();
-        crate::metrics::ACCOUTS_DATABASE_READ_QUERIES
+        crate::metrics::ACCOUNTS_DATABASE_READ_QUERIES
             .with_label_values(&[
                 account_id.as_ref(),
                 &shard_id_pool.shard_id.to_string(),
@@ -420,7 +420,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 "state_changes_access_key",
             ])
             .inc();
-        crate::metrics::ACCOUTS_DATABASE_READ_QUERIES
+        crate::metrics::ACCOUNTS_DATABASE_READ_QUERIES
             .with_label_values(&[
                 account_id.as_ref(),
                 &shard_id_pool.shard_id.to_string(),
@@ -468,7 +468,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 "state_changes_access_key",
             ])
             .inc();
-        crate::metrics::ACCOUTS_DATABASE_READ_QUERIES
+        crate::metrics::ACCOUNTS_DATABASE_READ_QUERIES
             .with_label_values(&[
                 account_id.as_ref(),
                 &shard_id_pool.shard_id.to_string(),
