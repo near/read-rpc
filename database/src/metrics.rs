@@ -38,10 +38,4 @@ lazy_static! {
         &["method_name", "table_name"]
     )
     .unwrap();
-    pub(crate) static ref ACCOUTS_DATABASE_READ_QUERIES: IntCounterVec = register_int_counter_vec(
-        "account_database_read_queries_counter",
-        "Total number of accounts database reads queries by method_name and table_name",
-        &["account_id", "shard_id", "method_name", "table_name"]
-    )
-    .unwrap();
 }
