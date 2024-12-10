@@ -1,6 +1,7 @@
 use clap::Parser;
 use futures::{FutureExt, StreamExt};
-
+use near_indexer_primitives::near_primitives;
+use near_indexer_primitives::near_primitives::epoch_manager::{AllEpochConfig, EpochConfig};
 use tx_details_storage::TxDetailsStorage;
 
 mod collector;
@@ -31,23 +32,25 @@ async fn main() -> anyhow::Result<()> {
         near_jsonrpc_client::JsonRpcClient::connect(&indexer_config.general.near_rpc_url);
 
     tracing::info!(target: INDEXER, "Fetch protocol config...");
-    let protocol_config_view = rpc_client
-        .call(
-            near_jsonrpc_client::methods::EXPERIMENTAL_protocol_config::RpcProtocolConfigRequest {
-                block_reference:
-                    near_indexer_primitives::near_primitives::types::BlockReference::Finality(
-                        near_indexer_primitives::near_primitives::types::Finality::Final,
-                    ),
-            },
-        )
+    let genesis_config = rpc_client
+        .call(near_jsonrpc_client::methods::EXPERIMENTAL_genesis_config::RpcGenesisConfigRequest)
         .await?;
+    let default_epoch_config = EpochConfig::from(&genesis_config);
+    let all_epoch_config = AllEpochConfig::new(
+        true,
+        genesis_config.protocol_version,
+        default_epoch_config,
+        &genesis_config.chain_id,
+    );
+    let epoch_config =
+        all_epoch_config.for_protocol_version(near_primitives::version::PROTOCOL_VERSION);
 
     tracing::info!(target: INDEXER, "Connecting to db...");
     let db_manager: std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>> =
         std::sync::Arc::new(Box::new(
             database::prepare_db_manager::<database::PostgresDBManager>(
                 &indexer_config.database,
-                protocol_config_view.shard_layout.clone(),
+                epoch_config.shard_layout.clone(),
             )
             .await?,
         ));
@@ -70,7 +73,7 @@ async fn main() -> anyhow::Result<()> {
     let tx_collecting_storage = std::sync::Arc::new(
         storage::CacheStorage::init_with_restore(
             indexer_config.general.redis_url.to_string(),
-            protocol_config_view.shard_layout,
+            epoch_config.shard_layout,
         )
         .await?,
     );

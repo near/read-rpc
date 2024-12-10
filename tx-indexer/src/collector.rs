@@ -241,7 +241,7 @@ async fn extract_transactions_to_collect(
                 new_transaction_details_to_collecting_pool(
                     tx,
                     block,
-                    shard_id,
+                    shard_id.into(),
                     tx_collecting_storage,
                     indexer_config,
                 )
@@ -347,7 +347,7 @@ async fn process_shard(
                 process_receipt_execution_outcome(
                     tx_collecting_storage,
                     block,
-                    shard.shard_id,
+                    shard.shard_id.into(),
                     receipt_execution_outcome,
                 )
             });

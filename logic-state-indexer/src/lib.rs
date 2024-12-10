@@ -64,7 +64,7 @@ impl StateChangesToStore {
             futures::future::join_all(futures)
                 .await
                 .into_iter()
-                .collect::<anyhow::Result<_>>()?;
+                .collect::<anyhow::Result<()>>()?;
         }
         Ok(())
     }
@@ -89,7 +89,7 @@ impl StateChangesToStore {
             futures::future::join_all(futures)
                 .await
                 .into_iter()
-                .collect::<anyhow::Result<_>>()?;
+                .collect::<anyhow::Result<()>>()?;
         }
         Ok(())
     }
@@ -114,7 +114,7 @@ impl StateChangesToStore {
             futures::future::join_all(futures)
                 .await
                 .into_iter()
-                .collect::<anyhow::Result<_>>()?;
+                .collect::<anyhow::Result<()>>()?;
         }
         Ok(())
     }
@@ -139,7 +139,7 @@ impl StateChangesToStore {
             futures::future::join_all(futures)
                 .await
                 .into_iter()
-                .collect::<anyhow::Result<_>>()?;
+                .collect::<anyhow::Result<()>>()?;
         }
         Ok(())
     }
@@ -163,7 +163,7 @@ impl StateChangesToStore {
         ])
         .await
         .into_iter()
-        .collect::<anyhow::Result<_>>()?;
+        .collect::<anyhow::Result<()>>()?;
 
         Ok(())
     }
@@ -223,7 +223,7 @@ pub async fn handle_streamer_message(
                     .map(|chunk| {
                         (
                             chunk.chunk_hash.to_string(),
-                            chunk.shard_id,
+                            chunk.shard_id.into(),
                             chunk.height_included,
                         )
                     })
@@ -267,7 +267,7 @@ pub async fn handle_streamer_message(
     ])
     .await
     .into_iter()
-    .collect::<anyhow::Result<_>>()?;
+    .collect::<anyhow::Result<()>>()?;
 
     metrics::BLOCK_PROCESSED_TOTAL.inc();
     // Prometheus Gauge Metric type do not support u64

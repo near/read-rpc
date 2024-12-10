@@ -17,21 +17,26 @@ impl crate::TxIndexerDbManager for crate::PostgresDBManager {
             "INSERT INTO receipts_map (receipt_id, parent_transaction_hash, receiver_id, block_height, block_hash, shard_id) ",
         );
         query_builder.push_values(receipts.iter(), |mut values, receipt| {
+            let shard_id: u64 = receipt.shard_id.into();
             values
                 .push_bind(receipt.receipt_id.to_string())
                 .push_bind(receipt.parent_transaction_hash.to_string())
                 .push_bind(receipt.receiver_id.to_string())
                 .push_bind(bigdecimal::BigDecimal::from(receipt.block_height))
                 .push_bind(receipt.block_hash.to_string())
-                .push_bind(bigdecimal::BigDecimal::from(receipt.shard_id));
+                .push_bind(bigdecimal::BigDecimal::from(shard_id));
         });
         query_builder.push(" ON CONFLICT DO NOTHING;");
         query_builder
             .build()
-            .execute(self.shards_pool.get(&shard_id).ok_or(anyhow::anyhow!(
-                "Database connection for Shard_{} not found",
-                shard_id
-            ))?)
+            .execute(
+                self.shards_pool
+                    .get(&shard_id.into())
+                    .ok_or(anyhow::anyhow!(
+                        "Database connection for Shard_{} not found",
+                        shard_id
+                    ))?,
+            )
             .await?;
         Ok(())
     }
@@ -51,21 +56,26 @@ impl crate::TxIndexerDbManager for crate::PostgresDBManager {
             "INSERT INTO outcomes_map (outcome_id, parent_transaction_hash, receiver_id, block_height, block_hash, shard_id) ",
         );
         query_builder.push_values(outcomes.iter(), |mut values, outcome| {
+            let shard_id: u64 = outcome.shard_id.into();
             values
                 .push_bind(outcome.outcome_id.to_string())
                 .push_bind(outcome.parent_transaction_hash.to_string())
                 .push_bind(outcome.receiver_id.to_string())
                 .push_bind(bigdecimal::BigDecimal::from(outcome.block_height))
                 .push_bind(outcome.block_hash.to_string())
-                .push_bind(bigdecimal::BigDecimal::from(outcome.shard_id));
+                .push_bind(bigdecimal::BigDecimal::from(shard_id));
         });
         query_builder.push(" ON CONFLICT DO NOTHING;");
         query_builder
             .build()
-            .execute(self.shards_pool.get(&shard_id).ok_or(anyhow::anyhow!(
-                "Database connection for Shard_{} not found",
-                shard_id
-            ))?)
+            .execute(
+                self.shards_pool
+                    .get(&shard_id.into())
+                    .ok_or(anyhow::anyhow!(
+                        "Database connection for Shard_{} not found",
+                        shard_id
+                    ))?,
+            )
             .await?;
         Ok(())
     }

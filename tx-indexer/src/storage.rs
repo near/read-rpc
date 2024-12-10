@@ -101,7 +101,7 @@ impl CacheStorage {
         futures::future::join_all(tx_futures)
             .await
             .into_iter()
-            .collect::<anyhow::Result<_>>()?;
+            .collect::<anyhow::Result<()>>()?;
         tracing::debug!(
             target: STORAGE,
             "Restored {} transactions after interruption",
@@ -430,7 +430,7 @@ impl CacheStorage {
             receiver_id: receiver_id.clone(),
             block_height: block.height,
             block_hash: block.hash,
-            shard_id,
+            shard_id: shard_id.into(),
         };
         let outcome_record = readnode_primitives::OutcomeRecord {
             outcome_id: *outcome_id,
@@ -438,12 +438,12 @@ impl CacheStorage {
             receiver_id: receiver_id.clone(),
             block_height: block.height,
             block_hash: block.hash,
-            shard_id,
+            shard_id: shard_id.into(),
         };
         self.outcomes_and_receipts_to_save
             .write()
             .await
-            .entry(database_shard_id)
+            .entry(database_shard_id.into())
             .and_modify(|receipts_and_outcomes| {
                 receipts_and_outcomes
                     .receipts

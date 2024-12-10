@@ -35,8 +35,8 @@ database.workspace = true
 logic-state-indexer.workspace = true
 
 near-o11y.workspace = true
-near-chain-configs.workspace = true
 near-client.workspace = true
+near-config-utils.workspace = true
 near-indexer.workspace = true
 near-indexer-primitives.workspace = true
 

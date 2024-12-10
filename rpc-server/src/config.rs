@@ -20,7 +20,7 @@ pub struct GenesisInfo {
 impl GenesisInfo {
     pub async fn get(
         near_rpc_client: &crate::utils::JsonRpcClient,
-        s3_client: &near_lake_framework::s3_fetchers::LakeS3Client,
+        s3_client: &near_lake_framework::LakeS3Client,
         s3_bucket_name: &str,
     ) -> Self {
         tracing::info!("Get genesis config...");
@@ -32,7 +32,7 @@ impl GenesisInfo {
             .await
             .expect("Error to get genesis config");
 
-        let genesis_block = near_lake_framework::s3_fetchers::fetch_block(
+        let genesis_block = near_lake_framework::s3::fetchers::fetch_block(
             s3_client,
             s3_bucket_name,
             genesis_config.genesis_height,
@@ -50,7 +50,7 @@ impl GenesisInfo {
 #[derive(Clone)]
 pub struct ServerContext {
     /// Lake s3 client
-    pub s3_client: near_lake_framework::s3_fetchers::LakeS3Client,
+    pub s3_client: near_lake_framework::LakeS3Client,
     /// Database manager
     pub db_manager: std::sync::Arc<Box<dyn database::ReaderDbManager + Sync + Send + 'static>>,
     /// TransactionDetails storage
@@ -134,6 +134,7 @@ impl ServerContext {
         let default_epoch_config = EpochConfig::from(&genesis_info.genesis_config);
         let all_epoch_config = AllEpochConfig::new(
             true,
+            genesis_info.genesis_config.protocol_version,
             default_epoch_config,
             &genesis_info.genesis_config.chain_id,
         );
