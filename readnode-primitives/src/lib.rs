@@ -355,10 +355,11 @@ where
         let block_hash = CryptoHash::from_str(&value.4).map_err(|err| {
             anyhow::anyhow!("Failed to parse `block_hash` to CryptoHash: {}", err)
         })?;
-        let shard_id = value
+        let shard_id: near_indexer_primitives::types::ShardId = value
             .5
             .to_u64()
-            .ok_or_else(|| anyhow::anyhow!("Failed to parse `shard_id` to u64"))?;
+            .ok_or_else(|| anyhow::anyhow!("Failed to parse `shard_id` to u64"))?
+            .into();
 
         Ok(ReceiptRecord {
             receipt_id,

@@ -520,6 +520,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         crate::metrics::META_DATABASE_READ_QUERIES
             .with_label_values(&[method_name, "chunks_duplicate"])
             .inc();
+        let shard_id: u64 = shard_id.into();
         let result: (bigdecimal::BigDecimal, bigdecimal::BigDecimal) = sqlx::query_as(
             "
                 SELECT included_in_block_height, shard_id

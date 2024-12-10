@@ -61,7 +61,7 @@ pub async fn fetch_chunk_from_s3(
         s3_client,
         s3_bucket_name,
         block_height,
-        shard_id,
+        shard_id.into(),
     )
     .await
     {

@@ -13,13 +13,13 @@ aws-credential-types = "1.1.4"
 aws-sdk-s3 = { version = "1.14.0", features = ["behavior-version-latest"] }
 aws-types = "1.1.4"
 dotenv = "0.15.0"
-google-cloud-storage = "0.20.0"
+google-cloud-storage = "0.23.0"
 lazy_static = "1.4.0"
 regex = "1.10.2"
 serde = "1.0.145"
 serde_derive = "1.0.145"
 serde_json = "1.0.108"
-validator = { version = "0.18.1", features = ["derive"] }
+validator = { version = "0.19.0", features = ["derive"] }
 opentelemetry = { version = "0.19", features = ["rt-tokio-current-thread"] }
 opentelemetry-jaeger = { version = "0.18", features = [
     "rt-tokio-current-thread",
