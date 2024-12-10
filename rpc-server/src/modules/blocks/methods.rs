@@ -470,7 +470,7 @@ pub async fn fetch_chunk(
             {
                 (block_height_shard_id.0, block_height_shard_id.1)
             } else {
-                (block_height, shard_id)
+                (block_height, shard_id.into())
             }
         }
         near_jsonrpc::primitives::types::chunks::ChunkReference::ChunkHash { chunk_id } => data
@@ -488,7 +488,7 @@ pub async fn fetch_chunk(
         &data.s3_client,
         &data.s3_bucket_name,
         block_height,
-        shard_id,
+        shard_id.into(),
     )
     .await?;
     // increase block category metrics

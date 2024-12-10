@@ -70,7 +70,7 @@ impl From<CommonDatabaseConfig> for DatabaseConfig {
             shards_config: database_config
                 .shards
                 .into_iter()
-                .map(|shard| (shard.shard_id, shard.database_url))
+                .map(|shard| (shard.shard_id.into(), shard.database_url))
                 .collect(),
             max_connections: database_config
                 .max_connections

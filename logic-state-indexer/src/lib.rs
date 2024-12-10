@@ -223,7 +223,7 @@ pub async fn handle_streamer_message(
                     .map(|chunk| {
                         (
                             chunk.chunk_hash.to_string(),
-                            chunk.shard_id,
+                            chunk.shard_id.into(),
                             chunk.height_included,
                         )
                     })
