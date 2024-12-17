@@ -82,6 +82,7 @@ pub(crate) fn init_server(port: u16) -> anyhow::Result<actix_web::dev::Server> {
     Ok(HttpServer::new(|| App::new().service(get_metrics))
         .bind(("0.0.0.0", port))?
         .disable_signals()
+        .workers(2) // for indexer metrics server we don't need many workers
         .run())
 }
 
