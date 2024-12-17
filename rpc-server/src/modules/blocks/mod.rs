@@ -10,7 +10,6 @@ pub struct CacheBlock {
     pub block_timestamp: u64,
     pub gas_price: near_primitives::types::Balance,
     pub latest_protocol_version: near_primitives::types::ProtocolVersion,
-    pub chunks_included: u64,
     pub state_root: near_primitives::hash::CryptoHash,
     pub epoch_id: near_primitives::hash::CryptoHash,
 }
@@ -61,7 +60,6 @@ impl From<&near_primitives::views::BlockView> for CacheBlock {
             block_timestamp: block.header.timestamp,
             gas_price: block.header.gas_price,
             latest_protocol_version: block.header.latest_protocol_version,
-            chunks_included: block.header.chunks_included,
             state_root: block.header.prev_state_root,
             epoch_id: block.header.epoch_id,
         }
@@ -76,15 +74,6 @@ pub struct BlockInfo {
 }
 
 impl BlockInfo {
-    // Create new BlockInfo from BlockView. this method is useful only for start rpc-server.
-    pub async fn new_from_block_view(block_view: near_primitives::views::BlockView) -> Self {
-        Self {
-            block_cache: CacheBlock::from(&block_view),
-            block_view,
-            changes: vec![], // We left changes empty because block_view doesn't contain state changes.
-        }
-    }
-
     // Create new BlockInfo from StreamerMessage.
     // This is using to update final and optimistic blocks regularly.
     pub async fn new_from_streamer_message(
@@ -296,38 +285,30 @@ pub struct BlocksInfoByFinality {
 impl BlocksInfoByFinality {
     pub async fn new(
         near_rpc_client: &crate::utils::JsonRpcClient,
-        blocks_cache: &std::sync::Arc<crate::cache::RwLockLruMemoryCache<u64, CacheBlock>>,
+        fast_near_client: &near_lake_framework::FastNearClient,
     ) -> Self {
-        let final_block_future = crate::utils::get_final_block(near_rpc_client, false);
-        let optimistic_block_future = crate::utils::get_final_block(near_rpc_client, true);
-        let validators_future = crate::utils::get_current_validators(near_rpc_client);
-
-        let (final_block, optimistic_block, validators) = futures::try_join!(
-            final_block_future,
-            optimistic_block_future,
-            validators_future,
-        )
-        .map_err(|err| {
-            tracing::error!("Error to fetch final block info: {:?}", err);
-            err
-        })
-        .expect("Error to get final block info");
-
-        blocks_cache
-            .put(final_block.header.height, CacheBlock::from(&final_block))
-            .await;
+        let final_block =
+            near_lake_framework::fastnear::fetchers::fetch_last_block(fast_near_client).await;
+        let optimistic_block =
+            near_lake_framework::fastnear::fetchers::fetch_optimistic_block(fast_near_client).await;
+        let validators = crate::utils::get_current_validators(near_rpc_client)
+            .await
+            .expect("Failed to get current validators");
+        let protocol_version = crate::utils::get_current_protocol_version(near_rpc_client)
+            .await
+            .expect("Failed to get current protocol version");
 
         Self {
             final_block: futures_locks::RwLock::new(
-                BlockInfo::new_from_block_view(final_block).await,
+                BlockInfo::new_from_streamer_message(final_block).await,
             ),
             optimistic_block: futures_locks::RwLock::new(
-                BlockInfo::new_from_block_view(optimistic_block).await,
+                BlockInfo::new_from_streamer_message(optimistic_block).await,
             ),
             optimistic_changes: futures_locks::RwLock::new(OptimisticChanges::new()),
             current_validators: futures_locks::RwLock::new(CurrentValidatorInfo { validators }),
             current_protocol_version: futures_locks::RwLock::new(CurrentProtocolVersion {
-                protocol_version: near_primitives::version::PROTOCOL_VERSION,
+                protocol_version,
             }),
         }
     }
@@ -359,18 +340,13 @@ impl BlocksInfoByFinality {
         &self,
         near_rpc_client: &crate::utils::JsonRpcClient,
     ) -> anyhow::Result<()> {
-        self.current_validators.write().await.validators =
-            crate::utils::get_current_validators(near_rpc_client).await?;
-        Ok(())
-    }
-
-    // Update current protocol version in the cache.
-    // This method executes when the protocol version changes.
-    pub async fn update_current_protocol_version(
-        &self,
-        protocol_version: near_primitives::types::ProtocolVersion,
-    ) -> anyhow::Result<()> {
-        self.current_protocol_version.write().await.protocol_version = protocol_version;
+        let current_validators_future = crate::utils::get_current_validators(near_rpc_client);
+        let current_protocol_version_future =
+            crate::utils::get_current_protocol_version(near_rpc_client);
+        let (current_validators, current_protocol_version) =
+            futures::try_join!(current_validators_future, current_protocol_version_future,)?;
+        self.current_validators.write().await.validators = current_validators;
+        self.current_protocol_version.write().await.protocol_version = current_protocol_version;
         Ok(())
     }
 
