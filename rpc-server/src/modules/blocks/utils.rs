@@ -162,7 +162,12 @@ pub async fn fetch_block_from_cache_or_get(
         }
     };
     let cache_block = match block {
-        Some(block) => block,
+        Some(block) => {
+            crate::metrics::REQUESTS_BLOCKS_COUNTERS
+                .with_label_values(&[method_name, "cache"])
+                .inc();
+            block
+        }
         None => {
             let block_from_s3 = fetch_block(data, block_reference, method_name).await?;
             let block = CacheBlock::from(&block_from_s3.block_view);

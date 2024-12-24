@@ -261,7 +261,13 @@ async fn changes_in_block_call(
         }
     })?;
 
-    let result = fetch_changes_in_block(&data, cache_block, &params.block_reference).await;
+    let result = fetch_changes_in_block(
+        &data,
+        cache_block,
+        &params.block_reference,
+        "EXPERIMENTAL_changes_in_block",
+    )
+    .await;
     #[cfg(feature = "shadow-data-consistency")]
     {
         if let near_primitives::types::BlockReference::Finality(_) = params.block_reference {
@@ -306,6 +312,7 @@ async fn changes_in_block_by_type_call(
         cache_block,
         &params.state_changes_request,
         &params.block_reference,
+        "EXPERIMENTAL_changes",
     )
     .await;
 
@@ -367,6 +374,9 @@ pub async fn fetch_block(
             return match finality {
                 near_primitives::types::Finality::Final
                 | near_primitives::types::Finality::DoomSlug => {
+                    crate::metrics::REQUESTS_BLOCKS_COUNTERS
+                        .with_label_values(&[method_name, "cache"])
+                        .inc();
                     let block_view = data.blocks_info_by_finality.final_block_view().await;
                     Ok(near_jsonrpc::primitives::types::blocks::RpcBlockResponse { block_view })
                 }
@@ -379,6 +389,9 @@ pub async fn fetch_block(
                             },
                         )
                     } else {
+                        crate::metrics::REQUESTS_BLOCKS_COUNTERS
+                            .with_label_values(&[method_name, "cache"])
+                            .inc();
                         let block_view = data.blocks_info_by_finality.optimistic_block_view().await;
                         Ok(
                             near_jsonrpc::primitives::types::blocks::RpcBlockResponse {
@@ -402,6 +415,9 @@ pub async fn fetch_block(
             .await
             .block_height
     {
+        crate::metrics::REQUESTS_BLOCKS_COUNTERS
+            .with_label_values(&[method_name, "cache"])
+            .inc();
         data.blocks_info_by_finality.final_block_view().await
     } else if block_height
         == data
@@ -410,8 +426,14 @@ pub async fn fetch_block(
             .await
             .block_height
     {
+        crate::metrics::REQUESTS_BLOCKS_COUNTERS
+            .with_label_values(&[method_name, "cache"])
+            .inc();
         data.blocks_info_by_finality.optimistic_block_view().await
     } else {
+        crate::metrics::REQUESTS_BLOCKS_COUNTERS
+            .with_label_values(&[method_name, "lake"])
+            .inc();
         near_lake_framework::fastnear::fetchers::fetch_block_or_retry(
             &data.fastnear_client,
             block_height,
@@ -484,6 +506,9 @@ pub async fn fetch_chunk(
             )
             .map(|block_height_shard_id| (block_height_shard_id.0, block_height_shard_id.1))?,
     };
+    crate::metrics::REQUESTS_BLOCKS_COUNTERS
+        .with_label_values(&[method_name, "lake"])
+        .inc();
     let chunk_view =
         fetch_chunk_from_fastnear(&data.fastnear_client, block_height, shard_id.into()).await?;
     // increase block category metrics
@@ -505,11 +530,12 @@ async fn fetch_changes_in_block(
     data: &Data<ServerContext>,
     cache_block: crate::modules::blocks::CacheBlock,
     block_reference: &near_primitives::types::BlockReference,
+    method_name: &str,
 ) -> Result<
     near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockByTypeResponse,
     near_jsonrpc::primitives::types::changes::RpcStateChangesError,
 > {
-    let trie_keys = fetch_state_changes(data, cache_block, block_reference)
+    let trie_keys = fetch_state_changes(data, cache_block, block_reference, method_name)
         .await
         .map_err(|err| {
             near_jsonrpc::primitives::types::changes::RpcStateChangesError::UnknownBlock {
@@ -593,11 +619,12 @@ async fn fetch_changes_in_block_by_type(
     cache_block: crate::modules::blocks::CacheBlock,
     state_changes_request: &near_primitives::views::StateChangesRequestView,
     block_reference: &near_primitives::types::BlockReference,
+    method_name: &str,
 ) -> Result<
     near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockResponse,
     near_jsonrpc::primitives::types::changes::RpcStateChangesError,
 > {
-    let changes = fetch_state_changes(data, cache_block, block_reference)
+    let changes = fetch_state_changes(data, cache_block, block_reference, method_name)
         .await
         .map_err(|err| {
             near_jsonrpc::primitives::types::changes::RpcStateChangesError::UnknownBlock {
@@ -624,6 +651,7 @@ async fn fetch_state_changes(
     data: &Data<ServerContext>,
     cache_block: crate::modules::blocks::CacheBlock,
     block_reference: &near_primitives::types::BlockReference,
+    method_name: &str,
 ) -> anyhow::Result<near_primitives::views::StateChangesView> {
     if let near_primitives::types::BlockReference::Finality(finality) = block_reference {
         match finality {
@@ -645,7 +673,7 @@ async fn fetch_state_changes(
             }
         }
     } else {
-        Ok(fetch_shards_by_cache_block(data, cache_block)
+        Ok(fetch_shards_by_cache_block(data, cache_block, method_name)
             .await?
             .into_iter()
             .flat_map(|shard| shard.state_changes)
@@ -658,7 +686,11 @@ async fn fetch_state_changes(
 async fn fetch_shards_by_cache_block(
     data: &Data<ServerContext>,
     cache_block: crate::modules::blocks::CacheBlock,
+    method_name: &str,
 ) -> anyhow::Result<Vec<near_indexer_primitives::IndexerShard>> {
+    crate::metrics::REQUESTS_BLOCKS_COUNTERS
+        .with_label_values(&[method_name, "lake"])
+        .inc();
     match near_lake_framework::fastnear::fetchers::fetch_streamer_message(
         &data.fastnear_client,
         cache_block.block_height,
