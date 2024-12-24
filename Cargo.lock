@@ -5105,6 +5105,7 @@ dependencies = [
  "actix",
  "actix-web",
  "anyhow",
+ "cache-storage",
  "clap",
  "configuration",
  "database",

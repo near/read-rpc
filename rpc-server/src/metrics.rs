@@ -123,7 +123,7 @@ lazy_static! {
     pub(crate) static ref REQUESTS_BLOCKS_COUNTERS: IntCounterVec = register_int_counter_vec(
         "requests_blocks_counters",
         "Total number of requests blocks from Lake and Cache",
-        &["method_name", "source"] // // This declares a label named `method_name` and `source`(lake or cache)
+        &["method_name", "source"] // This declares a label named `method_name` and `source`(lake or cache)
     ).unwrap();
 
     // Error metrics
