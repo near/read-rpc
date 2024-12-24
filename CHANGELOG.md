@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased](https://github.com/near/read-rpc/compare/main...develop)
 
+### What's Changed
+* Migrate from lake data to fastnear data
+* Add metrics to calculate the number of blocks which fetched from the cache and fastnear
+
 ## [0.3.3](https://github.com/near/read-rpc/releases/tag/v0.3.3)
 
 ### Supported Nearcore Version

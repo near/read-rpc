@@ -120,18 +120,9 @@ tracked_changes = "${TRACKED_CHANGES}"
 
 ### Lake framework configuration
 [lake_config]
-
-## Lake framework AWS access key id
-aws_access_key_id = "${AWS_ACCESS_KEY_ID}"
-
-## Lake framework AWS secret access key
-aws_secret_access_key = "${AWS_SECRET_ACCESS_KEY}"
-
-## Lake framework AWS default region
-aws_default_region = "${AWS_DEFAULT_REGION}"
-
-## Lake framework bucket name
-aws_bucket_name = "${AWS_BUCKET_NAME}"
+# Number of threads to use for fetching data from fatnear
+# Default: 2 * available threads
+#num_threads = 8
 
 ## Transaction details are stored in the Google Cloud Storage
 [tx_details_storage]
