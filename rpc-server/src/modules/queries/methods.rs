@@ -88,15 +88,15 @@ async fn query_call(
 
     let result = match &query_request.request {
         near_primitives::views::QueryRequest::ViewAccount { account_id } => {
-            view_account(data, block, account_id, is_optimistic).await
+            view_account(data, block.clone(), account_id, is_optimistic).await
         }
         near_primitives::views::QueryRequest::ViewCode { account_id } => {
-            view_code(data, block, account_id, is_optimistic).await
+            view_code(data, block.clone(), account_id, is_optimistic).await
         }
         near_primitives::views::QueryRequest::ViewAccessKey {
             account_id,
             public_key,
-        } => view_access_key(data, block, account_id, public_key, is_optimistic).await,
+        } => view_access_key(data, block.clone(), account_id, public_key, is_optimistic).await,
         near_primitives::views::QueryRequest::ViewState {
             account_id,
             prefix,
@@ -139,16 +139,26 @@ async fn query_call(
                         })?)
                 };
             } else {
-                view_state(data, block, account_id, prefix, is_optimistic).await
+                view_state(data, block.clone(), account_id, prefix, is_optimistic).await
             }
         }
         near_primitives::views::QueryRequest::CallFunction {
             account_id,
             method_name,
             args,
-        } => function_call(data, block, account_id, method_name, args, is_optimistic).await,
+        } => {
+            function_call(
+                data,
+                block.clone(),
+                account_id,
+                method_name,
+                args,
+                is_optimistic,
+            )
+            .await
+        }
         near_primitives::views::QueryRequest::ViewAccessKeyList { account_id } => {
-            view_access_keys_list(data, block, account_id).await
+            view_access_keys_list(data, block.clone(), account_id).await
         }
     };
 
@@ -198,9 +208,9 @@ async fn view_account(
         is_optimistic
     );
     let account_view = if is_optimistic {
-        optimistic_view_account(data, block, account_id, "query_view_account").await?
+        optimistic_view_account(data, block.clone(), account_id, "query_view_account").await?
     } else {
-        database_view_account(data, block, account_id, "query_view_account").await?
+        database_view_account(data, block.clone(), account_id, "query_view_account").await?
     };
     Ok(near_jsonrpc::primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc::primitives::types::query::QueryResponseKind::ViewAccount(account_view),
@@ -283,13 +293,13 @@ async fn view_code(
     );
     let (code, account) = if is_optimistic {
         futures::try_join!(
-            optimistic_view_code(data, block, account_id, "query_view_code"),
-            optimistic_view_account(data, block, account_id, "query_view_code"),
+            optimistic_view_code(data, block.clone(), account_id, "query_view_code"),
+            optimistic_view_account(data, block.clone(), account_id, "query_view_code"),
         )?
     } else {
         futures::try_join!(
-            database_view_code(data, block, account_id, "query_view_code"),
-            database_view_account(data, block, account_id, "query_view_code"),
+            database_view_code(data, block.clone(), account_id, "query_view_code"),
+            database_view_account(data, block.clone(), account_id, "query_view_code"),
         )?
     };
 
@@ -394,7 +404,7 @@ async fn function_call(
         &data.compiled_contract_code_cache,
         &data.contract_code_cache,
         &data.blocks_info_by_finality,
-        block,
+        block.clone(),
         data.max_gas_burnt,
         maybe_optimistic_data,
         data.prefetch_state_size_limit,
@@ -466,9 +476,9 @@ async fn view_state(
     }
 
     let state_item = if is_optimistic {
-        optimistic_view_state(data, block, account_id, prefix).await?
+        optimistic_view_state(data, block.clone(), account_id, prefix).await?
     } else {
-        database_view_state(data, block, account_id, prefix).await?
+        database_view_state(data, block.clone(), account_id, prefix).await?
     };
 
     Ok(near_jsonrpc::primitives::types::query::RpcQueryResponse {
@@ -583,9 +593,9 @@ async fn view_access_key(
         is_optimistic,
     );
     let access_key_view = if is_optimistic {
-        optimistic_view_access_key(data, block, account_id, public_key).await?
+        optimistic_view_access_key(data, block.clone(), account_id, public_key).await?
     } else {
-        database_view_access_key(data, block, account_id, public_key).await?
+        database_view_access_key(data, block.clone(), account_id, public_key).await?
     };
     Ok(near_jsonrpc::primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc::primitives::types::query::QueryResponseKind::AccessKey(access_key_view),

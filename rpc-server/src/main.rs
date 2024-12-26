@@ -334,6 +334,7 @@ async fn main() -> anyhow::Result<()> {
     utils::task_regularly_update_blocks_by_finality(
         std::sync::Arc::clone(&server_context.blocks_info_by_finality),
         std::sync::Arc::clone(&server_context.blocks_cache),
+        std::sync::Arc::clone(&server_context.chunks_cache),
         server_context.fastnear_client.clone(),
         server_context.near_rpc_client.clone(),
     )

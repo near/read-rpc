@@ -3,7 +3,7 @@ use near_primitives::views::{StateChangeValueView, StateChangesView};
 pub mod methods;
 pub mod utils;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct CacheBlock {
     pub block_hash: near_primitives::hash::CryptoHash,
     pub block_height: near_primitives::types::BlockHeight,
@@ -12,6 +12,7 @@ pub struct CacheBlock {
     pub latest_protocol_version: near_primitives::types::ProtocolVersion,
     pub state_root: near_primitives::hash::CryptoHash,
     pub epoch_id: near_primitives::hash::CryptoHash,
+    pub block_view: near_primitives::views::BlockView,
 }
 
 #[derive(Debug, Clone)]
@@ -62,6 +63,7 @@ impl From<&near_primitives::views::BlockView> for CacheBlock {
             latest_protocol_version: block.header.latest_protocol_version,
             state_root: block.header.prev_state_root,
             epoch_id: block.header.epoch_id,
+            block_view: block.clone(),
         }
     }
 }
@@ -71,22 +73,25 @@ pub struct BlockInfo {
     pub block_cache: CacheBlock,
     pub block_view: near_primitives::views::BlockView,
     pub changes: StateChangesView,
+    pub shards: Vec<near_indexer_primitives::IndexerShard>,
 }
 
 impl BlockInfo {
     // Create new BlockInfo from StreamerMessage.
     // This is using to update final and optimistic blocks regularly.
     pub async fn new_from_streamer_message(
-        streamer_message: near_indexer_primitives::StreamerMessage,
+        streamer_message: &near_indexer_primitives::StreamerMessage,
     ) -> Self {
         Self {
             block_cache: CacheBlock::from(&streamer_message.block),
-            block_view: streamer_message.block,
+            block_view: streamer_message.block.clone(),
             changes: streamer_message
                 .shards
+                .clone()
                 .into_iter()
                 .flat_map(|shard| shard.state_changes)
                 .collect(),
+            shards: streamer_message.shards.clone(),
         }
     }
 
@@ -300,10 +305,10 @@ impl BlocksInfoByFinality {
 
         Self {
             final_block: futures_locks::RwLock::new(
-                BlockInfo::new_from_streamer_message(final_block).await,
+                BlockInfo::new_from_streamer_message(&final_block).await,
             ),
             optimistic_block: futures_locks::RwLock::new(
-                BlockInfo::new_from_streamer_message(optimistic_block).await,
+                BlockInfo::new_from_streamer_message(&optimistic_block).await,
             ),
             optimistic_changes: futures_locks::RwLock::new(OptimisticChanges::new()),
             current_validators: futures_locks::RwLock::new(CurrentValidatorInfo { validators }),
@@ -320,6 +325,7 @@ impl BlocksInfoByFinality {
         final_block_lock.block_cache = block_info.block_cache;
         final_block_lock.block_view = block_info.block_view;
         final_block_lock.changes = block_info.changes;
+        final_block_lock.shards = block_info.shards;
     }
 
     // Update optimistic block changes and optimistic block info in the cache.
@@ -332,6 +338,7 @@ impl BlocksInfoByFinality {
         optimistic_block_lock.block_cache = block_info.block_cache;
         optimistic_block_lock.block_view = block_info.block_view;
         optimistic_block_lock.changes = block_info.changes;
+        optimistic_block_lock.shards = block_info.shards;
     }
 
     // Update current validators info in the cache.
@@ -355,9 +362,14 @@ impl BlocksInfoByFinality {
         self.final_block.read().await.changes.clone()
     }
 
+    // return final block shards
+    pub async fn final_block_shards(&self) -> Vec<near_indexer_primitives::IndexerShard> {
+        self.final_block.read().await.shards.clone()
+    }
+
     // return final block changes
     pub async fn final_cache_block(&self) -> CacheBlock {
-        self.final_block.read().await.block_cache
+        self.final_block.read().await.block_cache.clone()
     }
 
     // return final block view
@@ -370,9 +382,14 @@ impl BlocksInfoByFinality {
         self.optimistic_block.read().await.changes.clone()
     }
 
+    // return optimistic block shards
+    pub async fn optimistic_block_shards(&self) -> Vec<near_indexer_primitives::IndexerShard> {
+        self.optimistic_block.read().await.shards.clone()
+    }
+
     // return optimistic block cache
     pub async fn optimistic_cache_block(&self) -> CacheBlock {
-        self.optimistic_block.read().await.block_cache
+        self.optimistic_block.read().await.block_cache.clone()
     }
 
     // return optimistic block view

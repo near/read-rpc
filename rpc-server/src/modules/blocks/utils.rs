@@ -158,7 +158,7 @@ pub async fn fetch_block_from_cache_or_get(
             // Return genesis_block_cache for all SyncCheckpoint
             // for archive node both Genesis and EarliestAvailable
             // are returning the genesis block
-            Some(data.genesis_info.genesis_block_cache)
+            Some(data.genesis_info.genesis_block_cache.clone())
         }
     };
     let cache_block = match block {
@@ -172,7 +172,9 @@ pub async fn fetch_block_from_cache_or_get(
             let block_from_s3 = fetch_block(data, block_reference, method_name).await?;
             let block = CacheBlock::from(&block_from_s3.block_view);
 
-            data.blocks_cache.put(block.block_height, block).await;
+            data.blocks_cache
+                .put(block.block_height, block.clone())
+                .await;
             block
         }
     };

@@ -75,9 +75,12 @@ pub async fn run_contract(
             },
         )?;
 
-    let (epoch_height, validators) =
-        epoch_height_and_validators_with_balances(db_manager, blocks_info_by_finality, block)
-            .await?;
+    let (epoch_height, validators) = epoch_height_and_validators_with_balances(
+        db_manager,
+        blocks_info_by_finality,
+        block.clone(),
+    )
+    .await?;
 
     // Prepare context for the VM run contract
     let public_key = near_crypto::PublicKey::empty(near_crypto::KeyType::ED25519);
