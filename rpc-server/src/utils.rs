@@ -232,19 +232,28 @@ async fn task_update_optimistic_block_regularly(
 // Task to check optimistic block status
 async fn task_optimistic_block_status() {
     tracing::info!("Task to check optimistic block status started");
+    let mut last_optimistic = crate::metrics::LATEST_BLOCK_HEIGHT_BY_FINALITIY
+        .with_label_values(&["optimistic"])
+        .get();
     loop {
         // check every second
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
+        // get the current final block height
+        let current_final = crate::metrics::LATEST_BLOCK_HEIGHT_BY_FINALITIY
+            .with_label_values(&["final"])
+            .get();
+
+        // get the current optimistic block height
+        let current_optimistic = crate::metrics::LATEST_BLOCK_HEIGHT_BY_FINALITIY
+            .with_label_values(&["optimistic"])
+            .get();
+
         // When an optimistic block is not updated, or it is lower than the final block
         // we need to mark that optimistic updating is not working
-        if crate::metrics::LATEST_BLOCK_HEIGHT_BY_FINALITIY
-            .with_label_values(&["optimistic"])
-            .get()
-            <= crate::metrics::LATEST_BLOCK_HEIGHT_BY_FINALITIY
-                .with_label_values(&["final"])
-                .get()
-            && !crate::metrics::OPTIMISTIC_UPDATING.is_not_working()
+        if current_optimistic <= current_final
+            || current_optimistic <= last_optimistic
+                && !crate::metrics::OPTIMISTIC_UPDATING.is_not_working()
         {
             tracing::warn!(
                 "Optimistic block in is not updated or optimistic block less than final block"
@@ -254,17 +263,15 @@ async fn task_optimistic_block_status() {
 
         // When an optimistic block is updated, and it is greater than the final block
         // we need to mark that optimistic updating is working
-        if crate::metrics::LATEST_BLOCK_HEIGHT_BY_FINALITIY
-            .with_label_values(&["optimistic"])
-            .get()
-            > crate::metrics::LATEST_BLOCK_HEIGHT_BY_FINALITIY
-                .with_label_values(&["final"])
-                .get()
+        if current_optimistic > current_final
+            && current_optimistic > last_optimistic
             && crate::metrics::OPTIMISTIC_UPDATING.is_not_working()
         {
             crate::metrics::OPTIMISTIC_UPDATING.set_working();
             tracing::info!("Optimistic block updating is resumed.");
         }
+
+        last_optimistic = current_optimistic;
     }
 }
 
