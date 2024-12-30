@@ -194,6 +194,30 @@ impl ServerContext {
     }
 }
 
+impl crate::cache::ResidentSize for near_vm_runner::CompiledContractInfo {
+    fn resident_size(&self) -> usize {
+        borsh::to_vec(self).unwrap_or_default().len()
+    }
+}
+
+impl crate::cache::ResidentSize for Vec<u8> {
+    fn resident_size(&self) -> usize {
+        self.len()
+    }
+}
+
+impl crate::cache::ResidentSize for Vec<IndexerShard> {
+    fn resident_size(&self) -> usize {
+        serde_json::to_vec(self).unwrap_or_default().len()
+    }
+}
+
+impl crate::cache::ResidentSize for CacheBlock {
+    fn resident_size(&self) -> usize {
+        serde_json::to_vec(self).unwrap_or_default().len()
+    }
+}
+
 #[derive(Clone)]
 pub struct CompiledCodeCache {
     pub local_cache: std::sync::Arc<

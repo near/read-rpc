@@ -3,7 +3,7 @@ use near_primitives::views::{StateChangeValueView, StateChangesView};
 pub mod methods;
 pub mod utils;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize)]
 pub struct CacheBlock {
     pub block_hash: near_primitives::hash::CryptoHash,
     pub block_height: near_primitives::types::BlockHeight,

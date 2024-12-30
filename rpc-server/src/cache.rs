@@ -9,7 +9,14 @@ pub struct LruMemoryCache<K, V> {
     max_size: usize,
 }
 
-impl<K: std::hash::Hash + Eq, V> LruMemoryCache<K, V> {
+/// An indicator of the resident in memory of a value.
+pub trait ResidentSize {
+    /// Return the resident size of the value. Users of the trait will depend
+    /// on this value to remain stable unless the value is mutated.
+    fn resident_size(&self) -> usize;
+}
+
+impl<K: std::hash::Hash + Eq, V: ResidentSize> LruMemoryCache<K, V> {
     /// Create a new cache with a maximum memory size of values.
     pub fn new(max_size: usize) -> Self {
         LruMemoryCache {
@@ -23,7 +30,7 @@ impl<K: std::hash::Hash + Eq, V> LruMemoryCache<K, V> {
     fn decrease(&mut self) {
         while self.current_size > self.max_size {
             match self.inner.pop_lru() {
-                Some((_, v)) => self.current_size -= std::mem::size_of_val(&v),
+                Some((_, v)) => self.current_size -= v.resident_size(),
                 _ => break,
             }
         }
@@ -43,11 +50,11 @@ impl<K: std::hash::Hash + Eq, V> LruMemoryCache<K, V> {
             self.inner.resize(new_cap);
         }
 
-        self.current_size += std::mem::size_of_val(&val);
+        self.current_size += val.resident_size();
 
         // subtract any element displaced from the hash.
         if let Some(lru) = self.inner.put(key, val) {
-            self.current_size -= std::mem::size_of_val(&lru);
+            self.current_size -= lru.resident_size();
         }
 
         self.decrease();
@@ -86,7 +93,7 @@ pub struct RwLockLruMemoryCache<K, V> {
     inner: futures_locks::RwLock<LruMemoryCache<K, V>>,
 }
 
-impl<K: std::hash::Hash + Eq, V: Clone> RwLockLruMemoryCache<K, V> {
+impl<K: std::hash::Hash + Eq, V: ResidentSize + Clone> RwLockLruMemoryCache<K, V> {
     pub fn new(max_size: usize) -> Self {
         RwLockLruMemoryCache {
             inner: futures_locks::RwLock::new(LruMemoryCache::new(max_size)),
