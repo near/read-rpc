@@ -8,6 +8,10 @@ pub struct RPCHealthStatusResponse {
     max_blocks_cache_size: String,
     current_blocks_cache_size: String,
 
+    chunks_in_cache: usize,
+    max_chunks_cache_size: String,
+    current_chunks_cache_size: String,
+
     contracts_codes_in_cache: usize,
     max_contracts_codes_cache_size: String,
     current_contracts_codes_cache_size: String,
@@ -28,6 +32,14 @@ impl RPCHealthStatusResponse {
             ),
             current_blocks_cache_size: friendly_memory_size_format(
                 server_context.blocks_cache.current_size().await,
+            ),
+
+            chunks_in_cache: server_context.chunks_cache.len().await,
+            max_chunks_cache_size: friendly_memory_size_format(
+                server_context.chunks_cache.max_size().await,
+            ),
+            current_chunks_cache_size: friendly_memory_size_format(
+                server_context.chunks_cache.current_size().await,
             ),
 
             contracts_codes_in_cache: server_context.contract_code_cache.len().await,
