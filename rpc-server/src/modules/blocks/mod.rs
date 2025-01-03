@@ -3,18 +3,6 @@ use near_primitives::views::{StateChangeValueView, StateChangesView};
 pub mod methods;
 pub mod utils;
 
-#[derive(Clone, Debug, serde::Serialize)]
-pub struct CacheBlock {
-    pub block_hash: near_primitives::hash::CryptoHash,
-    pub block_height: near_primitives::types::BlockHeight,
-    pub block_timestamp: u64,
-    pub gas_price: near_primitives::types::Balance,
-    pub latest_protocol_version: near_primitives::types::ProtocolVersion,
-    pub state_root: near_primitives::hash::CryptoHash,
-    pub epoch_id: near_primitives::hash::CryptoHash,
-    pub block_view: near_primitives::views::BlockView,
-}
-
 #[derive(Debug, Clone)]
 pub enum AccountChanges {
     None,
@@ -53,24 +41,87 @@ impl AccountChangesInBlock {
     }
 }
 
-impl From<&near_primitives::views::BlockView> for CacheBlock {
-    fn from(block: &near_primitives::views::BlockView) -> Self {
+// Struct to store the chunk
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct ChunkInfo {
+    pub shard_id: near_primitives::types::ShardId,
+    pub chunk: Option<near_primitives::views::ChunkView>,
+}
+
+impl Clone for ChunkInfo {
+    fn clone(&self) -> Self {
+        let chunk_clone = self
+            .chunk
+            .as_ref()
+            .map(|chunk| near_primitives::views::ChunkView {
+                author: chunk.author.clone(),
+                header: chunk.header.clone(),
+                transactions: chunk.transactions.clone(),
+                receipts: chunk.receipts.clone(),
+            });
+
         Self {
-            block_hash: block.header.hash,
-            block_height: block.header.height,
-            block_timestamp: block.header.timestamp,
-            gas_price: block.header.gas_price,
-            latest_protocol_version: block.header.latest_protocol_version,
-            state_root: block.header.prev_state_root,
-            epoch_id: block.header.epoch_id,
-            block_view: block.clone(),
+            shard_id: self.shard_id,
+            chunk: chunk_clone,
+        }
+    }
+}
+
+pub type ChunksInfo = Vec<ChunkInfo>;
+
+impl ChunkInfo {
+    pub fn from_indexer_shards(shards: Vec<near_indexer_primitives::IndexerShard>) -> ChunksInfo {
+        shards.into_iter().map(ChunkInfo::from).collect()
+    }
+}
+
+impl From<near_indexer_primitives::IndexerShard> for ChunkInfo {
+    fn from(shard: near_indexer_primitives::IndexerShard) -> Self {
+        let chunk_view = match shard.chunk {
+            Some(chunk) => {
+                // We collect a list of local receipt ids to filter out local receipts from the chunk
+                let local_receipt_ids: Vec<near_indexer_primitives::CryptoHash> = chunk
+                    .transactions
+                    .iter()
+                    .filter(|indexer_tx| {
+                        indexer_tx.transaction.signer_id == indexer_tx.transaction.receiver_id
+                    })
+                    .map(|indexer_tx| {
+                        *indexer_tx
+                            .outcome
+                            .execution_outcome
+                            .outcome
+                            .receipt_ids
+                            .first()
+                            .expect("Conversion receipt_id must be present in transaction outcome")
+                    })
+                    .collect();
+                Some(near_primitives::views::ChunkView {
+                    author: chunk.author,
+                    header: chunk.header,
+                    transactions: chunk
+                        .transactions
+                        .into_iter()
+                        .map(|indexer_transaction| indexer_transaction.transaction)
+                        .collect(),
+                    receipts: chunk
+                        .receipts
+                        .into_iter()
+                        .filter(|receipt| !local_receipt_ids.contains(&receipt.receipt_id))
+                        .collect(),
+                })
+            }
+            None => None,
+        };
+        Self {
+            shard_id: shard.shard_id,
+            chunk: chunk_view,
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct BlockInfo {
-    pub block_cache: CacheBlock,
     pub block_view: near_primitives::views::BlockView,
     pub changes: StateChangesView,
     pub shards: Vec<near_indexer_primitives::IndexerShard>,
@@ -83,7 +134,6 @@ impl BlockInfo {
         streamer_message: &near_indexer_primitives::StreamerMessage,
     ) -> Self {
         Self {
-            block_cache: CacheBlock::from(&streamer_message.block),
             block_view: streamer_message.block.clone(),
             changes: streamer_message
                 .shards
@@ -322,7 +372,6 @@ impl BlocksInfoByFinality {
     // Executes every second.
     pub async fn update_final_block(&self, block_info: BlockInfo) {
         let mut final_block_lock = self.final_block.write().await;
-        final_block_lock.block_cache = block_info.block_cache;
         final_block_lock.block_view = block_info.block_view;
         final_block_lock.changes = block_info.changes;
         final_block_lock.shards = block_info.shards;
@@ -335,7 +384,6 @@ impl BlocksInfoByFinality {
         optimistic_changes_lock.account_changes = block_info.changes_in_block_account_map().await;
 
         let mut optimistic_block_lock = self.optimistic_block.write().await;
-        optimistic_block_lock.block_cache = block_info.block_cache;
         optimistic_block_lock.block_view = block_info.block_view;
         optimistic_block_lock.changes = block_info.changes;
         optimistic_block_lock.shards = block_info.shards;
@@ -367,11 +415,6 @@ impl BlocksInfoByFinality {
         self.final_block.read().await.shards.clone()
     }
 
-    // return final block changes
-    pub async fn final_cache_block(&self) -> CacheBlock {
-        self.final_block.read().await.block_cache.clone()
-    }
-
     // return final block view
     pub async fn final_block_view(&self) -> near_primitives::views::BlockView {
         self.final_block.read().await.block_view.clone()
@@ -385,11 +428,6 @@ impl BlocksInfoByFinality {
     // return optimistic block shards
     pub async fn optimistic_block_shards(&self) -> Vec<near_indexer_primitives::IndexerShard> {
         self.optimistic_block.read().await.shards.clone()
-    }
-
-    // return optimistic block cache
-    pub async fn optimistic_cache_block(&self) -> CacheBlock {
-        self.optimistic_block.read().await.block_cache.clone()
     }
 
     // return optimistic block view

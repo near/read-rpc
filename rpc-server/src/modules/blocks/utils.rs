@@ -2,7 +2,6 @@ use near_primitives::views::{StateChangeValueView, StateChangesRequestView};
 
 use crate::config::ServerContext;
 use crate::modules::blocks::methods::fetch_block;
-use crate::modules::blocks::CacheBlock;
 
 // Helper function to check if the requested block height is within the range of the available blocks
 // If block height is lower than genesis block height, return an error block height is too low
@@ -14,10 +13,11 @@ pub async fn check_block_height(
 ) -> Result<(), near_jsonrpc::primitives::types::blocks::RpcBlockError> {
     let optimistic_block_height = data
         .blocks_info_by_finality
-        .optimistic_cache_block()
+        .optimistic_block_view()
         .await
-        .block_height;
-    let genesis_block_height = data.genesis_info.genesis_block_cache.block_height;
+        .header
+        .height;
+    let genesis_block_height = data.genesis_info.genesis_block.header.height;
     if block_height < genesis_block_height {
         return Err(
             near_jsonrpc::primitives::types::blocks::RpcBlockError::UnknownBlock {
@@ -116,7 +116,8 @@ pub async fn fetch_block_from_cache_or_get(
     data: &actix_web::web::Data<ServerContext>,
     block_reference: &near_primitives::types::BlockReference,
     method_name: &str,
-) -> Result<CacheBlock, near_jsonrpc::primitives::types::blocks::RpcBlockError> {
+) -> Result<near_primitives::views::BlockView, near_jsonrpc::primitives::types::blocks::RpcBlockError>
+{
     let block = match block_reference {
         near_primitives::types::BlockReference::BlockId(block_id) => {
             let block_height = match block_id {
@@ -141,16 +142,16 @@ pub async fn fetch_block_from_cache_or_get(
                 near_primitives::types::Finality::None => {
                     if crate::metrics::OPTIMISTIC_UPDATING.is_not_working() {
                         // Returns the final_block for None.
-                        Some(data.blocks_info_by_finality.final_cache_block().await)
+                        Some(data.blocks_info_by_finality.final_block_view().await)
                     } else {
                         // Returns the optimistic_block for None.
-                        Some(data.blocks_info_by_finality.optimistic_cache_block().await)
+                        Some(data.blocks_info_by_finality.optimistic_block_view().await)
                     }
                 }
                 near_primitives::types::Finality::DoomSlug
                 | near_primitives::types::Finality::Final => {
                     // Returns the final_block for DoomSlug and Final.
-                    Some(data.blocks_info_by_finality.final_cache_block().await)
+                    Some(data.blocks_info_by_finality.final_block_view().await)
                 }
             }
         }
@@ -158,7 +159,7 @@ pub async fn fetch_block_from_cache_or_get(
             // Return genesis_block_cache for all SyncCheckpoint
             // for archive node both Genesis and EarliestAvailable
             // are returning the genesis block
-            Some(data.genesis_info.genesis_block_cache.clone())
+            Some(data.genesis_info.genesis_block.clone())
         }
     };
     let cache_block = match block {
@@ -170,10 +171,10 @@ pub async fn fetch_block_from_cache_or_get(
         }
         None => {
             let block_from_s3 = fetch_block(data, block_reference, method_name).await?;
-            let block = CacheBlock::from(&block_from_s3.block_view);
+            let block = block_from_s3.block_view;
 
             data.blocks_cache
-                .put(block.block_height, block.clone())
+                .put(block.header.height, block.clone())
                 .await;
             block
         }
@@ -183,7 +184,7 @@ pub async fn fetch_block_from_cache_or_get(
         data,
         block_reference,
         method_name,
-        Some(cache_block.block_height),
+        Some(cache_block.header.height),
     )
     .await;
     Ok(cache_block)

@@ -249,7 +249,7 @@ async fn changes_in_block_call(
     near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockByTypeResponse,
     near_jsonrpc::primitives::types::changes::RpcStateChangesError,
 > {
-    let cache_block = fetch_block_from_cache_or_get(
+    let block_view = fetch_block_from_cache_or_get(
         &data,
         &params.block_reference,
         "EXPERIMENTAL_changes_in_block",
@@ -263,7 +263,7 @@ async fn changes_in_block_call(
 
     let result = fetch_changes_in_block(
         &data,
-        cache_block.clone(),
+        &block_view,
         &params.block_reference,
         "EXPERIMENTAL_changes_in_block",
     )
@@ -272,7 +272,7 @@ async fn changes_in_block_call(
     {
         if let near_primitives::types::BlockReference::Finality(_) = params.block_reference {
             params.block_reference = near_primitives::types::BlockReference::from(
-                near_primitives::types::BlockId::Height(cache_block.block_height),
+                near_primitives::types::BlockId::Height(block_view.header.height),
             )
         }
         crate::utils::shadow_compare_results_handler(
@@ -298,7 +298,7 @@ async fn changes_in_block_by_type_call(
     near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockResponse,
     near_jsonrpc::primitives::types::changes::RpcStateChangesError,
 > {
-    let cache_block =
+    let block_view =
         fetch_block_from_cache_or_get(&data, &params.block_reference, "EXPERIMENTAL_changes")
             .await
             .map_err(|err| {
@@ -309,7 +309,7 @@ async fn changes_in_block_by_type_call(
 
     let result = fetch_changes_in_block_by_type(
         &data,
-        cache_block.clone(),
+        &block_view,
         &params.state_changes_request,
         &params.block_reference,
         "EXPERIMENTAL_changes",
@@ -320,7 +320,7 @@ async fn changes_in_block_by_type_call(
     {
         if let near_primitives::types::BlockReference::Finality(_) = params.block_reference {
             params.block_reference = near_primitives::types::BlockReference::from(
-                near_primitives::types::BlockId::Height(cache_block.block_height),
+                near_primitives::types::BlockId::Height(block_view.header.height),
             )
         }
         crate::utils::shadow_compare_results_handler(
@@ -405,15 +405,16 @@ pub async fn fetch_block(
         // for archive node both SyncCheckpoint(Genesis and EarliestAvailable)
         // are returning the genesis block height
         near_primitives::types::BlockReference::SyncCheckpoint(_) => {
-            Ok(data.genesis_info.genesis_block_cache.block_height)
+            Ok(data.genesis_info.genesis_block.header.height)
         }
     }?;
     let block_view = if block_height
         == data
             .blocks_info_by_finality
-            .final_cache_block()
+            .final_block_view()
             .await
-            .block_height
+            .header
+            .height
     {
         crate::metrics::REQUESTS_BLOCKS_COUNTERS
             .with_label_values(&[method_name, "cache"])
@@ -422,9 +423,10 @@ pub async fn fetch_block(
     } else if block_height
         == data
             .blocks_info_by_finality
-            .optimistic_cache_block()
+            .optimistic_block_view()
             .await
-            .block_height
+            .header
+            .height
     {
         crate::metrics::REQUESTS_BLOCKS_COUNTERS
             .with_label_values(&[method_name, "cache"])
@@ -434,7 +436,7 @@ pub async fn fetch_block(
         crate::metrics::REQUESTS_BLOCKS_COUNTERS
             .with_label_values(&[method_name, "cache"])
             .inc();
-        block.block_view.clone()
+        block
     } else {
         crate::metrics::REQUESTS_BLOCKS_COUNTERS
             .with_label_values(&[method_name, "lake"])
@@ -512,28 +514,34 @@ pub async fn fetch_chunk(
             .map(|block_height_shard_id| (block_height_shard_id.0, block_height_shard_id.1))?,
     };
 
-    let indexed_shards = if block_height
+    let chunks_info = if block_height
         == data
             .blocks_info_by_finality
-            .final_cache_block()
+            .final_block_view()
             .await
-            .block_height
+            .header
+            .height
     {
-        Some(data.blocks_info_by_finality.final_block_shards().await)
+        Some(crate::modules::blocks::ChunkInfo::from_indexer_shards(
+            data.blocks_info_by_finality.final_block_shards().await,
+        ))
     } else if block_height
         == data
             .blocks_info_by_finality
-            .optimistic_cache_block()
+            .optimistic_block_view()
             .await
-            .block_height
+            .header
+            .height
     {
-        Some(data.blocks_info_by_finality.optimistic_block_shards().await)
+        Some(crate::modules::blocks::ChunkInfo::from_indexer_shards(
+            data.blocks_info_by_finality.optimistic_block_shards().await,
+        ))
     } else {
         data.chunks_cache.get(&block_height).await
     };
 
-    let chunk_view = if let Some(shards) = indexed_shards {
-        let indexed_chunk_view = shards
+    let chunk_view = if let Some(chunks) = chunks_info {
+        let chunk_view = chunks
             .iter()
             .filter_map(|shard| {
                 if shard.shard_id == shard_id {
@@ -543,43 +551,13 @@ pub async fn fetch_chunk(
                 }
             })
             .next()
-            .map(|shard| shard.chunk.clone())
+            .map(|shard| shard.chunk)
             .unwrap_or_default();
-        if let Some(chunk) = indexed_chunk_view {
+        if let Some(chunk) = chunk_view {
             crate::metrics::REQUESTS_BLOCKS_COUNTERS
                 .with_label_values(&[method_name, "cache"])
                 .inc();
-            // We collect a list of local receipt ids to filter out local receipts from the chunk
-            let local_receipt_ids: Vec<near_indexer_primitives::CryptoHash> = chunk
-                .transactions
-                .iter()
-                .filter(|indexer_tx| {
-                    indexer_tx.transaction.signer_id == indexer_tx.transaction.receiver_id
-                })
-                .map(|indexer_tx| {
-                    *indexer_tx
-                        .outcome
-                        .execution_outcome
-                        .outcome
-                        .receipt_ids
-                        .first()
-                        .expect("Conversion receipt_id must be present in transaction outcome")
-                })
-                .collect();
-            near_primitives::views::ChunkView {
-                author: chunk.author,
-                header: chunk.header,
-                transactions: chunk
-                    .transactions
-                    .into_iter()
-                    .map(|indexer_transaction| indexer_transaction.transaction)
-                    .collect(),
-                receipts: chunk
-                    .receipts
-                    .into_iter()
-                    .filter(|receipt| !local_receipt_ids.contains(&receipt.receipt_id))
-                    .collect(),
-            }
+            chunk
         } else {
             crate::metrics::REQUESTS_BLOCKS_COUNTERS
                 .with_label_values(&[method_name, "lake"])
@@ -610,14 +588,14 @@ pub async fn fetch_chunk(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 async fn fetch_changes_in_block(
     data: &Data<ServerContext>,
-    cache_block: crate::modules::blocks::CacheBlock,
+    block: &near_primitives::views::BlockView,
     block_reference: &near_primitives::types::BlockReference,
     method_name: &str,
 ) -> Result<
     near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockByTypeResponse,
     near_jsonrpc::primitives::types::changes::RpcStateChangesError,
 > {
-    let trie_keys = fetch_state_changes(data, cache_block.clone(), block_reference, method_name)
+    let trie_keys = fetch_state_changes(data, block, block_reference, method_name)
         .await
         .map_err(|err| {
             near_jsonrpc::primitives::types::changes::RpcStateChangesError::UnknownBlock {
@@ -689,7 +667,7 @@ async fn fetch_changes_in_block(
 
     Ok(
         near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockByTypeResponse {
-            block_hash: cache_block.block_hash,
+            block_hash: block.header.hash,
             changes,
         },
     )
@@ -698,7 +676,7 @@ async fn fetch_changes_in_block(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 async fn fetch_changes_in_block_by_type(
     data: &Data<ServerContext>,
-    cache_block: crate::modules::blocks::CacheBlock,
+    block: &near_primitives::views::BlockView,
     state_changes_request: &near_primitives::views::StateChangesRequestView,
     block_reference: &near_primitives::types::BlockReference,
     method_name: &str,
@@ -706,7 +684,7 @@ async fn fetch_changes_in_block_by_type(
     near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockResponse,
     near_jsonrpc::primitives::types::changes::RpcStateChangesError,
 > {
-    let changes = fetch_state_changes(data, cache_block.clone(), block_reference, method_name)
+    let changes = fetch_state_changes(data, block, block_reference, method_name)
         .await
         .map_err(|err| {
             near_jsonrpc::primitives::types::changes::RpcStateChangesError::UnknownBlock {
@@ -718,7 +696,7 @@ async fn fetch_changes_in_block_by_type(
         .collect();
     Ok(
         near_jsonrpc::primitives::types::changes::RpcStateChangesInBlockResponse {
-            block_hash: cache_block.block_hash,
+            block_hash: block.header.hash,
             changes,
         },
     )
@@ -731,7 +709,7 @@ async fn fetch_changes_in_block_by_type(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 async fn fetch_state_changes(
     data: &Data<ServerContext>,
-    cache_block: crate::modules::blocks::CacheBlock,
+    block: &near_primitives::views::BlockView,
     block_reference: &near_primitives::types::BlockReference,
     method_name: &str,
 ) -> anyhow::Result<near_primitives::views::StateChangesView> {
@@ -761,23 +739,24 @@ async fn fetch_state_changes(
             }
         }
     } else {
-        Ok(fetch_shards_by_cache_block(data, cache_block, method_name).await?)
+        Ok(fetch_shards_by_block(data, block, method_name).await?)
     }
 }
 
 // Helper method to fetch block shards from the S3 by the cache block
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
-async fn fetch_shards_by_cache_block(
+async fn fetch_shards_by_block(
     data: &Data<ServerContext>,
-    cache_block: crate::modules::blocks::CacheBlock,
+    block: &near_primitives::views::BlockView,
     method_name: &str,
 ) -> anyhow::Result<near_primitives::views::StateChangesView> {
-    if cache_block.block_height
+    if block.header.height
         == data
             .blocks_info_by_finality
-            .optimistic_cache_block()
+            .optimistic_block_view()
             .await
-            .block_height
+            .header
+            .height
     {
         crate::metrics::REQUESTS_BLOCKS_COUNTERS
             .with_label_values(&[method_name, "cache"])
@@ -786,32 +765,25 @@ async fn fetch_shards_by_cache_block(
             .blocks_info_by_finality
             .optimistic_block_changes()
             .await)
-    } else if cache_block.block_height
+    } else if block.header.height
         == data
             .blocks_info_by_finality
-            .final_cache_block()
+            .final_block_view()
             .await
-            .block_height
+            .header
+            .height
     {
         crate::metrics::REQUESTS_BLOCKS_COUNTERS
             .with_label_values(&[method_name, "cache"])
             .inc();
         Ok(data.blocks_info_by_finality.final_block_changes().await)
-    } else if let Some(shards) = data.chunks_cache.get(&cache_block.block_height).await {
-        crate::metrics::REQUESTS_BLOCKS_COUNTERS
-            .with_label_values(&[method_name, "cache"])
-            .inc();
-        Ok(shards
-            .into_iter()
-            .flat_map(|shard| shard.state_changes)
-            .collect())
     } else {
         crate::metrics::REQUESTS_BLOCKS_COUNTERS
             .with_label_values(&[method_name, "lake"])
             .inc();
         match near_lake_framework::fastnear::fetchers::fetch_streamer_message(
             &data.fastnear_client,
-            cache_block.block_height,
+            block.header.height,
         )
         .await
         {
@@ -822,7 +794,7 @@ async fn fetch_shards_by_cache_block(
                 .collect()),
             None => Err(anyhow::anyhow!(
                 "Failed to fetch shards for block {}",
-                cache_block.block_height,
+                block.header.height,
             )),
         }
     }
