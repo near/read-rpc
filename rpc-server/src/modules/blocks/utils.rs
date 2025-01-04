@@ -52,7 +52,7 @@ pub async fn fetch_chunk_from_fastnear(
 ) -> Result<near_primitives::views::ChunkView, near_jsonrpc::primitives::types::chunks::RpcChunkError>
 {
     tracing::debug!(
-        "`fetch_chunk_from_s3` call: block_height {}, shard_id {}",
+        "`fetch_chunk_from_fastnear` call: block_height {}, shard_id {}",
         block_height,
         shard_id
     );
@@ -63,46 +63,18 @@ pub async fn fetch_chunk_from_fastnear(
     )
     .await
     {
-        Ok(shard) => match shard.chunk {
-            Some(chunk) => {
-                // We collect a list of local receipt ids to filter out local receipts from the chunk
-                let local_receipt_ids: Vec<near_indexer_primitives::CryptoHash> = chunk
-                    .transactions
-                    .iter()
-                    .filter(|indexer_tx| {
-                        indexer_tx.transaction.signer_id == indexer_tx.transaction.receiver_id
-                    })
-                    .map(|indexer_tx| {
-                        *indexer_tx
-                            .outcome
-                            .execution_outcome
-                            .outcome
-                            .receipt_ids
-                            .first()
-                            .expect("Conversion receipt_id must be present in transaction outcome")
-                    })
-                    .collect();
-                Ok(near_primitives::views::ChunkView {
-                    author: chunk.author,
-                    header: chunk.header,
-                    transactions: chunk
-                        .transactions
-                        .into_iter()
-                        .map(|indexer_transaction| indexer_transaction.transaction)
-                        .collect(),
-                    receipts: chunk
-                        .receipts
-                        .into_iter()
-                        .filter(|receipt| !local_receipt_ids.contains(&receipt.receipt_id))
-                        .collect(),
-                })
+        Ok(shard) => {
+            let chunk_info = crate::modules::blocks::ChunkInfo::from(shard);
+            if let Some(chunk) = chunk_info.chunk {
+                Ok(chunk)
+            } else {
+                Err(
+                    near_jsonrpc::primitives::types::chunks::RpcChunkError::InternalError {
+                        error_message: "Unavailable chunk".to_string(),
+                    },
+                )
             }
-            None => Err(
-                near_jsonrpc::primitives::types::chunks::RpcChunkError::InternalError {
-                    error_message: "Unavailable chunk".to_string(),
-                },
-            ),
-        },
+        }
         Err(err) => Err(
             near_jsonrpc::primitives::types::chunks::RpcChunkError::InternalError {
                 error_message: err.to_string(),

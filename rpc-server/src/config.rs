@@ -90,8 +90,8 @@ impl ServerContext {
         //     crate::utils::gigabytes_to_bytes(rpc_server_config.general.contract_code_cache_size)
         //         .await;
 
-        // For contract code cache we use 1GB. make it configurable. temporary hardcoded
-        let contract_code_cache_size_in_bytes = crate::utils::gigabytes_to_bytes(1.0).await;
+        // For contract code cache we use 0.5GB. make it configurable. temporary hardcoded
+        let contract_code_cache_size_in_bytes = crate::utils::gigabytes_to_bytes(0.5).await;
         let contract_code_cache = std::sync::Arc::new(crate::cache::RwLockLruMemoryCache::new(
             contract_code_cache_size_in_bytes,
         ));
@@ -99,13 +99,13 @@ impl ServerContext {
         // let block_cache_size_in_bytes =
         //     crate::utils::gigabytes_to_bytes(rpc_server_config.general.block_cache_size).await;
 
-        // For chunk block we use 5GB. make it configurable. temporary hardcoded
-        let block_cache_size_in_bytes = crate::utils::gigabytes_to_bytes(2.0).await;
+        // For chunk block we use 1GB. make it configurable. temporary hardcoded
+        let block_cache_size_in_bytes = crate::utils::gigabytes_to_bytes(1.0).await;
         let blocks_cache = std::sync::Arc::new(crate::cache::RwLockLruMemoryCache::new(
             block_cache_size_in_bytes,
         ));
 
-        // For chunk cache we use 5GB. make it configurable. temporary hardcoded
+        // For chunk cache we use 2GB. make it configurable. temporary hardcoded
         let chunk_cache_size_in_bytes = crate::utils::gigabytes_to_bytes(2.0).await;
         let chunks_cache = std::sync::Arc::new(crate::cache::RwLockLruMemoryCache::new(
             chunk_cache_size_in_bytes,
@@ -165,9 +165,9 @@ impl ServerContext {
         )
         .await?;
 
-        // For compiled contract code cache we use 2GB. make it configurable. temporary hardcoded
+        // For compiled contract code cache we use 1.5GB. make it configurable. temporary hardcoded
         let compiled_contract_code_cache_size_in_bytes =
-            crate::utils::gigabytes_to_bytes(2.0).await;
+            crate::utils::gigabytes_to_bytes(1.5).await;
 
         let compiled_contract_code_cache = std::sync::Arc::new(CompiledCodeCache::new(
             compiled_contract_code_cache_size_in_bytes,
