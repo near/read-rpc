@@ -140,11 +140,11 @@ impl CommonGeneralRpcServerConfig {
     }
 
     pub fn default_contract_code_cache_size() -> f64 {
-        0.25
+        2.0
     }
 
     pub fn default_block_cache_size() -> f64 {
-        0.125
+        3.0
     }
 
     pub fn default_shadow_data_consistency_rate() -> f64 {

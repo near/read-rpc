@@ -40,13 +40,15 @@ server_port = "${SERVER_PORT}"
 max_gas_burnt = "${MAX_GAS_BURNT}"
 
 ## Contract code cache in gigabytes
-## By default we use 0.25 gigabyte (256MB or 268_435_456 bytes)
+## By default we use 2.0 gigabytes
+## We divide the cache size 1/4 for contract code and 3/4 for compiled contract code
+## Because the compiled contract code is bigger in 3 times than the contract code from the database
 contract_code_cache_size = "${CONTRACT_CODE_CACHE_SIZE}"
 
 ## Block cache size in gigabytes
-## By default we use 0.125 gigabyte (128MB or 134_217_728 bytes)
-## One cache_block size is ≈ 96 bytes
-## In 128MB we can put 1_398_101 cache_blocks
+## By default we use 3 gigabytes
+## We devide the cache size 1/3 for block cache and 2/3 for chunks cache
+## Because the chunks for block is bigger in 2 times than the block
 block_cache_size = "${BLOCK_CACHE_SIZE}"
 
 ## How many requests we should check for data consistency

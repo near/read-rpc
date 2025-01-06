@@ -2,7 +2,6 @@ use actix_web::web::Data;
 
 use crate::config::ServerContext;
 use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
-use crate::modules::blocks::CacheBlock;
 
 use super::contract_runner;
 use super::utils::get_state_from_db;
@@ -88,15 +87,15 @@ async fn query_call(
 
     let result = match &query_request.request {
         near_primitives::views::QueryRequest::ViewAccount { account_id } => {
-            view_account(data, block, account_id, is_optimistic).await
+            view_account(data, &block, account_id, is_optimistic).await
         }
         near_primitives::views::QueryRequest::ViewCode { account_id } => {
-            view_code(data, block, account_id, is_optimistic).await
+            view_code(data, &block, account_id, is_optimistic).await
         }
         near_primitives::views::QueryRequest::ViewAccessKey {
             account_id,
             public_key,
-        } => view_access_key(data, block, account_id, public_key, is_optimistic).await,
+        } => view_access_key(data, &block, account_id, public_key, is_optimistic).await,
         near_primitives::views::QueryRequest::ViewState {
             account_id,
             prefix,
@@ -104,14 +103,14 @@ async fn query_call(
         } => {
             if *include_proof {
                 // TODO: We can calculate the proof for state only on regular or archival nodes.
-                let final_block = data.blocks_info_by_finality.final_cache_block().await;
+                let final_block = data.blocks_info_by_finality.final_block_view().await;
                 // `expected_earliest_available_block` calculated by formula:
                 // `final_block_height` - `node_epoch_count` * `epoch_length`
                 // Now near store 5 epochs, it can be changed in the future
                 // epoch_length = 43200 blocks
                 let expected_earliest_available_block =
-                    final_block.block_height - 5 * data.genesis_info.genesis_config.epoch_length;
-                return if block.block_height > expected_earliest_available_block {
+                    final_block.header.height - 5 * data.genesis_info.genesis_config.epoch_length;
+                return if block.header.height > expected_earliest_available_block {
                     // Proxy to regular rpc if the block is available
                     Ok(data
                         .near_rpc_client
@@ -139,16 +138,16 @@ async fn query_call(
                         })?)
                 };
             } else {
-                view_state(data, block, account_id, prefix, is_optimistic).await
+                view_state(data, &block, account_id, prefix, is_optimistic).await
             }
         }
         near_primitives::views::QueryRequest::CallFunction {
             account_id,
             method_name,
             args,
-        } => function_call(data, block, account_id, method_name, args, is_optimistic).await,
+        } => function_call(data, &block, account_id, method_name, args, is_optimistic).await,
         near_primitives::views::QueryRequest::ViewAccessKeyList { account_id } => {
-            view_access_keys_list(data, block, account_id).await
+            view_access_keys_list(data, &block, account_id).await
         }
     };
 
@@ -162,7 +161,7 @@ async fn query_call(
             Ok(res) => res.block_height,
             // If the result is an error it does not contain the block_height, so we
             // will use the block_height considered as final from the cache.
-            Err(_err) => block.block_height,
+            Err(_err) => block.header.height,
         };
         query_request.block_reference = near_primitives::types::BlockReference::from(
             near_primitives::types::BlockId::Height(block_height),
@@ -184,7 +183,7 @@ async fn query_call(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 async fn view_account(
     data: &Data<ServerContext>,
-    block: CacheBlock,
+    block: &near_primitives::views::BlockView,
     account_id: &near_primitives::types::AccountId,
     is_optimistic: bool,
 ) -> Result<
@@ -194,7 +193,7 @@ async fn view_account(
     tracing::debug!(
         "`view_account` call. AccountID {}, Block {}, optimistic {}",
         account_id,
-        block.block_height,
+        block.header.height,
         is_optimistic
     );
     let account_view = if is_optimistic {
@@ -204,15 +203,15 @@ async fn view_account(
     };
     Ok(near_jsonrpc::primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc::primitives::types::query::QueryResponseKind::ViewAccount(account_view),
-        block_height: block.block_height,
-        block_hash: block.block_hash,
+        block_height: block.header.height,
+        block_hash: block.header.hash,
     })
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 async fn optimistic_view_account(
     data: &Data<ServerContext>,
-    block: CacheBlock,
+    block: &near_primitives::views::BlockView,
     account_id: &near_primitives::types::AccountId,
     method_name: &str,
 ) -> Result<
@@ -230,8 +229,8 @@ async fn optimistic_view_account(
             Err(
                 near_jsonrpc::primitives::types::query::RpcQueryError::UnknownAccount {
                     requested_account_id: account_id.clone(),
-                    block_height: block.block_height,
-                    block_hash: block.block_hash,
+                    block_height: block.header.height,
+                    block_hash: block.header.hash,
                 },
             )
         }
@@ -243,7 +242,7 @@ async fn optimistic_view_account(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 async fn database_view_account(
     data: &Data<ServerContext>,
-    block: CacheBlock,
+    block: &near_primitives::views::BlockView,
     account_id: &near_primitives::types::AccountId,
     method_name: &str,
 ) -> Result<
@@ -252,13 +251,13 @@ async fn database_view_account(
 > {
     let account = data
         .db_manager
-        .get_account(account_id, block.block_height, method_name)
+        .get_account(account_id, block.header.height, method_name)
         .await
         .map_err(
             |_err| near_jsonrpc::primitives::types::query::RpcQueryError::UnknownAccount {
                 requested_account_id: account_id.clone(),
-                block_height: block.block_height,
-                block_hash: block.block_hash,
+                block_height: block.header.height,
+                block_hash: block.header.hash,
             },
         )?
         .data;
@@ -268,7 +267,7 @@ async fn database_view_account(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 async fn view_code(
     data: &Data<ServerContext>,
-    block: CacheBlock,
+    block: &near_primitives::views::BlockView,
     account_id: &near_primitives::types::AccountId,
     is_optimistic: bool,
 ) -> Result<
@@ -278,7 +277,7 @@ async fn view_code(
     tracing::debug!(
         "`view_code` call. AccountID {}, Block {}, optimistic {}",
         account_id,
-        block.block_height,
+        block.header.height,
         is_optimistic
     );
     let (code, account) = if is_optimistic {
@@ -300,15 +299,15 @@ async fn view_code(
                 hash: account.code_hash,
             },
         ),
-        block_height: block.block_height,
-        block_hash: block.block_hash,
+        block_height: block.header.height,
+        block_hash: block.header.hash,
     })
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 async fn optimistic_view_code(
     data: &Data<ServerContext>,
-    block: CacheBlock,
+    block: &near_primitives::views::BlockView,
     account_id: &near_primitives::types::AccountId,
     method_name: &str,
 ) -> Result<Vec<u8>, near_jsonrpc::primitives::types::query::RpcQueryError> {
@@ -323,8 +322,8 @@ async fn optimistic_view_code(
             return Err(
                 near_jsonrpc::primitives::types::query::RpcQueryError::NoContractCode {
                     contract_account_id: account_id.clone(),
-                    block_height: block.block_height,
-                    block_hash: block.block_hash,
+                    block_height: block.header.height,
+                    block_hash: block.header.hash,
                 },
             );
         }
@@ -337,19 +336,19 @@ async fn optimistic_view_code(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 async fn database_view_code(
     data: &Data<ServerContext>,
-    block: CacheBlock,
+    block: &near_primitives::views::BlockView,
     account_id: &near_primitives::types::AccountId,
     method_name: &str,
 ) -> Result<Vec<u8>, near_jsonrpc::primitives::types::query::RpcQueryError> {
     Ok(data
         .db_manager
-        .get_contract_code(account_id, block.block_height, method_name)
+        .get_contract_code(account_id, block.header.height, method_name)
         .await
         .map_err(
             |_err| near_jsonrpc::primitives::types::query::RpcQueryError::NoContractCode {
                 contract_account_id: account_id.clone(),
-                block_height: block.block_height,
-                block_hash: block.block_hash,
+                block_height: block.header.height,
+                block_hash: block.header.hash,
             },
         )?
         .data)
@@ -358,7 +357,7 @@ async fn database_view_code(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 async fn function_call(
     data: &Data<ServerContext>,
-    block: CacheBlock,
+    block: &near_primitives::views::BlockView,
     account_id: &near_primitives::types::AccountId,
     method_name: &str,
     args: &near_primitives::types::FunctionArgs,
@@ -370,7 +369,7 @@ async fn function_call(
     tracing::debug!(
         "`function_call` call. AccountID {}, block {}, method_name {}, args {:?}, optimistic {}",
         account_id,
-        block.block_height,
+        block.header.height,
         method_name,
         args,
         is_optimistic,
@@ -408,15 +407,15 @@ async fn function_call(
                 logs: call_results.logs,
             },
         ),
-        block_height: block.block_height,
-        block_hash: block.block_hash,
+        block_height: block.header.height,
+        block_hash: block.header.hash,
     })
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 async fn view_state(
     data: &Data<ServerContext>,
-    block: CacheBlock,
+    block: &near_primitives::views::BlockView,
     account_id: &near_primitives::types::AccountId,
     prefix: &[u8],
     is_optimistic: bool,
@@ -427,20 +426,20 @@ async fn view_state(
     tracing::debug!(
         "`view_state` call. AccountID {}, block {}, prefix {:?}, optimistic {}",
         account_id,
-        block.block_height,
+        block.header.height,
         prefix,
         is_optimistic,
     );
 
     let account = data
         .db_manager
-        .get_account(account_id, block.block_height, "query_view_state")
+        .get_account(account_id, block.header.height, "query_view_state")
         .await
         .map_err(
             |_err| near_jsonrpc::primitives::types::query::RpcQueryError::UnknownAccount {
                 requested_account_id: account_id.clone(),
-                block_height: block.block_height,
-                block_hash: block.block_hash,
+                block_height: block.header.height,
+                block_hash: block.header.hash,
             },
         )?;
 
@@ -449,7 +448,7 @@ async fn view_state(
     // more details: nearcore/runtime/runtime/src/state_viewer/mod.rs:150
     let code_len = data
         .db_manager
-        .get_contract_code(account_id, block.block_height, "query_view_state")
+        .get_contract_code(account_id, block.header.height, "query_view_state")
         .await
         .map(|code| code.data.len() as u64)
         .unwrap_or_default();
@@ -459,8 +458,8 @@ async fn view_state(
         return Err(
             near_jsonrpc::primitives::types::query::RpcQueryError::TooLargeContractState {
                 contract_account_id: account_id.clone(),
-                block_height: block.block_height,
-                block_hash: block.block_hash,
+                block_height: block.header.height,
+                block_hash: block.header.hash,
             },
         );
     }
@@ -478,15 +477,15 @@ async fn view_state(
                 proof: vec![], // TODO: this is hardcoded empty value since we don't support proofs yet
             },
         ),
-        block_height: block.block_height,
-        block_hash: block.block_hash,
+        block_height: block.header.height,
+        block_hash: block.header.hash,
     })
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 async fn optimistic_view_state(
     data: &Data<ServerContext>,
-    block: CacheBlock,
+    block: &near_primitives::views::BlockView,
     account_id: &near_primitives::types::AccountId,
     prefix: &[u8],
 ) -> Result<
@@ -500,7 +499,7 @@ async fn optimistic_view_state(
     let state_from_db = get_state_from_db(
         &data.db_manager,
         account_id,
-        block.block_height,
+        block.header.height,
         prefix,
         "query_view_state",
     )
@@ -538,7 +537,7 @@ async fn optimistic_view_state(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 async fn database_view_state(
     data: &Data<ServerContext>,
-    block: CacheBlock,
+    block: &near_primitives::views::BlockView,
     account_id: &near_primitives::types::AccountId,
     prefix: &[u8],
 ) -> Result<
@@ -548,7 +547,7 @@ async fn database_view_state(
     let state_from_db = get_state_from_db(
         &data.db_manager,
         account_id,
-        block.block_height,
+        block.header.height,
         prefix,
         "query_view_state",
     )
@@ -567,7 +566,7 @@ async fn database_view_state(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 async fn view_access_key(
     data: &Data<ServerContext>,
-    block: CacheBlock,
+    block: &near_primitives::views::BlockView,
     account_id: &near_primitives::types::AccountId,
     public_key: &near_crypto::PublicKey,
     is_optimistic: bool,
@@ -578,7 +577,7 @@ async fn view_access_key(
     tracing::debug!(
         "`view_access_key` call. AccountID {}, block {}, key_data {:?}, optimistic {}",
         account_id,
-        block.block_height,
+        block.header.height,
         public_key.to_string(),
         is_optimistic,
     );
@@ -589,15 +588,15 @@ async fn view_access_key(
     };
     Ok(near_jsonrpc::primitives::types::query::RpcQueryResponse {
         kind: near_jsonrpc::primitives::types::query::QueryResponseKind::AccessKey(access_key_view),
-        block_height: block.block_height,
-        block_hash: block.block_hash,
+        block_height: block.header.height,
+        block_hash: block.header.hash,
     })
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 async fn optimistic_view_access_key(
     data: &Data<ServerContext>,
-    block: CacheBlock,
+    block: &near_primitives::views::BlockView,
     account_id: &near_primitives::types::AccountId,
     public_key: &near_crypto::PublicKey,
 ) -> Result<
@@ -615,8 +614,8 @@ async fn optimistic_view_access_key(
             Err(
                 near_jsonrpc::primitives::types::query::RpcQueryError::UnknownAccessKey {
                     public_key: public_key.clone(),
-                    block_height: block.block_height,
-                    block_hash: block.block_hash,
+                    block_height: block.header.height,
+                    block_hash: block.header.hash,
                 },
             )
         }
@@ -628,7 +627,7 @@ async fn optimistic_view_access_key(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 async fn database_view_access_key(
     data: &Data<ServerContext>,
-    block: CacheBlock,
+    block: &near_primitives::views::BlockView,
     account_id: &near_primitives::types::AccountId,
     public_key: &near_crypto::PublicKey,
 ) -> Result<
@@ -639,7 +638,7 @@ async fn database_view_access_key(
         .db_manager
         .get_access_key(
             account_id,
-            block.block_height,
+            block.header.height,
             public_key.clone(),
             "query_view_access_key",
         )
@@ -647,8 +646,8 @@ async fn database_view_access_key(
         .map_err(
             |_err| near_jsonrpc::primitives::types::query::RpcQueryError::UnknownAccessKey {
                 public_key: public_key.clone(),
-                block_height: block.block_height,
-                block_hash: block.block_hash,
+                block_height: block.header.height,
+                block_hash: block.header.hash,
             },
         )?
         .data;
@@ -658,7 +657,7 @@ async fn database_view_access_key(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 async fn view_access_keys_list(
     data: &Data<ServerContext>,
-    block: CacheBlock,
+    block: &near_primitives::views::BlockView,
     account_id: &near_primitives::types::AccountId,
 ) -> Result<
     near_jsonrpc::primitives::types::query::RpcQueryResponse,
@@ -667,12 +666,16 @@ async fn view_access_keys_list(
     tracing::debug!(
         "`view_access_key` call. AccountID {}, block {}",
         account_id,
-        block.block_height,
+        block.header.height,
     );
 
     let access_keys = data
         .db_manager
-        .get_account_access_keys(account_id, block.block_height, "query_view_access_key_list")
+        .get_account_access_keys(
+            account_id,
+            block.header.height,
+            "query_view_access_key_list",
+        )
         .await
         .map_err(
             |err| near_jsonrpc::primitives::types::query::RpcQueryError::InternalError {
@@ -684,7 +687,7 @@ async fn view_access_keys_list(
         kind: near_jsonrpc::primitives::types::query::QueryResponseKind::AccessKeyList(
             near_primitives::views::AccessKeyList { keys: access_keys },
         ),
-        block_height: block.block_height,
-        block_hash: block.block_hash,
+        block_height: block.header.height,
+        block_hash: block.header.hash,
     })
 }

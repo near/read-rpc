@@ -3,8 +3,7 @@ use std::string::ToString;
 use futures::executor::block_on;
 use near_primitives::epoch_manager::{AllEpochConfig, EpochConfig};
 
-use crate::modules::blocks::{BlocksInfoByFinality, CacheBlock};
-use crate::utils;
+use crate::modules::blocks::BlocksInfoByFinality;
 
 static NEARD_VERSION: &str = env!("CARGO_PKG_VERSION");
 static NEARD_BUILD: &str = env!("BUILD_VERSION");
@@ -15,7 +14,7 @@ static RUSTC_VERSION: &str = env!("RUSTC_VERSION");
 #[derive(Debug, Clone)]
 pub struct GenesisInfo {
     pub genesis_config: near_chain_configs::GenesisConfig,
-    pub genesis_block_cache: CacheBlock,
+    pub genesis_block: near_primitives::views::BlockView,
 }
 
 impl GenesisInfo {
@@ -37,7 +36,7 @@ impl GenesisInfo {
 
         Self {
             genesis_config,
-            genesis_block_cache: CacheBlock::from(&genesis_block.block),
+            genesis_block: genesis_block.block,
         }
     }
 }
@@ -56,8 +55,12 @@ pub struct ServerContext {
     pub genesis_info: GenesisInfo,
     /// Near rpc client
     pub near_rpc_client: crate::utils::JsonRpcClient,
-    /// Blocks cache
-    pub blocks_cache: std::sync::Arc<crate::cache::RwLockLruMemoryCache<u64, CacheBlock>>,
+    /// Blocks cache. Store block_view by block_height
+    pub blocks_cache:
+        std::sync::Arc<crate::cache::RwLockLruMemoryCache<u64, near_primitives::views::BlockView>>,
+    /// Chunks cache. Store vector of block chunks by block_height
+    pub chunks_cache:
+        std::sync::Arc<crate::cache::RwLockLruMemoryCache<u64, crate::modules::blocks::ChunksInfo>>,
     /// Final block info include final_block_cache and current_validators_info
     pub blocks_info_by_finality: std::sync::Arc<BlocksInfoByFinality>,
     /// Cache to store compiled contract codes
@@ -83,18 +86,42 @@ pub struct ServerContext {
 
 impl ServerContext {
     pub async fn init(rpc_server_config: configuration::RpcServerConfig) -> anyhow::Result<Self> {
+        let total_contract_code_cache_size_in_bytes =
+            crate::utils::gigabytes_to_bytes(rpc_server_config.general.contract_code_cache_size)
+                .await;
+
+        // For compiled contract code cache we use 3/4 of total_contract_code_cache_size_in_bytes
+        // because the compiled contract code is bigger in 3 times than the contract code from the database
+        let compiled_contract_code_cache_size_in_bytes =
+            total_contract_code_cache_size_in_bytes / 4;
+        let compiled_contract_code_cache = std::sync::Arc::new(CompiledCodeCache::new(
+            compiled_contract_code_cache_size_in_bytes,
+        ));
+
+        // For contract code cache we use 1/4 of total_contract_code_cache_size_in_bytes
         let contract_code_cache_size_in_bytes =
-            utils::gigabytes_to_bytes(rpc_server_config.general.contract_code_cache_size).await;
+            total_contract_code_cache_size_in_bytes - compiled_contract_code_cache_size_in_bytes;
         let contract_code_cache = std::sync::Arc::new(crate::cache::RwLockLruMemoryCache::new(
             contract_code_cache_size_in_bytes,
         ));
 
-        let block_cache_size_in_bytes =
-            utils::gigabytes_to_bytes(rpc_server_config.general.block_cache_size).await;
+        let total_block_cache_size_in_bytes =
+            crate::utils::gigabytes_to_bytes(rpc_server_config.general.block_cache_size).await;
+
+        // For block cache we use 1/3 of total_block_cache_size_in_bytes
+        let block_cache_size_in_bytes = total_block_cache_size_in_bytes / 3;
         let blocks_cache = std::sync::Arc::new(crate::cache::RwLockLruMemoryCache::new(
             block_cache_size_in_bytes,
         ));
-        let near_rpc_client = utils::JsonRpcClient::new(
+
+        // For chunk cache we use 2/3 of total_block_cache_size_in_bytes
+        // because the chunks for block is bigger in 2 times than the block
+        let chunk_cache_size_in_bytes = total_block_cache_size_in_bytes - block_cache_size_in_bytes;
+        let chunks_cache = std::sync::Arc::new(crate::cache::RwLockLruMemoryCache::new(
+            chunk_cache_size_in_bytes,
+        ));
+
+        let near_rpc_client = crate::utils::JsonRpcClient::new(
             rpc_server_config.general.near_rpc_url.clone(),
             rpc_server_config.general.near_archival_rpc_url.clone(),
         );
@@ -137,8 +164,9 @@ impl ServerContext {
         );
         let epoch_config = all_epoch_config.for_protocol_version(
             blocks_info_by_finality
-                .final_cache_block()
+                .final_block_view()
                 .await
+                .header
                 .latest_protocol_version,
         );
 
@@ -147,9 +175,6 @@ impl ServerContext {
             epoch_config.shard_layout,
         )
         .await?;
-
-        let compiled_contract_code_cache =
-            std::sync::Arc::new(CompiledCodeCache::new(contract_code_cache_size_in_bytes));
 
         crate::metrics::CARGO_PKG_VERSION
             .with_label_values(&[NEARD_VERSION])
@@ -163,6 +188,7 @@ impl ServerContext {
             genesis_info,
             near_rpc_client,
             blocks_cache,
+            chunks_cache,
             blocks_info_by_finality,
             compiled_contract_code_cache,
             contract_code_cache,
@@ -178,6 +204,30 @@ impl ServerContext {
                 rustc_version: RUSTC_VERSION.to_string(),
             },
         })
+    }
+}
+
+impl crate::cache::ResidentSize for near_vm_runner::CompiledContractInfo {
+    fn resident_size(&self) -> usize {
+        borsh::to_vec(self).unwrap_or_default().len()
+    }
+}
+
+impl crate::cache::ResidentSize for Vec<u8> {
+    fn resident_size(&self) -> usize {
+        self.len()
+    }
+}
+
+impl crate::cache::ResidentSize for crate::modules::blocks::ChunksInfo {
+    fn resident_size(&self) -> usize {
+        serde_json::to_vec(self).unwrap_or_default().len()
+    }
+}
+
+impl crate::cache::ResidentSize for near_primitives::views::BlockView {
+    fn resident_size(&self) -> usize {
+        serde_json::to_vec(self).unwrap_or_default().len()
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::modules::blocks::{BlockInfo, BlocksInfoByFinality, CacheBlock};
+use crate::modules::blocks::{BlockInfo, BlocksInfoByFinality, ChunkInfo};
 #[cfg(feature = "shadow-data-consistency")]
 use assert_json_diff::{assert_json_matches_no_panic, CompareMode, Config, NumericMode};
 
@@ -124,7 +124,12 @@ pub async fn get_current_protocol_version(
 
 async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
-    blocks_cache: std::sync::Arc<crate::cache::RwLockLruMemoryCache<u64, CacheBlock>>,
+    blocks_cache: std::sync::Arc<
+        crate::cache::RwLockLruMemoryCache<u64, near_primitives::views::BlockView>,
+    >,
+    chunks_cache: std::sync::Arc<
+        crate::cache::RwLockLruMemoryCache<u64, crate::modules::blocks::ChunksInfo>,
+    >,
     blocks_info_by_finality: std::sync::Arc<BlocksInfoByFinality>,
     near_rpc_client: &JsonRpcClient,
 ) -> anyhow::Result<()> {
@@ -133,11 +138,17 @@ async fn handle_streamer_message(
             .with_label_values(&["final"])
             .get()
     {
-        let block = BlockInfo::new_from_streamer_message(streamer_message).await;
-        let block_cache = block.block_cache;
+        let block = BlockInfo::new_from_streamer_message(&streamer_message).await;
+        let block_view = block.block_view.clone();
 
-        if blocks_info_by_finality.final_cache_block().await.epoch_id != block_cache.epoch_id {
-            tracing::info!("New epoch started: {:?}", block_cache.epoch_id);
+        if blocks_info_by_finality
+            .final_block_view()
+            .await
+            .header
+            .epoch_id
+            != block_view.header.epoch_id
+        {
+            tracing::info!("New epoch started: {:?}", block_view.header.epoch_id);
             blocks_info_by_finality
                 .update_current_epoch_info(near_rpc_client)
                 .await?;
@@ -145,27 +156,39 @@ async fn handle_streamer_message(
 
         blocks_info_by_finality.update_final_block(block).await;
         blocks_cache
-            .put(block_cache.block_height, block_cache)
+            .put(block_view.header.height, block_view.clone())
+            .await;
+        chunks_cache
+            .put(
+                block_view.header.height,
+                ChunkInfo::from_indexer_shards(streamer_message.shards),
+            )
             .await;
         crate::metrics::LATEST_BLOCK_HEIGHT_BY_FINALITIY
             .with_label_values(&["final"])
-            .set(i64::try_from(block_cache.block_height)?);
+            .set(i64::try_from(block_view.header.height)?);
     }
     Ok(())
 }
 
 // Task to get and store final block in the cache
 async fn task_update_final_block_regularly(
-    blocks_cache: std::sync::Arc<crate::cache::RwLockLruMemoryCache<u64, CacheBlock>>,
+    blocks_cache: std::sync::Arc<
+        crate::cache::RwLockLruMemoryCache<u64, near_primitives::views::BlockView>,
+    >,
+    chunks_cache: std::sync::Arc<
+        crate::cache::RwLockLruMemoryCache<u64, crate::modules::blocks::ChunksInfo>,
+    >,
     blocks_info_by_finality: std::sync::Arc<BlocksInfoByFinality>,
     fastnear_client: near_lake_framework::FastNearClient,
     near_rpc_client: JsonRpcClient,
 ) {
     tracing::info!("Task to get and store final block in the cache started");
     let mut final_block_height = blocks_info_by_finality
-        .final_cache_block()
+        .final_block_view()
         .await
-        .block_height;
+        .header
+        .height;
     loop {
         final_block_height += 1;
         if let Some(streamer_message) =
@@ -178,6 +201,7 @@ async fn task_update_final_block_regularly(
             if let Err(err) = handle_streamer_message(
                 streamer_message,
                 std::sync::Arc::clone(&blocks_cache),
+                std::sync::Arc::clone(&chunks_cache),
                 std::sync::Arc::clone(&blocks_info_by_finality),
                 &near_rpc_client,
             )
@@ -196,9 +220,10 @@ async fn task_update_optimistic_block_regularly(
 ) {
     tracing::info!("Task to get and store optimistic block in the cache started");
     let mut optimistic_block_height = blocks_info_by_finality
-        .optimistic_cache_block()
+        .optimistic_block_view()
         .await
-        .block_height;
+        .header
+        .height;
     loop {
         optimistic_block_height += 1;
         if let Some(streamer_message) =
@@ -213,15 +238,16 @@ async fn task_update_optimistic_block_regularly(
                     .with_label_values(&["optimistic"])
                     .get()
             {
-                let optimistic_block = BlockInfo::new_from_streamer_message(streamer_message).await;
-                let optimistic_block_cache = optimistic_block.block_cache;
+                let optimistic_block =
+                    BlockInfo::new_from_streamer_message(&streamer_message).await;
+                let optimistic_block_view = optimistic_block.block_view.clone();
                 blocks_info_by_finality
                     .update_optimistic_block(optimistic_block)
                     .await;
                 crate::metrics::LATEST_BLOCK_HEIGHT_BY_FINALITIY
                     .with_label_values(&["optimistic"])
                     .set(
-                        i64::try_from(optimistic_block_cache.block_height)
+                        i64::try_from(optimistic_block_view.header.height)
                             .expect("Invalid optimistic block height"),
                     );
             }
@@ -277,7 +303,12 @@ async fn task_optimistic_block_status() {
 
 pub async fn task_regularly_update_blocks_by_finality(
     blocks_info_by_finality: std::sync::Arc<BlocksInfoByFinality>,
-    blocks_cache: std::sync::Arc<crate::cache::RwLockLruMemoryCache<u64, CacheBlock>>,
+    blocks_cache: std::sync::Arc<
+        crate::cache::RwLockLruMemoryCache<u64, near_primitives::views::BlockView>,
+    >,
+    chunks_cache: std::sync::Arc<
+        crate::cache::RwLockLruMemoryCache<u64, crate::modules::blocks::ChunksInfo>,
+    >,
     fastnear_client: near_lake_framework::FastNearClient,
     near_rpc_client: JsonRpcClient,
 ) {
@@ -288,6 +319,7 @@ pub async fn task_regularly_update_blocks_by_finality(
     tokio::spawn(async move {
         task_update_final_block_regularly(
             blocks_cache,
+            chunks_cache,
             blocks_info_by_finality_clone,
             fastnear_client_clone,
             near_rpc_client,

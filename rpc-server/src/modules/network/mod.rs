@@ -26,8 +26,8 @@ pub(crate) async fn get_protocol_version(
                 method_name,
             )
             .await?;
-            if block.block_height < epoch_start_height {
-                Ok(block.latest_protocol_version)
+            if block.header.height < epoch_start_height {
+                Ok(block.header.latest_protocol_version)
             } else {
                 Ok(data
                     .blocks_info_by_finality
