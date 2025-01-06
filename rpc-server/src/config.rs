@@ -90,19 +90,18 @@ impl ServerContext {
             crate::utils::gigabytes_to_bytes(rpc_server_config.general.contract_code_cache_size)
                 .await;
 
+        // For contract code cache we use 1/4 of total_contract_code_cache_size_in_bytes
+        let contract_code_cache_size_in_bytes = total_contract_code_cache_size_in_bytes / 4;
+        let contract_code_cache = std::sync::Arc::new(crate::cache::RwLockLruMemoryCache::new(
+            contract_code_cache_size_in_bytes,
+        ));
+
         // For compiled contract code cache we use 3/4 of total_contract_code_cache_size_in_bytes
         // because the compiled contract code is bigger in 3 times than the contract code from the database
         let compiled_contract_code_cache_size_in_bytes =
-            total_contract_code_cache_size_in_bytes / 4;
+            total_contract_code_cache_size_in_bytes - contract_code_cache_size_in_bytes;
         let compiled_contract_code_cache = std::sync::Arc::new(CompiledCodeCache::new(
             compiled_contract_code_cache_size_in_bytes,
-        ));
-
-        // For contract code cache we use 1/4 of total_contract_code_cache_size_in_bytes
-        let contract_code_cache_size_in_bytes =
-            total_contract_code_cache_size_in_bytes - compiled_contract_code_cache_size_in_bytes;
-        let contract_code_cache = std::sync::Arc::new(crate::cache::RwLockLruMemoryCache::new(
-            contract_code_cache_size_in_bytes,
         ));
 
         let total_block_cache_size_in_bytes =
