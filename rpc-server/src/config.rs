@@ -55,10 +55,10 @@ pub struct ServerContext {
     pub genesis_info: GenesisInfo,
     /// Near rpc client
     pub near_rpc_client: crate::utils::JsonRpcClient,
-    /// Blocks cache
+    /// Blocks cache. Store block_view by block_height
     pub blocks_cache:
         std::sync::Arc<crate::cache::RwLockLruMemoryCache<u64, near_primitives::views::BlockView>>,
-    /// Chunks cache
+    /// Chunks cache. Store vector of block chunks by block_height
     pub chunks_cache:
         std::sync::Arc<crate::cache::RwLockLruMemoryCache<u64, crate::modules::blocks::ChunksInfo>>,
     /// Final block info include final_block_cache and current_validators_info
@@ -86,30 +86,41 @@ pub struct ServerContext {
 
 impl ServerContext {
     pub async fn init(rpc_server_config: configuration::RpcServerConfig) -> anyhow::Result<Self> {
-        // let contract_code_cache_size_in_bytes =
-        //     crate::utils::gigabytes_to_bytes(rpc_server_config.general.contract_code_cache_size)
-        //         .await;
+        let total_contract_code_cache_size_in_bytes =
+            crate::utils::gigabytes_to_bytes(rpc_server_config.general.contract_code_cache_size)
+                .await;
 
-        // For contract code cache we use 0.5GB. make it configurable. temporary hardcoded
-        let contract_code_cache_size_in_bytes = crate::utils::gigabytes_to_bytes(0.5).await;
+        // For compiled contract code cache we use 3/4 of total_contract_code_cache_size_in_bytes
+        // because the compiled contract code is bigger in 3 times than the contract code from the database
+        let compiled_contract_code_cache_size_in_bytes =
+            total_contract_code_cache_size_in_bytes / 4;
+        let compiled_contract_code_cache = std::sync::Arc::new(CompiledCodeCache::new(
+            compiled_contract_code_cache_size_in_bytes,
+        ));
+
+        // For contract code cache we use 1/4 of total_contract_code_cache_size_in_bytes
+        let contract_code_cache_size_in_bytes =
+            total_contract_code_cache_size_in_bytes - compiled_contract_code_cache_size_in_bytes;
         let contract_code_cache = std::sync::Arc::new(crate::cache::RwLockLruMemoryCache::new(
             contract_code_cache_size_in_bytes,
         ));
 
-        // let block_cache_size_in_bytes =
-        //     crate::utils::gigabytes_to_bytes(rpc_server_config.general.block_cache_size).await;
+        let total_block_cache_size_in_bytes =
+            crate::utils::gigabytes_to_bytes(rpc_server_config.general.block_cache_size).await;
 
-        // For chunk block we use 1GB. make it configurable. temporary hardcoded
-        let block_cache_size_in_bytes = crate::utils::gigabytes_to_bytes(1.0).await;
+        // For block cache we use 1/3 of total_block_cache_size_in_bytes
+        let block_cache_size_in_bytes = total_block_cache_size_in_bytes / 3;
         let blocks_cache = std::sync::Arc::new(crate::cache::RwLockLruMemoryCache::new(
             block_cache_size_in_bytes,
         ));
 
-        // For chunk cache we use 2GB. make it configurable. temporary hardcoded
-        let chunk_cache_size_in_bytes = crate::utils::gigabytes_to_bytes(2.0).await;
+        // For chunk cache we use 2/3 of total_block_cache_size_in_bytes
+        // because the chunks for block is bigger in 2 times than the block
+        let chunk_cache_size_in_bytes = total_block_cache_size_in_bytes - block_cache_size_in_bytes;
         let chunks_cache = std::sync::Arc::new(crate::cache::RwLockLruMemoryCache::new(
             chunk_cache_size_in_bytes,
         ));
+
         let near_rpc_client = crate::utils::JsonRpcClient::new(
             rpc_server_config.general.near_rpc_url.clone(),
             rpc_server_config.general.near_archival_rpc_url.clone(),
@@ -164,14 +175,6 @@ impl ServerContext {
             epoch_config.shard_layout,
         )
         .await?;
-
-        // For compiled contract code cache we use 1.5GB. make it configurable. temporary hardcoded
-        let compiled_contract_code_cache_size_in_bytes =
-            crate::utils::gigabytes_to_bytes(1.5).await;
-
-        let compiled_contract_code_cache = std::sync::Arc::new(CompiledCodeCache::new(
-            compiled_contract_code_cache_size_in_bytes,
-        ));
 
         crate::metrics::CARGO_PKG_VERSION
             .with_label_values(&[NEARD_VERSION])
