@@ -11,4 +11,4 @@ license.workspace = true
 
 [dependencies]
 anyhow = "1.0.70"
-aws-sdk-s3 = "1.68.0"
+aws-sdk-s3 = { version = "1.68.0", features = ["behavior-version-latest"]  }

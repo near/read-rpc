@@ -9,7 +9,7 @@ license.workspace = true
 
 [dependencies]
 anyhow = "1.0.70"
-aws-sdk-s3 = "1.68.0"
+aws-sdk-s3 = { version = "1.68.0", features = ["behavior-version-latest"]  }
 dotenv = "0.15.0"
 lazy_static = "1.4.0"
 regex = "1.10.2"

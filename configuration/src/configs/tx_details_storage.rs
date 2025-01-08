@@ -22,7 +22,7 @@ impl TxDetailsStorageConfig {
             self.secret_key.clone(),
             None,
             None,
-            "tx-storage-provider", // It is
+            "Static",
         );
 
         // Build AWS SDK config
