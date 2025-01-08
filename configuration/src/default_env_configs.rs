@@ -132,6 +132,18 @@ tracked_changes = "${TRACKED_CHANGES}"
 ## Storage Bucket Name
 bucket_name = "${TX_BUCKET_NAME}"
 
+## Transaction storage access key
+access_key = "${TX_ACCESS_KEY}"
+
+## Transaction storage secret key
+secret_key = "${TX_SECRET_KEY}"
+
+## Transaction storage region
+region = "${TX_REGION}"
+
+## Transaction storage endpoint (optional) for custom storage solutions
+endpoint = "${TX_ENDPOINT}"
+
 ## Database configuration
 [database]
 

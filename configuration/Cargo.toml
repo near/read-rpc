@@ -9,8 +9,8 @@ license.workspace = true
 
 [dependencies]
 anyhow = "1.0.70"
+aws-sdk-s3 = "1.68.0"
 dotenv = "0.15.0"
-google-cloud-storage = "0.23.0"
 lazy_static = "1.4.0"
 regex = "1.10.2"
 serde = "1.0.145"

@@ -80,7 +80,7 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!(target: INDEXER, "Instantiating the tx_details storage client...");
     let tx_details_storage = std::sync::Arc::new(TxDetailsStorage::new(
-        indexer_config.tx_details_storage.storage_client().await,
+        indexer_config.tx_details_storage.s3_client().await,
         indexer_config.tx_details_storage.bucket_name.clone(),
     ));
 

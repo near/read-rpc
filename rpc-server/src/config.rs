@@ -140,7 +140,7 @@ impl ServerContext {
         );
 
         let tx_details_storage = tx_details_storage::TxDetailsStorage::new(
-            rpc_server_config.tx_details_storage.storage_client().await,
+            rpc_server_config.tx_details_storage.s3_client().await,
             rpc_server_config.tx_details_storage.bucket_name.clone(),
         );
 
