@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### What's Changed
 * Migrate from lake data to fastnear data
 * Add metrics to calculate the number of blocks which fetched from the cache and fastnear
+* Add blocks chunks cache and optimize cache layer for read-rpc-server
+* Add S3 Client Implementation for Transaction Details with Support for Multiple Storage Providers
 
 ## [0.3.3](https://github.com/near/read-rpc/releases/tag/v0.3.3)
 

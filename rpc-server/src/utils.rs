@@ -262,7 +262,7 @@ async fn task_optimistic_block_status() {
         .with_label_values(&["optimistic"])
         .get();
     loop {
-        // check every second
+        // check every 2 seconds
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
         // get the current final block height
