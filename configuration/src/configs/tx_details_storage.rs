@@ -26,9 +26,13 @@ impl TxDetailsStorageConfig {
         );
 
         // Build AWS SDK config
-        let mut s3_conf = aws_sdk_s3::Config::builder()
-            .region(region)
-            .credentials_provider(credentials);
+        let mut s3_conf =
+            aws_sdk_s3::Config::builder()
+                .stalled_stream_protection(
+                    aws_sdk_s3::config::StalledStreamProtectionConfig::disabled(),
+                )
+                .region(region)
+                .credentials_provider(credentials);
 
         // Override S3 endpoint in case you want to use custom solution
         if let Some(s3_endpoint) = self.endpoint.clone() {
