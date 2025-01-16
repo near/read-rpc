@@ -4,39 +4,77 @@ use crate::configs::{deserialize_optional_data_or_env, required_value_or_panic};
 
 #[derive(Debug, Clone)]
 pub struct TxDetailsStorageConfig {
-    pub bucket_name: String,
+    pub scylla_url: String,
+    pub scylla_user: Option<String>,
+    pub scylla_password: Option<String>,
+    pub scylla_preferred_dc: Option<String>,
+    pub scylla_keepalive_interval: u64,
 }
 
 impl TxDetailsStorageConfig {
-    pub async fn gcs_config(&self) -> google_cloud_storage::client::ClientConfig {
-        let default_config = google_cloud_storage::client::ClientConfig::default();
-        if std::env::var("STORAGE_EMULATOR_HOST").is_ok() {
-            // if we are running local, and we are using gcs emulator
-            // we need to use anonymous access with the emulator host
-            let mut config = default_config.anonymous();
-            config.storage_endpoint = std::env::var("STORAGE_EMULATOR_HOST").unwrap();
-            config
-        } else {
-            default_config.with_auth().await.unwrap()
-        }
-    }
+    pub async fn scylla_client(&self) -> scylla::Session {
+        let mut load_balancing_policy_builder =
+            scylla::transport::load_balancing::DefaultPolicy::builder();
 
-    pub async fn storage_client(&self) -> google_cloud_storage::client::Client {
-        let gcs_config = self.gcs_config().await;
-        google_cloud_storage::client::Client::new(gcs_config)
+        if let Some(scylla_preferred_dc) = self.scylla_preferred_dc.clone() {
+            load_balancing_policy_builder =
+                load_balancing_policy_builder.prefer_datacenter(scylla_preferred_dc);
+        }
+
+        let scylla_execution_profile_handle = scylla::transport::ExecutionProfile::builder()
+            .load_balancing_policy(load_balancing_policy_builder.build())
+            .build()
+            .into_handle();
+
+        let mut session: scylla::SessionBuilder = scylla::SessionBuilder::new()
+            .known_node(self.scylla_url.clone())
+            .keepalive_interval(std::time::Duration::from_secs(
+                self.scylla_keepalive_interval,
+            ))
+            .default_execution_profile_handle(scylla_execution_profile_handle);
+
+        if let Some(user) = self.scylla_user.clone() {
+            if let Some(password) = self.scylla_password.clone() {
+                session = session.user(user, password);
+            }
+        }
+        session
+            .build()
+            .await
+            .expect("Failed to create scylla session")
     }
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]
 pub struct CommonTxDetailStorageConfig {
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
-    pub bucket_name: Option<String>,
+    pub scylla_url: Option<String>,
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    pub scylla_user: Option<String>,
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    pub scylla_password: Option<String>,
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    pub scylla_preferred_dc: Option<String>,
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    pub scylla_keepalive_interval: Option<u64>,
+}
+
+impl CommonTxDetailStorageConfig {
+    pub fn default_scylla_keepalive_interval() -> u64 {
+        60
+    }
 }
 
 impl From<CommonTxDetailStorageConfig> for TxDetailsStorageConfig {
     fn from(common_config: CommonTxDetailStorageConfig) -> Self {
         Self {
-            bucket_name: required_value_or_panic("bucket_name", common_config.bucket_name),
+            scylla_url: required_value_or_panic("scylla_url", common_config.scylla_url),
+            scylla_user: common_config.scylla_user,
+            scylla_password: common_config.scylla_password,
+            scylla_preferred_dc: common_config.scylla_preferred_dc,
+            scylla_keepalive_interval: common_config
+                .scylla_keepalive_interval
+                .unwrap_or_else(CommonTxDetailStorageConfig::default_scylla_keepalive_interval),
         }
     }
 }
