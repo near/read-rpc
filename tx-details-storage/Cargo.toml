@@ -12,3 +12,4 @@ license.workspace = true
 [dependencies]
 anyhow = "1.0.70"
 google-cloud-storage = "0.23.0"
+scylla = "0.15.1"
