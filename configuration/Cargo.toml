@@ -22,7 +22,8 @@ opentelemetry-jaeger = { version = "0.18", features = [
     "collector_client",
     "isahc_collector_client",
 ], optional = true }
-scylla = "0.15.1"
+openssl = "0.10.68"
+scylla = { version = "0.15.1", features = ["ssl"] }
 toml = "0.8.4"
 tracing = "0.1.34"
 tracing-subscriber = { version = "0.3.15", features = [

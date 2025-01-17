@@ -40,8 +40,8 @@ impl TxDetailsStorage {
             .query_unpaged(
                 "CREATE KEYSPACE IF NOT EXISTS tx_details
                 WITH REPLICATION = {
-                    'class': 'SimpleStrategy',
-                    'replication_factor': 1
+                    'class': 'NetworkTopologyStrategy',
+                    'replication_factor': 3
                 }",
                 &[],
             )

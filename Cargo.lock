@@ -1607,6 +1607,7 @@ dependencies = [
  "dotenv",
  "lazy_static",
  "near-lake-framework",
+ "openssl",
  "opentelemetry 0.19.0",
  "opentelemetry-jaeger",
  "regex",
@@ -7399,6 +7400,7 @@ dependencies = [
  "itertools 0.13.0",
  "lazy_static",
  "lz4_flex",
+ "openssl",
  "rand 0.8.5",
  "rand_pcg",
  "scylla-cql",
@@ -7408,6 +7410,7 @@ dependencies = [
  "socket2",
  "thiserror 2.0.11",
  "tokio",
+ "tokio-openssl",
  "tracing",
  "uuid",
 ]

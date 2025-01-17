@@ -12,6 +12,20 @@ pub struct TxDetailsStorageConfig {
 }
 
 impl TxDetailsStorageConfig {
+    async fn create_ssl_context(&self) -> anyhow::Result<openssl::ssl::SslContext> {
+        // Initialize SslContextBuilder with TLS method
+        let ca_cert_path = std::env::var("SCYLLA_CA_CERT")?;
+        let client_cert_path = std::env::var("SCYLLA_CLIENT_CERT")?;
+        let client_key_path = std::env::var("SCYLLA_CLIENT_KEY")?;
+        
+        let mut builder = openssl::ssl::SslContextBuilder::new(openssl::ssl::SslMethod::tls())?;
+        builder.set_ca_file(ca_cert_path)?;
+        builder.set_certificate_file(client_cert_path, openssl::ssl::SslFiletype::PEM)?;
+        builder.set_private_key_file(client_key_path, openssl::ssl::SslFiletype::PEM)?;
+        builder.check_private_key()?;
+        Ok(builder.build())
+    }
+
     pub async fn scylla_client(&self) -> scylla::Session {
         let mut load_balancing_policy_builder =
             scylla::transport::load_balancing::DefaultPolicy::builder();
@@ -25,13 +39,19 @@ impl TxDetailsStorageConfig {
             .load_balancing_policy(load_balancing_policy_builder.build())
             .build()
             .into_handle();
+        let ssl_context = if let Ok(ssl_context) = self.create_ssl_context().await {
+            Some(ssl_context)
+        } else {
+            None
+        };
 
         let mut session: scylla::SessionBuilder = scylla::SessionBuilder::new()
             .known_node(self.scylla_url.clone())
             .keepalive_interval(std::time::Duration::from_secs(
                 self.scylla_keepalive_interval,
             ))
-            .default_execution_profile_handle(scylla_execution_profile_handle);
+            .default_execution_profile_handle(scylla_execution_profile_handle)
+            .ssl_context(ssl_context);
 
         if let Some(user) = self.scylla_user.clone() {
             if let Some(password) = self.scylla_password.clone() {
