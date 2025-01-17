@@ -17,7 +17,7 @@ impl TxDetailsStorageConfig {
         let ca_cert_path = std::env::var("SCYLLA_CA_CERT")?;
         let client_cert_path = std::env::var("SCYLLA_CLIENT_CERT")?;
         let client_key_path = std::env::var("SCYLLA_CLIENT_KEY")?;
-        
+
         let mut builder = openssl::ssl::SslContextBuilder::new(openssl::ssl::SslMethod::tls())?;
         builder.set_ca_file(ca_cert_path)?;
         builder.set_certificate_file(client_cert_path, openssl::ssl::SslFiletype::PEM)?;
