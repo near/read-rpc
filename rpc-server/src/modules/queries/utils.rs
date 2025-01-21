@@ -33,7 +33,7 @@ pub async fn get_state_from_db(
     block_height: near_primitives::types::BlockHeight,
     prefix: &[u8],
     method_name: &str,
-) -> HashMap<readnode_primitives::StateKey, readnode_primitives::StateValue> {
+) -> anyhow::Result<HashMap<readnode_primitives::StateKey, readnode_primitives::StateValue>> {
     tracing::debug!(
         "`get_state_from_db` call. AccountId {}, block {}, prefix {:?}",
         account_id,
@@ -43,5 +43,4 @@ pub async fn get_state_from_db(
     db_manager
         .get_account_state(account_id, block_height, prefix, method_name)
         .await
-        .unwrap_or_default()
 }

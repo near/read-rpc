@@ -58,6 +58,7 @@ impl CodeStorage {
                 "query_call_function",
             )
             .await
+            .unwrap_or_default()
         } else {
             HashMap::new()
         };

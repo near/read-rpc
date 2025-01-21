@@ -74,7 +74,14 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         } else {
             crate::postgres::PageState::new(1000)
         };
-        let mut stream = sqlx::query_as::<_, (String, Vec<u8>)>(
+        // Start a transaction
+        let mut tx = shard_id_pool.pool.begin().await?;
+        // Set a timeout only for this transaction
+        sqlx::query("SET LOCAL statement_timeout = 5000") // 5 seconds timeout
+            .execute(&mut *tx)
+            .await?;
+
+        let result = sqlx::query_as::<_, (String, Vec<u8>)>(
             "
                 WITH latest_blocks AS (
                     SELECT 
@@ -113,11 +120,15 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         .bind(bigdecimal::BigDecimal::from(block_height))
         .bind(page_state.last_data_key.clone())
         .bind(page_state.page_size)
-        .fetch(shard_id_pool.pool);
+        .fetch_all(&mut *tx)
+        .await?;
+
+        // Rollback or commit the transaction
+        tx.rollback().await?;
+
         let mut items = std::collections::HashMap::new();
         let mut last_data_key = String::new();
-        while let Some(row) = stream.next().await {
-            let (key, value): (String, Vec<u8>) = row?;
+        for (key, value) in result {
             last_data_key.clone_from(&key);
             items.insert(hex::decode(key)?, value);
         }
@@ -151,7 +162,15 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
             ])
             .inc();
         let mut items = std::collections::HashMap::new();
-        let mut stream = sqlx::query_as::<_, (String, Vec<u8>)>(
+
+        // Start a transaction
+        let mut tx = shard_id_pool.pool.begin().await?;
+        // Set a timeout only for this transaction
+        sqlx::query("SET LOCAL statement_timeout = 5000") // 5 seconds timeout
+            .execute(&mut *tx)
+            .await?;
+
+        let result = sqlx::query_as::<_, (String, Vec<u8>)>(
             "
                 WITH latest_blocks AS (
                     SELECT 
@@ -183,9 +202,13 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         .bind(account_id.to_string())
         .bind(format!("{}%", hex::encode(prefix)))
         .bind(bigdecimal::BigDecimal::from(block_height))
-        .fetch(shard_id_pool.pool);
-        while let Some(row) = stream.next().await {
-            let (key, value): (String, Vec<u8>) = row?;
+        .fetch_all(&mut *tx)
+        .await?;
+
+        // Rollback or commit the transaction
+        tx.rollback().await?;
+
+        for (key, value) in result {
             items.insert(hex::decode(key)?, value);
         }
         Ok(items)
@@ -208,7 +231,14 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
             ])
             .inc();
         let mut items = std::collections::HashMap::new();
-        let mut stream = sqlx::query_as::<_, (String, Vec<u8>)>(
+        // Start a transaction
+        let mut tx = shard_id_pool.pool.begin().await?;
+        // Set a timeout only for this transaction
+        sqlx::query("SET LOCAL statement_timeout = 5000") // 5 seconds timeout
+            .execute(&mut *tx)
+            .await?;
+
+        let result = sqlx::query_as::<_, (String, Vec<u8>)>(
             "
                 WITH latest_blocks AS (
                     SELECT 
@@ -238,9 +268,13 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         )
         .bind(account_id.to_string())
         .bind(bigdecimal::BigDecimal::from(block_height))
-        .fetch(shard_id_pool.pool);
-        while let Some(row) = stream.next().await {
-            let (key, value): (String, Vec<u8>) = row?;
+        .fetch_all(&mut *tx)
+        .await?;
+
+        // Rollback or commit the transaction
+        tx.rollback().await?;
+
+        for (key, value) in result {
             items.insert(hex::decode(key)?, value);
         }
         Ok(items)
@@ -413,7 +447,15 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
             ])
             .inc();
         let mut access_keys = vec![];
-        let mut stream = sqlx::query_as::<_, (String, Vec<u8>, bigdecimal::BigDecimal)>(
+
+        // Start a transaction
+        let mut tx = shard_id_pool.pool.begin().await?;
+        // Set a timeout only for this transaction
+        sqlx::query("SET LOCAL statement_timeout = 5000") // 5 seconds timeout
+            .execute(&mut *tx)
+            .await?;
+
+        let result = sqlx::query_as::<_, (String, Vec<u8>, bigdecimal::BigDecimal)>(
             "
                 WITH latest_blocks AS (
                     SELECT 
@@ -446,9 +488,13 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         )
         .bind(account_id.to_string())
         .bind(bigdecimal::BigDecimal::from(block_height))
-        .fetch(shard_id_pool.pool);
-        while let Some(row) = stream.next().await {
-            let (public_key_hex, access_key, _): (String, Vec<u8>, _) = row?;
+        .fetch_all(&mut *tx)
+        .await?;
+
+        // Rollback or commit the transaction
+        tx.rollback().await?;
+
+        for (public_key_hex, access_key, _) in result {
             let access_key_view = near_primitives::views::AccessKeyInfoView {
                 public_key: borsh::from_slice::<near_crypto::PublicKey>(&hex::decode(
                     public_key_hex,
