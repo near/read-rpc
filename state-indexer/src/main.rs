@@ -7,7 +7,9 @@ use logic_state_indexer::{configs, handle_streamer_message, metrics, INDEXER};
 async fn main() -> anyhow::Result<()> {
     // We use it to automatically search the for root certificates to perform HTTPS calls
     // (sending telemetry and downloading genesis)
-    unsafe { openssl_probe::init_openssl_env_vars(); }
+    unsafe {
+        openssl_probe::init_openssl_env_vars();
+    }
 
     configuration::init_tracing(INDEXER).await?;
     tracing::info!("Starting {} v{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));

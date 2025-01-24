@@ -21,7 +21,9 @@ async fn main() -> anyhow::Result<()> {
 
     // We use it to automatically search the for root certificates to perform HTTPS calls
     // (sending telemetry and downloading genesis)
-    unsafe { openssl_probe::init_openssl_env_vars(); }
+    unsafe {
+        openssl_probe::init_openssl_env_vars();
+    }
     let opts: Opts = Opts::parse();
     let home_dir = opts.home.unwrap_or_else(near_indexer::get_default_home);
 
