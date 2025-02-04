@@ -39,6 +39,17 @@ impl JsonRpcClient {
         Ok(self)
     }
 
+    /// add authorization header to the RPC request.
+    pub fn authorization(mut self, token: &str) -> anyhow::Result<Self> {
+        self.regular_client = self
+            .regular_client
+            .header(near_jsonrpc_client::auth::Authorization::bearer(token)?);
+        self.archival_client = self
+            .archival_client
+            .header(near_jsonrpc_client::auth::Authorization::bearer(token)?);
+        Ok(self)
+    }
+
     /// Performs a RPC call to either the regular or archival endpoint.
     async fn rpc_call<M>(
         &self,

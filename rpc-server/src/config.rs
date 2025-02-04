@@ -120,15 +120,19 @@ impl ServerContext {
             chunk_cache_size_in_bytes,
         ));
 
-        let near_rpc_client = crate::utils::JsonRpcClient::new(
+        let mut near_rpc_client = crate::utils::JsonRpcClient::new(
             rpc_server_config.general.near_rpc_url.clone(),
             rpc_server_config.general.near_archival_rpc_url.clone(),
-        );
+        )
         // We want to set a custom referer to let NEAR JSON RPC nodes know that we are a read-rpc instance
-        let near_rpc_client = near_rpc_client.header(
+        .header(
             "Referer".to_string(),
             rpc_server_config.general.referer_header_value.clone(),
         )?;
+
+        if let Some(auth_token) = &rpc_server_config.general.rpc_auth_token {
+            near_rpc_client = near_rpc_client.authorization(auth_token)?
+        }
 
         let fastnear_client = rpc_server_config
             .lake_config

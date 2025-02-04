@@ -28,9 +28,13 @@ async fn main() -> anyhow::Result<()> {
 
     let opts = config::Opts::parse();
 
-    let rpc_client =
+    let mut rpc_client =
         near_jsonrpc_client::JsonRpcClient::connect(&indexer_config.general.near_rpc_url);
-
+    if let Some(auth_token) = &indexer_config.general.rpc_auth_token {
+        rpc_client = rpc_client.header(near_jsonrpc_client::auth::Authorization::bearer(
+            auth_token,
+        )?);
+    }
     tracing::info!(target: INDEXER, "Fetch protocol config...");
     let genesis_config = rpc_client
         .call(near_jsonrpc_client::methods::EXPERIMENTAL_genesis_config::RpcGenesisConfigRequest)
