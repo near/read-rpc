@@ -79,10 +79,9 @@ async fn main() -> anyhow::Result<()> {
     );
 
     tracing::info!(target: INDEXER, "Instantiating the tx_details storage client...");
-    let tx_details_storage = std::sync::Arc::new(TxDetailsStorage::new(
-        indexer_config.tx_details_storage.storage_client().await,
-        indexer_config.tx_details_storage.bucket_name.clone(),
-    ));
+    let tx_details_storage = std::sync::Arc::new(
+        TxDetailsStorage::new(indexer_config.tx_details_storage.scylla_client().await).await?,
+    );
 
     tracing::info!(target: INDEXER, "Instantiating the stream...",);
     let (sender, stream) = near_lake_framework::streamer(lake_config);

@@ -129,8 +129,30 @@ tracked_changes = "${TRACKED_CHANGES}"
 ## Transaction details are stored in the Google Cloud Storage
 [tx_details_storage]
 
-## Storage Bucket Name
-bucket_name = "${TX_BUCKET_NAME}"
+## ScyllaDB database connection URL
+## Example: "127.0.0.1:9042"
+scylla_url = "${SCYLLA_URL}"
+
+## Scylla user(login)
+## Optional database user
+scylla_user = "${SCYLLA_USER}"
+
+## Scylla password
+## Optional database password
+scylla_password = "${SCYLLA_PASSWORD}"
+
+## ScyllaDB preferred DataCenter
+## Accepts the DC name of the ScyllaDB to filter the connection to that DC only (preferrably).
+## If you connect to multi-DC cluter, you might experience big latencies while working with the DB.
+## This is due to the fact that ScyllaDB driver tries to connect to any of the nodes in the cluster disregarding of the location of the DC.
+## This option allows to filter the connection to the DC you need.
+## Example: "DC1" where DC1 is located in the same region as the application.
+## Default value is None
+scylla_preferred_dc = "${SCYLLA_PREFERRED_DC}"
+
+## Scylla keepalive interval
+## By default we use 60 seconds
+scylla_keepalive_interval = "${SCYLLA_KEEPALIVE_INTERVAL}"
 
 ## Database configuration
 [database]

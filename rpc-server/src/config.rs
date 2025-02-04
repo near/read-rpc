@@ -140,9 +140,9 @@ impl ServerContext {
         );
 
         let tx_details_storage = tx_details_storage::TxDetailsStorage::new(
-            rpc_server_config.tx_details_storage.storage_client().await,
-            rpc_server_config.tx_details_storage.bucket_name.clone(),
-        );
+            rpc_server_config.tx_details_storage.scylla_client().await,
+        )
+        .await?;
 
         let tx_cache_storage =
             cache_storage::TxIndexerCache::new(rpc_server_config.general.redis_url.to_string())
