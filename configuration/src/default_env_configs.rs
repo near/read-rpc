@@ -22,6 +22,10 @@ near_archival_rpc_url = "${ARCHIVAL_NEAR_RPC_URL}"
 ## Default value is "http://read-rpc.local"
 referer_header_value = "${REFERER_HEADER_VALUE}"
 
+## Authorization token for accessing protected resources
+## Default value is None
+rpc_auth_token = "${RPC_AUTH_TOKEN}"
+
 ## redis url using for pub/sub optimistic_block and final_block
 ## from near_state_indexer to rpc_server
 ## Default value is redis://127.0.0.1/
@@ -125,6 +129,10 @@ tracked_changes = "${TRACKED_CHANGES}"
 # Number of threads to use for fetching data from fatnear
 # Default: 2 * available threads
 #num_threads = 8
+
+# Authorization token for accessing neardata resources
+# Default: None
+lake_auth_token = "${LAKE_AUTH_TOKEN}"
 
 ## Transaction details are stored in the Google Cloud Storage
 [tx_details_storage]

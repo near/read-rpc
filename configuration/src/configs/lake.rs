@@ -5,6 +5,7 @@ use serde_derive::Deserialize;
 #[derive(Debug, Clone)]
 pub struct LakeConfig {
     pub num_threads: Option<u64>,
+    pub lake_auth_token: Option<String>,
 }
 
 impl LakeConfig {
@@ -36,7 +37,10 @@ impl LakeConfig {
             // Testnet is the default chain for other chain_id
             _ => String::from("https://testnet.neardata.xyz"),
         };
-        Ok(near_lake_framework::FastNearClient::new(fast_near_endpoint))
+        Ok(near_lake_framework::FastNearClient::new(
+            fast_near_endpoint,
+            self.lake_auth_token.clone(),
+        ))
     }
 }
 
@@ -44,12 +48,15 @@ impl LakeConfig {
 pub struct CommonLakeConfig {
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub num_threads: Option<u64>,
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    pub lake_auth_token: Option<String>,
 }
 
 impl From<CommonLakeConfig> for LakeConfig {
     fn from(common_config: CommonLakeConfig) -> Self {
         Self {
             num_threads: common_config.num_threads,
+            lake_auth_token: common_config.lake_auth_token,
         }
     }
 }
