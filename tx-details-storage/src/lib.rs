@@ -1,5 +1,5 @@
-use bigdecimal::ToPrimitive;
 use futures::FutureExt;
+use num_traits::cast::ToPrimitive;
 
 pub struct TxDetailsStorage {
     add_transaction: scylla::prepared_statement::PreparedStatement,
@@ -181,9 +181,9 @@ impl TxDetailsStorage {
                 receipt.receipt_id.to_string(),
                 receipt.parent_transaction_hash.to_string(),
                 receipt.receiver_id.to_string(),
-                bigdecimal::BigDecimal::from(receipt.block_height),
+                num_bigint::BigInt::from(receipt.block_height),
                 receipt.block_hash.to_string(),
-                bigdecimal::BigDecimal::from(shard_id),
+                num_bigint::BigInt::from(shard_id),
             ));
         }
         self.scylla_session.batch(&batch, batch_values).await?;
@@ -203,9 +203,9 @@ impl TxDetailsStorage {
                     String,
                     String,
                     String,
-                    bigdecimal::BigDecimal,
+                    num_bigint::BigInt,
                     String,
-                    bigdecimal::BigDecimal,
+                    num_bigint::BigInt,
                 )>()?,
         )
     }
@@ -226,9 +226,9 @@ impl TxDetailsStorage {
                 outcome.outcome_id.to_string(),
                 outcome.parent_transaction_hash.to_string(),
                 outcome.receiver_id.to_string(),
-                bigdecimal::BigDecimal::from(outcome.block_height),
+                num_bigint::BigInt::from(outcome.block_height),
                 outcome.block_hash.to_string(),
-                bigdecimal::BigDecimal::from(shard_id),
+                num_bigint::BigInt::from(shard_id),
             ));
         }
         self.scylla_session.batch(&batch, batch_values).await?;
@@ -248,9 +248,9 @@ impl TxDetailsStorage {
                     String,
                     String,
                     String,
-                    bigdecimal::BigDecimal,
+                    num_bigint::BigInt,
                     String,
-                    bigdecimal::BigDecimal,
+                    num_bigint::BigInt,
                 )>()?,
         )
     }
@@ -279,7 +279,7 @@ impl TxDetailsStorage {
                 &self.update_meta,
                 (
                     indexer_id.to_string(),
-                    bigdecimal::BigDecimal::from(last_processed_block_height),
+                    num_bigint::BigInt::from(last_processed_block_height),
                 ),
             )
             .await?;
@@ -292,7 +292,7 @@ impl TxDetailsStorage {
             .execute_unpaged(&self.last_processed_block_height, (indexer_id.to_string(),))
             .await?
             .into_rows_result()?
-            .single_row::<(bigdecimal::BigDecimal,)>()?;
+            .single_row::<(num_bigint::BigInt,)>()?;
         last_processed_block_height.to_u64().ok_or(anyhow::anyhow!(
             "Failed to convert last_processed_block_height to u64"
         ))
