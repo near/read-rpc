@@ -13,6 +13,6 @@ license.workspace = true
 anyhow = "1.0.70"
 bigdecimal = "0.4.7"
 futures = "0.3.31"
-scylla = { version = "0.15.1", features = ["full-serialization"] }
+scylla = { version = "0.15.1", features = ["ssl", "full-serialization"] }
 
 readnode-primitives.workspace = true
