@@ -99,8 +99,8 @@ async fn fetch_receipt_record(
 > {
     let receipt_id = request.receipt_reference.receipt_id;
     let result = data
-        .db_manager
-        .get_receipt_by_id(receipt_id, method_name)
+        .tx_details_storage
+        .get_receipt_by_id(&receipt_id.to_string())
         .await
         .map_err(|err| {
             tracing::warn!("Error in `{}` call: {:?}", method_name, err);

@@ -7399,13 +7399,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a0cefd8b924bb8f67525937a811038d5662f9febc30c74c778a8205f63c4b365"
 dependencies = [
  "async-trait",
+ "bigdecimal",
  "byteorder",
  "bytes",
+ "chrono",
  "lz4_flex",
+ "num-bigint 0.3.3",
+ "num-bigint 0.4.6",
  "scylla-macros",
+ "secrecy",
  "snap",
  "stable_deref_trait",
  "thiserror 2.0.11",
+ "time",
  "tokio",
  "uuid",
  "yoke",
@@ -7460,6 +7466,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "70a129b9e9efbfb223753b9163c4ab3b13cff7fd9c7f010fbac25ab4099fa07e"
 dependencies = [
  "cc",
+]
+
+[[package]]
+name = "secrecy"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9bd1c54ea06cfd2f6b63219704de0b9b4f72dcc2b8fdef820be6cd799780e91e"
+dependencies = [
+ "zeroize",
 ]
 
 [[package]]
@@ -8922,6 +8937,9 @@ name = "tx-details-storage"
 version = "0.3.3"
 dependencies = [
  "anyhow",
+ "bigdecimal",
+ "futures",
+ "readnode-primitives",
  "scylla",
 ]
 
@@ -8934,7 +8952,6 @@ dependencies = [
  "cache-storage",
  "clap",
  "configuration",
- "database",
  "futures",
  "futures-locks",
  "humantime",

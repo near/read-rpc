@@ -11,4 +11,8 @@ license.workspace = true
 
 [dependencies]
 anyhow = "1.0.70"
-scylla = "0.15.1"
+bigdecimal = "0.4.7"
+futures = "0.3.31"
+scylla = { version = "0.15.1", features = ["full-serialization"] }
+
+readnode-primitives.workspace = true

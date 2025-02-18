@@ -1,6 +1,7 @@
 pub use clap::{Parser, Subcommand};
 use near_indexer_primitives::types::{BlockReference, Finality};
 use near_jsonrpc_client::{methods, JsonRpcClient};
+use tx_details_storage::TxDetailsStorage;
 
 /// NEAR Indexer for Explorer
 /// Watches for stream of blocks from the chain
@@ -26,14 +27,17 @@ pub enum StartOptions {
 
 pub(crate) async fn get_start_block_height(
     rpc_client: &JsonRpcClient,
-    db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
+    tx_details_storage: &std::sync::Arc<TxDetailsStorage>,
     start_options: &StartOptions,
     indexer_id: &str,
 ) -> anyhow::Result<u64> {
     let start_block_height = match start_options {
         StartOptions::FromBlock { height } => *height,
         StartOptions::FromInterruption { height } => {
-            if let Ok(block_height) = db_manager.get_last_processed_block_height(indexer_id).await {
+            if let Ok(block_height) = tx_details_storage
+                .get_last_processed_block_height(indexer_id)
+                .await
+            {
                 block_height
             } else if let Some(height) = height {
                 *height

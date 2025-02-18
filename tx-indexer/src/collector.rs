@@ -12,7 +12,6 @@ const SAVE_ATTEMPTS: usize = 20;
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 pub(crate) async fn index_transactions(
     streamer_message: &near_indexer_primitives::StreamerMessage,
-    db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorage>,
     tx_details_storage: &std::sync::Arc<crate::TxDetailsStorage>,
     indexer_config: &configuration::TxIndexerConfig,
@@ -27,7 +26,7 @@ pub(crate) async fn index_transactions(
     let save_outcomes_and_receipts_future = {
         #[cfg(feature = "save_outcomes_and_receipts")]
         {
-            save_outcomes_and_receipts(db_manager, tx_collecting_storage)
+            save_outcomes_and_receipts(tx_details_storage, tx_collecting_storage)
         }
         #[cfg(not(feature = "save_outcomes_and_receipts"))]
         {
@@ -84,7 +83,7 @@ async fn save_finished_transaction_details(
 
 #[cfg(feature = "save_outcomes_and_receipts")]
 async fn save_outcomes_and_receipts(
-    db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
+    tx_details_storage: &std::sync::Arc<crate::TxDetailsStorage>,
     tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorage>,
 ) -> anyhow::Result<()> {
     let receipts_and_outcomes_to_save = tx_collecting_storage
@@ -98,26 +97,13 @@ async fn save_outcomes_and_receipts(
             );
             err
         })?;
-
-    if !receipts_and_outcomes_to_save.is_empty() {
-        let db_manager_clone = db_manager.clone();
-        let tx_collecting_storage_clone = tx_collecting_storage.clone();
-        tokio::spawn(async move {
-            let save_receipts_and_outcomes_futures = receipts_and_outcomes_to_save.into_iter().map(
-                |(shard_id, receipts_and_outcomes)| {
-                    save_receipts_and_outcomes_details(
-                        &db_manager_clone,
-                        &tx_collecting_storage_clone,
-                        shard_id,
-                        receipts_and_outcomes.receipts,
-                        receipts_and_outcomes.outcomes,
-                    )
-                },
-            );
-
-            futures::future::join_all(save_receipts_and_outcomes_futures).await;
-        });
-    }
+    save_receipts_and_outcomes_details(
+        tx_details_storage,
+        tx_collecting_storage,
+        receipts_and_outcomes_to_save.receipts,
+        receipts_and_outcomes_to_save.outcomes,
+    )
+    .await;
 
     Ok(())
 }
@@ -125,63 +111,53 @@ async fn save_outcomes_and_receipts(
 #[cfg(feature = "save_outcomes_and_receipts")]
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn save_receipts_and_outcomes_details(
-    db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
+    tx_details_storage: &std::sync::Arc<crate::TxDetailsStorage>,
     tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorage>,
-    shard_id: database::primitives::ShardId,
     receipts: Vec<readnode_primitives::ReceiptRecord>,
     outcomes: Vec<readnode_primitives::OutcomeRecord>,
 ) {
-    match save_outcome_and_receipt_to_shard(
-        db_manager,
-        shard_id,
-        receipts.clone(),
-        outcomes.clone(),
-    )
-    .await
+    match save_outcome_and_receipt_to_scylla(tx_details_storage, receipts.clone(), outcomes.clone())
+        .await
     {
         Ok(_) => {
             tracing::debug!(
                 target: crate::INDEXER,
-                "Receipts and outcomes for shard {} were saved",
-                shard_id
+                "Receipts and outcomes were saved",
             );
         }
         Err(err) => {
             tracing::error!(
                 target: crate::INDEXER,
-                "Failed to save receipts and outcomes for shard {}: Error {}",
-                shard_id,
+                "Failed to save receipts and outcomes: Error {}",
                 err
             );
 
             tx_collecting_storage
-                .return_outcomes_to_save(shard_id, outcomes)
+                .return_outcomes_to_save(outcomes)
                 .await;
             tx_collecting_storage
-                .return_receipts_to_save(shard_id, receipts)
+                .return_receipts_to_save(receipts)
                 .await;
         }
     }
 }
 
 #[cfg(feature = "save_outcomes_and_receipts")]
-async fn save_outcome_and_receipt_to_shard(
-    db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
-    shard_id: database::primitives::ShardId,
+async fn save_outcome_and_receipt_to_scylla(
+    tx_details_storage: &std::sync::Arc<crate::TxDetailsStorage>,
     receipts: Vec<readnode_primitives::ReceiptRecord>,
     outcomes: Vec<readnode_primitives::OutcomeRecord>,
 ) -> anyhow::Result<()> {
     let retry_strategy = FixedInterval::from_millis(500).take(SAVE_ATTEMPTS);
 
     let operation = || async {
-        db_manager
-            .save_outcome_and_receipt(shard_id, receipts.clone(), outcomes.clone())
+        tx_details_storage
+            .save_outcome_and_receipt(receipts.clone(), outcomes.clone())
             .await
             .map_err(|e| {
                 tracing::warn!(
                     target: crate::INDEXER,
-                    "Failed to save receipts and outcomes for shard {}: Error {}",
-                    shard_id,
+                    "Failed to save receipts and outcomes: Error {}",
                     e
                 );
                 e
@@ -190,8 +166,7 @@ async fn save_outcome_and_receipt_to_shard(
 
     Retry::spawn(retry_strategy, operation).await.map_err(|e| {
         anyhow::anyhow!(
-            "Failed to save receipts and outcomes for shard {} after {} attempts: {}",
-            shard_id,
+            "Failed to save receipts and outcomes after {} attempts: {}",
             SAVE_ATTEMPTS,
             e
         )
@@ -199,8 +174,7 @@ async fn save_outcome_and_receipt_to_shard(
 
     tracing::debug!(
         target: crate::INDEXER,
-        "Receipts and outcomes for shard {} were saved successfully",
-        shard_id,
+        "Receipts and outcomes were saved successfully",
     );
 
     Ok(())
@@ -480,7 +454,7 @@ async fn save_transaction_details_to_storage(
 
     let operation = || async {
         tx_details_storage
-            .store(&transaction_hash, tx_bytes.clone())
+            .save_tx(&transaction_hash, tx_bytes.clone())
             .await
             .map_err(|e| {
                 crate::metrics::TX_STORE_ERRORS_TOTAL.inc();

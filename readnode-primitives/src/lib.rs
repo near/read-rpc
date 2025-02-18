@@ -372,6 +372,50 @@ where
     }
 }
 
+impl<T> TryFrom<(String, String, String, T, String, T)> for OutcomeRecord
+where
+    T: ToPrimitive,
+{
+    type Error = anyhow::Error;
+
+    fn try_from(value: (String, String, String, T, String, T)) -> Result<Self, Self::Error> {
+        let outcome_id = CryptoHash::from_str(&value.0).map_err(|err| {
+            anyhow::anyhow!("Failed to parse `receipt_id` to CryptoHash: {}", err)
+        })?;
+        let parent_transaction_hash = CryptoHash::from_str(&value.1).map_err(|err| {
+            anyhow::anyhow!(
+                "Failed to parse `parent_transaction_hash` to CryptoHash: {}",
+                err
+            )
+        })?;
+        let receiver_id =
+            near_indexer_primitives::types::AccountId::from_str(&value.2).map_err(|err| {
+                anyhow::anyhow!("Failed to parse `receiver_id` to AccountId: {}", err)
+            })?;
+        let block_height = value
+            .3
+            .to_u64()
+            .ok_or_else(|| anyhow::anyhow!("Failed to parse `block_height` to u64"))?;
+        let block_hash = CryptoHash::from_str(&value.4).map_err(|err| {
+            anyhow::anyhow!("Failed to parse `block_hash` to CryptoHash: {}", err)
+        })?;
+        let shard_id: near_indexer_primitives::types::ShardId = value
+            .5
+            .to_u64()
+            .ok_or_else(|| anyhow::anyhow!("Failed to parse `shard_id` to u64"))?
+            .into();
+
+        Ok(OutcomeRecord {
+            outcome_id,
+            parent_transaction_hash,
+            receiver_id,
+            block_height,
+            block_hash,
+            shard_id,
+        })
+    }
+}
+
 impl<T> TryFrom<(String, T)> for BlockRecord
 where
     T: ToPrimitive,
