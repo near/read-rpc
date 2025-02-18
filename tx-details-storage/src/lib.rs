@@ -255,7 +255,7 @@ impl TxDetailsStorage {
         )
     }
 
-    pub async fn save_outcome_and_receipt(
+    pub async fn save_outcomes_and_receipts(
         &self,
         receipts: Vec<readnode_primitives::ReceiptRecord>,
         outcomes: Vec<readnode_primitives::OutcomeRecord>,

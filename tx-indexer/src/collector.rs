@@ -23,18 +23,9 @@ pub(crate) async fn index_transactions(
     let save_finished_tx_details_future =
         save_finished_transaction_details(tx_collecting_storage, tx_details_storage);
 
-    let save_outcomes_and_receipts_future = {
-        #[cfg(feature = "save_outcomes_and_receipts")]
-        {
-            save_outcomes_and_receipts(tx_details_storage, tx_collecting_storage)
-        }
-        #[cfg(not(feature = "save_outcomes_and_receipts"))]
-        {
-            // if feature is disabled just return Ok(()) to skip saving outcomes and receipts
-            // to the database, this is useful for testing and reindexing only transaction details
-            futures::future::ready(Ok(()))
-        }
-    };
+    let save_outcomes_and_receipts_future =
+        save_outcomes_and_receipts(tx_details_storage, tx_collecting_storage);
+
     futures::future::join_all([
         save_finished_tx_details_future.boxed(),
         save_outcomes_and_receipts_future.boxed(),
@@ -81,7 +72,6 @@ async fn save_finished_transaction_details(
     Ok(())
 }
 
-#[cfg(feature = "save_outcomes_and_receipts")]
 async fn save_outcomes_and_receipts(
     tx_details_storage: &std::sync::Arc<crate::TxDetailsStorage>,
     tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorage>,
@@ -108,7 +98,6 @@ async fn save_outcomes_and_receipts(
     Ok(())
 }
 
-#[cfg(feature = "save_outcomes_and_receipts")]
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn save_receipts_and_outcomes_details(
     tx_details_storage: &std::sync::Arc<crate::TxDetailsStorage>,
@@ -142,7 +131,6 @@ async fn save_receipts_and_outcomes_details(
     }
 }
 
-#[cfg(feature = "save_outcomes_and_receipts")]
 async fn save_outcome_and_receipt_to_scylla(
     tx_details_storage: &std::sync::Arc<crate::TxDetailsStorage>,
     receipts: Vec<readnode_primitives::ReceiptRecord>,
@@ -152,7 +140,7 @@ async fn save_outcome_and_receipt_to_scylla(
 
     let operation = || async {
         tx_details_storage
-            .save_outcome_and_receipt(receipts.clone(), outcomes.clone())
+            .save_outcomes_and_receipts(receipts.clone(), outcomes.clone())
             .await
             .map_err(|e| {
                 tracing::warn!(

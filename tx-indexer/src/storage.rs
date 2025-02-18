@@ -349,7 +349,6 @@ impl CacheStorage {
         Ok(transactions)
     }
 
-    #[cfg(feature = "save_outcomes_and_receipts")]
     #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
     pub(crate) async fn outcomes_and_receipts_to_save(
         &self,
@@ -414,7 +413,6 @@ impl CacheStorage {
         Ok(())
     }
 
-    #[cfg(feature = "save_outcomes_and_receipts")]
     pub(crate) async fn return_outcomes_to_save(
         &self,
         outcomes: Vec<readnode_primitives::OutcomeRecord>,
@@ -431,7 +429,6 @@ impl CacheStorage {
             .extend(outcomes);
     }
 
-    #[cfg(feature = "save_outcomes_and_receipts")]
     pub(crate) async fn return_receipts_to_save(
         &self,
         receipts: Vec<readnode_primitives::ReceiptRecord>,
