@@ -8956,6 +8956,7 @@ dependencies = [
  "futures",
  "futures-locks",
  "humantime",
+ "itertools 0.13.0",
  "lazy_static",
  "near-indexer-primitives",
  "near-jsonrpc-client 0.15.1",

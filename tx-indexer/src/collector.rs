@@ -1,7 +1,10 @@
-use near_indexer_primitives::IndexerTransactionWithOutcome;
+use itertools::EitherOrBoth::{Both, Left, Right};
+use itertools::Itertools;
 
 use futures::{FutureExt, StreamExt};
 use tokio_retry::{strategy::FixedInterval, Retry};
+
+use near_indexer_primitives::IndexerTransactionWithOutcome;
 
 use crate::metrics;
 use crate::storage;
@@ -98,8 +101,53 @@ async fn save_outcomes_and_receipts(
     Ok(())
 }
 
+/// Save receipts and outcomes to the DB
+/// Split the receipts and outcomes into chunks of 1500 records and save them
+/// It is necessary to split the records into chunks because Scylla has a limit per batch
+/// We use 1500 records because we should be sure that the batch size is less than 50MB
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn save_receipts_and_outcomes_details(
+    tx_details_storage: &std::sync::Arc<crate::TxDetailsStorage>,
+    tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorage>,
+    receipts: Vec<readnode_primitives::ReceiptRecord>,
+    outcomes: Vec<readnode_primitives::OutcomeRecord>,
+) {
+    let chunks: Vec<_> = receipts
+        .chunks(1500)
+        .zip_longest(outcomes.chunks(1500))
+        .collect();
+
+    let mut tasks = futures::stream::FuturesUnordered::new();
+
+    for pair in chunks {
+        let task = match pair {
+            Both(receipts, outcomes) => save_chunks_receipts_and_outcomes_details(
+                tx_details_storage,
+                tx_collecting_storage,
+                receipts.to_vec(),
+                outcomes.to_vec(),
+            ),
+            Left(receipts) => save_chunks_receipts_and_outcomes_details(
+                tx_details_storage,
+                tx_collecting_storage,
+                receipts.to_vec(),
+                vec![],
+            ),
+            Right(outcomes) => save_chunks_receipts_and_outcomes_details(
+                tx_details_storage,
+                tx_collecting_storage,
+                vec![],
+                outcomes.to_vec(),
+            ),
+        };
+        tasks.push(task);
+    }
+
+    while tasks.next().await.is_some() {}
+}
+
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
+async fn save_chunks_receipts_and_outcomes_details(
     tx_details_storage: &std::sync::Arc<crate::TxDetailsStorage>,
     tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorage>,
     receipts: Vec<readnode_primitives::ReceiptRecord>,
