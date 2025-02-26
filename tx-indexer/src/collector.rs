@@ -90,13 +90,18 @@ async fn save_outcomes_and_receipts(
             );
             err
         })?;
-    save_receipts_and_outcomes_details(
-        tx_details_storage,
-        tx_collecting_storage,
-        receipts_and_outcomes_to_save.receipts,
-        receipts_and_outcomes_to_save.outcomes,
-    )
-    .await;
+
+    let tx_collecting_storage = tx_collecting_storage.clone();
+    let tx_details_storage = tx_details_storage.clone();
+    tokio::spawn(async move {
+        save_receipts_and_outcomes_details(
+            &tx_details_storage,
+            &tx_collecting_storage,
+            receipts_and_outcomes_to_save.receipts,
+            receipts_and_outcomes_to_save.outcomes,
+        )
+        .await;
+    });
 
     Ok(())
 }
