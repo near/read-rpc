@@ -1,7 +1,5 @@
 use clap::Parser;
 use futures::{FutureExt, StreamExt};
-use near_indexer_primitives::near_primitives;
-use near_indexer_primitives::near_primitives::epoch_manager::{AllEpochConfig, EpochConfig};
 use tx_details_storage::TxDetailsStorage;
 
 mod collector;
@@ -35,33 +33,15 @@ async fn main() -> anyhow::Result<()> {
             auth_token,
         )?);
     }
-    tracing::info!(target: INDEXER, "Fetch protocol config...");
-    let genesis_config = rpc_client
-        .call(near_jsonrpc_client::methods::EXPERIMENTAL_genesis_config::RpcGenesisConfigRequest)
-        .await?;
-    let default_epoch_config = EpochConfig::from(&genesis_config);
-    let all_epoch_config = AllEpochConfig::new(
-        true,
-        genesis_config.protocol_version,
-        default_epoch_config,
-        &genesis_config.chain_id,
-    );
-    let epoch_config =
-        all_epoch_config.for_protocol_version(near_primitives::version::PROTOCOL_VERSION);
 
-    tracing::info!(target: INDEXER, "Connecting to db...");
-    let db_manager: std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>> =
-        std::sync::Arc::new(Box::new(
-            database::prepare_db_manager::<database::PostgresDBManager>(
-                &indexer_config.database,
-                epoch_config.shard_layout.clone(),
-            )
-            .await?,
-        ));
+    tracing::info!(target: INDEXER, "Instantiating the tx_details storage client...");
+    let tx_details_storage = std::sync::Arc::new(
+        TxDetailsStorage::new(indexer_config.tx_details_storage.scylla_client().await).await?,
+    );
 
     let start_block_height = config::get_start_block_height(
         &rpc_client,
-        &db_manager,
+        &tx_details_storage,
         &opts.start_options,
         &indexer_config.general.indexer_id,
     )
@@ -75,16 +55,8 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!(target: INDEXER, "Creating cache storage...");
     let tx_collecting_storage = std::sync::Arc::new(
-        storage::CacheStorage::init_with_restore(
-            indexer_config.general.redis_url.to_string(),
-            epoch_config.shard_layout,
-        )
-        .await?,
-    );
-
-    tracing::info!(target: INDEXER, "Instantiating the tx_details storage client...");
-    let tx_details_storage = std::sync::Arc::new(
-        TxDetailsStorage::new(indexer_config.tx_details_storage.scylla_client().await).await?,
+        storage::CacheStorage::init_with_restore(indexer_config.general.redis_url.to_string())
+            .await?,
     );
 
     tracing::info!(target: INDEXER, "Instantiating the stream...",);
@@ -107,7 +79,6 @@ async fn main() -> anyhow::Result<()> {
         .map(|streamer_message| {
             handle_streamer_message(
                 streamer_message,
-                &db_manager,
                 &tx_collecting_storage,
                 &tx_details_storage,
                 indexer_config.clone(),
@@ -134,7 +105,6 @@ async fn main() -> anyhow::Result<()> {
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
-    db_manager: &std::sync::Arc<Box<dyn database::TxIndexerDbManager + Sync + Send + 'static>>,
     tx_collecting_storage: &std::sync::Arc<storage::CacheStorage>,
     tx_details_storage: &std::sync::Arc<TxDetailsStorage>,
     indexer_config: configuration::TxIndexerConfig,
@@ -151,13 +121,12 @@ async fn handle_streamer_message(
 
     let tx_future = collector::index_transactions(
         &streamer_message,
-        db_manager,
         tx_collecting_storage,
         tx_details_storage,
         &indexer_config,
     );
 
-    let update_meta_future = db_manager.update_meta(
+    let update_meta_future = tx_details_storage.update_meta(
         &indexer_config.general.indexer_id,
         streamer_message.block.header.height,
     );
