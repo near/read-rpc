@@ -59,7 +59,26 @@ pub trait StateIndexerDbManager {
         shard_id: near_primitives::types::ShardId,
         state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
         block_height: u64,
-        block_hash: near_primitives::hash::CryptoHash,
+    ) -> anyhow::Result<()> {
+        self.insert_state_changes_data(shard_id, state_changes.clone(), block_height)
+            .await?;
+        self.update_state_changes_data(shard_id, state_changes, block_height)
+            .await?;
+        Ok(())
+    }
+
+    async fn insert_state_changes_data(
+        &self,
+        shard_id: near_primitives::types::ShardId,
+        state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
+        block_height: u64,
+    ) -> anyhow::Result<()>;
+
+    async fn update_state_changes_data(
+        &self,
+        shard_id: near_primitives::types::ShardId,
+        state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
+        block_height: u64,
     ) -> anyhow::Result<()>;
 
     async fn save_state_changes_access_key(
@@ -67,7 +86,26 @@ pub trait StateIndexerDbManager {
         shard_id: near_primitives::types::ShardId,
         state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
         block_height: u64,
-        block_hash: near_primitives::hash::CryptoHash,
+    ) -> anyhow::Result<()> {
+        self.insert_state_changes_access_key(shard_id, state_changes.clone(), block_height)
+            .await?;
+        self.update_state_changes_access_key(shard_id, state_changes, block_height)
+            .await?;
+        Ok(())
+    }
+
+    async fn insert_state_changes_access_key(
+        &self,
+        shard_id: near_primitives::types::ShardId,
+        state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
+        block_height: u64,
+    ) -> anyhow::Result<()>;
+
+    async fn update_state_changes_access_key(
+        &self,
+        shard_id: near_primitives::types::ShardId,
+        state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
+        block_height: u64,
     ) -> anyhow::Result<()>;
 
     async fn save_state_changes_contract(
@@ -75,7 +113,26 @@ pub trait StateIndexerDbManager {
         shard_id: near_primitives::types::ShardId,
         state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
         block_height: u64,
-        block_hash: near_primitives::hash::CryptoHash,
+    ) -> anyhow::Result<()> {
+        self.insert_state_changes_contract(shard_id, state_changes.clone(), block_height)
+            .await?;
+        self.update_state_changes_contract(shard_id, state_changes, block_height)
+            .await?;
+        Ok(())
+    }
+
+    async fn insert_state_changes_contract(
+        &self,
+        shard_id: near_primitives::types::ShardId,
+        state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
+        block_height: u64,
+    ) -> anyhow::Result<()>;
+
+    async fn update_state_changes_contract(
+        &self,
+        shard_id: near_primitives::types::ShardId,
+        state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
+        block_height: u64,
     ) -> anyhow::Result<()>;
 
     async fn save_state_changes_account(
@@ -83,6 +140,25 @@ pub trait StateIndexerDbManager {
         shard_id: near_primitives::types::ShardId,
         state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
         block_height: u64,
-        block_hash: near_primitives::hash::CryptoHash,
+    ) -> anyhow::Result<()> {
+        self.insert_state_changes_account(shard_id, state_changes.clone(), block_height)
+            .await?;
+        self.update_state_changes_account(shard_id, state_changes, block_height)
+            .await?;
+        Ok(())
+    }
+
+    async fn insert_state_changes_account(
+        &self,
+        shard_id: near_primitives::types::ShardId,
+        state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
+        block_height: u64,
+    ) -> anyhow::Result<()>;
+
+    async fn update_state_changes_account(
+        &self,
+        shard_id: near_primitives::types::ShardId,
+        state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
+        block_height: u64,
     ) -> anyhow::Result<()>;
 }

@@ -211,12 +211,11 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
         Ok(())
     }
 
-    async fn save_state_changes_data(
+    async fn insert_state_changes_data(
         &self,
         shard_id: near_primitives::types::ShardId,
         state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
         block_height: u64,
-        block_hash: near_primitives::hash::CryptoHash,
     ) -> anyhow::Result<()> {
         crate::metrics::SHARD_DATABASE_WRITE_QUERIES
             .with_label_values(&[
@@ -226,37 +225,34 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
             ])
             .inc();
         let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
-            "INSERT INTO state_changes_data (account_id, block_height, block_hash, data_key, data_value) ",
+            "INSERT INTO new_state_changes_data (account_id, data_key, data_value, block_height_from, block_height_to) ",
         );
-        query_builder.push_values(state_changes.iter(), |mut values, state_change| {
-            match &state_change.value {
-                near_primitives::views::StateChangeValueView::DataUpdate {
+
+        query_builder.push_values(
+            state_changes.iter().filter(|c| {
+                matches!(
+                    c.value,
+                    near_primitives::views::StateChangeValueView::DataUpdate { .. }
+                )
+            }),
+            |mut values, state_change| {
+                if let near_primitives::views::StateChangeValueView::DataUpdate {
                     account_id,
                     key,
                     value,
-                } => {
+                } = &state_change.value
+                {
                     let data_key: &[u8] = key.as_ref();
                     let data_value: &[u8] = value.as_ref();
                     values
                         .push_bind(account_id.to_string())
-                        .push_bind(bigdecimal::BigDecimal::from(block_height))
-                        .push_bind(block_hash.to_string())
                         .push_bind(hex::encode(data_key).to_string())
-                        .push_bind(data_value);
-                }
-                near_primitives::views::StateChangeValueView::DataDeletion { account_id, key } => {
-                    let data_key: &[u8] = key.as_ref();
-                    let data_value: Option<&[u8]> = None;
-                    values
-                        .push_bind(account_id.to_string())
+                        .push_bind(data_value)
                         .push_bind(bigdecimal::BigDecimal::from(block_height))
-                        .push_bind(block_hash.to_string())
-                        .push_bind(hex::encode(data_key).to_string())
-                        .push_bind(data_value);
+                        .push_bind(None::<Option<bigdecimal::BigDecimal>>);
                 }
-                _ => {}
-            }
-        });
+            },
+        );
         query_builder.push(" ON CONFLICT DO NOTHING;");
         query_builder
             .build()
@@ -268,12 +264,72 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
         Ok(())
     }
 
-    async fn save_state_changes_access_key(
+    async fn update_state_changes_data(
         &self,
         shard_id: near_primitives::types::ShardId,
         state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
         block_height: u64,
-        block_hash: near_primitives::hash::CryptoHash,
+    ) -> anyhow::Result<()> {
+        crate::metrics::SHARD_DATABASE_WRITE_QUERIES
+            .with_label_values(&[
+                &shard_id.to_string(),
+                "save_state_changes_data",
+                "state_changes_data",
+            ])
+            .inc();
+
+        let mut accounts_ids = vec![];
+        let mut data_keys = vec![];
+        for state_change in state_changes.iter() {
+            match &state_change.value {
+                near_primitives::views::StateChangeValueView::DataUpdate {
+                    account_id,
+                    key,
+                    ..
+                }
+                | near_primitives::views::StateChangeValueView::DataDeletion { account_id, key } => {
+                    let data_key: &[u8] = key.as_ref();
+                    accounts_ids.push(account_id.to_string());
+                    data_keys.push(hex::encode(data_key).to_string());
+                }
+                _ => {}
+            }
+        }
+
+        sqlx::query(
+            "
+            WITH latest_rows AS (
+                SELECT account_id, data_key, MAX(block_height_from) AS block_height_from
+                FROM new_state_changes_data
+                WHERE account_id = ANY($1)
+                  AND data_key = ANY($2)
+                  AND block_height_from < $3
+                GROUP BY account_id, data_key
+            )
+            UPDATE new_state_changes_data AS target
+            SET block_height_to = $3
+            FROM latest_rows
+            WHERE target.account_id = latest_rows.account_id
+              AND target.data_key = latest_rows.data_key
+              AND target.block_height_from = latest_rows.block_height_from;
+            ",
+        )
+        .bind(accounts_ids)
+        .bind(data_keys)
+        .bind(bigdecimal::BigDecimal::from(block_height))
+        .execute(self.shards_pool.get(&shard_id).ok_or(anyhow::anyhow!(
+            "Database connection for Shard_{} not found",
+            shard_id
+        ))?)
+        .await?;
+        Ok(())
+    }
+
+    async fn insert_state_changes_access_key(
+        &self,
+        shard_id: near_primitives::types::ShardId,
+        state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
+        block_height: u64,
     ) -> anyhow::Result<()> {
         crate::metrics::SHARD_DATABASE_WRITE_QUERIES
             .with_label_values(&[
@@ -283,43 +339,35 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
             ])
             .inc();
         let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
-            "INSERT INTO state_changes_access_key (account_id, block_height, block_hash, data_key, data_value) ",
+            "INSERT INTO new_state_changes_access_key (account_id, data_key, data_value, block_height_from, block_height_to) ",
         );
-        query_builder.push_values(state_changes.iter(), |mut values, state_change| {
-            match &state_change.value {
-                near_primitives::views::StateChangeValueView::AccessKeyUpdate {
+        query_builder.push_values(
+            state_changes.iter().filter(|c| {
+                matches!(
+                    c.value,
+                    near_primitives::views::StateChangeValueView::AccessKeyUpdate { .. }
+                )
+            }),
+            |mut values, state_change| {
+                if let near_primitives::views::StateChangeValueView::AccessKeyUpdate {
                     account_id,
                     public_key,
                     access_key,
-                } => {
+                } = &state_change.value
+                {
                     let data_key =
                         borsh::to_vec(public_key).expect("Failed to borsh serialize public key");
                     let data_value =
                         borsh::to_vec(access_key).expect("Failed to borsh serialize access key");
                     values
                         .push_bind(account_id.to_string())
-                        .push_bind(bigdecimal::BigDecimal::from(block_height))
-                        .push_bind(block_hash.to_string())
                         .push_bind(hex::encode(data_key).to_string())
-                        .push_bind(data_value);
-                }
-                near_primitives::views::StateChangeValueView::AccessKeyDeletion {
-                    account_id,
-                    public_key,
-                } => {
-                    let data_key =
-                        borsh::to_vec(public_key).expect("Failed to borsh serialize public key");
-                    let data_value: Option<&[u8]> = None;
-                    values
-                        .push_bind(account_id.to_string())
+                        .push_bind(data_value)
                         .push_bind(bigdecimal::BigDecimal::from(block_height))
-                        .push_bind(block_hash.to_string())
-                        .push_bind(hex::encode(data_key).to_string())
-                        .push_bind(data_value);
+                        .push_bind(None::<Option<bigdecimal::BigDecimal>>);
                 }
-                _ => {}
-            }
-        });
+            },
+        );
         query_builder.push(" ON CONFLICT DO NOTHING;");
         query_builder
             .build()
@@ -331,12 +379,73 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
         Ok(())
     }
 
-    async fn save_state_changes_contract(
+    async fn update_state_changes_access_key(
         &self,
         shard_id: near_primitives::types::ShardId,
         state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
         block_height: u64,
-        block_hash: near_primitives::hash::CryptoHash,
+    ) -> anyhow::Result<()> {
+        crate::metrics::SHARD_DATABASE_WRITE_QUERIES
+            .with_label_values(&[
+                &shard_id.to_string(),
+                "save_state_changes_access_key",
+                "state_changes_access_key",
+            ])
+            .inc();
+        let mut accounts_ids = vec![];
+        let mut data_keys = vec![];
+        for state_change in state_changes.iter() {
+            match &state_change.value {
+                near_primitives::views::StateChangeValueView::AccessKeyUpdate {
+                    account_id,
+                    public_key,
+                    ..
+                }
+                | near_primitives::views::StateChangeValueView::AccessKeyDeletion {
+                    account_id,
+                    public_key,
+                } => {
+                    accounts_ids.push(account_id.to_string());
+                    data_keys.push(hex::encode(public_key.key_data()).to_string());
+                }
+                _ => {}
+            }
+        }
+
+        sqlx::query(
+            "
+            WITH latest_rows AS (
+                SELECT account_id, data_key, MAX(block_height_from) AS block_height_from
+                FROM new_state_changes_access_key
+                WHERE account_id = ANY($1)
+                  AND data_key = ANY($2)
+                  AND block_height_from < $3
+                GROUP BY account_id, data_key
+            )
+            UPDATE new_state_changes_access_key AS target
+            SET block_height_to = $3
+            FROM latest_rows
+            WHERE target.account_id = latest_rows.account_id
+              AND target.data_key = latest_rows.data_key
+              AND target.block_height_from = latest_rows.block_height_from;
+            ",
+        )
+        .bind(accounts_ids)
+        .bind(data_keys)
+        .bind(bigdecimal::BigDecimal::from(block_height))
+        .execute(self.shards_pool.get(&shard_id).ok_or(anyhow::anyhow!(
+            "Database connection for Shard_{} not found",
+            shard_id
+        ))?)
+        .await?;
+        Ok(())
+    }
+
+    async fn insert_state_changes_contract(
+        &self,
+        shard_id: near_primitives::types::ShardId,
+        state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
+        block_height: u64,
     ) -> anyhow::Result<()> {
         crate::metrics::SHARD_DATABASE_WRITE_QUERIES
             .with_label_values(&[
@@ -346,34 +455,30 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
             ])
             .inc();
         let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
-            "INSERT INTO state_changes_contract (account_id, block_height, block_hash, data_value) ",
+            "INSERT INTO new_state_changes_contract (account_id, data_value, block_height_from, block_height_to) ",
         );
-        query_builder.push_values(state_changes.iter(), |mut values, state_change| {
-            match &state_change.value {
-                near_primitives::views::StateChangeValueView::ContractCodeUpdate {
+        query_builder.push_values(
+            state_changes.iter().filter(|c| {
+                matches!(
+                    c.value,
+                    near_primitives::views::StateChangeValueView::ContractCodeUpdate { .. }
+                )
+            }),
+            |mut values, state_change| {
+                if let near_primitives::views::StateChangeValueView::ContractCodeUpdate {
                     account_id,
                     code,
-                } => {
+                } = &state_change.value
+                {
                     let data_value: &[u8] = code.as_ref();
                     values
                         .push_bind(account_id.to_string())
+                        .push_bind(data_value)
                         .push_bind(bigdecimal::BigDecimal::from(block_height))
-                        .push_bind(block_hash.to_string())
-                        .push_bind(data_value);
+                        .push_bind(None::<Option<bigdecimal::BigDecimal>>);
                 }
-                near_primitives::views::StateChangeValueView::ContractCodeDeletion {
-                    account_id,
-                } => {
-                    let data_value: Option<&[u8]> = None;
-                    values
-                        .push_bind(account_id.to_string())
-                        .push_bind(bigdecimal::BigDecimal::from(block_height))
-                        .push_bind(block_hash.to_string())
-                        .push_bind(data_value);
-                }
-                _ => {}
-            }
-        });
+            },
+        );
         query_builder.push(" ON CONFLICT DO NOTHING;");
         query_builder
             .build()
@@ -385,12 +490,66 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
         Ok(())
     }
 
-    async fn save_state_changes_account(
+    async fn update_state_changes_contract(
         &self,
         shard_id: near_primitives::types::ShardId,
         state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
         block_height: u64,
-        block_hash: near_primitives::hash::CryptoHash,
+    ) -> anyhow::Result<()> {
+        crate::metrics::SHARD_DATABASE_WRITE_QUERIES
+            .with_label_values(&[
+                &shard_id.to_string(),
+                "save_state_changes_contract",
+                "state_changes_contract",
+            ])
+            .inc();
+        let mut accounts_ids = vec![];
+        for state_change in state_changes.iter() {
+            match &state_change.value {
+                near_primitives::views::StateChangeValueView::ContractCodeUpdate {
+                    account_id,
+                    ..
+                }
+                | near_primitives::views::StateChangeValueView::ContractCodeDeletion {
+                    account_id,
+                } => {
+                    accounts_ids.push(account_id.to_string());
+                }
+                _ => {}
+            }
+        }
+
+        sqlx::query(
+            "
+            WITH latest_rows AS (
+            SELECT account_id, MAX(block_height_from) AS block_height_from
+            FROM new_state_changes_contract
+            WHERE account_id = ANY($1)
+              AND block_height_from < $2
+            GROUP BY account_id
+            )
+            UPDATE new_state_changes_contract AS target
+            SET block_height_to = $2
+            FROM latest_rows
+            WHERE target.account_id = latest_rows.account_id
+              AND target.block_height_from = latest_rows.block_height_from;
+            ",
+        )
+        .bind(accounts_ids)
+        .bind(bigdecimal::BigDecimal::from(block_height))
+        .execute(self.shards_pool.get(&shard_id).ok_or(anyhow::anyhow!(
+            "Database connection for Shard_{} not found",
+            shard_id
+        ))?)
+        .await?;
+        Ok(())
+    }
+
+    async fn insert_state_changes_account(
+        &self,
+        shard_id: near_primitives::types::ShardId,
+        state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
+        block_height: u64,
     ) -> anyhow::Result<()> {
         crate::metrics::SHARD_DATABASE_WRITE_QUERIES
             .with_label_values(&[
@@ -400,34 +559,32 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
             ])
             .inc();
         let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
-            "INSERT INTO state_changes_account (account_id, block_height, block_hash, data_value) ",
+            "INSERT INTO new_state_changes_account (account_id, data_value, block_height_from, block_height_to) ",
         );
-        query_builder.push_values(state_changes.iter(), |mut values, state_change| {
-            match &state_change.value {
-                near_primitives::views::StateChangeValueView::AccountUpdate {
+        query_builder.push_values(
+            state_changes.iter().filter(|c| {
+                matches!(
+                    c.value,
+                    near_primitives::views::StateChangeValueView::AccountUpdate { .. }
+                )
+            }),
+            |mut values, state_change| {
+                if let near_primitives::views::StateChangeValueView::AccountUpdate {
                     account_id,
                     account,
-                } => {
+                } = &state_change.value
+                {
                     let data_value =
                         borsh::to_vec(&near_primitives::account::Account::from(account))
                             .expect("Failed to borsh serialize account");
                     values
                         .push_bind(account_id.to_string())
+                        .push_bind(data_value)
                         .push_bind(bigdecimal::BigDecimal::from(block_height))
-                        .push_bind(block_hash.to_string())
-                        .push_bind(data_value);
+                        .push_bind(None::<Option<bigdecimal::BigDecimal>>);
                 }
-                near_primitives::views::StateChangeValueView::AccountDeletion { account_id } => {
-                    let data_value: Option<&[u8]> = None;
-                    values
-                        .push_bind(account_id.to_string())
-                        .push_bind(bigdecimal::BigDecimal::from(block_height))
-                        .push_bind(block_hash.to_string())
-                        .push_bind(data_value);
-                }
-                _ => {}
-            }
-        });
+            },
+        );
         query_builder.push(" ON CONFLICT DO NOTHING;");
         query_builder
             .build()
@@ -436,6 +593,59 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                 shard_id
             ))?)
             .await?;
+        Ok(())
+    }
+
+    async fn update_state_changes_account(
+        &self,
+        shard_id: near_primitives::types::ShardId,
+        state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
+        block_height: u64,
+    ) -> anyhow::Result<()> {
+        crate::metrics::SHARD_DATABASE_WRITE_QUERIES
+            .with_label_values(&[
+                &shard_id.to_string(),
+                "save_state_changes_account",
+                "state_changes_account",
+            ])
+            .inc();
+
+        let mut accounts_ids = vec![];
+        for state_change in state_changes.iter() {
+            match &state_change.value {
+                near_primitives::views::StateChangeValueView::AccountUpdate {
+                    account_id, ..
+                }
+                | near_primitives::views::StateChangeValueView::AccountDeletion { account_id } => {
+                    accounts_ids.push(account_id.to_string());
+                }
+                _ => {}
+            }
+        }
+
+        sqlx::query(
+            "
+            WITH latest_rows AS (
+            SELECT account_id, MAX(block_height_from) AS block_height_from
+            FROM new_state_changes_account
+            WHERE account_id = ANY($1)
+              AND block_height_from < $2
+            GROUP BY account_id
+            )
+            UPDATE new_state_changes_account AS target
+            SET block_height_to = $2
+            FROM latest_rows
+            WHERE target.account_id = latest_rows.account_id
+              AND target.block_height_from = latest_rows.block_height_from;
+            ",
+        )
+        .bind(accounts_ids)
+        .bind(bigdecimal::BigDecimal::from(block_height))
+        .execute(self.shards_pool.get(&shard_id).ok_or(anyhow::anyhow!(
+            "Database connection for Shard_{} not found",
+            shard_id
+        ))?)
+        .await?;
         Ok(())
     }
 }
