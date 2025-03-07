@@ -220,12 +220,11 @@ pub type StateValue = Vec<u8>;
 pub struct BlockHeightShardId(pub u64, pub u64);
 pub struct QueryData<T: borsh::BorshDeserialize> {
     pub data: T,
-    // block_height and block_hash we return here represents the moment
+    // block_height we return here represents the moment
     // when the data was last updated in the database
     // We used to return it in the `QueryResponse` but it was replaced with
     // the logic that corresponds the logic of the `nearcore` RPC API
     pub block_height: near_indexer_primitives::types::BlockHeight,
-    pub block_hash: CryptoHash,
 }
 
 #[derive(Debug, Clone)]
@@ -300,31 +299,20 @@ where
     }
 }
 
-impl<T>
-    TryFrom<(
-        Vec<u8>,
-        near_indexer_primitives::types::BlockHeight,
-        CryptoHash,
-    )> for QueryData<T>
+impl<T, B> TryFrom<(Vec<u8>, B)> for QueryData<T>
 where
     T: borsh::BorshDeserialize,
+    B: ToPrimitive,
 {
     type Error = anyhow::Error;
 
-    fn try_from(
-        value: (
-            Vec<u8>,
-            near_indexer_primitives::types::BlockHeight,
-            CryptoHash,
-        ),
-    ) -> Result<Self, Self::Error> {
+    fn try_from(value: (Vec<u8>, B)) -> Result<Self, Self::Error> {
         let data = T::try_from_slice(&value.0)?;
-
-        Ok(Self {
-            data,
-            block_height: value.1,
-            block_hash: value.2,
-        })
+        let block_height = value
+            .1
+            .to_u64()
+            .ok_or_else(|| anyhow::anyhow!("Failed to parse `block_height` to u64"))?;
+        Ok(Self { data, block_height })
     }
 }
 
@@ -413,24 +401,5 @@ where
             block_hash,
             shard_id,
         })
-    }
-}
-
-impl<T> TryFrom<(String, T)> for BlockRecord
-where
-    T: ToPrimitive,
-{
-    type Error = anyhow::Error;
-
-    fn try_from(value: (String, T)) -> Result<Self, Self::Error> {
-        let height = value
-            .1
-            .to_u64()
-            .ok_or_else(|| anyhow::anyhow!("Failed to parse `block_height` to u64"))?;
-        let hash = CryptoHash::from_str(&value.0).map_err(|err| {
-            anyhow::anyhow!("Failed to parse `block_hash` to CryptoHash: {}", err)
-        })?;
-
-        Ok(BlockRecord { height, hash })
     }
 }

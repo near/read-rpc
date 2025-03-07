@@ -76,36 +76,14 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         };
         let mut stream = sqlx::query_as::<_, (String, Vec<u8>)>(
             "
-                WITH latest_blocks AS (
-                    SELECT 
-                        data_key,
-                        MAX(block_height) AS max_block_height
-                    FROM 
-                        state_changes_data
-                    WHERE 
-                        account_id = $1
-                        AND block_height <= $2
-                    GROUP BY 
-                        data_key
-                )
-                SELECT 
-                    sc.data_key,
-                    sc.data_value
-                FROM
-                    state_changes_data sc
-                INNER JOIN latest_blocks lb
-                ON 
-                    sc.data_key = lb.data_key 
-                    AND sc.block_height = lb.max_block_height
-                WHERE
-                    sc.account_id = $1
-                    AND sc.data_value IS NOT NULL
-                    AND (
-                        $3 IS NULL OR
-                        sc.data_key > $3
-                    )
+                SELECT data_key, data_value 
+                FROM new_state_changes_data 
+                WHERE account_id = $1
+                  AND block_height_from <= $2 
+                  AND (block_height_to IS NULL OR block_height_to > $2) 
+                  AND ($3 IS NULL OR data_key > $3)
                 ORDER BY 
-                    sc.data_key ASC
+                    data_key ASC
                 LIMIT $4;
                 ",
         )
@@ -153,31 +131,12 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         let mut items = std::collections::HashMap::new();
         let mut stream = sqlx::query_as::<_, (String, Vec<u8>)>(
             "
-                WITH latest_blocks AS (
-                    SELECT 
-                        data_key,
-                        MAX(block_height) AS max_block_height
-                    FROM 
-                        state_changes_data
-                    WHERE 
-                        account_id = $1
-                        AND data_key LIKE $2
-                        AND block_height <= $3
-                    GROUP BY 
-                        data_key
-                )
-                SELECT 
-                    sc.data_key,
-                    sc.data_value
-                FROM
-                    state_changes_data sc
-                INNER JOIN latest_blocks lb
-                ON 
-                    sc.data_key = lb.data_key 
-                    AND sc.block_height = lb.max_block_height
-                WHERE
-                    sc.account_id = $1
-                    AND sc.data_value IS NOT NULL;
+                SELECT data_key, data_value 
+                FROM new_state_changes_data 
+                WHERE account_id = $1
+                  AND data_key LIKE $2
+                  AND block_height_from <= $3 
+                  AND (block_height_to IS NULL OR block_height_to > $3);
                 ",
         )
         .bind(account_id.to_string())
@@ -210,30 +169,11 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         let mut items = std::collections::HashMap::new();
         let mut stream = sqlx::query_as::<_, (String, Vec<u8>)>(
             "
-                WITH latest_blocks AS (
-                    SELECT 
-                        data_key,
-                        MAX(block_height) AS max_block_height
-                    FROM 
-                        state_changes_data
-                    WHERE 
-                        account_id = $1
-                        AND block_height <= $2
-                    GROUP BY 
-                        data_key
-                )
-                SELECT 
-                    sc.data_key,
-                    sc.data_value
-                FROM
-                    state_changes_data sc
-                INNER JOIN latest_blocks lb
-                ON 
-                    sc.data_key = lb.data_key 
-                    AND sc.block_height = lb.max_block_height
-                WHERE
-                    sc.account_id = $1
-                    AND sc.data_value IS NOT NULL;
+                SELECT data_key, data_value 
+                FROM new_state_changes_data 
+                WHERE account_id = $1
+                  AND block_height_from <= $2 
+                  AND (block_height_to IS NULL OR block_height_to > $2);
                 ",
         )
         .bind(account_id.to_string())
@@ -266,12 +206,13 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
             .inc();
         let (data_value,): (Vec<u8>,) = sqlx::query_as(
             "
-                SELECT data_value 
-                FROM state_changes_data
-                WHERE account_id = $1 
-                    AND data_key = $2 
-                    AND block_height <= $3
-                ORDER BY block_height DESC
+                SELECT data_key, data_value 
+                FROM new_state_changes_data 
+                WHERE account_id = $1
+                  AND data_key = $2
+                  AND block_height_from <= $3 
+                  AND (block_height_to IS NULL OR block_height_to > $3)
+                ORDER BY block_height_from DESC
                 LIMIT 1;
                 ",
         )
@@ -297,27 +238,22 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 "state_changes_account",
             ])
             .inc();
-        let (block_height, block_hash, data_value): (bigdecimal::BigDecimal, String, Vec<u8>) =
-            sqlx::query_as(
-                "
-                SELECT block_height, block_hash, data_value 
-                FROM state_changes_account
-                WHERE account_id = $1 
-                    AND block_height <= $2
-                ORDER BY block_height DESC
+        let result: (Vec<u8>, bigdecimal::BigDecimal) = sqlx::query_as(
+            "
+                SELECT data_value, block_height 
+                FROM new_state_changes_account 
+                WHERE account_id = $1
+                  AND block_height_from <= $2 
+                  AND (block_height_to IS NULL OR block_height_to > $2)
+                ORDER BY block_height_from DESC
                 LIMIT 1;
                 ",
-            )
-            .bind(account_id.to_string())
-            .bind(bigdecimal::BigDecimal::from(request_block_height))
-            .fetch_one(shard_id_pool.pool)
-            .await?;
-        let block = readnode_primitives::BlockRecord::try_from((block_hash, block_height))?;
-        readnode_primitives::QueryData::<near_primitives::account::Account>::try_from((
-            data_value,
-            block.height,
-            block.hash,
-        ))
+        )
+        .bind(account_id.to_string())
+        .bind(bigdecimal::BigDecimal::from(request_block_height))
+        .fetch_one(shard_id_pool.pool)
+        .await?;
+        readnode_primitives::QueryData::<near_primitives::account::Account>::try_from(result)
     }
 
     async fn get_contract_code(
@@ -334,27 +270,23 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 "state_changes_contract",
             ])
             .inc();
-        let (block_height, block_hash, contract_code): (bigdecimal::BigDecimal, String, Vec<u8>) =
-            sqlx::query_as(
-                "
-                SELECT block_height, block_hash, data_value
-                FROM state_changes_contract
-                WHERE account_id = $1 
-                    AND block_height <= $2
-                ORDER BY block_height DESC
+        let result: (Vec<u8>, bigdecimal::BigDecimal) = sqlx::query_as(
+            "
+                SELECT data_value, block_height 
+                FROM new_state_changes_contract
+                WHERE account_id = $1
+                  AND block_height_from <= $2 
+                  AND (block_height_to IS NULL OR block_height_to > $2)
+                ORDER BY block_height_from DESC
                 LIMIT 1;
                 ",
-            )
-            .bind(account_id.to_string())
-            .bind(bigdecimal::BigDecimal::from(request_block_height))
-            .fetch_one(shard_id_pool.pool)
-            .await?;
-        let block = readnode_primitives::BlockRecord::try_from((block_hash, block_height))?;
-        Ok(readnode_primitives::QueryData {
-            data: contract_code,
-            block_height: block.height,
-            block_hash: block.hash,
-        })
+        )
+        .bind(account_id.to_string())
+        .bind(bigdecimal::BigDecimal::from(request_block_height))
+        .fetch_one(shard_id_pool.pool)
+        .await?;
+
+        readnode_primitives::QueryData::<Vec<u8>>::try_from(result)
     }
 
     async fn get_access_key(
@@ -373,29 +305,24 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
             ])
             .inc();
         let key_data = borsh::to_vec(&public_key)?;
-        let (block_height, block_hash, data_value): (bigdecimal::BigDecimal, String, Vec<u8>) =
-            sqlx::query_as(
-                "
-                SELECT block_height, block_hash, data_value
-                FROM state_changes_access_key
-                WHERE account_id = $1 
-                    AND data_key = $2 
-                    AND block_height <= $3
-                ORDER BY block_height DESC
+        let result: (Vec<u8>, bigdecimal::BigDecimal) = sqlx::query_as(
+            "
+                SELECT data_value, block_height 
+                FROM new_state_changes_access_key
+                WHERE account_id = $1
+                  AND data_key = $2
+                  AND block_height_from <= $3 
+                  AND (block_height_to IS NULL OR block_height_to > $3)
+                ORDER BY block_height_from DESC
                 LIMIT 1;
                 ",
-            )
-            .bind(account_id.to_string())
-            .bind(hex::encode(&key_data).to_string())
-            .bind(bigdecimal::BigDecimal::from(request_block_height))
-            .fetch_one(shard_id_pool.pool)
-            .await?;
-        let block = readnode_primitives::BlockRecord::try_from((block_hash, block_height))?;
-        readnode_primitives::QueryData::<near_primitives::account::AccessKey>::try_from((
-            data_value,
-            block.height,
-            block.hash,
-        ))
+        )
+        .bind(account_id.to_string())
+        .bind(hex::encode(&key_data).to_string())
+        .bind(bigdecimal::BigDecimal::from(request_block_height))
+        .fetch_one(shard_id_pool.pool)
+        .await?;
+        readnode_primitives::QueryData::<near_primitives::account::AccessKey>::try_from(result)
     }
 
     async fn get_account_access_keys(
@@ -413,42 +340,20 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
             ])
             .inc();
         let mut access_keys = vec![];
-        let mut stream = sqlx::query_as::<_, (String, Vec<u8>, bigdecimal::BigDecimal)>(
+        let mut stream = sqlx::query_as::<_, (String, Vec<u8>)>(
             "
-                WITH latest_blocks AS (
-                    SELECT 
-                        data_key,
-                        account_id,
-                        MAX(block_height) as max_block_height
-                    FROM 
-                        state_changes_access_key
-                    WHERE 
-                        account_id = $1
-                        AND block_height <= $2
-                    GROUP BY 
-                        data_key,
-                        account_id
-                )
-                SELECT 
-                    sc.data_key,
-                    sc.data_value,
-                    sc.block_height 
-                FROM
-                    state_changes_access_key sc
-                INNER JOIN latest_blocks lb
-                ON 
-                    sc.data_key = lb.data_key 
-                    AND sc.block_height = lb.max_block_height
-                    AND sc.account_id = lb.account_id
-                WHERE
-                    sc.data_value IS NOT NULL;
+                SELECT data_key, data_value 
+                FROM new_state_changes_access_key 
+                WHERE account_id = $1
+                  AND block_height_from <= $2 
+                  AND (block_height_to IS NULL OR block_height_to > $2);
                 ",
         )
         .bind(account_id.to_string())
         .bind(bigdecimal::BigDecimal::from(block_height))
         .fetch(shard_id_pool.pool);
         while let Some(row) = stream.next().await {
-            let (public_key_hex, access_key, _): (String, Vec<u8>, _) = row?;
+            let (public_key_hex, access_key): (String, Vec<u8>) = row?;
             let access_key_view = near_primitives::views::AccessKeyInfoView {
                 public_key: borsh::from_slice::<near_crypto::PublicKey>(&hex::decode(
                     public_key_hex,
