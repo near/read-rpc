@@ -1,6 +1,4 @@
 pub use clap::{Parser, Subcommand};
-use near_indexer_primitives::types::{BlockReference, Finality};
-use near_jsonrpc_client::{methods, JsonRpcClient};
 use tx_details_storage::TxDetailsStorage;
 
 /// NEAR Indexer for Explorer
@@ -26,7 +24,7 @@ pub enum StartOptions {
 }
 
 pub(crate) async fn get_start_block_height(
-    rpc_client: &JsonRpcClient,
+    fastnear_client: &near_lake_framework::FastNearClient,
     tx_details_storage: &std::sync::Arc<TxDetailsStorage>,
     start_options: &StartOptions,
     indexer_id: &str,
@@ -42,20 +40,18 @@ pub(crate) async fn get_start_block_height(
             } else if let Some(height) = height {
                 *height
             } else {
-                final_block_height(rpc_client).await?
+                final_block_height(fastnear_client).await?
             }
         }
-        StartOptions::FromLatest => final_block_height(rpc_client).await?,
+        StartOptions::FromLatest => final_block_height(fastnear_client).await?,
     };
     Ok(start_block_height - 100) // Start just a bit earlier to overlap indexed blocks to ensure we don't miss anything in-between
 }
 
-pub async fn final_block_height(rpc_client: &JsonRpcClient) -> anyhow::Result<u64> {
-    let request = methods::block::RpcBlockRequest {
-        block_reference: BlockReference::Finality(Finality::Final),
-    };
-
-    let latest_block = rpc_client.call(request).await?;
-
-    Ok(latest_block.header.height)
+pub async fn final_block_height(
+    fastnear_client: &near_lake_framework::FastNearClient,
+) -> anyhow::Result<u64> {
+    let latest_block =
+        near_lake_framework::fastnear::fetchers::fetch_last_block(fastnear_client).await;
+    Ok(latest_block.block.header.height)
 }

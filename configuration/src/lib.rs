@@ -15,6 +15,12 @@ pub use crate::configs::{
     TxIndexerConfig,
 };
 
+/// Two new shard layouts included in nearcore 2.5.0. New protocol version is 74.
+/// The network will undergo two resharding events and the number of shards will increase from 6 to 8 shards.
+/// We should freeze the shard layout for read_rpc. The shard layout will be updated in the future.
+pub const SHARD_LAYOUT_PROTOCOL_VERSION:
+    near_lake_framework::near_indexer_primitives::types::ProtocolVersion = 73;
+
 // Read the configuration file and parse it into a struct
 // Validate the struct and return it
 // If the config file does not exist, create a default one

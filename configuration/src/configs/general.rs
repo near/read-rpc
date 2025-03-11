@@ -26,9 +26,6 @@ pub struct GeneralRpcServerConfig {
 #[derive(Debug, Clone)]
 pub struct GeneralTxIndexerConfig {
     pub chain_id: ChainId,
-    pub near_rpc_url: String,
-    pub near_archival_rpc_url: Option<String>,
-    pub rpc_auth_token: Option<String>,
     pub redis_url: url::Url,
     pub indexer_id: String,
     pub metrics_server_port: u16,
@@ -302,9 +299,6 @@ impl From<CommonGeneralConfig> for GeneralTxIndexerConfig {
     fn from(common_config: CommonGeneralConfig) -> Self {
         Self {
             chain_id: common_config.chain_id,
-            near_rpc_url: required_value_or_panic("near_rpc_url", common_config.near_rpc_url),
-            near_archival_rpc_url: common_config.near_archival_rpc_url,
-            rpc_auth_token: common_config.rpc_auth_token,
             redis_url: url::Url::parse(&required_value_or_panic(
                 "redis_url",
                 common_config.redis_url,

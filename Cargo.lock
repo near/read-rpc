@@ -8959,7 +8959,6 @@ dependencies = [
  "itertools 0.13.0",
  "lazy_static",
  "near-indexer-primitives",
- "near-jsonrpc-client 0.15.1",
  "near-lake-framework",
  "prometheus",
  "readnode-primitives",
