@@ -165,13 +165,8 @@ impl ServerContext {
             default_epoch_config,
             &genesis_info.genesis_config.chain_id,
         );
-        let epoch_config = all_epoch_config.for_protocol_version(
-            blocks_info_by_finality
-                .final_block_view()
-                .await
-                .header
-                .latest_protocol_version,
-        );
+        let epoch_config =
+            all_epoch_config.for_protocol_version(configuration::SHARD_LAYOUT_PROTOCOL_VERSION);
 
         let db_manager = database::prepare_db_manager::<database::PostgresDBManager>(
             &rpc_server_config.database,

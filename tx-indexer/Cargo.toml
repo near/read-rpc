@@ -37,7 +37,6 @@ readnode-primitives.workspace = true
 tx-details-storage.workspace = true
 
 near-indexer-primitives.workspace = true
-near-jsonrpc-client.workspace = true
 near-lake-framework.workspace = true
 
 [features]

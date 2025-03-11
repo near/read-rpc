@@ -26,13 +26,10 @@ async fn main() -> anyhow::Result<()> {
 
     let opts = config::Opts::parse();
 
-    let mut rpc_client =
-        near_jsonrpc_client::JsonRpcClient::connect(&indexer_config.general.near_rpc_url);
-    if let Some(auth_token) = &indexer_config.general.rpc_auth_token {
-        rpc_client = rpc_client.header(near_jsonrpc_client::auth::Authorization::bearer(
-            auth_token,
-        )?);
-    }
+    let fastnear_client = indexer_config
+        .lake_config
+        .lake_client(indexer_config.general.chain_id.clone())
+        .await?;
 
     tracing::info!(target: INDEXER, "Instantiating the tx_details storage client...");
     let tx_details_storage = std::sync::Arc::new(
@@ -40,7 +37,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let start_block_height = config::get_start_block_height(
-        &rpc_client,
+        &fastnear_client,
         &tx_details_storage,
         &opts.start_options,
         &indexer_config.general.indexer_id,
@@ -71,7 +68,7 @@ async fn main() -> anyhow::Result<()> {
     let stats = std::sync::Arc::new(tokio::sync::RwLock::new(metrics::Stats::new()));
     tokio::spawn(metrics::state_logger(
         std::sync::Arc::clone(&stats),
-        rpc_client.clone(),
+        fastnear_client.clone(),
     ));
 
     tracing::info!(target: INDEXER, "Starting tx indexer...",);

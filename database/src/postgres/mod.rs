@@ -75,8 +75,7 @@ impl PostgresDBManager {
         &self,
         account_id: &near_primitives::types::AccountId,
     ) -> anyhow::Result<ShardIdPool> {
-        let shard_id =
-            near_primitives::shard_layout::account_id_to_shard_id(account_id, &self.shard_layout);
+        let shard_id = self.shard_layout.account_id_to_shard_id(account_id);
         Ok(ShardIdPool {
             shard_id,
             pool: self.shards_pool.get(&shard_id).ok_or(anyhow::anyhow!(

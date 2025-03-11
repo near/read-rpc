@@ -432,14 +432,9 @@ pub async fn protocol_config_call(
     genesis_config.minimum_stake_divisor = epoch_config.minimum_stake_divisor;
     genesis_config.protocol_upgrade_stake_threshold = epoch_config.protocol_upgrade_stake_threshold;
     genesis_config.shard_layout = epoch_config.shard_layout;
-    genesis_config.num_chunk_only_producer_seats = epoch_config
-        .validator_selection_config
-        .num_chunk_only_producer_seats;
-    genesis_config.minimum_validators_per_shard = epoch_config
-        .validator_selection_config
-        .minimum_validators_per_shard;
-    genesis_config.minimum_stake_ratio =
-        epoch_config.validator_selection_config.minimum_stake_ratio;
+    genesis_config.num_chunk_only_producer_seats = epoch_config.num_chunk_only_producer_seats;
+    genesis_config.minimum_validators_per_shard = epoch_config.minimum_validators_per_shard;
+    genesis_config.minimum_stake_ratio = epoch_config.minimum_stake_ratio;
 
     let protocol_config = near_chain_configs::ProtocolConfig {
         genesis_config,
@@ -449,6 +444,7 @@ pub async fn protocol_config_call(
             account_creation_config: runtime_config.account_creation_config.clone(),
             congestion_control_config: runtime_config.congestion_control_config,
             witness_config: runtime_config.witness_config,
+            bandwidth_scheduler_config: runtime_config.bandwidth_scheduler_config,
             use_state_stored_receipt: runtime_config.use_state_stored_receipt,
         },
     };

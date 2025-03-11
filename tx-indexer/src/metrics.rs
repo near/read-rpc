@@ -1,5 +1,4 @@
 use actix_web::{get, App, HttpServer, Responder};
-use near_jsonrpc_client::JsonRpcClient;
 use prometheus::{Encoder, IntCounter, IntGauge, Opts};
 
 type Result<T, E> = std::result::Result<T, E>;
@@ -105,7 +104,7 @@ impl Stats {
 
 pub async fn state_logger(
     stats: std::sync::Arc<tokio::sync::RwLock<Stats>>,
-    rpc_client: JsonRpcClient,
+    rpc_client: near_lake_framework::FastNearClient,
 ) {
     let interval_secs = 10;
     let mut prev_blocks_processed_count: u64 = 0;

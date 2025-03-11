@@ -65,6 +65,6 @@ pub async fn shard_layout(
         &genesis_config.chain_id,
     );
     let epoch_config =
-        all_epoch_config.for_protocol_version(near_primitives::version::PROTOCOL_VERSION);
+        all_epoch_config.for_protocol_version(configuration::SHARD_LAYOUT_PROTOCOL_VERSION);
     Ok(epoch_config.shard_layout)
 }
