@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Add authorization token supports
 * Migrate transaction details from GCS to ScyllaDB
 * Migrate `receipts_map` and `outcomes_map` from PostgreSQL to ScyllaDB
+* Remove `near_state_indexer`
+
+### Supported Nearcore Version
+- nearcore v2.5.1
+- rust v1.84.0
 
 ## [0.3.3](https://github.com/near/read-rpc/releases/tag/v0.3.3)
 

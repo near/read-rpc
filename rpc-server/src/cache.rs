@@ -1,4 +1,4 @@
-/// A memory-size based wrapper around the lru crate.
+//! A memory-size based wrapper around the lru crate.
 
 const INITIAL_CAPACITY: Option<std::num::NonZeroUsize> = std::num::NonZeroUsize::new(10);
 
