@@ -11,8 +11,7 @@ mod default_env_configs;
 pub use crate::configs::database::DatabaseConfig;
 pub use crate::configs::general::ChainId;
 pub use crate::configs::{
-    IndexerConfig, NearStateIndexerConfig, RightsizingConfig, RpcServerConfig, StateIndexerConfig,
-    TxIndexerConfig,
+    IndexerConfig, RightsizingConfig, RpcServerConfig, StateIndexerConfig, TxIndexerConfig,
 };
 
 /// Two new shard layouts included in nearcore 2.5.0. New protocol version is 74.
