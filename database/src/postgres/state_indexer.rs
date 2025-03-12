@@ -278,8 +278,10 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
             ])
             .inc();
 
-        let mut accounts_ids = vec![];
-        let mut data_keys = vec![];
+        // let mut accounts_ids = vec![];
+        // let mut data_keys = vec![];
+        let mut accounts: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
         for state_change in state_changes.iter() {
             match &state_change.value {
                 near_primitives::views::StateChangeValueView::DataUpdate {
@@ -289,39 +291,61 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                 }
                 | near_primitives::views::StateChangeValueView::DataDeletion { account_id, key } => {
                     let data_key: &[u8] = key.as_ref();
-                    accounts_ids.push(account_id.to_string());
-                    data_keys.push(hex::encode(data_key).to_string());
+                    let data_key = hex::encode(data_key).to_string();
+                    accounts
+                        .entry(account_id.to_string())
+                        .or_default()
+                        .push(data_key);
+                    // accounts_ids.push(account_id.to_string());
+                    // data_keys.push(hex::encode(data_key).to_string());
                 }
                 _ => {}
             }
         }
+        let mut tasks = Vec::new();
 
-        sqlx::query(
-            "
-            WITH latest_rows AS (
-                SELECT account_id, data_key, MAX(block_height_from) AS block_height_from
-                FROM new_state_changes_data
-                WHERE account_id = ANY($1)
-                  AND data_key = ANY($2)
-                  AND block_height_from < $3
-                GROUP BY account_id, data_key
-            )
-            UPDATE new_state_changes_data AS target
-            SET block_height_to = $3
-            FROM latest_rows
-            WHERE target.account_id = latest_rows.account_id
-              AND target.data_key = latest_rows.data_key
-              AND target.block_height_from = latest_rows.block_height_from;
-            ",
-        )
-        .bind(accounts_ids)
-        .bind(data_keys)
-        .bind(bigdecimal::BigDecimal::from(block_height))
-        .execute(self.shards_pool.get(&shard_id).ok_or(anyhow::anyhow!(
-            "Database connection for Shard_{} not found",
-            shard_id
-        ))?)
-        .await?;
+        for (account_id, data_keys) in accounts.into_iter() {
+            let pool = self.shards_pool.get(&shard_id).unwrap().clone();
+            let task = tokio::task::spawn(async move {
+                sqlx::query("CALL state_data_update_latest_block_height($1, $2, $3)")
+                    .bind(account_id)
+                    .bind(data_keys)
+                    .bind(bigdecimal::BigDecimal::from(block_height))
+                    .execute(&pool)
+                    .await
+            });
+
+            tasks.push(task);
+        }
+        for task in tasks {
+            task.await??;
+        }
+        // sqlx::query(
+        //     "
+        //     WITH latest_rows AS (
+        //         SELECT account_id, data_key, MAX(block_height_from) AS block_height_from
+        //         FROM new_state_changes_data
+        //         WHERE account_id = ANY($1)
+        //           AND data_key = ANY($2)
+        //           AND block_height_from < $3
+        //         GROUP BY account_id, data_key
+        //     )
+        //     UPDATE new_state_changes_data AS target
+        //     SET block_height_to = $3
+        //     FROM latest_rows
+        //     WHERE target.account_id = latest_rows.account_id
+        //       AND target.data_key = latest_rows.data_key
+        //       AND target.block_height_from = latest_rows.block_height_from;
+        //     ",
+        // )
+        // .bind(accounts_ids)
+        // .bind(data_keys)
+        // .bind(bigdecimal::BigDecimal::from(block_height))
+        // .execute(self.shards_pool.get(&shard_id).ok_or(anyhow::anyhow!(
+        //     "Database connection for Shard_{} not found",
+        //     shard_id
+        // ))?)
+        // .await?;
         Ok(())
     }
 
@@ -392,8 +416,10 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                 "state_changes_access_key",
             ])
             .inc();
-        let mut accounts_ids = vec![];
-        let mut data_keys = vec![];
+        // let mut accounts_ids = vec![];
+        // let mut data_keys = vec![];
+        let mut accounts: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
         for state_change in state_changes.iter() {
             match &state_change.value {
                 near_primitives::views::StateChangeValueView::AccessKeyUpdate {
@@ -405,39 +431,61 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                     account_id,
                     public_key,
                 } => {
-                    accounts_ids.push(account_id.to_string());
-                    data_keys.push(hex::encode(public_key.key_data()).to_string());
+                    // accounts_ids.push(account_id.to_string());
+                    // data_keys.push(hex::encode(public_key.key_data()).to_string());
+                    accounts
+                        .entry(account_id.to_string())
+                        .or_default()
+                        .push(hex::encode(public_key.key_data()).to_string());
                 }
                 _ => {}
             }
         }
+        let mut tasks = Vec::new();
 
-        sqlx::query(
-            "
-            WITH latest_rows AS (
-                SELECT account_id, data_key, MAX(block_height_from) AS block_height_from
-                FROM new_state_changes_access_key
-                WHERE account_id = ANY($1)
-                  AND data_key = ANY($2)
-                  AND block_height_from < $3
-                GROUP BY account_id, data_key
-            )
-            UPDATE new_state_changes_access_key AS target
-            SET block_height_to = $3
-            FROM latest_rows
-            WHERE target.account_id = latest_rows.account_id
-              AND target.data_key = latest_rows.data_key
-              AND target.block_height_from = latest_rows.block_height_from;
-            ",
-        )
-        .bind(accounts_ids)
-        .bind(data_keys)
-        .bind(bigdecimal::BigDecimal::from(block_height))
-        .execute(self.shards_pool.get(&shard_id).ok_or(anyhow::anyhow!(
-            "Database connection for Shard_{} not found",
-            shard_id
-        ))?)
-        .await?;
+        for (account_id, data_keys) in accounts.into_iter() {
+            let pool = self.shards_pool.get(&shard_id).unwrap().clone();
+            let task = tokio::task::spawn(async move {
+                sqlx::query("CALL access_keys_update_latest_block_height($1, $2, $3)")
+                    .bind(account_id)
+                    .bind(data_keys)
+                    .bind(bigdecimal::BigDecimal::from(block_height))
+                    .execute(&pool)
+                    .await
+            });
+
+            tasks.push(task);
+        }
+        for task in tasks {
+            task.await??;
+        }
+
+        // sqlx::query(
+        //     "
+        //     WITH latest_rows AS (
+        //         SELECT account_id, data_key, MAX(block_height_from) AS block_height_from
+        //         FROM new_state_changes_access_key
+        //         WHERE account_id = ANY($1)
+        //           AND data_key = ANY($2)
+        //           AND block_height_from < $3
+        //         GROUP BY account_id, data_key
+        //     )
+        //     UPDATE new_state_changes_access_key AS target
+        //     SET block_height_to = $3
+        //     FROM latest_rows
+        //     WHERE target.account_id = latest_rows.account_id
+        //       AND target.data_key = latest_rows.data_key
+        //       AND target.block_height_from = latest_rows.block_height_from;
+        //     ",
+        // )
+        // .bind(accounts_ids)
+        // .bind(data_keys)
+        // .bind(bigdecimal::BigDecimal::from(block_height))
+        // .execute(self.shards_pool.get(&shard_id).ok_or(anyhow::anyhow!(
+        //     "Database connection for Shard_{} not found",
+        //     shard_id
+        // ))?)
+        // .await?;
         Ok(())
     }
 
@@ -504,8 +552,8 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
             ])
             .inc();
         let mut accounts_ids = vec![];
-        for state_change in state_changes.iter() {
-            match &state_change.value {
+        for state_change in state_changes.into_iter() {
+            match state_change.value.clone() {
                 near_primitives::views::StateChangeValueView::ContractCodeUpdate {
                     account_id,
                     ..
@@ -519,29 +567,35 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
             }
         }
 
-        sqlx::query(
-            "
-            WITH latest_rows AS (
-            SELECT account_id, MAX(block_height_from) AS block_height_from
-            FROM new_state_changes_contract
-            WHERE account_id = ANY($1)
-              AND block_height_from < $2
-            GROUP BY account_id
-            )
-            UPDATE new_state_changes_contract AS target
-            SET block_height_to = $2
-            FROM latest_rows
-            WHERE target.account_id = latest_rows.account_id
-              AND target.block_height_from = latest_rows.block_height_from;
-            ",
-        )
-        .bind(accounts_ids)
-        .bind(bigdecimal::BigDecimal::from(block_height))
-        .execute(self.shards_pool.get(&shard_id).ok_or(anyhow::anyhow!(
-            "Database connection for Shard_{} not found",
-            shard_id
-        ))?)
-        .await?;
+        sqlx::query("CALL contracts_update_latest_block_height($1, $2)")
+            .bind(accounts_ids)
+            .bind(bigdecimal::BigDecimal::from(block_height))
+            .execute(self.shards_pool.get(&shard_id).unwrap())
+            .await?;
+
+        // sqlx::query(
+        //     "
+        //     WITH latest_rows AS (
+        //     SELECT account_id, MAX(block_height_from) AS block_height_from
+        //     FROM new_state_changes_contract
+        //     WHERE account_id = ANY($1)
+        //       AND block_height_from < $2
+        //     GROUP BY account_id
+        //     )
+        //     UPDATE new_state_changes_contract AS target
+        //     SET block_height_to = $2
+        //     FROM latest_rows
+        //     WHERE target.account_id = latest_rows.account_id
+        //       AND target.block_height_from = latest_rows.block_height_from;
+        //     ",
+        // )
+        // .bind(accounts_ids)
+        // .bind(bigdecimal::BigDecimal::from(block_height))
+        // .execute(self.shards_pool.get(&shard_id).ok_or(anyhow::anyhow!(
+        //     "Database connection for Shard_{} not found",
+        //     shard_id
+        // ))?)
+        // .await?;
         Ok(())
     }
 
@@ -611,8 +665,8 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
             .inc();
 
         let mut accounts_ids = vec![];
-        for state_change in state_changes.iter() {
-            match &state_change.value {
+        for state_change in state_changes.into_iter() {
+            match state_change.value.clone() {
                 near_primitives::views::StateChangeValueView::AccountUpdate {
                     account_id, ..
                 }
@@ -623,29 +677,35 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
             }
         }
 
-        sqlx::query(
-            "
-            WITH latest_rows AS (
-            SELECT account_id, MAX(block_height_from) AS block_height_from
-            FROM new_state_changes_account
-            WHERE account_id = ANY($1)
-              AND block_height_from < $2
-            GROUP BY account_id
-            )
-            UPDATE new_state_changes_account AS target
-            SET block_height_to = $2
-            FROM latest_rows
-            WHERE target.account_id = latest_rows.account_id
-              AND target.block_height_from = latest_rows.block_height_from;
-            ",
-        )
-        .bind(accounts_ids)
-        .bind(bigdecimal::BigDecimal::from(block_height))
-        .execute(self.shards_pool.get(&shard_id).ok_or(anyhow::anyhow!(
-            "Database connection for Shard_{} not found",
-            shard_id
-        ))?)
-        .await?;
+        sqlx::query("CALL accounts_update_latest_block_height($1, $2)")
+            .bind(accounts_ids)
+            .bind(bigdecimal::BigDecimal::from(block_height))
+            .execute(self.shards_pool.get(&shard_id).unwrap())
+            .await?;
+
+        // sqlx::query(
+        //     "
+        //     WITH latest_rows AS (
+        //     SELECT account_id, MAX(block_height_from) AS block_height_from
+        //     FROM new_state_changes_account
+        //     WHERE account_id = ANY($1)
+        //       AND block_height_from < $2
+        //     GROUP BY account_id
+        //     )
+        //     UPDATE new_state_changes_account AS target
+        //     SET block_height_to = $2
+        //     FROM latest_rows
+        //     WHERE target.account_id = latest_rows.account_id
+        //       AND target.block_height_from = latest_rows.block_height_from;
+        //     ",
+        // )
+        // .bind(accounts_ids)
+        // .bind(bigdecimal::BigDecimal::from(block_height))
+        // .execute(self.shards_pool.get(&shard_id).ok_or(anyhow::anyhow!(
+        //     "Database connection for Shard_{} not found",
+        //     shard_id
+        // ))?)
+        // .await?;
         Ok(())
     }
 }

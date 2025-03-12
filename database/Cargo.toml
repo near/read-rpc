@@ -30,3 +30,4 @@ readnode-primitives.workspace = true
 
 near-primitives.workspace = true
 near-crypto.workspace = true
+tokio = "1.44.0"

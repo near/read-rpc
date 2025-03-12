@@ -2111,6 +2111,7 @@ dependencies = [
  "readnode-primitives",
  "serde_json",
  "sqlx",
+ "tokio",
 ]
 
 [[package]]
