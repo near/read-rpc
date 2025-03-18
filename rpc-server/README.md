@@ -70,10 +70,6 @@ This feature flag enables the shadow data consistency checks. With this feature 
 
 **Warning** This feature is created for the early-stage of lunching the read-rpc-server to catch all the bugs and inconsistencies. You don't need this feature if you are not a contributor to the read-rpc-server.
 
-## Redis (Optional)
-
-Redis is used as an optional dependency when paired with the near_state_indexer feature. To use Redis, you need to specify the REDIS_URL in the .env file and set up a server using docker or `redis-server` command. Redis can be used to cache the state data indexed by the near_state_indexer for faster retrieval and reduced load on the database.
-
 ## Metrics (Prometheus)
 
 The read-rpc-server exposes Prometheus-compatible metrics at the `/metrics` endpoint.
