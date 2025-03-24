@@ -77,13 +77,9 @@ impl ChunkInfo {
 
 impl From<near_indexer_primitives::IndexerShard> for ChunkInfo {
     fn from(shard: near_indexer_primitives::IndexerShard) -> Self {
-        let chunk_view = match shard.chunk {
-            Some(indexer_chunk) => Some(utils::from_indexer_chunk_to_chunk_view(indexer_chunk)),
-            None => None,
-        };
         Self {
             shard_id: shard.shard_id,
-            chunk: chunk_view,
+            chunk: shard.chunk.map(utils::from_indexer_chunk_to_chunk_view),
         }
     }
 }
