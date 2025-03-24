@@ -41,6 +41,40 @@ pub async fn check_block_height(
     Ok(())
 }
 
+pub fn from_indexer_chunk_to_chunk_view(
+    indexer_chunk: near_indexer_primitives::IndexerChunkView,
+) -> near_primitives::views::ChunkView {
+    // We collect a list of local receipt ids to filter out local receipts from the chunk
+    let local_receipt_ids: Vec<near_indexer_primitives::CryptoHash> = indexer_chunk
+        .transactions
+        .iter()
+        .filter(|indexer_tx| indexer_tx.transaction.signer_id == indexer_tx.transaction.receiver_id)
+        .map(|indexer_tx| {
+            *indexer_tx
+                .outcome
+                .execution_outcome
+                .outcome
+                .receipt_ids
+                .first()
+                .expect("Conversion receipt_id must be present in transaction outcome")
+        })
+        .collect();
+    near_primitives::views::ChunkView {
+        author: indexer_chunk.author,
+        header: indexer_chunk.header,
+        transactions: indexer_chunk
+            .transactions
+            .into_iter()
+            .map(|indexer_transaction| indexer_transaction.transaction)
+            .collect(),
+        receipts: indexer_chunk
+            .receipts
+            .into_iter()
+            .filter(|receipt| !local_receipt_ids.contains(&receipt.receipt_id))
+            .collect(),
+    }
+}
+
 #[cfg_attr(
     feature = "tracing-instrumentation",
     tracing::instrument(skip(fastnear_client))
@@ -56,31 +90,18 @@ pub async fn fetch_chunk_from_fastnear(
         block_height,
         shard_id
     );
-    match near_lake_framework::fastnear::fetchers::fetch_shard_or_retry(
+    let indexer_chunk = near_lake_framework::fastnear::fetchers::fetch_chunk_or_retry(
         fastnear_client,
         block_height,
         shard_id.into(),
     )
     .await
-    {
-        Ok(shard) => {
-            let chunk_info = crate::modules::blocks::ChunkInfo::from(shard);
-            if let Some(chunk) = chunk_info.chunk {
-                Ok(chunk)
-            } else {
-                Err(
-                    near_jsonrpc::primitives::types::chunks::RpcChunkError::InternalError {
-                        error_message: "Unavailable chunk".to_string(),
-                    },
-                )
-            }
-        }
-        Err(err) => Err(
-            near_jsonrpc::primitives::types::chunks::RpcChunkError::InternalError {
-                error_message: err.to_string(),
-            },
-        ),
-    }
+    .map_err(
+        |err| near_jsonrpc::primitives::types::chunks::RpcChunkError::InternalError {
+            error_message: err.to_string(),
+        },
+    )?;
+    Ok(from_indexer_chunk_to_chunk_view(indexer_chunk))
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]

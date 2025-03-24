@@ -51,7 +51,10 @@ pub(crate) async fn get_start_block_height(
 pub async fn final_block_height(
     fastnear_client: &near_lake_framework::FastNearClient,
 ) -> anyhow::Result<u64> {
-    let latest_block =
-        near_lake_framework::fastnear::fetchers::fetch_last_block(fastnear_client).await;
-    Ok(latest_block.block.header.height)
+    let latest_block = near_lake_framework::fastnear::fetchers::fetch_block_by_finality(
+        fastnear_client,
+        near_indexer_primitives::types::Finality::Final,
+    )
+    .await;
+    Ok(latest_block.header.height)
 }

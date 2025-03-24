@@ -238,7 +238,7 @@ async fn task_update_optimistic_block_regularly(
     loop {
         optimistic_block_height += 1;
         if let Some(streamer_message) =
-            near_lake_framework::fastnear::fetchers::fetch_optimistic_block_by_height(
+            near_lake_framework::fastnear::fetchers::fetch_optimistic_streamer_message_by_height(
                 &fastnear_client,
                 optimistic_block_height,
             )
