@@ -26,8 +26,7 @@ referer_header_value = "${REFERER_HEADER_VALUE}"
 ## Default value is None
 rpc_auth_token = "${RPC_AUTH_TOKEN}"
 
-## redis url using for pub/sub optimistic_block and final_block
-## from near_state_indexer to rpc_server
+## redis url using for cache to store the tx in progress
 ## Default value is redis://127.0.0.1/
 redis_url = "${REDIS_URL}"
 
@@ -95,17 +94,6 @@ metrics_server_port = "${STATE_SERVER_PORT}"
 ## Concurrency for state-indexer
 ## Default value is 1
 concurrency = "${CONCURRENCY}"
-
-### Near state indexer general configuration
-[general.near_state_indexer]
-
-## Port for metrics server
-## By default it 8082
-metrics_server_port = "${NEAR_STATE_SERVER_PORT}"
-
-## Concurrency for state-indexer
-## Default value is 1
-concurrency = "${NEAR_STATE_CONCURRENCY}"
 
 ### Tracking acconunts and state changes configuration
 [rightsizing]

@@ -8,7 +8,7 @@ use super::utils::get_state_from_db;
 
 /// `query` rpc method implementation
 /// calls proxy_rpc_call to get `query` from near-rpc if request parameters not supported by read-rpc
-/// as example: BlockReference for Finality::None is not supported by read-rpc when near_state_indexer is not running
+/// as example: BlockReference for Finality::None is not supported by read-rpc when near_data is not running
 /// another way to get `query` from read-rpc using `query_call`
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 pub async fn query(

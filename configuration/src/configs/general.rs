@@ -42,13 +42,6 @@ pub struct GeneralStateIndexerConfig {
     pub concurrency: usize,
 }
 
-#[derive(Debug, Clone)]
-pub struct GeneralNearStateIndexerConfig {
-    pub chain_id: ChainId,
-    pub redis_url: url::Url,
-    pub concurrency: usize,
-}
-
 #[derive(Validate, Deserialize, Debug, Clone, Default)]
 pub struct CommonGeneralConfig {
     #[serde(deserialize_with = "deserialize_data_or_env")]
@@ -74,8 +67,6 @@ pub struct CommonGeneralConfig {
     pub tx_indexer: CommonGeneralTxIndexerConfig,
     #[serde(default)]
     pub state_indexer: CommonGeneralStateIndexerConfig,
-    #[serde(default)]
-    pub near_state_indexer: CommonGeneralNearStateIndexerConfig,
 }
 
 #[derive(Deserialize, PartialEq, Debug, Clone, Default)]
@@ -231,26 +222,6 @@ impl Default for CommonGeneralStateIndexerConfig {
     }
 }
 
-#[derive(Deserialize, Debug, Clone)]
-pub struct CommonGeneralNearStateIndexerConfig {
-    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
-    pub concurrency: Option<usize>,
-}
-
-impl CommonGeneralNearStateIndexerConfig {
-    pub fn default_concurrency() -> usize {
-        1
-    }
-}
-
-impl Default for CommonGeneralNearStateIndexerConfig {
-    fn default() -> Self {
-        Self {
-            concurrency: Some(Self::default_concurrency()),
-        }
-    }
-}
-
 impl From<CommonGeneralConfig> for GeneralRpcServerConfig {
     fn from(common_config: CommonGeneralConfig) -> Self {
         Self {
@@ -335,23 +306,6 @@ impl From<CommonGeneralConfig> for GeneralStateIndexerConfig {
                 .state_indexer
                 .concurrency
                 .unwrap_or_else(CommonGeneralStateIndexerConfig::default_concurrency),
-        }
-    }
-}
-
-impl From<CommonGeneralConfig> for GeneralNearStateIndexerConfig {
-    fn from(common_config: CommonGeneralConfig) -> Self {
-        Self {
-            chain_id: common_config.chain_id,
-            redis_url: url::Url::parse(&required_value_or_panic(
-                "redis_url",
-                common_config.redis_url,
-            ))
-            .expect("Invalid redis url"),
-            concurrency: common_config
-                .near_state_indexer
-                .concurrency
-                .unwrap_or_else(CommonGeneralNearStateIndexerConfig::default_concurrency),
         }
     }
 }
