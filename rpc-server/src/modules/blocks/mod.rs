@@ -77,45 +77,9 @@ impl ChunkInfo {
 
 impl From<near_indexer_primitives::IndexerShard> for ChunkInfo {
     fn from(shard: near_indexer_primitives::IndexerShard) -> Self {
-        let chunk_view = match shard.chunk {
-            Some(chunk) => {
-                // We collect a list of local receipt ids to filter out local receipts from the chunk
-                let local_receipt_ids: Vec<near_indexer_primitives::CryptoHash> = chunk
-                    .transactions
-                    .iter()
-                    .filter(|indexer_tx| {
-                        indexer_tx.transaction.signer_id == indexer_tx.transaction.receiver_id
-                    })
-                    .map(|indexer_tx| {
-                        *indexer_tx
-                            .outcome
-                            .execution_outcome
-                            .outcome
-                            .receipt_ids
-                            .first()
-                            .expect("Conversion receipt_id must be present in transaction outcome")
-                    })
-                    .collect();
-                Some(near_primitives::views::ChunkView {
-                    author: chunk.author,
-                    header: chunk.header,
-                    transactions: chunk
-                        .transactions
-                        .into_iter()
-                        .map(|indexer_transaction| indexer_transaction.transaction)
-                        .collect(),
-                    receipts: chunk
-                        .receipts
-                        .into_iter()
-                        .filter(|receipt| !local_receipt_ids.contains(&receipt.receipt_id))
-                        .collect(),
-                })
-            }
-            None => None,
-        };
         Self {
             shard_id: shard.shard_id,
-            chunk: chunk_view,
+            chunk: shard.chunk.map(utils::from_indexer_chunk_to_chunk_view),
         }
     }
 }
@@ -343,9 +307,17 @@ impl BlocksInfoByFinality {
         fast_near_client: &near_lake_framework::FastNearClient,
     ) -> Self {
         let final_block =
-            near_lake_framework::fastnear::fetchers::fetch_last_block(fast_near_client).await;
+            near_lake_framework::fastnear::fetchers::fetch_streamer_message_by_finality(
+                fast_near_client,
+                near_indexer_primitives::types::Finality::Final,
+            )
+            .await;
         let optimistic_block =
-            near_lake_framework::fastnear::fetchers::fetch_optimistic_block(fast_near_client).await;
+            near_lake_framework::fastnear::fetchers::fetch_streamer_message_by_finality(
+                fast_near_client,
+                near_indexer_primitives::types::Finality::None,
+            )
+            .await;
         let validators = crate::utils::get_current_validators(near_rpc_client)
             .await
             .expect("Failed to get current validators");

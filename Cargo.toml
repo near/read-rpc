@@ -65,4 +65,4 @@ near-vm-runner = { git = "https://github.com/near/nearcore", rev = "710f763472a6
 ] }
 
 near-jsonrpc-client = { git = 'https://github.com/kobayurii/near-jsonrpc-client-rs.git', branch = 'fork/0.16.0' }
-near-lake-framework = { git = 'https://github.com/kobayurii/near-lake-framework-rs.git', branch = 'fork/0.7.13' }
+near-lake-framework = { git = 'https://github.com/kobayurii/near-lake-framework-rs.git', branch = 'fork/0.7.14' }
