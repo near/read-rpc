@@ -31,6 +31,7 @@ impl PageState {
 
 pub struct ShardIdPool<'a> {
     shard_id: near_primitives::types::ShardId,
+    table_number: u64,
     pool: &'a sqlx::Pool<sqlx::Postgres>,
 }
 
@@ -40,6 +41,7 @@ pub struct PostgresDBManager {
     shards_pool:
         std::collections::HashMap<near_primitives::types::ShardId, sqlx::Pool<sqlx::Postgres>>,
     meta_db_pool: sqlx::Pool<sqlx::Postgres>,
+    earliest_available_block: Option<near_primitives::types::BlockHeight>,
 }
 
 impl PostgresDBManager {
@@ -76,28 +78,78 @@ impl PostgresDBManager {
     async fn get_shard_connection(
         &self,
         account_id: &near_primitives::types::AccountId,
+        block_height: &near_primitives::types::BlockHeight,
     ) -> anyhow::Result<ShardIdPool> {
         let shard_id = self.shard_layout.account_id_to_shard_id(account_id);
         Ok(ShardIdPool {
             shard_id,
+            table_number: self.get_table_number(block_height).await?,
             pool: self.shards_pool.get(&shard_id).ok_or(anyhow::anyhow!(
                 "Database connection for Shard_{} not found",
                 shard_id
             ))?,
         })
     }
-
+    
     async fn get_shard_connection_by_id(
         &self,
         shard_id: &near_primitives::types::ShardId,
     ) -> anyhow::Result<ShardIdPool> {
         Ok(ShardIdPool {
             shard_id: *shard_id,
+            table_number: 0, // Table number is not used in this case
             pool: self.shards_pool.get(shard_id).ok_or(anyhow::anyhow!(
                 "Database connection for shard_{} not found",
                 shard_id
             ))?,
         })
+    }
+
+    /// # Explanation of the logic:
+    ///
+    /// 1. `block_height / 500000`
+    ///
+    ///     * This integer division truncates any remainder, effectively grouping numbers into bins of 500,000.
+    ///
+    ///     * Example: 73908345 / 500000 = 147 (as integer division discards the remainder).
+    ///
+    /// 2. `* 5`
+    ///
+    ///     * Since each bin represents a multiple of 500,000, multiplying by 5 scales the result to match the pattern you provided.
+    ///
+    /// # Example Calculations:
+    /// Example 1: 73908345
+    ///
+    ///     1. 73908345 / 500000 = 147
+    ///
+    ///     2. 147 * 5 = 735
+    ///
+    ///     Output: 735
+    ///
+    /// Example 2: 130501000
+    ///     
+    ///     1. 130501000 / 500000 = 261
+    ///
+    ///     2. 261 * 5 = 1305
+    ///
+    ///     Output: 1305
+    async fn get_table_number(
+        &self,
+        block_height: &near_primitives::types::BlockHeight,
+    ) -> anyhow::Result<u64> {
+        if let Some(earliest_available_block) = self.earliest_available_block {
+            if *block_height < earliest_available_block {
+                anyhow::bail!(
+                    "Block {} has been garbage collected. The earliest available block is {}",
+                    block_height,
+                    earliest_available_block
+                )
+            } else {
+                Ok((block_height / 500000) * 5)
+            }
+        } else {
+            Ok((block_height / 500000) * 5)
+        }
     }
 
     async fn run_migrations(
@@ -137,6 +189,10 @@ impl crate::BaseDbManager for PostgresDBManager {
             shard_layout,
             shards_pool,
             meta_db_pool,
+            // TODO: This should be set from the config and not hardcoded
+            // Should be updated when garbage collection is run
+            // or should be None for archive node_mode
+            earliest_available_block: None,
         }))
     }
 }
