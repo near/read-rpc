@@ -74,15 +74,15 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         } else {
             crate::postgres::PageState::new(1000)
         };
-        let table_number = shard_id_pool.table_number;
+        let data_range_id = shard_id_pool.data_range_id;
         let sql_query = format!(
             "
                 WITH latest_blocks AS (
                     SELECT
                         data_key,
                         MAX(block_height) AS max_block_height
-                    FROM 
-                        state_changes_data_{table_number}
+                    FROM
+                        state_changes_data_{data_range_id}
                     WHERE
                         account_id = $1
                         AND block_height <= $2
@@ -93,7 +93,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                     sc.data_key,
                     sc.data_value
                 FROM
-                    state_changes_data_{table_number} sc
+                    state_changes_data_{data_range_id} sc
                 INNER JOIN latest_blocks lb
                 ON
                     sc.data_key = lb.data_key
@@ -153,15 +153,15 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
             ])
             .inc();
         let mut items = std::collections::HashMap::new();
-        let table_number = shard_id_pool.table_number;
+        let data_range_id = shard_id_pool.data_range_id;
         let sql_query = format!(
             "
                 WITH latest_blocks AS (
                     SELECT
                         data_key,
                         MAX(block_height) AS max_block_height
-                    FROM 
-                        state_changes_data_{table_number}
+                    FROM
+                        state_changes_data_{data_range_id}
                     WHERE
                         account_id = $1
                         AND data_key LIKE $2
@@ -173,7 +173,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                     sc.data_key,
                     sc.data_value
                 FROM
-                    state_changes_data_{table_number} sc
+                    state_changes_data_{data_range_id} sc
                 INNER JOIN latest_blocks lb
                 ON
                     sc.data_key = lb.data_key
@@ -212,15 +212,15 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
             ])
             .inc();
         let mut items = std::collections::HashMap::new();
-        let table_number = shard_id_pool.table_number;
+        let data_range_id = shard_id_pool.data_range_id;
         let sql_query = format!(
             "
                 WITH latest_blocks AS (
                     SELECT
                         data_key,
                         MAX(block_height) AS max_block_height
-                    FROM 
-                        state_changes_data_{table_number}
+                    FROM
+                        state_changes_data_{data_range_id}
                     WHERE
                         account_id = $1
                         AND block_height <= $2
@@ -231,7 +231,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                     sc.data_key,
                     sc.data_value
                 FROM
-                    state_changes_data_{table_number} sc
+                    state_changes_data_{data_range_id} sc
                 INNER JOIN latest_blocks lb
                 ON
                     sc.data_key = lb.data_key
@@ -270,11 +270,11 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 "state_changes_data",
             ])
             .inc();
-        let table_number = shard_id_pool.table_number;
+        let data_range_id = shard_id_pool.data_range_id;
         let sql_query = format!(
             "
                 SELECT data_value
-                FROM state_changes_data_{table_number}
+                FROM state_changes_data_{data_range_id}
                 WHERE account_id = $1 
                     AND data_key = $2
                     AND block_height <= $3
@@ -307,11 +307,11 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 "state_changes_account",
             ])
             .inc();
-        let table_number = shard_id_pool.table_number;
+        let data_range_id = shard_id_pool.data_range_id;
         let sql_query = format!(
             "
                 SELECT block_height, block_hash, data_value
-                FROM state_changes_account_{table_number}
+                FROM state_changes_account_{data_range_id}
                 WHERE account_id = $1
                     AND block_height <= $2
                 ORDER BY block_height DESC
@@ -348,11 +348,11 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 "state_changes_contract",
             ])
             .inc();
-        let table_number = shard_id_pool.table_number;
+        let data_range_id = shard_id_pool.data_range_id;
         let sql_query = format!(
             "
                 SELECT block_height, block_hash, data_value
-                FROM state_changes_contract_{table_number}
+                FROM state_changes_contract_{data_range_id}
                 WHERE account_id = $1
                     AND block_height <= $2
                 ORDER BY block_height DESC
@@ -391,11 +391,11 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
             ])
             .inc();
         let key_data = borsh::to_vec(&public_key)?;
-        let table_number = shard_id_pool.table_number;
+        let data_range_id = shard_id_pool.data_range_id;
         let sql_query = format!(
             "
                 SELECT block_height, block_hash, data_value
-                FROM state_changes_access_key_{table_number}
+                FROM state_changes_access_key_{data_range_id}
                 WHERE account_id = $1 
                     AND data_key = $2
                     AND block_height <= $3
@@ -433,7 +433,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
             ])
             .inc();
         let mut access_keys = vec![];
-        let table_number = shard_id_pool.table_number;
+        let data_range_id = shard_id_pool.data_range_id;
         let sql_query = format!(
             "
                 WITH latest_blocks AS (
@@ -441,8 +441,8 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                         data_key,
                         account_id,
                         MAX(block_height) as max_block_height
-                    FROM 
-                        state_changes_access_key_{table_number}
+                    FROM
+                        state_changes_access_key_{data_range_id}
                     WHERE
                         account_id = $1
                         AND block_height <= $2
@@ -455,7 +455,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                     sc.data_value,
                     sc.block_height
                 FROM
-                    state_changes_access_key_{table_number} sc
+                    state_changes_access_key_{data_range_id} sc
                 INNER JOIN latest_blocks lb
                 ON
                     sc.data_key = lb.data_key

@@ -74,6 +74,11 @@ pub struct ServerContext {
     pub boot_time_seconds: i64,
     /// Binary version.
     pub version: near_primitives::version::Version,
+    /// Available data ranges for regular node mode.
+    pub available_data_ranges: u64,
+    /// Archival mode.
+    /// If true, available_data_ranges will be ignored
+    pub archival_mode: bool,
 }
 
 impl ServerContext {
@@ -204,6 +209,8 @@ impl ServerContext {
                 commit: NEARD_COMMIT.to_string(),
                 rustc_version: RUSTC_VERSION.to_string(),
             },
+            available_data_ranges: rpc_server_config.general.available_data_ranges,
+            archival_mode: rpc_server_config.general.archival_mode,
         })
     }
 }

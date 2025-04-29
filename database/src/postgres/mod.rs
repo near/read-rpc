@@ -29,9 +29,27 @@ impl PageState {
     }
 }
 
+/// This struct is used to manage the connection to a specific shard database.
+/// It contains the shard_id, data_range_id, and a reference to the database pool.
+/// `shard_id` is used to identify the shard database.
+/// `data_range_id` is used to identify the range of data in the shard database.
+/// `pool` is a reference to the database pool that is used to connect to the shard database.
+///
+/// `data_range_id` is calculated based on the block height.
+/// Since we split the database into ranges of 500,000 blocks,
+/// we can use the block height to determine the range.
+/// For database, we store ranges in different tables and use `data_range_id` as the suffix.
+/// `state_changes_data_{data_range_id}`
+///
+/// Example:
+/// block_height 73_908_345, the `data_range_id` will be 735 -> `state_changes_data_735`
+/// block_height 130_501_000, the `data_range_id` will be 1305 -> `state_changes_data_1305`
+///
+/// How to get `data_range_id` from block_height
+/// see more details in the `get_data_range_id` function below.
 pub struct ShardIdPool<'a> {
     shard_id: near_primitives::types::ShardId,
-    table_number: u64,
+    data_range_id: u64,
     pool: &'a sqlx::Pool<sqlx::Postgres>,
 }
 
@@ -41,7 +59,6 @@ pub struct PostgresDBManager {
     shards_pool:
         std::collections::HashMap<near_primitives::types::ShardId, sqlx::Pool<sqlx::Postgres>>,
     meta_db_pool: sqlx::Pool<sqlx::Postgres>,
-    earliest_available_block: Option<near_primitives::types::BlockHeight>,
 }
 
 impl PostgresDBManager {
@@ -83,7 +100,7 @@ impl PostgresDBManager {
         let shard_id = self.shard_layout.account_id_to_shard_id(account_id);
         Ok(ShardIdPool {
             shard_id,
-            table_number: self.get_table_number(block_height).await?,
+            data_range_id: configuration::utils::get_data_range_id(block_height).await?,
             pool: self.shards_pool.get(&shard_id).ok_or(anyhow::anyhow!(
                 "Database connection for Shard_{} not found",
                 shard_id
@@ -103,53 +120,6 @@ impl PostgresDBManager {
                 shard_id
             ))?,
         })
-    }
-
-    /// # Explanation of the logic:
-    ///
-    /// 1. `block_height / 500000`
-    ///
-    ///     * This integer division truncates any remainder, effectively grouping numbers into bins of 500,000.
-    ///
-    ///     * Example: 73908345 / 500000 = 147 (as integer division discards the remainder).
-    ///
-    /// 2. `* 5`
-    ///
-    ///     * Since each bin represents a multiple of 500,000, multiplying by 5 scales the result to match the pattern you provided.
-    ///
-    /// # Example Calculations:
-    /// Example 1: 73908345
-    ///
-    ///     1. 73908345 / 500000 = 147
-    ///
-    ///     2. 147 * 5 = 735
-    ///
-    ///     Output: 735
-    ///
-    /// Example 2: 130501000
-    ///     
-    ///     1. 130501000 / 500000 = 261
-    ///
-    ///     2. 261 * 5 = 1305
-    ///
-    ///     Output: 1305
-    async fn get_table_number(
-        &self,
-        block_height: &near_primitives::types::BlockHeight,
-    ) -> anyhow::Result<u64> {
-        if let Some(earliest_available_block) = self.earliest_available_block {
-            if *block_height < earliest_available_block {
-                anyhow::bail!(
-                    "Block {} has been garbage collected. The earliest available block is {}",
-                    block_height,
-                    earliest_available_block
-                )
-            } else {
-                Ok((block_height / 500000) * 5)
-            }
-        } else {
-            Ok((block_height / 500000) * 5)
-        }
     }
 
     async fn run_migrations(
@@ -189,10 +159,6 @@ impl crate::BaseDbManager for PostgresDBManager {
             shard_layout,
             shards_pool,
             meta_db_pool,
-            // TODO: This should be set from the config and not hardcoded
-            // Should be updated when garbage collection is run
-            // or should be None for archive node_mode
-            earliest_available_block: None,
         }))
     }
 }
