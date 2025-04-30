@@ -8992,6 +8992,7 @@ name = "tx-details-storage"
 version = "0.3.3"
 dependencies = [
  "anyhow",
+ "async-trait",
  "futures",
  "num-bigint 0.3.3",
  "num-traits",

@@ -1,6 +1,12 @@
 use futures::FutureExt;
 use num_traits::cast::ToPrimitive;
 
+pub use crate::traits::Storage;
+use anyhow::Result;
+use async_trait::async_trait;
+
+mod traits;
+
 pub struct TxDetailsStorage {
     add_transaction: scylla::prepared_statement::PreparedStatement,
     get_transaction: scylla::prepared_statement::PreparedStatement,
@@ -147,15 +153,18 @@ impl TxDetailsStorage {
             .await?;
         Ok(())
     }
+}
 
-    pub async fn save_tx(&self, key: &str, data: Vec<u8>) -> anyhow::Result<()> {
+#[async_trait]
+impl Storage for TxDetailsStorage {
+    async fn save_tx(&self, key: &str, data: Vec<u8>) -> Result<()> {
         self.scylla_session
             .execute_unpaged(&self.add_transaction, (key, data))
             .await?;
         Ok(())
     }
 
-    pub async fn retrieve_tx(&self, key: &str) -> anyhow::Result<Vec<u8>> {
+    async fn retrieve_tx(&self, key: &str) -> Result<Vec<u8>> {
         let (data,) = self
             .scylla_session
             .execute_unpaged(&self.get_transaction, (key.to_string(),))
@@ -165,10 +174,7 @@ impl TxDetailsStorage {
         Ok(data)
     }
 
-    pub async fn save_receipts(
-        &self,
-        receipts: Vec<readnode_primitives::ReceiptRecord>,
-    ) -> anyhow::Result<()> {
+    async fn save_receipts(&self, receipts: Vec<readnode_primitives::ReceiptRecord>) -> Result<()> {
         if receipts.is_empty() {
             return Ok(());
         }
@@ -190,10 +196,10 @@ impl TxDetailsStorage {
         Ok(())
     }
 
-    pub async fn get_receipt_by_id(
+    async fn get_receipt_by_id(
         &self,
         receipt_id: &str,
-    ) -> anyhow::Result<readnode_primitives::ReceiptRecord> {
+    ) -> Result<readnode_primitives::ReceiptRecord> {
         readnode_primitives::ReceiptRecord::try_from(
             self.scylla_session
                 .execute_unpaged(&self.get_receipt, (receipt_id.to_string(),))
@@ -210,10 +216,7 @@ impl TxDetailsStorage {
         )
     }
 
-    pub async fn save_outcomes(
-        &self,
-        outcomes: Vec<readnode_primitives::OutcomeRecord>,
-    ) -> anyhow::Result<()> {
+    async fn save_outcomes(&self, outcomes: Vec<readnode_primitives::OutcomeRecord>) -> Result<()> {
         if outcomes.is_empty() {
             return Ok(());
         }
@@ -235,10 +238,10 @@ impl TxDetailsStorage {
         Ok(())
     }
 
-    pub async fn get_outcome_by_id(
+    async fn get_outcome_by_id(
         &self,
         outcome_id: &str,
-    ) -> anyhow::Result<readnode_primitives::OutcomeRecord> {
+    ) -> Result<readnode_primitives::OutcomeRecord> {
         readnode_primitives::OutcomeRecord::try_from(
             self.scylla_session
                 .execute_unpaged(&self.get_outcome, (outcome_id.to_string(),))
@@ -255,25 +258,7 @@ impl TxDetailsStorage {
         )
     }
 
-    pub async fn save_outcomes_and_receipts(
-        &self,
-        receipts: Vec<readnode_primitives::ReceiptRecord>,
-        outcomes: Vec<readnode_primitives::OutcomeRecord>,
-    ) -> anyhow::Result<()> {
-        let save_outcome_future = self.save_outcomes(outcomes);
-        let save_receipt_future = self.save_receipts(receipts);
-
-        futures::future::join_all([save_outcome_future.boxed(), save_receipt_future.boxed()])
-            .await
-            .into_iter()
-            .collect::<anyhow::Result<()>>()
-    }
-
-    pub async fn update_meta(
-        &self,
-        indexer_id: &str,
-        last_processed_block_height: u64,
-    ) -> anyhow::Result<()> {
+    async fn update_meta(&self, indexer_id: &str, last_processed_block_height: u64) -> Result<()> {
         self.scylla_session
             .execute_unpaged(
                 &self.update_meta,
@@ -286,7 +271,7 @@ impl TxDetailsStorage {
         Ok(())
     }
 
-    pub async fn get_last_processed_block_height(&self, indexer_id: &str) -> anyhow::Result<u64> {
+    async fn get_last_processed_block_height(&self, indexer_id: &str) -> Result<u64> {
         let (last_processed_block_height,) = self
             .scylla_session
             .execute_unpaged(&self.last_processed_block_height, (indexer_id.to_string(),))
@@ -296,5 +281,19 @@ impl TxDetailsStorage {
         last_processed_block_height.to_u64().ok_or(anyhow::anyhow!(
             "Failed to convert last_processed_block_height to u64"
         ))
+    }
+
+    async fn save_outcomes_and_receipts(
+        &self,
+        receipts: Vec<readnode_primitives::ReceiptRecord>,
+        outcomes: Vec<readnode_primitives::OutcomeRecord>,
+    ) -> anyhow::Result<()> {
+        let save_outcome_future = self.save_outcomes(outcomes);
+        let save_receipt_future = self.save_receipts(receipts);
+
+        futures::future::join_all([save_outcome_future.boxed(), save_receipt_future.boxed()])
+            .await
+            .into_iter()
+            .collect::<anyhow::Result<()>>()
     }
 }
