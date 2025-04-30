@@ -438,4 +438,14 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
             .await?;
         Ok(())
     }
+
+    async fn create_new_range_tables(&self, range_id: u64) -> anyhow::Result<()> {
+        for (_, pool) in self.shards_pool.iter() {
+            sqlx::query("CALL create_new_range_tables($1);")
+                .bind(range_id as i64)
+                .execute(pool)
+                .await?;
+        }
+        Ok(())
+    }
 }
