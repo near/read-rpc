@@ -1,6 +1,6 @@
 use clap::Parser;
 use futures::{FutureExt, StreamExt};
-use tx_details_storage::TxDetailsStorage;
+use tx_details_storage::ScyllaDbTxDetailsStorage;
 
 mod collector;
 mod config;
@@ -33,7 +33,8 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!(target: INDEXER, "Instantiating the tx_details storage client...");
     let tx_details_storage = std::sync::Arc::new(
-        TxDetailsStorage::new(indexer_config.tx_details_storage.scylla_client().await).await?,
+        ScyllaDbTxDetailsStorage::new(indexer_config.tx_details_storage.scylla_client().await)
+            .await?,
     );
 
     let start_block_height = config::get_start_block_height(

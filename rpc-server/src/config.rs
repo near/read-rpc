@@ -136,7 +136,7 @@ impl ServerContext {
             BlocksInfoByFinality::new(&near_rpc_client, &fastnear_client).await,
         );
 
-        let tx_details_storage = tx_details_storage::TxDetailsStorage::new(
+        let tx_details_storage = tx_details_storage::ScyllaDbTxDetailsStorage::new(
             rpc_server_config.tx_details_storage.scylla_client().await,
         )
         .await?;
