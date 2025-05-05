@@ -103,7 +103,7 @@ async fn main() -> anyhow::Result<()> {
 async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
     tx_collecting_storage: &std::sync::Arc<storage::CacheStorage>,
-    tx_details_storage: &std::sync::Arc<TxDetailsStorage>,
+    tx_details_storage: &std::sync::Arc<impl tx_details_storage::Storage + Send + Sync + 'static>,
     indexer_config: configuration::TxIndexerConfig,
     stats: std::sync::Arc<tokio::sync::RwLock<metrics::Stats>>,
 ) -> anyhow::Result<u64> {
