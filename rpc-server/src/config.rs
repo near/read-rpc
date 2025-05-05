@@ -40,7 +40,8 @@ pub struct ServerContext {
     /// Database manager
     pub db_manager: std::sync::Arc<Box<dyn database::ReaderDbManager + Sync + Send + 'static>>,
     /// TransactionDetails storage
-    pub tx_details_storage: std::sync::Arc<tx_details_storage::TxDetailsStorage>,
+    pub tx_details_storage:
+        std::sync::Arc<Box<dyn tx_details_storage::Storage + Sync + Send + 'static>>,
     /// Connection to cache storage with transactions in process
     pub tx_cache_storage: Option<cache_storage::TxIndexerCache>,
     /// Genesis info include genesis_config and genesis_block
@@ -162,7 +163,7 @@ impl ServerContext {
         Ok(Self {
             fastnear_client,
             db_manager: std::sync::Arc::new(Box::new(db_manager)),
-            tx_details_storage: std::sync::Arc::new(tx_details_storage),
+            tx_details_storage: std::sync::Arc::new(Box::new(tx_details_storage)),
             tx_cache_storage,
             genesis_info,
             near_rpc_client,
