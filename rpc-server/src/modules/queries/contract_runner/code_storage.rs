@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
-use futures::executor::block_on;
-
 use crate::modules::queries::utils;
 use crate::modules::queries::utils::get_state_key_value_from_db;
 use database::ReaderDbManager;
+use futures::executor::block_on;
+use near_vm_runner::logic::StorageAccessTracker;
 
 pub type Result<T> = ::std::result::Result<T, near_vm_runner::logic::VMLogicError>;
 
@@ -32,7 +32,7 @@ impl near_vm_runner::logic::ValuePtr for StorageValuePtr {
         self.value.len() as u32
     }
 
-    fn deref(&self) -> Result<Vec<u8>> {
+    fn deref(&self, _storage_tracker: &mut dyn StorageAccessTracker) -> Result<Vec<u8>> {
         Ok(self.value.clone())
     }
 }
@@ -135,8 +135,16 @@ impl CodeStorage {
 }
 
 impl near_vm_runner::logic::External for CodeStorage {
-    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
-    fn storage_set(&mut self, _key: &[u8], _value: &[u8]) -> Result<()> {
+    #[cfg_attr(
+        feature = "tracing-instrumentation",
+        tracing::instrument(skip(self, _access_tracker))
+    )]
+    fn storage_set(
+        &mut self,
+        _access_tracker: &mut dyn StorageAccessTracker,
+        _key: &[u8],
+        _value: &[u8],
+    ) -> Result<Option<Vec<u8>>> {
         Err(near_vm_runner::logic::VMLogicError::HostError(
             near_vm_runner::logic::HostError::ProhibitedInView {
                 method_name: String::from("storage_set"),
@@ -146,12 +154,12 @@ impl near_vm_runner::logic::External for CodeStorage {
 
     #[cfg_attr(
         feature = "tracing-instrumentation",
-        tracing::instrument(skip(self, _mode))
+        tracing::instrument(skip(self, _access_tracker))
     )]
     fn storage_get(
         &self,
+        _access_tracker: &mut dyn StorageAccessTracker,
         key: &[u8],
-        _mode: near_vm_runner::logic::StorageGetMode,
     ) -> Result<Option<Box<dyn near_vm_runner::logic::ValuePtr>>> {
         if self.is_optimistic {
             self.optimistic_storage_get(key)
@@ -160,8 +168,15 @@ impl near_vm_runner::logic::External for CodeStorage {
         }
     }
 
-    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
-    fn storage_remove(&mut self, _key: &[u8]) -> Result<()> {
+    #[cfg_attr(
+        feature = "tracing-instrumentation",
+        tracing::instrument(skip(self, _access_tracker))
+    )]
+    fn storage_remove(
+        &mut self,
+        _access_tracker: &mut dyn StorageAccessTracker,
+        _key: &[u8],
+    ) -> Result<Option<Vec<u8>>> {
         Err(near_vm_runner::logic::VMLogicError::HostError(
             near_vm_runner::logic::HostError::ProhibitedInView {
                 method_name: String::from("storage_remove"),
@@ -169,23 +184,14 @@ impl near_vm_runner::logic::External for CodeStorage {
         ))
     }
 
-    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
-    fn storage_remove_subtree(&mut self, _prefix: &[u8]) -> Result<()> {
-        Err(near_vm_runner::logic::VMLogicError::HostError(
-            near_vm_runner::logic::HostError::ProhibitedInView {
-                method_name: String::from("storage_remove_subtree"),
-            },
-        ))
-    }
-
     #[cfg_attr(
         feature = "tracing-instrumentation",
-        tracing::instrument(skip(self, _mode))
+        tracing::instrument(skip(self, _access_tracker))
     )]
     fn storage_has_key(
         &mut self,
+        _access_tracker: &mut dyn StorageAccessTracker,
         key: &[u8],
-        _mode: near_vm_runner::logic::StorageGetMode,
     ) -> Result<bool> {
         if self.is_optimistic {
             self.optimistic_storage_has_key(key)
@@ -202,14 +208,6 @@ impl near_vm_runner::logic::External for CodeStorage {
         let data_id = near_primitives::hash::hash(&self.data_count.to_le_bytes());
         self.data_count += 1;
         data_id
-    }
-
-    #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(self)))]
-    fn get_trie_nodes_count(&self) -> near_vm_runner::logic::TrieNodesCount {
-        near_vm_runner::logic::TrieNodesCount {
-            db_reads: 0,
-            mem_reads: 0,
-        }
     }
 
     fn get_recorded_storage_size(&self) -> usize {

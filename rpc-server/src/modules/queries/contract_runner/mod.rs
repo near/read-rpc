@@ -116,7 +116,10 @@ pub async fn run_contract(
         vm_kind: config.vm_kind.replace_with_wasmtime_if_unsupported(),
         ..near_parameters::vm::Config::clone(&config)
     };
-    let code_hash = contract.data.code_hash();
+    let code_hash = contract
+        .data
+        .local_contract_hash()
+        .unwrap_or(contract.data.global_contract_hash().unwrap_or_default());
 
     // Check if the contract code is already in the cache
     let key = near_vm_runner::get_contract_cache_key(code_hash, &vm_config);

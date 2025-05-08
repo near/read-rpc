@@ -8,6 +8,7 @@ use crate::modules::blocks::BlocksInfoByFinality;
 static NEARD_VERSION: &str = env!("CARGO_PKG_VERSION");
 static NEARD_BUILD: &str = env!("BUILD_VERSION");
 static RUSTC_VERSION: &str = env!("RUSTC_VERSION");
+static NEARD_COMMIT: &str = env!("NEARD_COMMIT");
 
 // Struct to store genesis_config and genesis_block in the server context
 // Fetch once genesis info on start of the server and put it in the context
@@ -199,6 +200,7 @@ impl ServerContext {
             version: near_primitives::version::Version {
                 version: NEARD_VERSION.to_string(),
                 build: NEARD_BUILD.to_string(),
+                commit: NEARD_COMMIT.to_string(),
                 rustc_version: RUSTC_VERSION.to_string(),
             },
         })
