@@ -311,8 +311,7 @@ async fn rpc_handler(
     };
 
     response.json(near_jsonrpc::primitives::message::Message::response(
-        id,
-        result.map_err(near_jsonrpc::primitives::errors::RpcError::from),
+        id, result,
     ))
 }
 
