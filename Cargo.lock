@@ -8993,11 +8993,13 @@ version = "0.3.3"
 dependencies = [
  "anyhow",
  "async-trait",
+ "bigdecimal",
  "futures",
  "num-bigint 0.3.3",
  "num-traits",
  "readnode-primitives",
  "scylla",
+ "sqlx",
 ]
 
 [[package]]

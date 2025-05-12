@@ -156,7 +156,7 @@ impl ScyllaDbTxDetailsStorage {
 
 #[async_trait]
 impl Storage for ScyllaDbTxDetailsStorage {
-    async fn save_tx(&self, key: &str, data: Vec<u8>) -> Result<()> {
+    async fn save_tx(&self, key: &str, data: Vec<u8>, _block_height: u64) -> Result<()> {
         self.scylla_session
             .execute_unpaged(&self.add_transaction, (key, data))
             .await?;
@@ -173,7 +173,11 @@ impl Storage for ScyllaDbTxDetailsStorage {
         Ok(data)
     }
 
-    async fn save_receipts(&self, receipts: Vec<readnode_primitives::ReceiptRecord>) -> Result<()> {
+    async fn save_receipts(
+        &self,
+        receipts: Vec<readnode_primitives::ReceiptRecord>,
+        _block_height: u64,
+    ) -> Result<()> {
         if receipts.is_empty() {
             return Ok(());
         }
@@ -215,7 +219,11 @@ impl Storage for ScyllaDbTxDetailsStorage {
         )
     }
 
-    async fn save_outcomes(&self, outcomes: Vec<readnode_primitives::OutcomeRecord>) -> Result<()> {
+    async fn save_outcomes(
+        &self,
+        outcomes: Vec<readnode_primitives::OutcomeRecord>,
+        _block_height: u64,
+    ) -> Result<()> {
         if outcomes.is_empty() {
             return Ok(());
         }
@@ -286,9 +294,10 @@ impl Storage for ScyllaDbTxDetailsStorage {
         &self,
         receipts: Vec<readnode_primitives::ReceiptRecord>,
         outcomes: Vec<readnode_primitives::OutcomeRecord>,
+        _block_height: u64,
     ) -> anyhow::Result<()> {
-        let save_outcome_future = self.save_outcomes(outcomes);
-        let save_receipt_future = self.save_receipts(receipts);
+        let save_outcome_future = self.save_outcomes(outcomes, _block_height);
+        let save_receipt_future = self.save_receipts(receipts, _block_height);
 
         futures::future::join_all([save_outcome_future.boxed(), save_receipt_future.boxed()])
             .await

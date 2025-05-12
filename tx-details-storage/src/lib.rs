@@ -1,3 +1,4 @@
+pub use crate::drivers::postgres::PostgresTxDetailsStorage;
 pub use crate::drivers::scylladb::ScyllaDbTxDetailsStorage;
 pub use crate::traits::Storage;
 
