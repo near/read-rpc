@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Remove `near_state_indexer`
 
 ### Supported Nearcore Version
-- nearcore v2.6.1
+- nearcore v2.6.2
 - rust v1.85.0
 
 ## [0.3.3](https://github.com/near/read-rpc/releases/tag/v0.3.3)
