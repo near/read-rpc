@@ -1,5 +1,6 @@
 mod rpc_server;
 mod state_indexer;
+mod tx_indexer;
 
 static META_DB_MIGRATOR: sqlx::migrate::Migrator =
     sqlx::migrate!("src/postgres/migrations/meta_db");

@@ -156,7 +156,13 @@ impl ScyllaDbTxDetailsStorage {
 
 #[async_trait]
 impl Storage for ScyllaDbTxDetailsStorage {
-    async fn save_tx(&self, key: &str, data: Vec<u8>, _block_height: u64) -> Result<()> {
+    async fn save_tx(
+        &self,
+        _sender_id: &near_primitives::types::AccountId,
+        key: &str,
+        data: Vec<u8>,
+        _block_height: u64,
+    ) -> Result<()> {
         self.scylla_session
             .execute_unpaged(&self.add_transaction, (key, data))
             .await?;

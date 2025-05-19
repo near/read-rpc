@@ -17,11 +17,7 @@ num-bigint = "0.3.3"
 num-traits = "0.2.19"
 futures = "0.3.31"
 scylla = { version = "0.15.1", features = ["ssl", "full-serialization"] }
-sqlx = { version = "0.8.2", features = [
-    "runtime-tokio-native-tls",
-    "postgres",
-    "migrate",
-    "bigdecimal",
-] }
 
+database.workspace = true
+near-primitives.workspace = true
 readnode-primitives.workspace = true

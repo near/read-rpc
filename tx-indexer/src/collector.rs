@@ -487,6 +487,7 @@ async fn save_transaction_details_to_storage(
     tx_details_storage: &std::sync::Arc<impl tx_details_storage::Storage>,
     tx_details: readnode_primitives::CollectingTransactionDetails,
 ) -> anyhow::Result<()> {
+    let sender_id = tx_details.transaction.signer_id.clone();
     let transaction_details = tx_details.to_final_transaction_result()?;
     let transaction_hash = transaction_details.transaction.hash.to_string();
     let tx_bytes = transaction_details.tx_serialize()?;
@@ -495,7 +496,7 @@ async fn save_transaction_details_to_storage(
 
     let operation = || async {
         tx_details_storage
-            .save_tx(&transaction_hash, tx_bytes.clone(), 0)
+            .save_tx(&sender_id, &transaction_hash, tx_bytes.clone(), 0)
             .await
             .map_err(|e| {
                 crate::metrics::TX_STORE_ERRORS_TOTAL.inc();

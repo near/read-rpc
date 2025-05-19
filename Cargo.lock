@@ -8994,12 +8994,13 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bigdecimal",
+ "database",
  "futures",
+ "near-primitives 2.5.1",
  "num-bigint 0.3.3",
  "num-traits",
  "readnode-primitives",
  "scylla",
- "sqlx",
 ]
 
 [[package]]

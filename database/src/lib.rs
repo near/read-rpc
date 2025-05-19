@@ -7,6 +7,7 @@ use crate::base::BaseDbManager;
 pub use crate::base::PageToken;
 pub use crate::base::ReaderDbManager;
 pub use crate::base::StateIndexerDbManager;
+pub use crate::base::TxIndexerDbManager;
 
 mod metrics;
 mod postgres;

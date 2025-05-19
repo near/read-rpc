@@ -1,7 +1,10 @@
-mod rpc_server;
 pub use crate::base::rpc_server::ReaderDbManager;
-pub mod state_indexer;
 pub use crate::base::state_indexer::StateIndexerDbManager;
+pub use crate::base::tx_indexer::TxIndexerDbManager;
+
+mod rpc_server;
+pub mod state_indexer;
+pub mod tx_indexer;
 
 pub type PageToken = Option<String>;
 
