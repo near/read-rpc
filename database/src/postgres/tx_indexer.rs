@@ -9,7 +9,7 @@ impl crate::base::tx_indexer::TxIndexerDbManager for crate::postgres::PostgresDB
     async fn create_tx_tables(&self) -> Result<()> {
         // Create partitioned transactions table and partitions on each shard
         for pool in self.shards_pool.values() {
-            // Create the partitioned transactions table
+            // Transactions
             sqlx::query(
                 r#"
                 CREATE TABLE IF NOT EXISTS transactions (
@@ -24,7 +24,6 @@ impl crate::base::tx_indexer::TxIndexerDbManager for crate::postgres::PostgresDB
             .execute(pool)
             .await?;
 
-            // Create 100 partitions for the transactions table
             sqlx::query(
                 r#"
                 DO $$
@@ -41,39 +40,75 @@ impl crate::base::tx_indexer::TxIndexerDbManager for crate::postgres::PostgresDB
             )
             .execute(pool)
             .await?;
+
+            // Receipts
+            sqlx::query(
+                r#"
+                CREATE TABLE IF NOT EXISTS receipts (
+                    receipt_id VARCHAR PRIMARY KEY,
+                    parent_transaction_hash VARCHAR NOT NULL,
+                    receiver_id VARCHAR NOT NULL,
+                    block_height NUMERIC(20,0) NOT NULL,
+                    block_hash VARCHAR NOT NULL,
+                    shard_id BIGINT NOT NULL
+                ) PARTITION BY HASH (receipt_id);
+                "#,
+            )
+            .execute(pool)
+            .await?;
+
+            sqlx::query(
+                r#"
+                DO $$
+                DECLARE
+                    i INT;
+                BEGIN
+                    FOR i IN 0..99 LOOP
+                        EXECUTE format(
+                            'CREATE TABLE IF NOT EXISTS receipts_%s PARTITION OF receipts FOR VALUES WITH (MODULUS 100, REMAINDER %s)', i, i
+                        );
+                    END LOOP;
+                END $$;
+                "#
+            )
+            .execute(pool)
+            .await?;
+
+            // Outcomes
+            sqlx::query(
+                r#"
+                CREATE TABLE IF NOT EXISTS outcomes (
+                    outcome_id VARCHAR PRIMARY KEY,
+                    parent_transaction_hash VARCHAR NOT NULL,
+                    receiver_id VARCHAR NOT NULL,
+                    block_height NUMERIC(20,0) NOT NULL,
+                    block_hash VARCHAR NOT NULL,
+                    shard_id BIGINT NOT NULL
+                ) PARTITION BY HASH (outcome_id);
+                "#,
+            )
+            .execute(pool)
+            .await?;
+
+            sqlx::query(
+                r#"
+                DO $$
+                DECLARE
+                    i INT;
+                BEGIN
+                    FOR i IN 0..99 LOOP
+                        EXECUTE format(
+                            'CREATE TABLE IF NOT EXISTS outcomes_%s PARTITION OF outcomes FOR VALUES WITH (MODULUS 100, REMAINDER %s)', i, i
+                        );
+                    END LOOP;
+                END $$;
+                "#
+            )
+            .execute(pool)
+            .await?;
         }
 
-        // Receipts, outcomes, and meta tables remain on meta_db_pool as before
-        sqlx::query(
-            "
-            CREATE TABLE IF NOT EXISTS receipts (
-                receipt_id VARCHAR PRIMARY KEY,
-                parent_transaction_hash VARCHAR NOT NULL,
-                receiver_id VARCHAR NOT NULL,
-                block_height NUMERIC(20,0) NOT NULL,
-                block_hash VARCHAR NOT NULL,
-                shard_id BIGINT NOT NULL
-            );
-            ",
-        )
-        .execute(&self.meta_db_pool)
-        .await?;
-
-        sqlx::query(
-            "
-            CREATE TABLE IF NOT EXISTS outcomes (
-                outcome_id VARCHAR PRIMARY KEY,
-                parent_transaction_hash VARCHAR NOT NULL,
-                receiver_id VARCHAR NOT NULL,
-                block_height NUMERIC(20,0) NOT NULL,
-                block_hash VARCHAR NOT NULL,
-                shard_id BIGINT NOT NULL
-            );
-            ",
-        )
-        .execute(&self.meta_db_pool)
-        .await?;
-
+        // Meta table remains on meta_db_pool as before
         sqlx::query(
             "
             CREATE TABLE IF NOT EXISTS meta (

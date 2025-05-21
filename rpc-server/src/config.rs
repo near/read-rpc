@@ -136,8 +136,12 @@ impl ServerContext {
             BlocksInfoByFinality::new(&near_rpc_client, &fastnear_client).await,
         );
 
+        let scylla_session = rpc_server_config.tx_details_storage.scylla_client().await;
+        let scylla_db_manager =
+            database::scylla::tx_indexer::ScyllaDBManager::new(scylla_session).await?;
+        // Use ScyllaDBManager directly for tx_details_storage, since it does not implement ReaderDbManager
         let tx_details_storage = tx_details_storage::ScyllaDbTxDetailsStorage::new(
-            rpc_server_config.tx_details_storage.scylla_client().await,
+            std::sync::Arc::new(scylla_db_manager),
         )
         .await?;
 

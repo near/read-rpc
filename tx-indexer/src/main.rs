@@ -1,6 +1,5 @@
 use clap::Parser;
 use futures::{FutureExt, StreamExt};
-use tx_details_storage::ScyllaDbTxDetailsStorage;
 
 mod collector;
 mod config;
@@ -32,8 +31,12 @@ async fn main() -> anyhow::Result<()> {
         .await?;
 
     tracing::info!(target: INDEXER, "Instantiating the tx_details storage client...");
+    let scylla_session = indexer_config.tx_details_storage.scylla_client().await;
+    let scylla_db_manager =
+        database::scylla::tx_indexer::ScyllaDBManager::new(scylla_session).await?;
+    // Use ScyllaDBManager directly for tx_details_storage, since it does not implement ReaderDbManager
     let tx_details_storage = std::sync::Arc::new(
-        ScyllaDbTxDetailsStorage::new(indexer_config.tx_details_storage.scylla_client().await)
+        tx_details_storage::ScyllaDbTxDetailsStorage::new(std::sync::Arc::new(scylla_db_manager))
             .await?,
     );
 

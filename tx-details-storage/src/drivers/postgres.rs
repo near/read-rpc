@@ -1,16 +1,16 @@
 use crate::traits::Storage;
 use anyhow::Result;
 use async_trait::async_trait;
-use database::PostgresDBManager;
 use database::TxIndexerDbManager;
+use std::sync::Arc;
 
 pub struct PostgresTxDetailsStorage {
-    db_manager: PostgresDBManager,
+    db_manager: Arc<dyn TxIndexerDbManager + Send + Sync>,
 }
 
 impl PostgresTxDetailsStorage {
     /// Creates a new instance of `PostgresTxDetailsStorage`.
-    pub async fn new(db_manager: PostgresDBManager) -> Result<Self> {
+    pub async fn new(db_manager: Arc<dyn TxIndexerDbManager + Send + Sync>) -> Result<Self> {
         db_manager.create_tx_tables().await?;
         Ok(Self { db_manager })
     }

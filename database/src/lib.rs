@@ -12,6 +12,7 @@ pub use crate::base::TxIndexerDbManager;
 mod metrics;
 mod postgres;
 pub mod primitives;
+pub mod scylla;
 
 pub use crate::postgres::PostgresDBManager;
 
