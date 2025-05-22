@@ -8,7 +8,6 @@ BEGIN
         CREATE TABLE IF NOT EXISTS state_changes_data_%s (
             account_id text NOT NULL,
             block_height numeric(20,0) NOT NULL,
-            block_hash text NOT NULL,
             data_key text NOT NULL,
             data_value bytea NULL,
             PRIMARY KEY (account_id, data_key, block_height)
@@ -27,7 +26,6 @@ BEGIN
         CREATE TABLE IF NOT EXISTS state_changes_access_key_%s (
             account_id text NOT NULL,
             block_height numeric(20,0) NOT NULL,
-            block_hash text NOT NULL,
             data_key text NOT NULL,
             data_value bytea NULL,
             PRIMARY KEY (account_id, data_key, block_height)
@@ -45,7 +43,6 @@ BEGIN
         CREATE TABLE IF NOT EXISTS state_changes_contract_%s (
             account_id text NOT NULL,
             block_height numeric(20,0) NOT NULL,
-            block_hash text NOT NULL,
             data_value bytea NULL,
             PRIMARY KEY (account_id, block_height)
         ) PARTITION BY HASH (account_id);
@@ -62,7 +59,6 @@ BEGIN
         CREATE TABLE IF NOT EXISTS state_changes_account_%s (
             account_id text NOT NULL,
             block_height numeric(20,0) NOT NULL,
-            block_hash text NOT NULL,
             data_value bytea NULL,
             PRIMARY KEY (account_id, block_height)
         ) PARTITION BY HASH (account_id);
