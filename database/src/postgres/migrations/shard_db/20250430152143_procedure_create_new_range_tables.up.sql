@@ -1,4 +1,4 @@
-CREATE OR REPLACE PROCEDURE create_new_range_tables(range_id INT)
+CREATE OR REPLACE PROCEDURE create_new_range_tables(range_id numeric(20,0))
     LANGUAGE plpgsql
 AS $$
 DECLARE
