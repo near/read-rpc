@@ -36,7 +36,12 @@ tracing-opentelemetry = { version = "0.19", optional = true }
 tracing-stackdriver = "0.7.2" # GCP logs
 url = "2.5.0"
 
+near-chain-configs.workspace = true
+near-primitives.workspace = true
 near-lake-framework.workspace = true
 
 [features]
-tracing-instrumentation = ["dep:opentelemetry-jaeger", "dep:tracing-opentelemetry"]
+tracing-instrumentation = [
+    "dep:opentelemetry-jaeger",
+    "dep:tracing-opentelemetry",
+]

@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Migrate transaction details from GCS to ScyllaDB
 * Migrate `receipts_map` and `outcomes_map` from PostgreSQL to ScyllaDB
 * Remove `near_state_indexer`
+* Move the helper function `shard_layout` from `logic-state-indexer` to `configuration` crate
+  * Add helper script `scripts/fetch_genesis_config.sh` to fetch genesis config from the existing RPC to determine the shard layout on startup
+  * Provide `Option<ShardLayout>` to `DatabaseConfig` since it's the most common case to care about shard layout in the database context
 
 ### Supported Nearcore Version
 - nearcore v2.6.2

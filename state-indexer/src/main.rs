@@ -23,10 +23,12 @@ async fn main() -> anyhow::Result<()> {
     if let Some(auth_token) = &indexer_config.general.rpc_auth_token {
         rpc_client = rpc_client.header(near_jsonrpc_client::auth::Authorization::bearer(auth_token)?);
     }
-    let genesis_config = rpc_client
-        .call(near_jsonrpc_client::methods::EXPERIMENTAL_genesis_config::RpcGenesisConfigRequest)
-        .await?;
-    let shard_layout = configs::shard_layout(genesis_config).await?;
+
+    let shard_layout = indexer_config
+        .database
+        .shard_layout
+        .clone()
+        .expect("Shard Layout is missing in the config.");
     let near_client = logic_state_indexer::NearJsonRpc::new(rpc_client);
 
     let db_manager =

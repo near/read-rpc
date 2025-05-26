@@ -28,9 +28,9 @@ pub async fn read_configuration<T>() -> anyhow::Result<T>
 where
     T: configs::Config + Send + Sync + 'static,
 {
-    let path_root = find_configs_root().await?;
+    let path_root = find_configs_root()?;
     load_env(path_root.clone()).await?;
-    let common_config = read_toml_file(path_root).await?;
+    let common_config = read_toml_file(path_root)?;
 
     if let Err(validation_errors) = common_config.validate() {
         panic!("Failed to validate config: {validation_errors}");
@@ -42,7 +42,7 @@ where
 // Initialize the tracing subscriber with the given service name
 // and the environment variables
 pub async fn init_tracing(service_name: &str) -> anyhow::Result<()> {
-    let path_root = find_configs_root().await?;
+    let path_root = find_configs_root()?;
     load_env(path_root.clone()).await?;
 
     let mut env_filter = tracing_subscriber::EnvFilter::new(format!("{}=info,info", service_name));
@@ -113,7 +113,7 @@ async fn load_env(mut path_root: PathBuf) -> anyhow::Result<()> {
 }
 
 // Read the config file and parse it into a struct
-async fn read_toml_file(mut path_root: PathBuf) -> anyhow::Result<configs::CommonConfig> {
+fn read_toml_file(mut path_root: PathBuf) -> anyhow::Result<configs::CommonConfig> {
     path_root.push("config.toml");
     match std::fs::read_to_string(path_root.as_path()) {
         Ok(content) => match toml::from_str::<configs::CommonConfig>(&content) {
@@ -137,7 +137,7 @@ async fn read_toml_file(mut path_root: PathBuf) -> anyhow::Result<configs::Commo
 }
 
 // Create default config file if it does not exist
-async fn create_default_config_file(mut path_config: PathBuf) -> anyhow::Result<()> {
+fn create_default_config_file(mut path_config: PathBuf) -> anyhow::Result<()> {
     path_config.push("config.toml");
     let mut file = std::fs::File::create(path_config.clone())?;
     file.write_all(default_env_configs::DEFAULT_CONFIG.as_bytes())?;
@@ -147,7 +147,7 @@ async fn create_default_config_file(mut path_config: PathBuf) -> anyhow::Result<
 
 // Find the root of the project where the config file is located
 // If the config file does not exist, create a default one
-async fn find_configs_root() -> anyhow::Result<PathBuf> {
+fn find_configs_root() -> anyhow::Result<PathBuf> {
     let current_path = std::env::current_dir()?;
 
     for path_config in current_path.as_path().ancestors() {
@@ -160,7 +160,46 @@ async fn find_configs_root() -> anyhow::Result<PathBuf> {
     }
 
     tracing::warn!("Config file does not exist. Creating new default...");
-    create_default_config_file(current_path.clone()).await?;
+    create_default_config_file(current_path.clone())?;
 
     Ok(current_path)
+}
+
+// Helper function to get shard layout for the `SHARD_LAYOUT_PROTOCOL_VERSION` protocol version
+pub fn shard_layout() -> anyhow::Result<near_primitives::shard_layout::ShardLayout> {
+    let genesis_config = read_genesis_config_from_root()?;
+    let default_epoch_config = near_primitives::epoch_manager::EpochConfig::from(&genesis_config);
+    let all_epoch_config = near_primitives::epoch_manager::AllEpochConfig::new(
+        true,
+        genesis_config.protocol_version,
+        default_epoch_config,
+        &genesis_config.chain_id,
+    );
+    let epoch_config = all_epoch_config.for_protocol_version(SHARD_LAYOUT_PROTOCOL_VERSION);
+    Ok(epoch_config.shard_layout)
+}
+
+// Private helper to read genesis_config.json from the project root
+fn read_genesis_config_from_root() -> anyhow::Result<near_chain_configs::GenesisConfig> {
+    let mut path_root = find_configs_root()?;
+    path_root.push("genesis_config.json");
+    match std::fs::read_to_string(path_root.as_path()) {
+        Ok(content) => match serde_json::from_str::<near_chain_configs::GenesisConfig>(&content) {
+            Ok(config) => Ok(config),
+            Err(err) => {
+                anyhow::bail!(
+                    "Unable to load data from: {:?}.\n Error: {}",
+                    path_root.to_str(),
+                    err
+                );
+            }
+        },
+        Err(err) => {
+            anyhow::bail!(
+                "Could not read file: {:?}.\n Error: {}",
+                path_root.to_str(),
+                err
+            );
+        }
+    }
 }
