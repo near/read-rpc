@@ -6,3 +6,4 @@
 *.log
 credentials.json
 config.toml
+genesis_config.json

@@ -1,7 +1,6 @@
 use std::string::ToString;
 
 use futures::executor::block_on;
-use near_primitives::epoch_manager::{AllEpochConfig, EpochConfig};
 
 use crate::modules::blocks::BlocksInfoByFinality;
 
@@ -19,18 +18,10 @@ pub struct GenesisInfo {
 }
 
 impl GenesisInfo {
-    pub async fn get(
-        near_rpc_client: &crate::utils::JsonRpcClient,
-        fastnear_client: &near_lake_framework::FastNearClient,
-    ) -> Self {
+    pub async fn get(fastnear_client: &near_lake_framework::FastNearClient) -> Self {
         tracing::info!("Get genesis config...");
-        let genesis_config = near_rpc_client
-            .call(
-                near_jsonrpc_client::methods::EXPERIMENTAL_genesis_config::RpcGenesisConfigRequest,
-                None,
-            )
-            .await
-            .expect("Error to get genesis config");
+        let genesis_config = configuration::read_genesis_config_from_root()
+            .expect("Failed to read genesis_config.json from the project root");
 
         let genesis_block =
             near_lake_framework::fastnear::fetchers::fetch_first_block(fastnear_client).await;
@@ -157,21 +148,10 @@ impl ServerContext {
                 })
                 .ok();
 
-        let genesis_info = GenesisInfo::get(&near_rpc_client, &fastnear_client).await;
-
-        let default_epoch_config = EpochConfig::from(&genesis_info.genesis_config);
-        let all_epoch_config = AllEpochConfig::new(
-            true,
-            genesis_info.genesis_config.protocol_version,
-            default_epoch_config,
-            &genesis_info.genesis_config.chain_id,
-        );
-        let epoch_config =
-            all_epoch_config.for_protocol_version(configuration::SHARD_LAYOUT_PROTOCOL_VERSION);
+        let genesis_info = GenesisInfo::get(&fastnear_client).await;
 
         let db_manager = database::prepare_db_manager::<database::PostgresDBManager>(
             &rpc_server_config.database,
-            epoch_config.shard_layout,
         )
         .await?;
 

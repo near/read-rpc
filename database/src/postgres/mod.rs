@@ -96,10 +96,7 @@ impl PostgresDBManager {
 
 #[async_trait::async_trait]
 impl crate::BaseDbManager for PostgresDBManager {
-    async fn new(
-        config: &configuration::DatabaseConfig,
-        shard_layout: near_primitives::shard_layout::ShardLayout,
-    ) -> anyhow::Result<Box<Self>> {
+    async fn new(config: &configuration::DatabaseConfig) -> anyhow::Result<Box<Self>> {
         let meta_db_pool = Self::create_meta_db_pool(
             &config.database_url,
             config.read_only,
@@ -107,6 +104,10 @@ impl crate::BaseDbManager for PostgresDBManager {
         )
         .await?;
         let mut shards_pool = std::collections::HashMap::new();
+        let shard_layout = config
+            .shard_layout
+            .clone()
+            .unwrap_or_else(|| panic!("Shard layout is not provided in the configuration. Please check if you have genesis_config.json in the root of the project."));
         for shard_id in shard_layout.shard_ids() {
             let database_url = config
                 .shards_config

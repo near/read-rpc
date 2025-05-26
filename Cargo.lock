@@ -1708,7 +1708,9 @@ dependencies = [
  "anyhow",
  "dotenv",
  "lazy_static",
+ "near-chain-configs 2.6.2",
  "near-lake-framework",
+ "near-primitives 2.6.2",
  "openssl",
  "opentelemetry 0.19.0",
  "opentelemetry-jaeger",
@@ -1722,6 +1724,7 @@ dependencies = [
  "tracing-opentelemetry 0.19.0",
  "tracing-stackdriver",
  "tracing-subscriber",
+ "ureq",
  "url",
  "validator",
 ]
@@ -3905,7 +3908,6 @@ dependencies = [
  "hex",
  "humantime",
  "lazy_static",
- "near-chain-configs 2.6.2",
  "near-indexer-primitives",
  "near-jsonrpc-client 0.17.0",
  "near-primitives 2.6.2",
@@ -7255,7 +7257,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "822ee9188ac4ec04a2f0531e55d035fb2de73f18b41a63c70c2712503b6fb13c"
 dependencies = [
  "aws-lc-rs",
+ "log",
  "once_cell",
+ "ring 0.17.14",
  "rustls-pki-types",
  "rustls-webpki 0.103.0",
  "subtle",
@@ -9096,6 +9100,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
+name = "ureq"
+version = "2.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "02d1a66277ed75f640d608235660df48c8e3c19f3b4edb6a263315626cc3c01d"
+dependencies = [
+ "base64 0.22.1",
+ "flate2",
+ "log",
+ "once_cell",
+ "rustls 0.23.25",
+ "rustls-pki-types",
+ "url",
+ "webpki-roots 0.26.11",
+]
+
+[[package]]
 name = "url"
 version = "2.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9749,6 +9769,24 @@ checksum = "5a6580f308b1fad9207618087a65c04e7a10bc77e02c8e84e9b00dd4b12fa0bb"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "webpki-roots"
+version = "0.26.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "521bc38abb08001b01866da9f51eb7c5d647a19260e00054a8c7fd5f9e57f7a9"
+dependencies = [
+ "webpki-roots 1.0.0",
+]
+
+[[package]]
+name = "webpki-roots"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2853738d1cc4f2da3a225c18ec6c3721abb31961096e9dbf5ab35fa88b19cfdb"
+dependencies = [
+ "rustls-pki-types",
 ]
 
 [[package]]
