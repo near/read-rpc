@@ -21,7 +21,7 @@ pub struct GeneralRpcServerConfig {
     pub block_cache_size: f64,
     pub shadow_data_consistency_rate: f64,
     pub prefetch_state_size_limit: u64,
-    pub available_data_ranges: u64,
+    pub keep_data_ranges_number: u64,
     pub archival_mode: bool,
 }
 
@@ -154,7 +154,7 @@ pub struct CommonGeneralRpcServerConfig {
         message = "Available data ranges must be greater than or equal to 1"
     ))]
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
-    pub available_data_ranges: Option<u64>,
+    pub keep_data_ranges_number: Option<u64>,
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub archival_mode: Option<bool>,
 }
@@ -184,12 +184,12 @@ impl CommonGeneralRpcServerConfig {
         100_000
     }
 
-    pub fn default_available_data_ranges() -> u64 {
+    pub fn default_keep_data_ranges_number() -> u64 {
         1
     }
 
     pub fn default_archival_mode() -> bool {
-        false
+        true
     }
 }
 
@@ -202,7 +202,7 @@ impl Default for CommonGeneralRpcServerConfig {
             block_cache_size: Some(Self::default_block_cache_size()),
             shadow_data_consistency_rate: Some(Self::default_shadow_data_consistency_rate()),
             prefetch_state_size_limit: Some(Self::default_prefetch_state_size_limit()),
-            available_data_ranges: Some(Self::default_available_data_ranges()),
+            keep_data_ranges_number: Some(Self::default_keep_data_ranges_number()),
             archival_mode: Some(Self::default_archival_mode()),
         }
     }
@@ -312,10 +312,10 @@ impl From<CommonGeneralConfig> for GeneralRpcServerConfig {
                 .rpc_server
                 .prefetch_state_size_limit
                 .unwrap_or_else(CommonGeneralRpcServerConfig::default_prefetch_state_size_limit),
-            available_data_ranges: common_config
+            keep_data_ranges_number: common_config
                 .rpc_server
-                .available_data_ranges
-                .unwrap_or_else(CommonGeneralRpcServerConfig::default_available_data_ranges),
+                .keep_data_ranges_number
+                .unwrap_or_else(CommonGeneralRpcServerConfig::default_keep_data_ranges_number),
             archival_mode: common_config
                 .rpc_server
                 .archival_mode

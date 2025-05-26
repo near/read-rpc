@@ -31,14 +31,15 @@ rpc_auth_token = "${RPC_AUTH_TOKEN}"
 redis_url = "${REDIS_URL}"
 
 ## Represents the number of available data ranges.
-## 1 means it will be available last 500_000 blocks (~11 epochs).
+## 1 means it will be available last 500_000 blocks (~11 epochs).cargo fmt
 ## 2 means it will be available last 1_000_000 blocks (~22 epochs) etc.
 ## Default value is 1
-available_data_ranges = "${AVAILABLE_DATA_RANGES}"
+keep_data_ranges_number = "${KEEP_DATA_RANGES_NUMBER}"
 
 ## If true, means we store whole state changes in the database 
-## and available_data_ranges will be ignored 
+## and keep_data_ranges_number will be ignored 
 ## and genesis block_height will be used as earliest_available_block_height
+## Default value is true
 archival_mode = "${ARCHIVAL_MODE}"
 
 ### Rpc server general configuration

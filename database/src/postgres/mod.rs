@@ -46,7 +46,7 @@ impl PageState {
 /// block_height 130_501_000, the `data_range_id` will be 1305 -> `state_changes_data_1305`
 ///
 /// How to get `data_range_id` from block_height
-/// see more details in the `get_data_range_id` function below.
+/// see more details in the function `configuration::utils::get_data_range_id`.
 pub struct ShardIdPool<'a> {
     shard_id: near_primitives::types::ShardId,
     data_range_id: u64,

@@ -408,7 +408,7 @@ pub async fn fetch_block(
             Ok(data.genesis_info.genesis_block.header.height)
         }
     }?;
-    configuration::utils::check_block_height(
+    configuration::utils::check_block_height_availability(
         &block_height,
         &data
             .blocks_info_by_finality
@@ -416,7 +416,7 @@ pub async fn fetch_block(
             .await
             .header
             .height,
-        data.available_data_ranges,
+        data.keep_data_ranges_number,
         data.archival_mode,
     )
     .await
@@ -531,7 +531,7 @@ pub async fn fetch_chunk(
             .map(|block_height_shard_id| (block_height_shard_id.0, block_height_shard_id.1))?,
     };
 
-    configuration::utils::check_block_height(
+    configuration::utils::check_block_height_availability(
         &block_height,
         &data
             .blocks_info_by_finality
@@ -539,7 +539,7 @@ pub async fn fetch_chunk(
             .await
             .header
             .height,
-        data.available_data_ranges,
+        data.keep_data_ranges_number,
         data.archival_mode,
     )
     .await

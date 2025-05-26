@@ -128,7 +128,7 @@ pub async fn fetch_block_from_cache_or_get(
                         }
                     })?,
             };
-            configuration::utils::check_block_height(
+            configuration::utils::check_block_height_availability(
                 &block_height,
                 &data
                     .blocks_info_by_finality
@@ -136,7 +136,7 @@ pub async fn fetch_block_from_cache_or_get(
                     .await
                     .header
                     .height,
-                data.available_data_ranges,
+                data.keep_data_ranges_number,
                 data.archival_mode,
             )
             .await

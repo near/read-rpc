@@ -75,9 +75,9 @@ pub struct ServerContext {
     /// Binary version.
     pub version: near_primitives::version::Version,
     /// Available data ranges for regular node mode.
-    pub available_data_ranges: u64,
+    pub keep_data_ranges_number: u64,
     /// Archival mode.
-    /// If true, available_data_ranges will be ignored
+    /// If true, keep_data_ranges_number will be ignored
     pub archival_mode: bool,
 }
 
@@ -209,7 +209,7 @@ impl ServerContext {
                 commit: NEARD_COMMIT.to_string(),
                 rustc_version: RUSTC_VERSION.to_string(),
             },
-            available_data_ranges: rpc_server_config.general.available_data_ranges,
+            keep_data_ranges_number: rpc_server_config.general.keep_data_ranges_number,
             archival_mode: rpc_server_config.general.archival_mode,
         })
     }

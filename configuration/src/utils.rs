@@ -41,25 +41,25 @@ pub async fn get_data_range_id(
 /// This function calculates the earliest available block height based on the final block height
 pub async fn get_earliest_available_block_height(
     final_block_height: u64,
-    available_data_ranges: u64,
+    keep_data_ranges_number: u64,
 ) -> anyhow::Result<u64> {
     let final_range_id = get_data_range_id(&final_block_height).await?;
-    Ok(final_range_id * 100_000 + available_data_ranges * BLOCK_HEIGHT_RANGE)
+    Ok(final_range_id * 100_000 + keep_data_ranges_number * BLOCK_HEIGHT_RANGE)
 }
 
 /// This function checks if the block height is available in the database
 /// It returns an error if the block height is less than the earliest available block
-pub async fn check_block_height(
+pub async fn check_block_height_availability(
     block_height: &near_primitives::types::BlockHeight,
     final_block_height: &near_primitives::types::BlockHeight,
-    available_data_ranges: u64,
+    keep_data_ranges_number: u64,
     archival_mode: bool,
 ) -> anyhow::Result<()> {
     if archival_mode {
         return Ok(());
     }
     let earliest_available_block =
-        get_earliest_available_block_height(*final_block_height, available_data_ranges).await?;
+        get_earliest_available_block_height(*final_block_height, keep_data_ranges_number).await?;
     if *block_height < earliest_available_block {
         anyhow::bail!(
             "The data for block #{} is garbage collected on this node, use an archival node to fetch historical data",
