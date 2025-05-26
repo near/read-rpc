@@ -31,9 +31,7 @@ async fn main() -> anyhow::Result<()> {
         .expect("Shard Layout is missing in the config.");
     let near_client = logic_state_indexer::NearJsonRpc::new(rpc_client);
 
-    let db_manager =
-        database::prepare_db_manager::<database::PostgresDBManager>(&indexer_config.database, shard_layout.clone())
-            .await?;
+    let db_manager = database::prepare_db_manager::<database::PostgresDBManager>(&indexer_config.database).await?;
     let start_block_height = configs::get_start_block_height(
         &near_client,
         &db_manager,

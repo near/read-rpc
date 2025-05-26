@@ -14,12 +14,9 @@ pub mod primitives;
 
 pub use crate::postgres::PostgresDBManager;
 
-pub async fn prepare_db_manager<T>(
-    config: &configuration::DatabaseConfig,
-    shard_layout: near_primitives::shard_layout::ShardLayout,
-) -> anyhow::Result<T>
+pub async fn prepare_db_manager<T>(config: &configuration::DatabaseConfig) -> anyhow::Result<T>
 where
     T: BaseDbManager + Send + Sync + 'static,
 {
-    Ok(*T::new(config, shard_layout).await?)
+    Ok(*T::new(config).await?)
 }

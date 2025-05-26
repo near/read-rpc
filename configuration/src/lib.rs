@@ -180,26 +180,48 @@ pub fn shard_layout() -> anyhow::Result<near_primitives::shard_layout::ShardLayo
 }
 
 // Private helper to read genesis_config.json from the project root
-fn read_genesis_config_from_root() -> anyhow::Result<near_chain_configs::GenesisConfig> {
+pub fn read_genesis_config_from_root() -> anyhow::Result<near_chain_configs::GenesisConfig> {
     let mut path_root = find_configs_root()?;
     path_root.push("genesis_config.json");
-    match std::fs::read_to_string(path_root.as_path()) {
-        Ok(content) => match serde_json::from_str::<near_chain_configs::GenesisConfig>(&content) {
-            Ok(config) => Ok(config),
-            Err(err) => {
-                anyhow::bail!(
-                    "Unable to load data from: {:?}.\n Error: {}",
-                    path_root.to_str(),
-                    err
-                );
-            }
-        },
-        Err(err) => {
-            anyhow::bail!(
-                "Could not read file: {:?}.\n Error: {}",
-                path_root.to_str(),
-                err
-            );
-        }
+
+    if !path_root.exists() {
+        tracing::warn!("genesis_config.json does not exist. Downloading from RPC...");
+        download_genesis_config(&path_root)?;
     }
+
+    let content = std::fs::read_to_string(&path_root)
+        .map_err(|err| anyhow::anyhow!("Could not read file: {:?}.\n Error: {}", path_root, err))?;
+    serde_json::from_str::<near_chain_configs::GenesisConfig>(&content).map_err(|err| {
+        anyhow::anyhow!(
+            "Unable to load data from: {:?}.\n Error: {}",
+            path_root,
+            err
+        )
+    })
+}
+
+// Private helper to download genesis_config.json from RPC
+fn download_genesis_config(path: &std::path::Path) -> anyhow::Result<()> {
+    let rpc_url = std::env::var("NEAR_RPC_URL")
+        .unwrap_or_else(|_| "https://rpc.mainnet.fastnear.com".to_string());
+
+    let body = r#"{"jsonrpc":"2.0","id":"dontcare","method":"EXPERIMENTAL_genesis_config"}"#;
+    let response: serde_json::Value = {
+        let resp = ureq::post(&rpc_url)
+            .set("Content-Type", "application/json")
+            .send_string(body)
+            .map_err(|e| anyhow::anyhow!("Failed to fetch genesis config: {}", e))?;
+        serde_json::from_reader(resp.into_reader())
+            .map_err(|e| anyhow::anyhow!("Failed to parse RPC response: {}", e))?
+    };
+
+    let result = response
+        .get("result")
+        .ok_or_else(|| anyhow::anyhow!("No 'result' field in RPC response"))?;
+
+    std::fs::write(path, serde_json::to_vec_pretty(result)?)
+        .map_err(|e| anyhow::anyhow!("Failed to write genesis_config.json: {}", e))?;
+
+    tracing::info!("Downloaded genesis_config.json to {:?}", path);
+    Ok(())
 }

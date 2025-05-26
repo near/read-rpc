@@ -7,8 +7,5 @@ pub type PageToken = Option<String>;
 
 #[async_trait::async_trait]
 pub trait BaseDbManager {
-    async fn new(
-        config: &configuration::DatabaseConfig,
-        shard_layout: near_primitives::shard_layout::ShardLayout,
-    ) -> anyhow::Result<Box<Self>>;
+    async fn new(config: &configuration::DatabaseConfig) -> anyhow::Result<Box<Self>>;
 }
