@@ -31,13 +31,21 @@ async fn main() -> anyhow::Result<()> {
         .await?;
 
     tracing::info!(target: INDEXER, "Instantiating the tx_details storage client...");
-    let scylla_session = indexer_config.tx_details_storage.scylla_client().await;
-    let scylla_db_manager =
-        database::scylla::tx_indexer::ScyllaDBManager::new(scylla_session).await?;
-    // Use ScyllaDBManager directly for tx_details_storage, since it does not implement ReaderDbManager
+    // TODO: handle this based on the configuration
+    // let scylla_session = indexer_config.tx_details_storage.scylla_client().await;
+    // let scylla_db_manager =
+    //     database::scylla::tx_indexer::ScyllaDBManager::new(scylla_session).await?;
+    // // Use ScyllaDBManager directly for tx_details_storage, since it does not implement ReaderDbManager
+    // let tx_details_storage = std::sync::Arc::new(
+    //     tx_details_storage::ScyllaDbTxDetailsStorage::new(std::sync::Arc::new(scylla_db_manager))
+    //         .await?,
+    // );
+
+    let db_manager =
+        database::prepare_db_manager::<database::PostgresDBManager>(&indexer_config.database)
+            .await?;
     let tx_details_storage = std::sync::Arc::new(
-        tx_details_storage::ScyllaDbTxDetailsStorage::new(std::sync::Arc::new(scylla_db_manager))
-            .await?,
+        tx_details_storage::PostgresTxDetailsStorage::new(std::sync::Arc::new(db_manager)).await?,
     );
 
     let start_block_height = config::get_start_block_height(

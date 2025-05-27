@@ -7,7 +7,7 @@ use sqlx::QueryBuilder;
 #[async_trait]
 impl crate::base::tx_indexer::TxIndexerDbManager for crate::postgres::PostgresDBManager {
     async fn create_tx_tables(&self) -> Result<()> {
-        // Create partitioned transactions table and partitions on each shard
+        // Transactions table and partitions on each shard
         for pool in self.shards_pool.values() {
             // Transactions
             sqlx::query(
@@ -40,73 +40,74 @@ impl crate::base::tx_indexer::TxIndexerDbManager for crate::postgres::PostgresDB
             )
             .execute(pool)
             .await?;
-
-            // Receipts
-            sqlx::query(
-                r#"
-                CREATE TABLE IF NOT EXISTS receipts (
-                    receipt_id VARCHAR PRIMARY KEY,
-                    parent_transaction_hash VARCHAR NOT NULL,
-                    receiver_id VARCHAR NOT NULL,
-                    block_height NUMERIC(20,0) NOT NULL,
-                    block_hash VARCHAR NOT NULL,
-                    shard_id BIGINT NOT NULL
-                ) PARTITION BY HASH (receipt_id);
-                "#,
-            )
-            .execute(pool)
-            .await?;
-
-            sqlx::query(
-                r#"
-                DO $$
-                DECLARE
-                    i INT;
-                BEGIN
-                    FOR i IN 0..99 LOOP
-                        EXECUTE format(
-                            'CREATE TABLE IF NOT EXISTS receipts_%s PARTITION OF receipts FOR VALUES WITH (MODULUS 100, REMAINDER %s)', i, i
-                        );
-                    END LOOP;
-                END $$;
-                "#
-            )
-            .execute(pool)
-            .await?;
-
-            // Outcomes
-            sqlx::query(
-                r#"
-                CREATE TABLE IF NOT EXISTS outcomes (
-                    outcome_id VARCHAR PRIMARY KEY,
-                    parent_transaction_hash VARCHAR NOT NULL,
-                    receiver_id VARCHAR NOT NULL,
-                    block_height NUMERIC(20,0) NOT NULL,
-                    block_hash VARCHAR NOT NULL,
-                    shard_id BIGINT NOT NULL
-                ) PARTITION BY HASH (outcome_id);
-                "#,
-            )
-            .execute(pool)
-            .await?;
-
-            sqlx::query(
-                r#"
-                DO $$
-                DECLARE
-                    i INT;
-                BEGIN
-                    FOR i IN 0..99 LOOP
-                        EXECUTE format(
-                            'CREATE TABLE IF NOT EXISTS outcomes_%s PARTITION OF outcomes FOR VALUES WITH (MODULUS 100, REMAINDER %s)', i, i
-                        );
-                    END LOOP;
-                END $$;
-                "#
-            )
-            .execute(pool)
-            .await?;
         }
+
+        // Receipts and outcomes tables and partitions in meta_db_pool only
+        // Receipts
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS receipts (
+                receipt_id VARCHAR PRIMARY KEY,
+                parent_transaction_hash VARCHAR NOT NULL,
+                receiver_id VARCHAR NOT NULL,
+                block_height NUMERIC(20,0) NOT NULL,
+                block_hash VARCHAR NOT NULL,
+                shard_id BIGINT NOT NULL
+            ) PARTITION BY HASH (receipt_id);
+            "#,
+        )
+        .execute(&self.meta_db_pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            DO $$
+            DECLARE
+                i INT;
+            BEGIN
+                FOR i IN 0..99 LOOP
+                    EXECUTE format(
+                        'CREATE TABLE IF NOT EXISTS receipts_%s PARTITION OF receipts FOR VALUES WITH (MODULUS 100, REMAINDER %s)', i, i
+                    );
+                END LOOP;
+            END $$;
+            "#
+        )
+        .execute(&self.meta_db_pool)
+        .await?;
+
+        // Outcomes
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS outcomes (
+                outcome_id VARCHAR PRIMARY KEY,
+                parent_transaction_hash VARCHAR NOT NULL,
+                receiver_id VARCHAR NOT NULL,
+                block_height NUMERIC(20,0) NOT NULL,
+                block_hash VARCHAR NOT NULL,
+                shard_id BIGINT NOT NULL
+            ) PARTITION BY HASH (outcome_id);
+            "#,
+        )
+        .execute(&self.meta_db_pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            DO $$
+            DECLARE
+                i INT;
+            BEGIN
+                FOR i IN 0..99 LOOP
+                    EXECUTE format(
+                        'CREATE TABLE IF NOT EXISTS outcomes_%s PARTITION OF outcomes FOR VALUES WITH (MODULUS 100, REMAINDER %s)', i, i
+                    );
+                END LOOP;
+            END $$;
+            "#
+        )
+        .execute(&self.meta_db_pool)
+        .await?;
 
         // Meta table remains on meta_db_pool as before
         sqlx::query(
@@ -147,7 +148,12 @@ impl crate::base::tx_indexer::TxIndexerDbManager for crate::postgres::PostgresDB
         Ok(())
     }
 
-    async fn retrieve_transaction(&self, key: &str) -> Result<Vec<u8>> {
+    async fn retrieve_transaction(
+        &self,
+        key: &str,
+        shard_id: &near_primitives::types::ShardId,
+    ) -> Result<Vec<u8>> {
+        let shard_connection = self.get_shard_connection_by_id(shard_id).await?;
         let (data,): (Vec<u8>,) = sqlx::query_as(
             "
             SELECT transaction_details
@@ -157,17 +163,13 @@ impl crate::base::tx_indexer::TxIndexerDbManager for crate::postgres::PostgresDB
             ",
         )
         .bind(key)
-        .fetch_one(&self.meta_db_pool)
+        .fetch_one(shard_connection.pool)
         .await?;
 
         Ok(data)
     }
 
-    async fn save_receipts(
-        &self,
-        receipts: Vec<readnode_primitives::ReceiptRecord>,
-        block_height: u64,
-    ) -> Result<()> {
+    async fn save_receipts(&self, receipts: Vec<readnode_primitives::ReceiptRecord>) -> Result<()> {
         if receipts.is_empty() {
             return Ok(());
         }
@@ -180,7 +182,7 @@ impl crate::base::tx_indexer::TxIndexerDbManager for crate::postgres::PostgresDB
             b.push_bind(receipt.receipt_id.to_string())
                 .push_bind(receipt.parent_transaction_hash.to_string())
                 .push_bind(receipt.receiver_id.to_string())
-                .push_bind(BigDecimal::from(block_height))
+                .push_bind(BigDecimal::from(receipt.block_height))
                 .push_bind(receipt.block_hash.to_string())
                 .push_bind(BigDecimal::from(shard_id));
         });
@@ -209,11 +211,7 @@ impl crate::base::tx_indexer::TxIndexerDbManager for crate::postgres::PostgresDB
         readnode_primitives::ReceiptRecord::try_from(row)
     }
 
-    async fn save_outcomes(
-        &self,
-        outcomes: Vec<readnode_primitives::OutcomeRecord>,
-        block_height: u64,
-    ) -> Result<()> {
+    async fn save_outcomes(&self, outcomes: Vec<readnode_primitives::OutcomeRecord>) -> Result<()> {
         if outcomes.is_empty() {
             return Ok(());
         }
@@ -226,7 +224,7 @@ impl crate::base::tx_indexer::TxIndexerDbManager for crate::postgres::PostgresDB
             b.push_bind(outcome.outcome_id.to_string())
                 .push_bind(outcome.parent_transaction_hash.to_string())
                 .push_bind(outcome.receiver_id.to_string())
-                .push_bind(BigDecimal::from(block_height))
+                .push_bind(BigDecimal::from(outcome.block_height))
                 .push_bind(outcome.block_hash.to_string())
                 .push_bind(BigDecimal::from(shard_id));
         });
@@ -293,10 +291,9 @@ impl crate::base::tx_indexer::TxIndexerDbManager for crate::postgres::PostgresDB
         &self,
         receipts: Vec<readnode_primitives::ReceiptRecord>,
         outcomes: Vec<readnode_primitives::OutcomeRecord>,
-        block_height: u64,
     ) -> Result<()> {
-        self.save_receipts(receipts, block_height).await?;
-        self.save_outcomes(outcomes, block_height).await?;
+        self.save_receipts(receipts).await?;
+        self.save_outcomes(outcomes).await?;
         Ok(())
     }
 }

@@ -169,7 +169,11 @@ impl TxIndexerDbManager for ScyllaDBManager {
         Ok(())
     }
 
-    async fn retrieve_transaction(&self, key: &str) -> Result<Vec<u8>> {
+    async fn retrieve_transaction(
+        &self,
+        key: &str,
+        _shard_id: &near_primitives::types::ShardId,
+    ) -> Result<Vec<u8>> {
         let (data,) = self
             .scylla_session
             .execute_unpaged(&self.get_transaction, (key.to_string(),))
@@ -179,11 +183,7 @@ impl TxIndexerDbManager for ScyllaDBManager {
         Ok(data)
     }
 
-    async fn save_receipts(
-        &self,
-        receipts: Vec<readnode_primitives::ReceiptRecord>,
-        _block_height: u64,
-    ) -> Result<()> {
+    async fn save_receipts(&self, receipts: Vec<readnode_primitives::ReceiptRecord>) -> Result<()> {
         if receipts.is_empty() {
             return Ok(());
         }
@@ -225,11 +225,7 @@ impl TxIndexerDbManager for ScyllaDBManager {
         )
     }
 
-    async fn save_outcomes(
-        &self,
-        outcomes: Vec<readnode_primitives::OutcomeRecord>,
-        _block_height: u64,
-    ) -> Result<()> {
+    async fn save_outcomes(&self, outcomes: Vec<readnode_primitives::OutcomeRecord>) -> Result<()> {
         if outcomes.is_empty() {
             return Ok(());
         }
@@ -300,10 +296,9 @@ impl TxIndexerDbManager for ScyllaDBManager {
         &self,
         receipts: Vec<readnode_primitives::ReceiptRecord>,
         outcomes: Vec<readnode_primitives::OutcomeRecord>,
-        block_height: u64,
     ) -> anyhow::Result<()> {
-        let save_outcome_future = self.save_outcomes(outcomes, block_height);
-        let save_receipt_future = self.save_receipts(receipts, block_height);
+        let save_outcome_future = self.save_outcomes(outcomes);
+        let save_receipt_future = self.save_receipts(receipts);
         futures::future::join_all([save_outcome_future.boxed(), save_receipt_future.boxed()])
             .await
             .into_iter()

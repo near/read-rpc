@@ -130,4 +130,10 @@ pub trait ReaderDbManager {
         block_height: near_primitives::types::BlockHeight,
         method_name: &str,
     ) -> anyhow::Result<readnode_primitives::EpochValidatorsInfo>;
+
+    /// Converts an account ID to a shard ID
+    fn get_shard_id_by_account_id(
+        &self,
+        account_id: &near_primitives::types::AccountId,
+    ) -> near_primitives::types::ShardId;
 }

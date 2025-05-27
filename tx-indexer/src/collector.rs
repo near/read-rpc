@@ -193,7 +193,7 @@ async fn save_outcome_and_receipt_to_scylla(
 
     let operation = || async {
         tx_details_storage
-            .save_outcomes_and_receipts(receipts.clone(), outcomes.clone(), 0)
+            .save_outcomes_and_receipts(receipts.clone(), outcomes.clone())
             .await
             .map_err(|e| {
                 tracing::warn!(
@@ -496,7 +496,12 @@ async fn save_transaction_details_to_storage(
 
     let operation = || async {
         tx_details_storage
-            .save_tx(&sender_id, &transaction_hash, tx_bytes.clone(), 0)
+            .save_tx(
+                &sender_id,
+                &transaction_hash,
+                tx_bytes.clone(),
+                tx_details.block_height,
+            )
             .await
             .map_err(|e| {
                 crate::metrics::TX_STORE_ERRORS_TOTAL.inc();

@@ -77,25 +77,25 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         let mut stream = sqlx::query_as::<_, (String, Vec<u8>)>(
             "
                 WITH latest_blocks AS (
-                    SELECT 
+                    SELECT
                         data_key,
                         MAX(block_height) AS max_block_height
-                    FROM 
+                    FROM
                         state_changes_data
-                    WHERE 
+                    WHERE
                         account_id = $1
                         AND block_height <= $2
-                    GROUP BY 
+                    GROUP BY
                         data_key
                 )
-                SELECT 
+                SELECT
                     sc.data_key,
                     sc.data_value
                 FROM
                     state_changes_data sc
                 INNER JOIN latest_blocks lb
-                ON 
-                    sc.data_key = lb.data_key 
+                ON
+                    sc.data_key = lb.data_key
                     AND sc.block_height = lb.max_block_height
                 WHERE
                     sc.account_id = $1
@@ -104,7 +104,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                         $3 IS NULL OR
                         sc.data_key > $3
                     )
-                ORDER BY 
+                ORDER BY
                     sc.data_key ASC
                 LIMIT $4;
                 ",
@@ -154,26 +154,26 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         let mut stream = sqlx::query_as::<_, (String, Vec<u8>)>(
             "
                 WITH latest_blocks AS (
-                    SELECT 
+                    SELECT
                         data_key,
                         MAX(block_height) AS max_block_height
-                    FROM 
+                    FROM
                         state_changes_data
-                    WHERE 
+                    WHERE
                         account_id = $1
                         AND data_key LIKE $2
                         AND block_height <= $3
-                    GROUP BY 
+                    GROUP BY
                         data_key
                 )
-                SELECT 
+                SELECT
                     sc.data_key,
                     sc.data_value
                 FROM
                     state_changes_data sc
                 INNER JOIN latest_blocks lb
-                ON 
-                    sc.data_key = lb.data_key 
+                ON
+                    sc.data_key = lb.data_key
                     AND sc.block_height = lb.max_block_height
                 WHERE
                     sc.account_id = $1
@@ -211,25 +211,25 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         let mut stream = sqlx::query_as::<_, (String, Vec<u8>)>(
             "
                 WITH latest_blocks AS (
-                    SELECT 
+                    SELECT
                         data_key,
                         MAX(block_height) AS max_block_height
-                    FROM 
+                    FROM
                         state_changes_data
-                    WHERE 
+                    WHERE
                         account_id = $1
                         AND block_height <= $2
-                    GROUP BY 
+                    GROUP BY
                         data_key
                 )
-                SELECT 
+                SELECT
                     sc.data_key,
                     sc.data_value
                 FROM
                     state_changes_data sc
                 INNER JOIN latest_blocks lb
-                ON 
-                    sc.data_key = lb.data_key 
+                ON
+                    sc.data_key = lb.data_key
                     AND sc.block_height = lb.max_block_height
                 WHERE
                     sc.account_id = $1
@@ -266,10 +266,10 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
             .inc();
         let (data_value,): (Vec<u8>,) = sqlx::query_as(
             "
-                SELECT data_value 
+                SELECT data_value
                 FROM state_changes_data
-                WHERE account_id = $1 
-                    AND data_key = $2 
+                WHERE account_id = $1
+                    AND data_key = $2
                     AND block_height <= $3
                 ORDER BY block_height DESC
                 LIMIT 1;
@@ -300,9 +300,9 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         let (block_height, block_hash, data_value): (bigdecimal::BigDecimal, String, Vec<u8>) =
             sqlx::query_as(
                 "
-                SELECT block_height, block_hash, data_value 
+                SELECT block_height, block_hash, data_value
                 FROM state_changes_account
-                WHERE account_id = $1 
+                WHERE account_id = $1
                     AND block_height <= $2
                 ORDER BY block_height DESC
                 LIMIT 1;
@@ -339,7 +339,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 "
                 SELECT block_height, block_hash, data_value
                 FROM state_changes_contract
-                WHERE account_id = $1 
+                WHERE account_id = $1
                     AND block_height <= $2
                 ORDER BY block_height DESC
                 LIMIT 1;
@@ -378,8 +378,8 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 "
                 SELECT block_height, block_hash, data_value
                 FROM state_changes_access_key
-                WHERE account_id = $1 
-                    AND data_key = $2 
+                WHERE account_id = $1
+                    AND data_key = $2
                     AND block_height <= $3
                 ORDER BY block_height DESC
                 LIMIT 1;
@@ -416,28 +416,28 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         let mut stream = sqlx::query_as::<_, (String, Vec<u8>, bigdecimal::BigDecimal)>(
             "
                 WITH latest_blocks AS (
-                    SELECT 
+                    SELECT
                         data_key,
                         account_id,
                         MAX(block_height) as max_block_height
-                    FROM 
+                    FROM
                         state_changes_access_key
-                    WHERE 
+                    WHERE
                         account_id = $1
                         AND block_height <= $2
-                    GROUP BY 
+                    GROUP BY
                         data_key,
                         account_id
                 )
-                SELECT 
+                SELECT
                     sc.data_key,
                     sc.data_value,
-                    sc.block_height 
+                    sc.block_height
                 FROM
                     state_changes_access_key sc
                 INNER JOIN latest_blocks lb
-                ON 
-                    sc.data_key = lb.data_key 
+                ON
+                    sc.data_key = lb.data_key
                     AND sc.block_height = lb.max_block_height
                     AND sc.account_id = lb.account_id
                 WHERE
@@ -478,7 +478,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
             "
                 SELECT included_in_block_height, shard_id
                 FROM chunks_duplicate
-                WHERE block_height = $1 
+                WHERE block_height = $1
                     AND shard_id = $2
                 LIMIT 1;
                 ",
@@ -557,5 +557,12 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
             epoch_start_height: validators_info.epoch_start_height,
             validators_info,
         })
+    }
+
+    fn get_shard_id_by_account_id(
+        &self,
+        account_id: &near_primitives::types::AccountId,
+    ) -> near_primitives::types::ShardId {
+        self.shard_layout.account_id_to_shard_id(account_id)
     }
 }

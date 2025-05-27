@@ -12,24 +12,20 @@ pub trait TxIndexerDbManager {
         block_height: u64,
     ) -> Result<()>;
 
-    async fn retrieve_transaction(&self, key: &str) -> Result<Vec<u8>>;
-
-    async fn save_receipts(
+    async fn retrieve_transaction(
         &self,
-        receipts: Vec<readnode_primitives::ReceiptRecord>,
-        block_height: u64,
-    ) -> Result<()>;
+        key: &str,
+        shard_id: &near_primitives::types::ShardId,
+    ) -> Result<Vec<u8>>;
+
+    async fn save_receipts(&self, receipts: Vec<readnode_primitives::ReceiptRecord>) -> Result<()>;
 
     async fn get_receipt_by_id(
         &self,
         receipt_id: &str,
     ) -> Result<readnode_primitives::ReceiptRecord>;
 
-    async fn save_outcomes(
-        &self,
-        outcomes: Vec<readnode_primitives::OutcomeRecord>,
-        block_height: u64,
-    ) -> Result<()>;
+    async fn save_outcomes(&self, outcomes: Vec<readnode_primitives::OutcomeRecord>) -> Result<()>;
 
     async fn get_outcome_by_id(
         &self,
@@ -44,6 +40,5 @@ pub trait TxIndexerDbManager {
         &self,
         receipts: Vec<readnode_primitives::ReceiptRecord>,
         outcomes: Vec<readnode_primitives::OutcomeRecord>,
-        block_height: u64,
     ) -> Result<()>;
 }
