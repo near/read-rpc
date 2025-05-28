@@ -29,6 +29,7 @@ pub struct GeneralTxIndexerConfig {
     pub redis_url: url::Url,
     pub indexer_id: String,
     pub metrics_server_port: u16,
+    pub tx_details_storage_provider: StorageProvider,
 }
 
 #[derive(Debug, Clone)]
@@ -67,6 +68,8 @@ pub struct CommonGeneralConfig {
     pub tx_indexer: CommonGeneralTxIndexerConfig,
     #[serde(default)]
     pub state_indexer: CommonGeneralStateIndexerConfig,
+    #[serde(default)]
+    pub tx_details_storage_provider: StorageProvider,
 }
 
 #[derive(Deserialize, PartialEq, Debug, Clone, Default)]
@@ -89,6 +92,30 @@ impl FromStr for ChainId {
             "localnet" => Ok(ChainId::Localnet),
             "betanet" => Ok(ChainId::Betanet),
             _ => Err(anyhow::anyhow!("Invalid chain id")),
+        }
+    }
+}
+
+/// Represents the storage provider for some parts of the project.
+/// Initially created to be able to switch between ScyllaDB and Postgres for transaction details storage.
+/// Default is Postgres to simplify the initial setup for a new node operator.
+/// It is not recommended to use Postgres transaction details storage for an archival node.
+#[derive(Deserialize, PartialEq, Debug, Clone, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum StorageProvider {
+    #[default]
+    Postgres,
+    ScyllaDb,
+}
+
+impl FromStr for StorageProvider {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "postgres" => Ok(StorageProvider::Postgres),
+            "scylladb" => Ok(StorageProvider::ScyllaDb),
+            _ => Err(anyhow::anyhow!("Invalid storage provider")),
         }
     }
 }
@@ -167,6 +194,8 @@ pub struct CommonGeneralTxIndexerConfig {
     pub indexer_id: Option<String>,
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub metrics_server_port: Option<u16>,
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    pub tx_details_storage_provider: Option<StorageProvider>,
 }
 
 impl CommonGeneralTxIndexerConfig {
@@ -184,6 +213,7 @@ impl Default for CommonGeneralTxIndexerConfig {
         Self {
             indexer_id: Some(Self::default_indexer_id()),
             metrics_server_port: Some(Self::default_metrics_server_port()),
+            tx_details_storage_provider: Some(StorageProvider::Postgres),
         }
     }
 }
@@ -283,6 +313,7 @@ impl From<CommonGeneralConfig> for GeneralTxIndexerConfig {
                 .tx_indexer
                 .metrics_server_port
                 .unwrap_or_else(CommonGeneralTxIndexerConfig::default_metrics_server_port),
+            tx_details_storage_provider: common_config.tx_details_storage_provider,
         }
     }
 }

@@ -24,7 +24,7 @@ pub enum StartOptions {
 
 pub(crate) async fn get_start_block_height(
     fastnear_client: &near_lake_framework::FastNearClient,
-    tx_details_storage: &std::sync::Arc<impl tx_details_storage::Storage + Send + Sync>,
+    tx_details_storage: &std::sync::Arc<dyn tx_details_storage::Storage + Send + Sync>,
     start_options: &StartOptions,
     indexer_id: &str,
 ) -> anyhow::Result<u64> {

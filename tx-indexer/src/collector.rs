@@ -16,7 +16,7 @@ const SAVE_ATTEMPTS: usize = 20;
 pub(crate) async fn index_transactions(
     streamer_message: &near_indexer_primitives::StreamerMessage,
     tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorage>,
-    tx_details_storage: &std::sync::Arc<impl tx_details_storage::Storage + Send + Sync + 'static>,
+    tx_details_storage: &std::sync::Arc<dyn tx_details_storage::Storage + Send + Sync + 'static>,
     indexer_config: &configuration::TxIndexerConfig,
 ) -> anyhow::Result<()> {
     extract_transactions_to_collect(streamer_message, tx_collecting_storage, indexer_config)
@@ -40,7 +40,7 @@ pub(crate) async fn index_transactions(
 
 async fn save_finished_transaction_details(
     tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorage>,
-    tx_details_storage: &std::sync::Arc<impl tx_details_storage::Storage + Send + Sync + 'static>,
+    tx_details_storage: &std::sync::Arc<dyn tx_details_storage::Storage + Send + Sync + 'static>,
 ) -> anyhow::Result<()> {
     let finished_transaction_details =
         tx_collecting_storage
@@ -76,7 +76,7 @@ async fn save_finished_transaction_details(
 }
 
 async fn save_outcomes_and_receipts(
-    tx_details_storage: &std::sync::Arc<impl tx_details_storage::Storage + Send + Sync + 'static>,
+    tx_details_storage: &std::sync::Arc<dyn tx_details_storage::Storage + Send + Sync + 'static>,
     tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorage>,
 ) -> anyhow::Result<()> {
     let receipts_and_outcomes_to_save = tx_collecting_storage
@@ -112,7 +112,7 @@ async fn save_outcomes_and_receipts(
 /// We use 1500 records because we should be sure that the batch size is less than 50MB
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn save_receipts_and_outcomes_details(
-    tx_details_storage: &std::sync::Arc<impl tx_details_storage::Storage>,
+    tx_details_storage: &std::sync::Arc<dyn tx_details_storage::Storage + Send + Sync + 'static>,
     tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorage>,
     receipts: Vec<readnode_primitives::ReceiptRecord>,
     outcomes: Vec<readnode_primitives::OutcomeRecord>,
@@ -153,7 +153,7 @@ async fn save_receipts_and_outcomes_details(
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn save_chunks_receipts_and_outcomes_details(
-    tx_details_storage: &std::sync::Arc<impl tx_details_storage::Storage>,
+    tx_details_storage: &std::sync::Arc<dyn tx_details_storage::Storage + Send + Sync + 'static>,
     tx_collecting_storage: &std::sync::Arc<crate::storage::CacheStorage>,
     receipts: Vec<readnode_primitives::ReceiptRecord>,
     outcomes: Vec<readnode_primitives::OutcomeRecord>,
@@ -185,7 +185,7 @@ async fn save_chunks_receipts_and_outcomes_details(
 }
 
 async fn save_outcome_and_receipt_to_scylla(
-    tx_details_storage: &std::sync::Arc<impl tx_details_storage::Storage>,
+    tx_details_storage: &std::sync::Arc<dyn tx_details_storage::Storage + Send + Sync + 'static>,
     receipts: Vec<readnode_primitives::ReceiptRecord>,
     outcomes: Vec<readnode_primitives::OutcomeRecord>,
 ) -> anyhow::Result<()> {
@@ -441,7 +441,7 @@ async fn process_receipt_execution_outcome(
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn save_transaction_details(
     tx_collecting_storage: &std::sync::Arc<storage::CacheStorage>,
-    tx_details_storage: &std::sync::Arc<impl tx_details_storage::Storage>,
+    tx_details_storage: &std::sync::Arc<dyn tx_details_storage::Storage + Send + Sync + 'static>,
     tx_details: readnode_primitives::CollectingTransactionDetails,
 ) {
     let tx_key = tx_details.transaction_key();
@@ -484,7 +484,7 @@ async fn save_transaction_details(
 // Save transaction detail into the storage
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip_all))]
 async fn save_transaction_details_to_storage(
-    tx_details_storage: &std::sync::Arc<impl tx_details_storage::Storage>,
+    tx_details_storage: &std::sync::Arc<dyn tx_details_storage::Storage + Send + Sync + 'static>,
     tx_details: readnode_primitives::CollectingTransactionDetails,
 ) -> anyhow::Result<()> {
     let sender_id = tx_details.transaction.signer_id.clone();

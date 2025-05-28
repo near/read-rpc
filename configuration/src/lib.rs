@@ -10,6 +10,7 @@ mod default_env_configs;
 
 pub use crate::configs::database::DatabaseConfig;
 pub use crate::configs::general::ChainId;
+pub use crate::configs::general::StorageProvider;
 pub use crate::configs::{
     IndexerConfig, RightsizingConfig, RpcServerConfig, StateIndexerConfig, TxIndexerConfig,
 };

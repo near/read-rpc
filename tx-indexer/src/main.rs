@@ -30,23 +30,38 @@ async fn main() -> anyhow::Result<()> {
         .lake_client(indexer_config.general.chain_id.clone())
         .await?;
 
-    tracing::info!(target: INDEXER, "Instantiating the tx_details storage client...");
-    // TODO: handle this based on the configuration
-    // let scylla_session = indexer_config.tx_details_storage.scylla_client().await;
-    // let scylla_db_manager =
-    //     database::scylla::tx_indexer::ScyllaDBManager::new(scylla_session).await?;
-    // // Use ScyllaDBManager directly for tx_details_storage, since it does not implement ReaderDbManager
-    // let tx_details_storage = std::sync::Arc::new(
-    //     tx_details_storage::ScyllaDbTxDetailsStorage::new(std::sync::Arc::new(scylla_db_manager))
-    //         .await?,
-    // );
-
-    let db_manager =
-        database::prepare_db_manager::<database::PostgresDBManager>(&indexer_config.database)
-            .await?;
-    let tx_details_storage = std::sync::Arc::new(
-        tx_details_storage::PostgresTxDetailsStorage::new(std::sync::Arc::new(db_manager)).await?,
-    );
+    tracing::info!(target: INDEXER, "Instantiating the tx_details storage client with {:?} provider...", &indexer_config.tx_details_storage_provider);
+    let tx_details_storage: std::sync::Arc<dyn tx_details_storage::Storage + Send + Sync> =
+        match indexer_config.tx_details_storage_provider {
+            configuration::StorageProvider::ScyllaDb => {
+                let scylla_session = indexer_config
+                    .tx_details_storage
+                    .scylla_client()
+                    .await
+                    .expect("Failed to create ScyllaDB client");
+                let scylla_db_manager =
+                    database::scylla::tx_indexer::ScyllaDBManager::new(scylla_session).await?;
+                // Use ScyllaDBManager directly for tx_details_storage, since it does not implement ReaderDbManager
+                std::sync::Arc::new(
+                    tx_details_storage::ScyllaDbTxDetailsStorage::new(std::sync::Arc::new(
+                        scylla_db_manager,
+                    ))
+                    .await?,
+                )
+            }
+            configuration::StorageProvider::Postgres => {
+                let db_manager = database::prepare_db_manager::<database::PostgresDBManager>(
+                    &indexer_config.database,
+                )
+                .await?;
+                std::sync::Arc::new(
+                    tx_details_storage::PostgresTxDetailsStorage::new(std::sync::Arc::new(
+                        db_manager,
+                    ))
+                    .await?,
+                )
+            }
+        };
 
     let start_block_height = config::get_start_block_height(
         &fastnear_client,
@@ -115,7 +130,7 @@ async fn main() -> anyhow::Result<()> {
 async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
     tx_collecting_storage: &std::sync::Arc<storage::CacheStorage>,
-    tx_details_storage: &std::sync::Arc<impl tx_details_storage::Storage + Send + Sync + 'static>,
+    tx_details_storage: &std::sync::Arc<dyn tx_details_storage::Storage + Send + Sync + 'static>,
     indexer_config: configuration::TxIndexerConfig,
     stats: std::sync::Arc<tokio::sync::RwLock<metrics::Stats>>,
 ) -> anyhow::Result<u64> {

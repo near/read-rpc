@@ -135,15 +135,36 @@ impl ServerContext {
             BlocksInfoByFinality::new(&near_rpc_client, &fastnear_client).await,
         );
 
-        // TODO: handle scylla/postgres tx_details_storage based on the configuration
-        // let scylla_session = rpc_server_config.tx_details_storage.scylla_client().await;
-        // let scylla_db_manager =
-        //     database::scylla::tx_indexer::ScyllaDBManager::new(scylla_session).await?;
-        // // Use ScyllaDBManager directly for tx_details_storage, since it does not implement ReaderDbManager
-        // let tx_details_storage = tx_details_storage::ScyllaDbTxDetailsStorage::new(
-        //     std::sync::Arc::new(scylla_db_manager),
-        // )
-        // .await?;
+        let db_manager = database::prepare_db_manager::<database::PostgresDBManager>(
+            &rpc_server_config.database,
+        )
+        .await?;
+
+        let tx_details_storage: std::sync::Arc<dyn tx_details_storage::Storage + Send + Sync> =
+            match rpc_server_config.tx_details_storage_provider {
+                configuration::StorageProvider::ScyllaDb => {
+                    let scylla_session = rpc_server_config
+                        .tx_details_storage
+                        .scylla_client()
+                        .await
+                        .expect("Failed to create ScyllaDB client");
+                    let scylla_db_manager =
+                        database::scylla::tx_indexer::ScyllaDBManager::new(scylla_session).await?;
+                    // Use ScyllaDBManager directly for tx_details_storage, since it does not implement ReaderDbManager
+                    std::sync::Arc::new(
+                        tx_details_storage::ScyllaDbTxDetailsStorage::new(std::sync::Arc::new(
+                            scylla_db_manager,
+                        ))
+                        .await?,
+                    )
+                }
+                configuration::StorageProvider::Postgres => std::sync::Arc::new(
+                    tx_details_storage::PostgresTxDetailsStorage::new(std::sync::Arc::new(
+                        db_manager.clone(),
+                    ))
+                    .await?,
+                ),
+            };
 
         let tx_cache_storage =
             cache_storage::TxIndexerCache::new(rpc_server_config.general.redis_url.to_string())
@@ -154,19 +175,6 @@ impl ServerContext {
                 .ok();
 
         let genesis_info = GenesisInfo::get(&fastnear_client).await;
-
-        let db_manager = database::prepare_db_manager::<database::PostgresDBManager>(
-            &rpc_server_config.database,
-        )
-        .await?;
-
-        // TODO: see the commented instantiation of tx_details_storage above
-        let tx_details_storage = std::sync::Arc::new(
-            tx_details_storage::PostgresTxDetailsStorage::new(std::sync::Arc::new(
-                db_manager.clone(),
-            ))
-            .await?,
-        );
 
         crate::metrics::CARGO_PKG_VERSION
             .with_label_values(&[NEARD_VERSION])
