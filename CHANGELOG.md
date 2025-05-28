@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   * Refactor the configuration of the `rpc-server` crate to use the `ShardLayout` from the `configuration` crate
 
 ### Supported Nearcore Version
-- nearcore v2.6.2
+- nearcore v2.6.3
 - rust v1.85.0
 
 ## [0.3.3](https://github.com/near/read-rpc/releases/tag/v0.3.3)
