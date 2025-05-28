@@ -4,123 +4,23 @@ use bigdecimal::num_traits::ToPrimitive;
 use bigdecimal::BigDecimal;
 use sqlx::QueryBuilder;
 
+static META_RECEIPTS_AND_OUTCOMES_MIGRATOR: sqlx::migrate::Migrator =
+    sqlx::migrate!("src/postgres/migrations/tx_details/receipts_and_outcomes");
+static SHARDS_TRANSACTIONS_MIGRATOR: sqlx::migrate::Migrator =
+    sqlx::migrate!("src/postgres/migrations/tx_details/transactions");
+
 #[async_trait]
 impl crate::base::tx_indexer::TxIndexerDbManager for crate::postgres::PostgresDBManager {
     async fn create_tx_tables(&self) -> Result<()> {
         // Transactions table and partitions on each shard
         for pool in self.shards_pool.values() {
-            // Transactions
-            sqlx::query(
-                r#"
-                CREATE TABLE IF NOT EXISTS transactions (
-                    transaction_hash text NOT NULL,
-                    sender_account_id text NOT NULL,
-                    block_height numeric(20,0) NOT NULL,
-                    transaction_details bytea NOT NULL,
-                    PRIMARY KEY (transaction_hash)
-                ) PARTITION BY HASH (transaction_hash);
-                "#,
-            )
-            .execute(pool)
-            .await?;
-
-            sqlx::query(
-                r#"
-                DO $$
-                DECLARE
-                    i INT;
-                BEGIN
-                    FOR i IN 0..99 LOOP
-                        EXECUTE format(
-                            'CREATE TABLE IF NOT EXISTS transactions_%s PARTITION OF transactions FOR VALUES WITH (MODULUS 100, REMAINDER %s)', i, i
-                        );
-                    END LOOP;
-                END $$;
-                "#
-            )
-            .execute(pool)
-            .await?;
+            SHARDS_TRANSACTIONS_MIGRATOR.run(pool).await?;
         }
 
         // Receipts and outcomes tables and partitions in meta_db_pool only
-        // Receipts
-        sqlx::query(
-            r#"
-            CREATE TABLE IF NOT EXISTS receipts (
-                receipt_id VARCHAR PRIMARY KEY,
-                parent_transaction_hash VARCHAR NOT NULL,
-                receiver_id VARCHAR NOT NULL,
-                block_height NUMERIC(20,0) NOT NULL,
-                block_hash VARCHAR NOT NULL,
-                shard_id BIGINT NOT NULL
-            ) PARTITION BY HASH (receipt_id);
-            "#,
-        )
-        .execute(&self.meta_db_pool)
-        .await?;
-
-        sqlx::query(
-            r#"
-            DO $$
-            DECLARE
-                i INT;
-            BEGIN
-                FOR i IN 0..99 LOOP
-                    EXECUTE format(
-                        'CREATE TABLE IF NOT EXISTS receipts_%s PARTITION OF receipts FOR VALUES WITH (MODULUS 100, REMAINDER %s)', i, i
-                    );
-                END LOOP;
-            END $$;
-            "#
-        )
-        .execute(&self.meta_db_pool)
-        .await?;
-
-        // Outcomes
-        sqlx::query(
-            r#"
-            CREATE TABLE IF NOT EXISTS outcomes (
-                outcome_id VARCHAR PRIMARY KEY,
-                parent_transaction_hash VARCHAR NOT NULL,
-                receiver_id VARCHAR NOT NULL,
-                block_height NUMERIC(20,0) NOT NULL,
-                block_hash VARCHAR NOT NULL,
-                shard_id BIGINT NOT NULL
-            ) PARTITION BY HASH (outcome_id);
-            "#,
-        )
-        .execute(&self.meta_db_pool)
-        .await?;
-
-        sqlx::query(
-            r#"
-            DO $$
-            DECLARE
-                i INT;
-            BEGIN
-                FOR i IN 0..99 LOOP
-                    EXECUTE format(
-                        'CREATE TABLE IF NOT EXISTS outcomes_%s PARTITION OF outcomes FOR VALUES WITH (MODULUS 100, REMAINDER %s)', i, i
-                    );
-                END LOOP;
-            END $$;
-            "#
-        )
-        .execute(&self.meta_db_pool)
-        .await?;
-
-        // Meta table remains on meta_db_pool as before
-        sqlx::query(
-            "
-            CREATE TABLE IF NOT EXISTS meta (
-                indexer_id VARCHAR PRIMARY KEY,
-                last_processed_block_height NUMERIC(20,0) NOT NULL
-            );
-            ",
-        )
-        .execute(&self.meta_db_pool)
-        .await?;
-
+        META_RECEIPTS_AND_OUTCOMES_MIGRATOR
+            .run(&self.meta_db_pool)
+            .await?;
         Ok(())
     }
 
