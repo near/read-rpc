@@ -1,5 +1,6 @@
 mod rpc_server;
 mod state_indexer;
+mod tx_indexer;
 
 static META_DB_MIGRATOR: sqlx::migrate::Migrator =
     sqlx::migrate!("src/postgres/migrations/meta_db");
@@ -33,6 +34,7 @@ pub struct ShardIdPool<'a> {
     pool: &'a sqlx::Pool<sqlx::Postgres>,
 }
 
+#[derive(Clone)]
 pub struct PostgresDBManager {
     shard_layout: near_primitives::shard_layout::ShardLayout,
     shards_pool:
@@ -80,6 +82,19 @@ impl PostgresDBManager {
             shard_id,
             pool: self.shards_pool.get(&shard_id).ok_or(anyhow::anyhow!(
                 "Database connection for Shard_{} not found",
+                shard_id
+            ))?,
+        })
+    }
+
+    async fn get_shard_connection_by_id(
+        &self,
+        shard_id: &near_primitives::types::ShardId,
+    ) -> anyhow::Result<ShardIdPool> {
+        Ok(ShardIdPool {
+            shard_id: *shard_id,
+            pool: self.shards_pool.get(shard_id).ok_or(anyhow::anyhow!(
+                "Database connection for shard_{} not found",
                 shard_id
             ))?,
         })

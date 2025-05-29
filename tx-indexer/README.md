@@ -36,6 +36,7 @@ In order to collect a `Transactions` with all related entities it does the follo
 An example `.env` file:
 ```
 INDEXER_ID=tx-indexer
+TX_DETAILS_STORAGE_PROVIDER=scylla
 DATABASE_URL=127.0.0.1:9042
 DATABASE_USER=admin
 DATABASE_PASSWORD=password
@@ -44,7 +45,8 @@ AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
 AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
 AWS_DEFAULT_REGION=eu-central-1
 ```
-### Features
+
+In case of `TX_DETAILS_STORAGE_PROVIDER=postgres`, the database credentials and connections from the `rpc-server` will be used.
 
 ### Command to run
 

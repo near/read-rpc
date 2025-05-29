@@ -1,10 +1,10 @@
 use serde_derive::Deserialize;
 
-use crate::configs::{deserialize_optional_data_or_env, required_value_or_panic};
+use crate::configs::deserialize_optional_data_or_env;
 
 #[derive(Debug, Clone)]
 pub struct TxDetailsStorageConfig {
-    pub scylla_url: String,
+    pub scylla_url: Option<String>,
     pub scylla_user: Option<String>,
     pub scylla_password: Option<String>,
     pub scylla_preferred_dc: Option<String>,
@@ -26,7 +26,14 @@ impl TxDetailsStorageConfig {
         Ok(builder.build())
     }
 
-    pub async fn scylla_client(&self) -> scylla::Session {
+    pub async fn scylla_client(&self) -> Option<scylla::Session> {
+        let scylla_url = match &self.scylla_url {
+            Some(url) => url.clone(),
+            None => {
+                panic!("Scylla URL is not set but scylla_client() was called. This method should only be used when Scylla is configured.");
+            }
+        };
+
         let mut load_balancing_policy_builder =
             scylla::transport::load_balancing::DefaultPolicy::builder();
 
@@ -46,7 +53,7 @@ impl TxDetailsStorageConfig {
         };
 
         let mut session: scylla::SessionBuilder = scylla::SessionBuilder::new()
-            .known_node(self.scylla_url.clone())
+            .known_node(scylla_url.clone())
             .keepalive_interval(std::time::Duration::from_secs(
                 self.scylla_keepalive_interval,
             ))
@@ -58,10 +65,12 @@ impl TxDetailsStorageConfig {
                 session = session.user(user, password);
             }
         }
-        session
-            .build()
-            .await
-            .expect("Failed to create scylla session")
+        Some(
+            session
+                .build()
+                .await
+                .expect("Failed to create scylla session"),
+        )
     }
 }
 
@@ -88,7 +97,7 @@ impl CommonTxDetailStorageConfig {
 impl From<CommonTxDetailStorageConfig> for TxDetailsStorageConfig {
     fn from(common_config: CommonTxDetailStorageConfig) -> Self {
         Self {
-            scylla_url: required_value_or_panic("scylla_url", common_config.scylla_url),
+            scylla_url: common_config.scylla_url,
             scylla_user: common_config.scylla_user,
             scylla_password: common_config.scylla_password,
             scylla_preferred_dc: common_config.scylla_preferred_dc,

@@ -159,17 +159,19 @@ async fn tx_status_common(
     near_jsonrpc::primitives::types::transactions::RpcTransactionError,
 > {
     tracing::debug!("`tx_status_common` call.");
-    let tx_hash = match &transaction_info {
+    let (tx_hash, sender_id) = match &transaction_info {
         near_jsonrpc::primitives::types::transactions::TransactionInfo::Transaction(
             near_jsonrpc::primitives::types::transactions::SignedTransaction::SignedTransaction(tx),
-        ) => tx.get_hash(),
+        ) => (tx.get_hash(), tx.transaction.signer_id().clone()),
         near_jsonrpc::primitives::types::transactions::TransactionInfo::TransactionId {
             tx_hash,
-            ..
-        } => *tx_hash,
+            sender_account_id,
+        } => (*tx_hash, sender_account_id.clone()),
     };
 
-    let transaction_details = super::try_get_transaction_details_by_hash(data, &tx_hash)
+    let shard_id = data.db_manager.get_shard_id_by_account_id(&sender_id);
+
+    let transaction_details = super::try_get_transaction_details_by_hash(data, &tx_hash, &shard_id)
         .await
         .map_err(|err| {
             // logging the error at debug level since it's expected to see some "not found"
