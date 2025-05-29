@@ -62,7 +62,7 @@ pub async fn run_contract(
         readnode_primitives::StateKey,
         Option<readnode_primitives::StateValue>,
     >,
-    prefetch_state_size_limit: u64,
+    _prefetch_state_size_limit: u64,
 ) -> Result<RunContractResponse, near_jsonrpc::primitives::types::query::RpcQueryError> {
     let contract = db_manager
         .get_account(account_id, block.header.height, "query_call_function")
@@ -159,7 +159,7 @@ pub async fn run_contract(
             .map(|code| code.data.len())
             .unwrap_or_default()
     };
-    let state_size = contract
+    let _state_size = contract
         .data
         .storage_usage()
         .saturating_sub(code_len as u64);
@@ -170,7 +170,8 @@ pub async fn run_contract(
         block.header.height,
         validators,
         optimistic_data,
-        state_size <= prefetch_state_size_limit,
+        // state_size <= prefetch_state_size_limit,
+        false,
     )
     .await;
 

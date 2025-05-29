@@ -503,7 +503,12 @@ async fn optimistic_view_state(
         prefix,
         "query_view_state",
     )
-    .await;
+    .await
+    .map_err(
+        |err| near_jsonrpc::primitives::types::query::RpcQueryError::InternalError {
+            error_message: err.to_string(),
+        },
+    )?;
 
     let mut values: Vec<near_primitives::views::StateItem> = state_from_db
         .into_iter()
@@ -551,7 +556,12 @@ async fn database_view_state(
         prefix,
         "query_view_state",
     )
-    .await;
+    .await
+    .map_err(
+        |err| near_jsonrpc::primitives::types::query::RpcQueryError::InternalError {
+            error_message: err.to_string(),
+        },
+    )?;
 
     let values: Vec<near_primitives::views::StateItem> = state_from_db
         .into_iter()
