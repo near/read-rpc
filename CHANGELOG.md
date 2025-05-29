@@ -19,6 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   * `ShardLayout` depends on the `near-chain-configs::GenesisConfig` so now the `configuration` crate is responsible for downloading the genesis config and providing the `ShardLayout` automatically. This process is surrounded by additional logs to help with debugging.
   * Provide `Option<ShardLayout>` to `DatabaseConfig` since it's the most common case to care about shard layout in the database context
   * Refactor the configuration of the `rpc-server` crate to use the `ShardLayout` from the `configuration` crate
+  * `tx-details-storage` has been updated:
+    * Now it can work with either PostgreSQL or ScyllaDB
+    * The actual database interactions have been moved to the `database` crate and traits have been introduced to abstract the database interactions, so we can add more storage engines in the future
+    * `tx_details_storage_provider` parameter has been added to the `configuration` and defaults to `postgres` storage engine`
+  * `configuration` does not require `scylla_url` and will panic if the `tx_details_storage_provider` is set to `scylla` without the `scylla_url` parameter. The panic will occur during the initialization of the `tx-details-storage` in the `rpc-server` or `tx-indexer` crates.
+  * `rpc-server` will instantiate the `tx-details-storage` with the `tx_details_storage_provider` from the configuration
+  * `rpc-server` doesn't not ignore the `sernder_account_id` parameter when fetching the `TransactionDetails`. With ScyllaDB this parameter is not needed, but required for PostgreSQL to fetch the `TransactionDetails` from the corresponding shard database
 
 ### Supported Nearcore Version
 - nearcore v2.6.3

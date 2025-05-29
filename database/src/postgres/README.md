@@ -42,3 +42,10 @@ SHARD_3_DATABASE_URL=postgres://postgres:password@localhost:5433/near_data
 SHARD_4_DATABASE_URL=postgres://postgres:password@localhost:5434/near_data
 SHARD_5_DATABASE_URL=postgres://postgres:password@localhost:5435/near_data
 ```
+
+### Transaction details storage
+
+When the `tx_details_storage_provider` is set to `postgres`, the `tx-details-storage` library will use the Postgres database to store and retrieve `TransactionDetails`. Only in this case the migrations from `src/postgres/migrations/tx_details` will be applied to the database. This will create:
+
+* `transactions` tables on each of the shard databases
+* `receipts` and `outcomes` tables on the metadata database
