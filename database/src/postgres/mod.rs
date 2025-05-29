@@ -107,14 +107,14 @@ impl PostgresDBManager {
             ))?,
         })
     }
-    
+
     async fn get_shard_connection_by_id(
         &self,
         shard_id: &near_primitives::types::ShardId,
     ) -> anyhow::Result<ShardIdPool> {
         Ok(ShardIdPool {
             shard_id: *shard_id,
-            table_number: 0, // Table number is not used in this case
+            data_range_id: 0, // Table number is not used in this case
             pool: self.shards_pool.get(shard_id).ok_or(anyhow::anyhow!(
                 "Database connection for shard_{} not found",
                 shard_id
