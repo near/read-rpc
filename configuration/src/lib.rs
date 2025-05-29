@@ -7,6 +7,7 @@ use validator::Validate;
 
 mod configs;
 mod default_env_configs;
+pub mod utils;
 
 pub use crate::configs::database::DatabaseConfig;
 pub use crate::configs::general::ChainId;
