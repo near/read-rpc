@@ -109,13 +109,6 @@ pub trait ReaderDbManager {
         method_name: &str,
     ) -> anyhow::Result<Vec<near_primitives::views::AccessKeyInfoView>>;
 
-    /// Returns the near_primitives::views::ReceiptView at the given receipt_id
-    async fn get_receipt_by_id(
-        &self,
-        receipt_id: near_primitives::hash::CryptoHash,
-        method_name: &str,
-    ) -> anyhow::Result<readnode_primitives::ReceiptRecord>;
-
     /// Returns the block height and shard id by the given block height
     async fn get_block_by_height_and_shard_id(
         &self,

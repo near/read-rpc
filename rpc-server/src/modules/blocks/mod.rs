@@ -3,18 +3,6 @@ use near_primitives::views::{StateChangeValueView, StateChangesView};
 pub mod methods;
 pub mod utils;
 
-#[derive(Clone, Copy, Debug)]
-pub struct CacheBlock {
-    pub block_hash: near_primitives::hash::CryptoHash,
-    pub block_height: near_primitives::types::BlockHeight,
-    pub block_timestamp: u64,
-    pub gas_price: near_primitives::types::Balance,
-    pub latest_protocol_version: near_primitives::types::ProtocolVersion,
-    pub chunks_included: u64,
-    pub state_root: near_primitives::hash::CryptoHash,
-    pub epoch_id: near_primitives::hash::CryptoHash,
-}
-
 #[derive(Debug, Clone)]
 pub enum AccountChanges {
     None,
@@ -53,51 +41,71 @@ impl AccountChangesInBlock {
     }
 }
 
-impl From<&near_primitives::views::BlockView> for CacheBlock {
-    fn from(block: &near_primitives::views::BlockView) -> Self {
+// Struct to store the chunk
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct ChunkInfo {
+    pub shard_id: near_primitives::types::ShardId,
+    pub chunk: Option<near_primitives::views::ChunkView>,
+}
+
+impl Clone for ChunkInfo {
+    fn clone(&self) -> Self {
+        let chunk_clone = self
+            .chunk
+            .as_ref()
+            .map(|chunk| near_primitives::views::ChunkView {
+                author: chunk.author.clone(),
+                header: chunk.header.clone(),
+                transactions: chunk.transactions.clone(),
+                receipts: chunk.receipts.clone(),
+            });
+
         Self {
-            block_hash: block.header.hash,
-            block_height: block.header.height,
-            block_timestamp: block.header.timestamp,
-            gas_price: block.header.gas_price,
-            latest_protocol_version: block.header.latest_protocol_version,
-            chunks_included: block.header.chunks_included,
-            state_root: block.header.prev_state_root,
-            epoch_id: block.header.epoch_id,
+            shard_id: self.shard_id,
+            chunk: chunk_clone,
+        }
+    }
+}
+
+pub type ChunksInfo = Vec<ChunkInfo>;
+
+impl ChunkInfo {
+    pub fn from_indexer_shards(shards: Vec<near_indexer_primitives::IndexerShard>) -> ChunksInfo {
+        shards.into_iter().map(ChunkInfo::from).collect()
+    }
+}
+
+impl From<near_indexer_primitives::IndexerShard> for ChunkInfo {
+    fn from(shard: near_indexer_primitives::IndexerShard) -> Self {
+        Self {
+            shard_id: shard.shard_id,
+            chunk: shard.chunk.map(utils::from_indexer_chunk_to_chunk_view),
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct BlockInfo {
-    pub block_cache: CacheBlock,
     pub block_view: near_primitives::views::BlockView,
     pub changes: StateChangesView,
+    pub shards: Vec<near_indexer_primitives::IndexerShard>,
 }
 
 impl BlockInfo {
-    // Create new BlockInfo from BlockView. this method is useful only for start rpc-server.
-    pub async fn new_from_block_view(block_view: near_primitives::views::BlockView) -> Self {
-        Self {
-            block_cache: CacheBlock::from(&block_view),
-            block_view,
-            changes: vec![], // We left changes empty because block_view doesn't contain state changes.
-        }
-    }
-
     // Create new BlockInfo from StreamerMessage.
     // This is using to update final and optimistic blocks regularly.
     pub async fn new_from_streamer_message(
-        streamer_message: near_indexer_primitives::StreamerMessage,
+        streamer_message: &near_indexer_primitives::StreamerMessage,
     ) -> Self {
         Self {
-            block_cache: CacheBlock::from(&streamer_message.block),
-            block_view: streamer_message.block,
+            block_view: streamer_message.block.clone(),
             changes: streamer_message
                 .shards
+                .clone()
                 .into_iter()
                 .flat_map(|shard| shard.state_changes)
                 .collect(),
+            shards: streamer_message.shards.clone(),
         }
     }
 
@@ -296,38 +304,38 @@ pub struct BlocksInfoByFinality {
 impl BlocksInfoByFinality {
     pub async fn new(
         near_rpc_client: &crate::utils::JsonRpcClient,
-        blocks_cache: &std::sync::Arc<crate::cache::RwLockLruMemoryCache<u64, CacheBlock>>,
+        fast_near_client: &near_lake_framework::FastNearClient,
     ) -> Self {
-        let final_block_future = crate::utils::get_final_block(near_rpc_client, false);
-        let optimistic_block_future = crate::utils::get_final_block(near_rpc_client, true);
-        let validators_future = crate::utils::get_current_validators(near_rpc_client);
-
-        let (final_block, optimistic_block, validators) = futures::try_join!(
-            final_block_future,
-            optimistic_block_future,
-            validators_future,
-        )
-        .map_err(|err| {
-            tracing::error!("Error to fetch final block info: {:?}", err);
-            err
-        })
-        .expect("Error to get final block info");
-
-        blocks_cache
-            .put(final_block.header.height, CacheBlock::from(&final_block))
+        let final_block =
+            near_lake_framework::fastnear::fetchers::fetch_streamer_message_by_finality(
+                fast_near_client,
+                near_indexer_primitives::types::Finality::Final,
+            )
             .await;
+        let optimistic_block =
+            near_lake_framework::fastnear::fetchers::fetch_streamer_message_by_finality(
+                fast_near_client,
+                near_indexer_primitives::types::Finality::None,
+            )
+            .await;
+        let validators = crate::utils::get_current_validators(near_rpc_client)
+            .await
+            .expect("Failed to get current validators");
+        let protocol_version = crate::utils::get_current_protocol_version(near_rpc_client)
+            .await
+            .expect("Failed to get current protocol version");
 
         Self {
             final_block: futures_locks::RwLock::new(
-                BlockInfo::new_from_block_view(final_block).await,
+                BlockInfo::new_from_streamer_message(&final_block).await,
             ),
             optimistic_block: futures_locks::RwLock::new(
-                BlockInfo::new_from_block_view(optimistic_block).await,
+                BlockInfo::new_from_streamer_message(&optimistic_block).await,
             ),
             optimistic_changes: futures_locks::RwLock::new(OptimisticChanges::new()),
             current_validators: futures_locks::RwLock::new(CurrentValidatorInfo { validators }),
             current_protocol_version: futures_locks::RwLock::new(CurrentProtocolVersion {
-                protocol_version: near_primitives::version::PROTOCOL_VERSION,
+                protocol_version,
             }),
         }
     }
@@ -336,9 +344,9 @@ impl BlocksInfoByFinality {
     // Executes every second.
     pub async fn update_final_block(&self, block_info: BlockInfo) {
         let mut final_block_lock = self.final_block.write().await;
-        final_block_lock.block_cache = block_info.block_cache;
         final_block_lock.block_view = block_info.block_view;
         final_block_lock.changes = block_info.changes;
+        final_block_lock.shards = block_info.shards;
     }
 
     // Update optimistic block changes and optimistic block info in the cache.
@@ -348,9 +356,9 @@ impl BlocksInfoByFinality {
         optimistic_changes_lock.account_changes = block_info.changes_in_block_account_map().await;
 
         let mut optimistic_block_lock = self.optimistic_block.write().await;
-        optimistic_block_lock.block_cache = block_info.block_cache;
         optimistic_block_lock.block_view = block_info.block_view;
         optimistic_block_lock.changes = block_info.changes;
+        optimistic_block_lock.shards = block_info.shards;
     }
 
     // Update current validators info in the cache.
@@ -359,18 +367,13 @@ impl BlocksInfoByFinality {
         &self,
         near_rpc_client: &crate::utils::JsonRpcClient,
     ) -> anyhow::Result<()> {
-        self.current_validators.write().await.validators =
-            crate::utils::get_current_validators(near_rpc_client).await?;
-        Ok(())
-    }
-
-    // Update current protocol version in the cache.
-    // This method executes when the protocol version changes.
-    pub async fn update_current_protocol_version(
-        &self,
-        protocol_version: near_primitives::types::ProtocolVersion,
-    ) -> anyhow::Result<()> {
-        self.current_protocol_version.write().await.protocol_version = protocol_version;
+        let current_validators_future = crate::utils::get_current_validators(near_rpc_client);
+        let current_protocol_version_future =
+            crate::utils::get_current_protocol_version(near_rpc_client);
+        let (current_validators, current_protocol_version) =
+            futures::try_join!(current_validators_future, current_protocol_version_future,)?;
+        self.current_validators.write().await.validators = current_validators;
+        self.current_protocol_version.write().await.protocol_version = current_protocol_version;
         Ok(())
     }
 
@@ -379,9 +382,9 @@ impl BlocksInfoByFinality {
         self.final_block.read().await.changes.clone()
     }
 
-    // return final block changes
-    pub async fn final_cache_block(&self) -> CacheBlock {
-        self.final_block.read().await.block_cache
+    // return final block shards
+    pub async fn final_block_shards(&self) -> Vec<near_indexer_primitives::IndexerShard> {
+        self.final_block.read().await.shards.clone()
     }
 
     // return final block view
@@ -394,9 +397,9 @@ impl BlocksInfoByFinality {
         self.optimistic_block.read().await.changes.clone()
     }
 
-    // return optimistic block cache
-    pub async fn optimistic_cache_block(&self) -> CacheBlock {
-        self.optimistic_block.read().await.block_cache
+    // return optimistic block shards
+    pub async fn optimistic_block_shards(&self) -> Vec<near_indexer_primitives::IndexerShard> {
+        self.optimistic_block.read().await.shards.clone()
     }
 
     // return optimistic block view

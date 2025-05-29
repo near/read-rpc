@@ -1,5 +1,4 @@
 use actix_web::{get, App, HttpServer, Responder};
-use near_jsonrpc_client::JsonRpcClient;
 use prometheus::{Encoder, IntCounter, IntGauge, Opts};
 
 type Result<T, E> = std::result::Result<T, E>;
@@ -82,6 +81,7 @@ pub(crate) fn init_server(port: u16) -> anyhow::Result<actix_web::dev::Server> {
     Ok(HttpServer::new(|| App::new().service(get_metrics))
         .bind(("0.0.0.0", port))?
         .disable_signals()
+        .workers(2) // for indexer metrics server we don't need many workers
         .run())
 }
 
@@ -104,7 +104,7 @@ impl Stats {
 
 pub async fn state_logger(
     stats: std::sync::Arc<tokio::sync::RwLock<Stats>>,
-    rpc_client: JsonRpcClient,
+    rpc_client: near_lake_framework::FastNearClient,
 ) {
     let interval_secs = 10;
     let mut prev_blocks_processed_count: u64 = 0;

@@ -361,8 +361,7 @@ async fn handle_state_changes(
                 account_id, key, ..
             }
             | StateChangeValueView::DataDeletion { account_id, key } => {
-                let shard_id =
-                    near_primitives::shard_layout::account_id_to_shard_id(account_id, shard_layout);
+                let shard_id = shard_layout.account_id_to_shard_id(account_id);
                 // returning a hex-encoded key to ensure we store data changes to the key
                 // (if there is more than one change to the same key)
                 let data_key: &[u8] = key.as_ref();
@@ -385,8 +384,7 @@ async fn handle_state_changes(
                 account_id,
                 public_key,
             } => {
-                let shard_id =
-                    near_primitives::shard_layout::account_id_to_shard_id(account_id, shard_layout);
+                let shard_id = shard_layout.account_id_to_shard_id(account_id);
                 // returning a hex-encoded key to ensure we store data changes to the key
                 // (if there is more than one change to the same key)
                 let key = format!(
@@ -406,8 +404,7 @@ async fn handle_state_changes(
             // ContractCode and Account changes is not separate-able by any key, we can omit the suffix
             StateChangeValueView::ContractCodeUpdate { account_id, .. }
             | StateChangeValueView::ContractCodeDeletion { account_id } => {
-                let shard_id =
-                    near_primitives::shard_layout::account_id_to_shard_id(account_id, shard_layout);
+                let shard_id = shard_layout.account_id_to_shard_id(account_id);
                 let key = format!("{}_contract", account_id.as_str());
                 // This will override the previous record for this account_id + state change kind + suffix
                 state_changes_to_store
@@ -420,8 +417,7 @@ async fn handle_state_changes(
             }
             StateChangeValueView::AccountUpdate { account_id, .. }
             | StateChangeValueView::AccountDeletion { account_id } => {
-                let shard_id =
-                    near_primitives::shard_layout::account_id_to_shard_id(account_id, shard_layout);
+                let shard_id = shard_layout.account_id_to_shard_id(account_id);
                 let key = format!("{}_account", account_id.as_str());
                 // This will override the previous record for this account_id + state change kind + suffix
                 state_changes_to_store

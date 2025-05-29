@@ -9,11 +9,7 @@ license.workspace = true
 
 [dependencies]
 anyhow = "1.0.70"
-aws-credential-types = "1.1.4"
-aws-sdk-s3 = { version = "1.14.0", features = ["behavior-version-latest"] }
-aws-types = "1.1.4"
 dotenv = "0.15.0"
-google-cloud-storage = "0.23.0"
 lazy_static = "1.4.0"
 regex = "1.10.2"
 serde = "1.0.145"
@@ -26,6 +22,8 @@ opentelemetry-jaeger = { version = "0.18", features = [
     "collector_client",
     "isahc_collector_client",
 ], optional = true }
+openssl = "0.10.68"
+scylla = { version = "0.15.1", features = ["ssl", "full-serialization"] }
 toml = "0.8.4"
 tracing = "0.1.34"
 tracing-subscriber = { version = "0.3.15", features = [
@@ -36,9 +34,15 @@ tracing-subscriber = { version = "0.3.15", features = [
 ] }
 tracing-opentelemetry = { version = "0.19", optional = true }
 tracing-stackdriver = "0.7.2" # GCP logs
+ureq = "2.9" # for downloading genesis config
 url = "2.5.0"
 
+near-chain-configs.workspace = true
+near-primitives.workspace = true
 near-lake-framework.workspace = true
 
 [features]
-tracing-instrumentation = ["dep:opentelemetry-jaeger", "dep:tracing-opentelemetry"]
+tracing-instrumentation = [
+    "dep:opentelemetry-jaeger",
+    "dep:tracing-opentelemetry",
+]

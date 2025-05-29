@@ -20,7 +20,7 @@ pub async fn view_state_paginated(
     let state_values = get_state_from_db_paginated(
         &data.db_manager,
         &request_data.account_id,
-        block.block_height,
+        block.header.height,
         request_data.next_page_token,
     )
     .await?;
@@ -28,7 +28,7 @@ pub async fn view_state_paginated(
     Ok(crate::modules::state::RpcViewStatePaginatedResponse {
         values: state_values.values,
         next_page_token: state_values.next_page_token,
-        block_height: block.block_height,
-        block_hash: block.block_hash,
+        block_height: block.header.height,
+        block_hash: block.header.hash,
     })
 }

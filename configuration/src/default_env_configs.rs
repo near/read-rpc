@@ -22,8 +22,11 @@ near_archival_rpc_url = "${ARCHIVAL_NEAR_RPC_URL}"
 ## Default value is "http://read-rpc.local"
 referer_header_value = "${REFERER_HEADER_VALUE}"
 
-## redis url using for pub/sub optimistic_block and final_block
-## from near_state_indexer to rpc_server
+## Authorization token for accessing protected resources
+## Default value is None
+rpc_auth_token = "${RPC_AUTH_TOKEN}"
+
+## redis url using for cache to store the tx in progress
 ## Default value is redis://127.0.0.1/
 redis_url = "${REDIS_URL}"
 
@@ -40,13 +43,15 @@ server_port = "${SERVER_PORT}"
 max_gas_burnt = "${MAX_GAS_BURNT}"
 
 ## Contract code cache in gigabytes
-## By default we use 0.25 gigabyte (256MB or 268_435_456 bytes)
+## By default we use 2.0 gigabytes
+## We divide the cache size 1/4 for contract code and 3/4 for compiled contract code
+## Because the compiled contract code is bigger in 3 times than the contract code from the database
 contract_code_cache_size = "${CONTRACT_CODE_CACHE_SIZE}"
 
 ## Block cache size in gigabytes
-## By default we use 0.125 gigabyte (128MB or 134_217_728 bytes)
-## One cache_block size is ≈ 96 bytes
-## In 128MB we can put 1_398_101 cache_blocks
+## By default we use 3 gigabytes
+## We devide the cache size 1/3 for block cache and 2/3 for chunks cache
+## Because the chunks for block is bigger in 2 times than the block
 block_cache_size = "${BLOCK_CACHE_SIZE}"
 
 ## How many requests we should check for data consistency
@@ -90,17 +95,6 @@ metrics_server_port = "${STATE_SERVER_PORT}"
 ## Default value is 1
 concurrency = "${CONCURRENCY}"
 
-### Near state indexer general configuration
-[general.near_state_indexer]
-
-## Port for metrics server
-## By default it 8082
-metrics_server_port = "${NEAR_STATE_SERVER_PORT}"
-
-## Concurrency for state-indexer
-## Default value is 1
-concurrency = "${NEAR_STATE_CONCURRENCY}"
-
 ### Tracking acconunts and state changes configuration
 [rightsizing]
 
@@ -120,24 +114,41 @@ tracked_changes = "${TRACKED_CHANGES}"
 
 ### Lake framework configuration
 [lake_config]
+# Number of threads to use for fetching data from fatnear
+# Default: 2 * available threads
+#num_threads = 8
 
-## Lake framework AWS access key id
-aws_access_key_id = "${AWS_ACCESS_KEY_ID}"
-
-## Lake framework AWS secret access key
-aws_secret_access_key = "${AWS_SECRET_ACCESS_KEY}"
-
-## Lake framework AWS default region
-aws_default_region = "${AWS_DEFAULT_REGION}"
-
-## Lake framework bucket name
-aws_bucket_name = "${AWS_BUCKET_NAME}"
+# Authorization token for accessing neardata resources
+# Default: None
+lake_auth_token = "${LAKE_AUTH_TOKEN}"
 
 ## Transaction details are stored in the Google Cloud Storage
 [tx_details_storage]
 
-## Storage Bucket Name
-bucket_name = "${TX_BUCKET_NAME}"
+## ScyllaDB database connection URL
+## Example: "127.0.0.1:9042"
+scylla_url = "${SCYLLA_URL}"
+
+## Scylla user(login)
+## Optional database user
+scylla_user = "${SCYLLA_USER}"
+
+## Scylla password
+## Optional database password
+scylla_password = "${SCYLLA_PASSWORD}"
+
+## ScyllaDB preferred DataCenter
+## Accepts the DC name of the ScyllaDB to filter the connection to that DC only (preferrably).
+## If you connect to multi-DC cluter, you might experience big latencies while working with the DB.
+## This is due to the fact that ScyllaDB driver tries to connect to any of the nodes in the cluster disregarding of the location of the DC.
+## This option allows to filter the connection to the DC you need.
+## Example: "DC1" where DC1 is located in the same region as the application.
+## Default value is None
+scylla_preferred_dc = "${SCYLLA_PREFERRED_DC}"
+
+## Scylla keepalive interval
+## By default we use 60 seconds
+scylla_keepalive_interval = "${SCYLLA_KEEPALIVE_INTERVAL}"
 
 ## Database configuration
 [database]

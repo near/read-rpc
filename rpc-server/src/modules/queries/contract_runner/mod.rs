@@ -56,7 +56,7 @@ pub async fn run_contract(
         crate::cache::RwLockLruMemoryCache<near_primitives::hash::CryptoHash, Vec<u8>>,
     >,
     blocks_info_by_finality: &std::sync::Arc<BlocksInfoByFinality>,
-    block: crate::modules::blocks::CacheBlock,
+    block: &near_primitives::views::BlockView,
     max_gas_burnt: near_primitives::types::Gas,
     optimistic_data: HashMap<
         readnode_primitives::StateKey,
@@ -65,13 +65,13 @@ pub async fn run_contract(
     prefetch_state_size_limit: u64,
 ) -> Result<RunContractResponse, near_jsonrpc::primitives::types::query::RpcQueryError> {
     let contract = db_manager
-        .get_account(account_id, block.block_height, "query_call_function")
+        .get_account(account_id, block.header.height, "query_call_function")
         .await
         .map_err(
             |_| near_jsonrpc::primitives::types::query::RpcQueryError::UnknownAccount {
                 requested_account_id: account_id.clone(),
-                block_height: block.block_height,
-                block_hash: block.block_hash,
+                block_height: block.header.height,
+                block_hash: block.header.hash,
             },
         )?;
 
@@ -82,9 +82,9 @@ pub async fn run_contract(
     // Prepare context for the VM run contract
     let public_key = near_crypto::PublicKey::empty(near_crypto::KeyType::ED25519);
     let random_seed = near_primitives::utils::create_random_seed(
-        block.latest_protocol_version,
+        block.header.latest_protocol_version,
         near_primitives::hash::CryptoHash::default(),
-        block.state_root,
+        block.header.prev_state_root,
     );
     let context = near_vm_runner::logic::VMContext {
         current_account_id: account_id.clone(),
@@ -93,8 +93,8 @@ pub async fn run_contract(
         predecessor_account_id: account_id.clone(),
         input: args.to_vec(),
         promise_results: Vec::new().into(),
-        block_height: block.block_height,
-        block_timestamp: block.block_timestamp,
+        block_height: block.header.height,
+        block_timestamp: block.header.timestamp,
         epoch_height,
         account_balance: contract.data.amount(),
         account_locked_balance: contract.data.locked(),
@@ -109,14 +109,17 @@ pub async fn run_contract(
     // Init runtime config for each protocol version
     let store = near_parameters::RuntimeConfigStore::free();
     let config = store
-        .get_config(block.latest_protocol_version)
+        .get_config(block.header.latest_protocol_version)
         .wasm_config
         .clone();
     let vm_config = near_parameters::vm::Config {
         vm_kind: config.vm_kind.replace_with_wasmtime_if_unsupported(),
         ..near_parameters::vm::Config::clone(&config)
     };
-    let code_hash = contract.data.code_hash();
+    let code_hash = contract
+        .data
+        .local_contract_hash()
+        .unwrap_or(contract.data.global_contract_hash().unwrap_or_default());
 
     // Check if the contract code is already in the cache
     let key = near_vm_runner::get_contract_cache_key(code_hash, &vm_config);
@@ -127,13 +130,13 @@ pub async fn run_contract(
             Some(code) => Contract::new(Some(code), code_hash),
             None => {
                 let code = db_manager
-                    .get_contract_code(account_id, block.block_height, "query_call_function")
+                    .get_contract_code(account_id, block.header.height, "query_call_function")
                     .await
                     .map_err(|_| {
                         near_jsonrpc::primitives::types::query::RpcQueryError::InvalidAccount {
                             requested_account_id: account_id.clone(),
-                            block_height: block.block_height,
-                            block_hash: block.block_hash,
+                            block_height: block.header.height,
+                            block_hash: block.header.hash,
                         }
                     })?;
                 contract_code_cache.put(code_hash, code.data.clone()).await;
@@ -151,7 +154,7 @@ pub async fn run_contract(
         code.len()
     } else {
         db_manager
-            .get_contract_code(account_id, block.block_height, "query_call_function")
+            .get_contract_code(account_id, block.header.height, "query_call_function")
             .await
             .map(|code| code.data.len())
             .unwrap_or_default()
@@ -164,7 +167,7 @@ pub async fn run_contract(
     let code_storage = CodeStorage::init(
         db_manager.clone(),
         account_id.clone(),
-        block.block_height,
+        block.header.height,
         validators,
         optimistic_data,
         state_size <= prefetch_state_size_limit,
@@ -192,8 +195,8 @@ pub async fn run_contract(
         Err(
             near_jsonrpc::primitives::types::query::RpcQueryError::ContractExecutionError {
                 vm_error: message,
-                block_height: block.block_height,
-                block_hash: block.block_hash,
+                block_height: block.header.height,
+                block_hash: block.header.hash,
             },
         )
     } else {
@@ -210,29 +213,34 @@ pub async fn run_contract(
 async fn epoch_height_and_validators_with_balances(
     db_manager: &std::sync::Arc<Box<dyn database::ReaderDbManager + Sync + Send + 'static>>,
     blocks_info_by_finality: &std::sync::Arc<BlocksInfoByFinality>,
-    block: crate::modules::blocks::CacheBlock,
+    block: &near_primitives::views::BlockView,
 ) -> Result<
     (u64, HashMap<near_primitives::types::AccountId, u128>),
     near_jsonrpc::primitives::types::query::RpcQueryError,
 > {
-    let (epoch_height, epoch_validators) =
-        if blocks_info_by_finality.final_cache_block().await.epoch_id == block.epoch_id {
-            let validators = blocks_info_by_finality.validators().await;
-            (validators.epoch_height, validators.current_validators)
-        } else {
-            let validators = db_manager
-                .get_validators_by_epoch_id(block.epoch_id, "query_call_function")
-                .await
-                .map_err(|_| {
-                    near_jsonrpc::primitives::types::query::RpcQueryError::InternalError {
-                        error_message: "Failed to get epoch info".to_string(),
-                    }
-                })?;
-            (
-                validators.epoch_height,
-                validators.validators_info.current_validators,
-            )
-        };
+    let (epoch_height, epoch_validators) = if blocks_info_by_finality
+        .final_block_view()
+        .await
+        .header
+        .epoch_id
+        == block.header.epoch_id
+    {
+        let validators = blocks_info_by_finality.validators().await;
+        (validators.epoch_height, validators.current_validators)
+    } else {
+        let validators = db_manager
+            .get_validators_by_epoch_id(block.header.epoch_id, "query_call_function")
+            .await
+            .map_err(
+                |_| near_jsonrpc::primitives::types::query::RpcQueryError::InternalError {
+                    error_message: "Failed to get epoch info".to_string(),
+                },
+            )?;
+        (
+            validators.epoch_height,
+            validators.validators_info.current_validators,
+        )
+    };
     Ok((
         epoch_height,
         epoch_validators

@@ -38,7 +38,7 @@ pub async fn status(
     near_primitives::views::StatusResponse,
     near_jsonrpc::primitives::types::status::RpcStatusError,
 > {
-    let final_block = data.blocks_info_by_finality.final_cache_block().await;
+    let final_block = data.blocks_info_by_finality.final_block_view().await;
     let validators = data.blocks_info_by_finality.validators().await;
     let current_validators = validators
         .current_validators
@@ -56,29 +56,29 @@ pub async fn status(
             .blocks_info_by_finality
             .current_protocol_version()
             .await,
-        latest_protocol_version: final_block.latest_protocol_version,
+        latest_protocol_version: final_block.header.latest_protocol_version,
         // Address for current read_node RPC server.
         rpc_addr: Some(format!("0.0.0.0:{}", data.server_port)),
         validators: current_validators,
         sync_info: near_primitives::views::StatusSyncInfo {
-            latest_block_hash: final_block.block_hash,
-            latest_block_height: final_block.block_height,
-            latest_state_root: final_block.state_root,
+            latest_block_hash: final_block.header.hash,
+            latest_block_height: final_block.header.height,
+            latest_state_root: final_block.header.prev_state_root,
             latest_block_time: near_async::time::Utc::from_unix_timestamp_nanos(
-                final_block.block_timestamp as i128,
+                final_block.header.timestamp as i128,
             )
             .unwrap(),
             // Always false because read-rpc does not need to sync
             syncing: false,
-            earliest_block_hash: Some(data.genesis_info.genesis_block_cache.block_hash),
-            earliest_block_height: Some(data.genesis_info.genesis_block_cache.block_height),
+            earliest_block_hash: Some(data.genesis_info.genesis_block.header.hash),
+            earliest_block_height: Some(data.genesis_info.genesis_block.header.height),
             earliest_block_time: Some(
                 near_async::time::Utc::from_unix_timestamp_nanos(
-                    data.genesis_info.genesis_block_cache.block_timestamp as i128,
+                    data.genesis_info.genesis_block.header.timestamp as i128,
                 )
                 .unwrap(),
             ),
-            epoch_id: Some(near_primitives::types::EpochId(final_block.epoch_id)),
+            epoch_id: Some(near_primitives::types::EpochId(final_block.header.epoch_id)),
             epoch_start_height: Some(validators.epoch_start_height),
         },
         validator_account_id: None,
@@ -90,7 +90,7 @@ pub async fn status(
         uptime_sec: chrono::Utc::now().timestamp() - data.boot_time_seconds,
         // Not using for status method
         detailed_debug_status: None,
-        genesis_hash: data.genesis_info.genesis_block_cache.block_hash,
+        genesis_hash: data.genesis_info.genesis_block.header.hash,
     })
 }
 
@@ -154,8 +154,9 @@ pub async fn validators(
     {
         if data
             .blocks_info_by_finality
-            .final_cache_block()
+            .final_block_view()
             .await
+            .header
             .epoch_id
             == epoch_id.0
         {
@@ -212,14 +213,14 @@ pub async fn validators_ordered(
         )
         .await
         {
-            let final_block = data.blocks_info_by_finality.final_cache_block().await;
+            let final_block = data.blocks_info_by_finality.final_block_view().await;
             // `expected_earliest_available_block` calculated by formula:
             // `final_block_height` - `node_epoch_count` * `epoch_length`
             // Now near store 5 epochs, it can be changed in the future
             // epoch_length = 43200 blocks
             let expected_earliest_available_block =
-                final_block.block_height - 5 * data.genesis_info.genesis_config.epoch_length;
-            if block.block_height > expected_earliest_available_block {
+                final_block.header.height - 5 * data.genesis_info.genesis_config.epoch_length;
+            if block.header.height > expected_earliest_available_block {
                 // Proxy to regular rpc if the block is available
                 Ok(data
                     .near_rpc_client
@@ -359,7 +360,7 @@ async fn validators_call(
                     near_jsonrpc::primitives::types::validator::RpcValidatorError::UnknownEpoch
                 })?;
             data.db_manager
-                .get_validators_by_end_block_height(block.block_height, "validators")
+                .get_validators_by_end_block_height(block.header.height, "validators")
                 .await.map_err(|_err| {
                 near_jsonrpc::primitives::types::validator::RpcValidatorError::ValidatorInfoUnavailable
             })?
@@ -431,14 +432,9 @@ pub async fn protocol_config_call(
     genesis_config.minimum_stake_divisor = epoch_config.minimum_stake_divisor;
     genesis_config.protocol_upgrade_stake_threshold = epoch_config.protocol_upgrade_stake_threshold;
     genesis_config.shard_layout = epoch_config.shard_layout;
-    genesis_config.num_chunk_only_producer_seats = epoch_config
-        .validator_selection_config
-        .num_chunk_only_producer_seats;
-    genesis_config.minimum_validators_per_shard = epoch_config
-        .validator_selection_config
-        .minimum_validators_per_shard;
-    genesis_config.minimum_stake_ratio =
-        epoch_config.validator_selection_config.minimum_stake_ratio;
+    genesis_config.num_chunk_only_producer_seats = epoch_config.num_chunk_only_producer_seats;
+    genesis_config.minimum_validators_per_shard = epoch_config.minimum_validators_per_shard;
+    genesis_config.minimum_stake_ratio = epoch_config.minimum_stake_ratio;
 
     let protocol_config = near_chain_configs::ProtocolConfig {
         genesis_config,
@@ -448,6 +444,7 @@ pub async fn protocol_config_call(
             account_creation_config: runtime_config.account_creation_config.clone(),
             congestion_control_config: runtime_config.congestion_control_config,
             witness_config: runtime_config.witness_config,
+            bandwidth_scheduler_config: runtime_config.bandwidth_scheduler_config,
             use_state_stored_receipt: runtime_config.use_state_stored_receipt,
         },
     };

@@ -120,6 +120,11 @@ lazy_static! {
         prometheus::register(Box::new(counter_vec.clone())).unwrap();
         counter_vec
     };
+    pub(crate) static ref REQUESTS_BLOCKS_COUNTERS: IntCounterVec = register_int_counter_vec(
+        "requests_blocks_counters",
+        "Total number of requests blocks from Lake and Cache",
+        &["method_name", "source"] // This declares a label named `method_name` and `source`(lake or cache)
+    ).unwrap();
 
     // Error metrics
     // 0: ReadRPC success, NEAR RPC success"
@@ -147,12 +152,12 @@ pub async fn increase_request_category_metrics(
 ) {
     match block_reference {
         near_primitives::types::BlockReference::BlockId(_) => {
-            let final_block = data.blocks_info_by_finality.final_cache_block().await;
+            let final_block = data.blocks_info_by_finality.final_block_view().await;
             let expected_earliest_available_block =
-                final_block.block_height - 5 * data.genesis_info.genesis_config.epoch_length;
+                final_block.header.height - 5 * data.genesis_info.genesis_config.epoch_length;
             // By default, all requests should be historical, therefore
             // if block_height is None we use `genesis.block_height` by default
-            if block_height.unwrap_or(data.genesis_info.genesis_block_cache.block_height)
+            if block_height.unwrap_or(data.genesis_info.genesis_block.header.height)
                 > expected_earliest_available_block
             {
                 // This is request to regular nodes which includes 5 last epochs

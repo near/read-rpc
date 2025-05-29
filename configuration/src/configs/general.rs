@@ -12,8 +12,9 @@ pub struct GeneralRpcServerConfig {
     pub chain_id: ChainId,
     pub near_rpc_url: String,
     pub near_archival_rpc_url: Option<String>,
-    pub redis_url: url::Url,
     pub referer_header_value: String,
+    pub rpc_auth_token: Option<String>,
+    pub redis_url: url::Url,
     pub server_port: u16,
     pub max_gas_burnt: u64,
     pub contract_code_cache_size: f64,
@@ -25,8 +26,6 @@ pub struct GeneralRpcServerConfig {
 #[derive(Debug, Clone)]
 pub struct GeneralTxIndexerConfig {
     pub chain_id: ChainId,
-    pub near_rpc_url: String,
-    pub near_archival_rpc_url: Option<String>,
     pub redis_url: url::Url,
     pub indexer_id: String,
     pub metrics_server_port: u16,
@@ -37,16 +36,9 @@ pub struct GeneralStateIndexerConfig {
     pub chain_id: ChainId,
     pub near_rpc_url: String,
     pub near_archival_rpc_url: Option<String>,
-    pub referer_header_value: String,
+    pub rpc_auth_token: Option<String>,
     pub indexer_id: String,
     pub metrics_server_port: u16,
-    pub concurrency: usize,
-}
-
-#[derive(Debug, Clone)]
-pub struct GeneralNearStateIndexerConfig {
-    pub chain_id: ChainId,
-    pub redis_url: url::Url,
     pub concurrency: usize,
 }
 
@@ -63,6 +55,8 @@ pub struct CommonGeneralConfig {
     #[validate(url(message = "Invalid referer header value"))]
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub referer_header_value: Option<String>,
+    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
+    pub rpc_auth_token: Option<String>,
     #[validate(url(message = "Invalid Redis URL"))]
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub redis_url: Option<String>,
@@ -73,8 +67,6 @@ pub struct CommonGeneralConfig {
     pub tx_indexer: CommonGeneralTxIndexerConfig,
     #[serde(default)]
     pub state_indexer: CommonGeneralStateIndexerConfig,
-    #[serde(default)]
-    pub near_state_indexer: CommonGeneralNearStateIndexerConfig,
 }
 
 #[derive(Deserialize, PartialEq, Debug, Clone, Default)]
@@ -140,11 +132,11 @@ impl CommonGeneralRpcServerConfig {
     }
 
     pub fn default_contract_code_cache_size() -> f64 {
-        0.25
+        2.0
     }
 
     pub fn default_block_cache_size() -> f64 {
-        0.125
+        3.0
     }
 
     pub fn default_shadow_data_consistency_rate() -> f64 {
@@ -230,26 +222,6 @@ impl Default for CommonGeneralStateIndexerConfig {
     }
 }
 
-#[derive(Deserialize, Debug, Clone)]
-pub struct CommonGeneralNearStateIndexerConfig {
-    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
-    pub concurrency: Option<usize>,
-}
-
-impl CommonGeneralNearStateIndexerConfig {
-    pub fn default_concurrency() -> usize {
-        1
-    }
-}
-
-impl Default for CommonGeneralNearStateIndexerConfig {
-    fn default() -> Self {
-        Self {
-            concurrency: Some(Self::default_concurrency()),
-        }
-    }
-}
-
 impl From<CommonGeneralConfig> for GeneralRpcServerConfig {
     fn from(common_config: CommonGeneralConfig) -> Self {
         Self {
@@ -265,6 +237,7 @@ impl From<CommonGeneralConfig> for GeneralRpcServerConfig {
             referer_header_value: common_config
                 .referer_header_value
                 .unwrap_or("http://read-rpc.local".to_string()),
+            rpc_auth_token: common_config.rpc_auth_token,
             server_port: common_config
                 .rpc_server
                 .server_port
@@ -297,8 +270,6 @@ impl From<CommonGeneralConfig> for GeneralTxIndexerConfig {
     fn from(common_config: CommonGeneralConfig) -> Self {
         Self {
             chain_id: common_config.chain_id,
-            near_rpc_url: required_value_or_panic("near_rpc_url", common_config.near_rpc_url),
-            near_archival_rpc_url: common_config.near_archival_rpc_url,
             redis_url: url::Url::parse(&required_value_or_panic(
                 "redis_url",
                 common_config.redis_url,
@@ -322,9 +293,7 @@ impl From<CommonGeneralConfig> for GeneralStateIndexerConfig {
             chain_id: common_config.chain_id,
             near_rpc_url: required_value_or_panic("near_rpc_url", common_config.near_rpc_url),
             near_archival_rpc_url: common_config.near_archival_rpc_url,
-            referer_header_value: common_config
-                .referer_header_value
-                .unwrap_or("http://read-rpc.local".to_string()),
+            rpc_auth_token: common_config.rpc_auth_token,
             indexer_id: common_config
                 .state_indexer
                 .indexer_id
@@ -337,23 +306,6 @@ impl From<CommonGeneralConfig> for GeneralStateIndexerConfig {
                 .state_indexer
                 .concurrency
                 .unwrap_or_else(CommonGeneralStateIndexerConfig::default_concurrency),
-        }
-    }
-}
-
-impl From<CommonGeneralConfig> for GeneralNearStateIndexerConfig {
-    fn from(common_config: CommonGeneralConfig) -> Self {
-        Self {
-            chain_id: common_config.chain_id,
-            redis_url: url::Url::parse(&required_value_or_panic(
-                "redis_url",
-                common_config.redis_url,
-            ))
-            .expect("Invalid redis url"),
-            concurrency: common_config
-                .near_state_indexer
-                .concurrency
-                .unwrap_or_else(CommonGeneralNearStateIndexerConfig::default_concurrency),
         }
     }
 }

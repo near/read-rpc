@@ -7,7 +7,9 @@ use logic_state_indexer::{configs, handle_streamer_message, metrics, INDEXER};
 async fn main() -> anyhow::Result<()> {
     // We use it to automatically search the for root certificates to perform HTTPS calls
     // (sending telemetry and downloading genesis)
-    openssl_probe::init_ssl_cert_env_vars();
+    unsafe {
+        openssl_probe::init_openssl_env_vars();
+    }
 
     configuration::init_tracing(INDEXER).await?;
     tracing::info!("Starting {} v{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
@@ -17,17 +19,19 @@ async fn main() -> anyhow::Result<()> {
 
     // Here we have to get the latest ProtocolConfigView to get the up-to-date ShardLayout
     // we use the Referer header to ensure we take it from the native RPC node
-    let rpc_client = near_jsonrpc_client::JsonRpcClient::connect(&indexer_config.general.near_rpc_url)
-        .header(("Referer", indexer_config.general.referer_header_value.clone()))?;
-    let genesis_config = rpc_client
-        .call(near_jsonrpc_client::methods::EXPERIMENTAL_genesis_config::RpcGenesisConfigRequest)
-        .await?;
-    let shard_layout = configs::shard_layout(genesis_config).await?;
+    let mut rpc_client = near_jsonrpc_client::JsonRpcClient::connect(&indexer_config.general.near_rpc_url);
+    if let Some(auth_token) = &indexer_config.general.rpc_auth_token {
+        rpc_client = rpc_client.header(near_jsonrpc_client::auth::Authorization::bearer(auth_token)?);
+    }
+
+    let shard_layout = indexer_config
+        .database
+        .shard_layout
+        .clone()
+        .expect("Shard Layout is missing in the config.");
     let near_client = logic_state_indexer::NearJsonRpc::new(rpc_client);
 
-    let db_manager =
-        database::prepare_db_manager::<database::PostgresDBManager>(&indexer_config.database, shard_layout.clone())
-            .await?;
+    let db_manager = database::prepare_db_manager::<database::PostgresDBManager>(&indexer_config.database).await?;
     let start_block_height = configs::get_start_block_height(
         &near_client,
         &db_manager,
@@ -36,7 +40,10 @@ async fn main() -> anyhow::Result<()> {
     )
     .await?;
 
-    let lake_config = indexer_config.lake_config.lake_config(start_block_height).await?;
+    let lake_config = indexer_config
+        .lake_config
+        .lake_config(start_block_height, indexer_config.general.chain_id.clone())
+        .await?;
     let (sender, stream) = near_lake_framework::streamer(lake_config);
 
     // Initiate metrics http server

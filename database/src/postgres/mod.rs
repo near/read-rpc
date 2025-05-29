@@ -1,6 +1,5 @@
 mod rpc_server;
 mod state_indexer;
-mod tx_indexer;
 
 static META_DB_MIGRATOR: sqlx::migrate::Migrator =
     sqlx::migrate!("src/postgres/migrations/meta_db");
@@ -76,8 +75,7 @@ impl PostgresDBManager {
         &self,
         account_id: &near_primitives::types::AccountId,
     ) -> anyhow::Result<ShardIdPool> {
-        let shard_id =
-            near_primitives::shard_layout::account_id_to_shard_id(account_id, &self.shard_layout);
+        let shard_id = self.shard_layout.account_id_to_shard_id(account_id);
         Ok(ShardIdPool {
             shard_id,
             pool: self.shards_pool.get(&shard_id).ok_or(anyhow::anyhow!(
@@ -98,10 +96,7 @@ impl PostgresDBManager {
 
 #[async_trait::async_trait]
 impl crate::BaseDbManager for PostgresDBManager {
-    async fn new(
-        config: &configuration::DatabaseConfig,
-        shard_layout: near_primitives::shard_layout::ShardLayout,
-    ) -> anyhow::Result<Box<Self>> {
+    async fn new(config: &configuration::DatabaseConfig) -> anyhow::Result<Box<Self>> {
         let meta_db_pool = Self::create_meta_db_pool(
             &config.database_url,
             config.read_only,
@@ -109,6 +104,10 @@ impl crate::BaseDbManager for PostgresDBManager {
         )
         .await?;
         let mut shards_pool = std::collections::HashMap::new();
+        let shard_layout = config
+            .shard_layout
+            .clone()
+            .unwrap_or_else(|| panic!("Shard layout is not provided in the configuration. Please check if you have genesis_config.json in the root of the project."));
         for shard_id in shard_layout.shard_ids() {
             let database_url = config
                 .shards_config

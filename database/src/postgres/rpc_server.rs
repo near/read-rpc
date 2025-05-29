@@ -464,53 +464,6 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         Ok(access_keys)
     }
 
-    async fn get_receipt_by_id(
-        &self,
-        receipt_id: near_primitives::hash::CryptoHash,
-        method_name: &str,
-    ) -> anyhow::Result<readnode_primitives::ReceiptRecord> {
-        // We need to query all shards because we don't know which shard the receipt is stored in
-        // and we need to return the receipt as soon as we find it.
-        // Query all shards in parallel and then we wait for the first result.
-        let futures = self.shards_pool.iter().map(|(shard_id, pool)| {
-            crate::metrics::SHARD_DATABASE_READ_QUERIES
-                .with_label_values(&[&shard_id.to_string(), method_name, "receipts_map"])
-                .inc();
-            sqlx::query_as::<
-                _,
-                (
-                    String,
-                    String,
-                    String,
-                    bigdecimal::BigDecimal,
-                    String,
-                    bigdecimal::BigDecimal,
-                ),
-            >(
-                "
-                SELECT receipt_id, 
-                    parent_transaction_hash, 
-                    receiver_id, 
-                    block_height, 
-                    block_hash, 
-                    shard_id
-                FROM receipts_map
-                WHERE receipt_id = $1
-                LIMIT 1;
-                ",
-            )
-            .bind(receipt_id.to_string())
-            .fetch_one(pool)
-        });
-        let mut tasks = futures::stream::FuturesUnordered::from_iter(futures);
-        while let Some(result) = tasks.next().await {
-            if let Ok(row) = result {
-                return readnode_primitives::ReceiptRecord::try_from(row);
-            }
-        }
-        anyhow::bail!("Receipt not found")
-    }
-
     async fn get_block_by_height_and_shard_id(
         &self,
         block_height: near_primitives::types::BlockHeight,

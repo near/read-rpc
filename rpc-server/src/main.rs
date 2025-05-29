@@ -311,8 +311,7 @@ async fn rpc_handler(
     };
 
     response.json(near_jsonrpc::primitives::message::Message::response(
-        id,
-        result.map_err(near_jsonrpc::primitives::errors::RpcError::from),
+        id, result,
     ))
 }
 
@@ -328,79 +327,17 @@ async fn main() -> anyhow::Result<()> {
     let rpc_server_config =
         configuration::read_configuration::<configuration::RpcServerConfig>().await?;
 
-    let near_rpc_client = utils::JsonRpcClient::new(
-        rpc_server_config.general.near_rpc_url.clone(),
-        rpc_server_config.general.near_archival_rpc_url.clone(),
-    );
-    // We want to set a custom referer to let NEAR JSON RPC nodes know that we are a read-rpc instance
-    let near_rpc_client = near_rpc_client.header(
-        "Referer".to_string(),
-        rpc_server_config.general.referer_header_value.clone(),
-    )?;
+    let server_context =
+        actix_web::web::Data::new(config::ServerContext::init(rpc_server_config.clone()).await?);
 
-    let server_port = rpc_server_config.general.server_port;
-
-    let server_context = actix_web::web::Data::new(
-        config::ServerContext::init(rpc_server_config.clone(), near_rpc_client.clone()).await?,
-    );
-
-    let blocks_cache_clone = std::sync::Arc::clone(&server_context.blocks_cache);
-    let blocks_info_by_finality_clone =
-        std::sync::Arc::clone(&server_context.blocks_info_by_finality);
-    let near_rpc_client_clone = near_rpc_client.clone();
-
-    let finality_blocks_storage =
-        cache_storage::BlocksByFinalityCache::new(rpc_server_config.general.redis_url.to_string())
-            .await
-            .map_err(|err| {
-                crate::metrics::OPTIMISTIC_UPDATING.set_not_working();
-                tracing::warn!("Failed to connect to Redis: {:?}", err);
-            })
-            .ok();
-
-    // We need to update final block from Redis and Lake
-    // Because we can't be sure that Redis has the latest block
-    // And Lake can be used as a backup source
-
-    // Update final block from Redis if Redis is available
-    if let Some(finality_blocks_storage) = finality_blocks_storage.clone() {
-        tokio::spawn(async move {
-            utils::update_final_block_regularly_from_redis(
-                blocks_cache_clone,
-                blocks_info_by_finality_clone,
-                finality_blocks_storage,
-                near_rpc_client_clone,
-            )
-            .await
-        });
-    }
-
-    // Update final block from Lake
-    let blocks_cache_clone = std::sync::Arc::clone(&server_context.blocks_cache);
-    let blocks_info_by_finality_clone =
-        std::sync::Arc::clone(&server_context.blocks_info_by_finality);
-    tokio::spawn(async move {
-        utils::update_final_block_regularly_from_lake(
-            blocks_cache_clone,
-            blocks_info_by_finality_clone,
-            rpc_server_config,
-            near_rpc_client,
-        )
-        .await
-    });
-
-    // Update optimistic block from Redis if Redis is available
-    if let Some(finality_blocks_storage) = finality_blocks_storage {
-        let blocks_info_by_finality =
-            std::sync::Arc::clone(&server_context.blocks_info_by_finality);
-        tokio::spawn(async move {
-            utils::update_optimistic_block_regularly(
-                blocks_info_by_finality,
-                finality_blocks_storage,
-            )
-            .await
-        });
-    }
+    utils::task_regularly_update_blocks_by_finality(
+        std::sync::Arc::clone(&server_context.blocks_info_by_finality),
+        std::sync::Arc::clone(&server_context.blocks_cache),
+        std::sync::Arc::clone(&server_context.chunks_cache),
+        server_context.fastnear_client.clone(),
+        server_context.near_rpc_client.clone(),
+    )
+    .await;
 
     actix_web::HttpServer::new(move || {
         let cors = actix_cors::Cors::permissive();
@@ -413,7 +350,10 @@ async fn main() -> anyhow::Result<()> {
             .service(metrics::get_metrics)
             .service(health::get_health_status)
     })
-    .bind(format!("0.0.0.0:{:0>5}", server_port))?
+    .bind(format!(
+        "0.0.0.0:{:0>5}",
+        rpc_server_config.general.server_port
+    ))?
     .run()
     .await?;
 

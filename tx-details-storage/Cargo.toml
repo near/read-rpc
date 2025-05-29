@@ -11,4 +11,9 @@ license.workspace = true
 
 [dependencies]
 anyhow = "1.0.70"
-google-cloud-storage = "0.23.0"
+num-bigint = "0.3.3"
+num-traits = "0.2.19"
+futures = "0.3.31"
+scylla = { version = "0.15.1", features = ["ssl", "full-serialization"] }
+
+readnode-primitives.workspace = true
