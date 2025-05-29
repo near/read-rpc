@@ -23,6 +23,7 @@ impl LakeConfig {
         if let Some(num_threads) = self.num_threads {
             config_builder = config_builder.num_threads(num_threads);
         };
+        config_builder = config_builder.authorization_token(self.lake_auth_token.clone());
         Ok(config_builder
             .start_block_height(start_block_height)
             .build()?)

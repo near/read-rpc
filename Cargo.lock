@@ -4695,7 +4695,7 @@ dependencies = [
 [[package]]
 name = "near-lake-framework"
 version = "0.0.0"
-source = "git+https://github.com/kobayurii/near-lake-framework-rs.git?branch=fork%2F0.7.17#c1919120a4be4d0cae3667024c0638bac693d0fd"
+source = "git+https://github.com/kobayurii/near-lake-framework-rs.git?branch=fork%2F0.7.18#4078e4b680d447a2cc776d3d5de74af21498f18f"
 dependencies = [
  "anyhow",
  "async-stream",
