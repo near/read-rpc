@@ -310,7 +310,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         let data_range_id = shard_id_pool.data_range_id;
         let sql_query = format!(
             "
-                SELECT block_height, block_hash, data_value
+                SELECT data_value, block_height 
                 FROM state_changes_account_{data_range_id}
                 WHERE account_id = $1
                     AND block_height <= $2
@@ -318,18 +318,12 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 LIMIT 1;
             "
         );
-        let (block_height, block_hash, data_value): (bigdecimal::BigDecimal, String, Vec<u8>) =
-            sqlx::query_as(&sql_query)
-                .bind(account_id.to_string())
-                .bind(bigdecimal::BigDecimal::from(request_block_height))
-                .fetch_one(shard_id_pool.pool)
-                .await?;
-        let block = readnode_primitives::BlockRecord::try_from((block_hash, block_height))?;
-        readnode_primitives::QueryData::<near_primitives::account::Account>::try_from((
-            data_value,
-            block.height,
-            block.hash,
-        ))
+        let result: (Vec<u8>, bigdecimal::BigDecimal) = sqlx::query_as(&sql_query)
+            .bind(account_id.to_string())
+            .bind(bigdecimal::BigDecimal::from(request_block_height))
+            .fetch_one(shard_id_pool.pool)
+            .await?;
+        readnode_primitives::QueryData::<near_primitives::account::Account>::try_from(result)
     }
 
     async fn get_contract_code(
@@ -351,7 +345,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         let data_range_id = shard_id_pool.data_range_id;
         let sql_query = format!(
             "
-                SELECT block_height, block_hash, data_value
+                SELECT data_value, block_height
                 FROM state_changes_contract_{data_range_id}
                 WHERE account_id = $1
                     AND block_height <= $2
@@ -359,18 +353,12 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 LIMIT 1;
             "
         );
-        let (block_height, block_hash, contract_code): (bigdecimal::BigDecimal, String, Vec<u8>) =
-            sqlx::query_as(&sql_query)
-                .bind(account_id.to_string())
-                .bind(bigdecimal::BigDecimal::from(request_block_height))
-                .fetch_one(shard_id_pool.pool)
-                .await?;
-        let block = readnode_primitives::BlockRecord::try_from((block_hash, block_height))?;
-        Ok(readnode_primitives::QueryData {
-            data: contract_code,
-            block_height: block.height,
-            block_hash: block.hash,
-        })
+        let result: (Vec<u8>, bigdecimal::BigDecimal) = sqlx::query_as(&sql_query)
+            .bind(account_id.to_string())
+            .bind(bigdecimal::BigDecimal::from(request_block_height))
+            .fetch_one(shard_id_pool.pool)
+            .await?;
+        readnode_primitives::QueryData::<Vec<u8>>::try_from(result)
     }
 
     async fn get_access_key(
@@ -394,7 +382,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         let data_range_id = shard_id_pool.data_range_id;
         let sql_query = format!(
             "
-                SELECT block_height, block_hash, data_value
+                SELECT data_value, block_height
                 FROM state_changes_access_key_{data_range_id}
                 WHERE account_id = $1 
                     AND data_key = $2
@@ -403,19 +391,13 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 LIMIT 1;
             "
         );
-        let (block_height, block_hash, data_value): (bigdecimal::BigDecimal, String, Vec<u8>) =
-            sqlx::query_as(&sql_query)
-                .bind(account_id.to_string())
-                .bind(hex::encode(&key_data).to_string())
-                .bind(bigdecimal::BigDecimal::from(request_block_height))
-                .fetch_one(shard_id_pool.pool)
-                .await?;
-        let block = readnode_primitives::BlockRecord::try_from((block_hash, block_height))?;
-        readnode_primitives::QueryData::<near_primitives::account::AccessKey>::try_from((
-            data_value,
-            block.height,
-            block.hash,
-        ))
+        let result: (Vec<u8>, bigdecimal::BigDecimal) = sqlx::query_as(&sql_query)
+            .bind(account_id.to_string())
+            .bind(hex::encode(&key_data).to_string())
+            .bind(bigdecimal::BigDecimal::from(request_block_height))
+            .fetch_one(shard_id_pool.pool)
+            .await?;
+        readnode_primitives::QueryData::<near_primitives::account::AccessKey>::try_from(result)
     }
 
     async fn get_account_access_keys(
