@@ -1,0 +1,8 @@
+drop table state_changes_contract_1305;
+drop table state_changes_account_1305;
+drop table state_changes_access_key_1305;
+drop table state_changes_data_1305;
+drop table state_changes_access_key_1300_compact;
+drop table state_changes_contract_1300_compact;
+drop table state_changes_account_1300_compact;
+drop table state_changes_data_1300_compact;
