@@ -1,0 +1,92 @@
+{
+  "avg_hidden_validator_seats_per_shard": [
+    0
+  ],
+  "block_producer_kickout_threshold": 90,
+  "chain_id": "mainnet",
+  "chunk_producer_assignment_changes_limit": 5,
+  "chunk_producer_kickout_threshold": 90,
+  "chunk_validator_only_kickout_threshold": 80,
+  "dynamic_resharding": false,
+  "epoch_length": 43200,
+  "fishermen_threshold": "340282366920938463463374607431768211455",
+  "gas_limit": 1000000000000000,
+  "gas_price_adjustment_rate": [
+    1,
+    100
+  ],
+  "genesis_height": 9820210,
+  "genesis_time": "2020-07-21T16:55:51.591948Z",
+  "max_gas_price": "10000000000000000000000",
+  "max_inflation_rate": [
+    0,
+    1
+  ],
+  "max_kickout_stake_perc": 100,
+  "min_gas_price": "1000000000",
+  "minimum_stake_divisor": 10,
+  "minimum_stake_ratio": [
+    1,
+    6250
+  ],
+  "minimum_validators_per_shard": 1,
+  "num_block_producer_seats": 100,
+  "num_block_producer_seats_per_shard": [
+    100
+  ],
+  "num_blocks_per_year": 31536000,
+  "num_chunk_only_producer_seats": 300,
+  "num_chunk_producer_seats": 100,
+  "num_chunk_validator_seats": 300,
+  "online_max_threshold": [
+    99,
+    100
+  ],
+  "online_min_threshold": [
+    90,
+    100
+  ],
+  "protocol_reward_rate": [
+    0,
+    1
+  ],
+  "protocol_treasury_account": "treasury.near",
+  "protocol_upgrade_stake_threshold": [
+    4,
+    5
+  ],
+  "protocol_version": 29,
+  "shard_layout": {
+    "V0": {
+      "num_shards": 1,
+      "version": 0
+    }
+  },
+  "shuffle_shard_assignment_for_chunk_producers": false,
+  "target_validator_mandates_per_shard": 68,
+  "total_supply": "999999999792372916156395166000000",
+  "transaction_validity_period": 86400,
+  "use_production_config": false,
+  "validators": [
+    {
+      "account_id": "nfvalidator1.near",
+      "amount": "50000000000000000000000000000",
+      "public_key": "ed25519:14pWWRutZtGFKX4B8q89KVFaUWY1Cqu1JcqYXhCDeFh1"
+    },
+    {
+      "account_id": "nfvalidator2.near",
+      "amount": "50000000000000000000000000000",
+      "public_key": "ed25519:BwZk4bkYJxo79P2vSRw2uk1nfiqEfVkHvr5p8eVsqASC"
+    },
+    {
+      "account_id": "nfvalidator3.near",
+      "amount": "50000000000000000000000000000",
+      "public_key": "ed25519:DMz11tmPvhdqpi7CzP2JULeeSE8SxYRD8pys5nKke4FS"
+    },
+    {
+      "account_id": "nfvalidator4.near",
+      "amount": "50000000000000000000000000000",
+      "public_key": "ed25519:Fi3CQDHJoviKazVR27YmfFzWcFnvmoPBKEDd9ouq5Tjx"
+    }
+  ]
+}
