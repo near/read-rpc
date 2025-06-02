@@ -9,7 +9,7 @@ mod configs;
 mod default_env_configs;
 pub mod utils;
 
-pub use crate::configs::database::DatabaseConfig;
+pub use crate::configs::database::{DatabaseConfig, DatabaseConnectUrl};
 pub use crate::configs::general::ChainId;
 pub use crate::configs::general::StorageProvider;
 pub use crate::configs::{

@@ -160,6 +160,24 @@ impl StateChangesToStore {
     }
 }
 
+async fn task_migrate_and_compact_db(
+    shard_db_config: HashMap<ShardId, configuration::DatabaseConnectUrl>,
+    previous_range_id: u64,
+    current_range_id: u64,
+    current_range_start_block_height: u64,
+) {
+    for (_, shard_database_url) in shard_db_config {
+        let output = std::process::Command::new("migrate_compact_with_state/shard_migration.sh")
+            .arg(shard_database_url)
+            .arg(previous_range_id.to_string())
+            .arg(current_range_id.to_string())
+            .arg(current_range_start_block_height.to_string())
+            .output();
+
+        println!("Task_migrate_and_compact_db exited with status: {:?}", output);
+    }
+}
+
 #[cfg_attr(
     feature = "tracing-instrumentation",
     tracing::instrument(skip(streamer_message, db_manager))
@@ -167,6 +185,7 @@ impl StateChangesToStore {
 pub async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
     db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
+    shard_db_config: HashMap<ShardId, configuration::DatabaseConnectUrl>,
     near_client: &(impl NearClient + std::fmt::Debug + Sync),
     indexer_config: impl configuration::RightsizingConfig
         + configuration::IndexerConfig
@@ -179,14 +198,33 @@ pub async fn handle_streamer_message(
     let block_hash = streamer_message.block.header.hash;
 
     let range_id = configuration::utils::get_data_range_id(&block_height).await?;
-    if stats.read().await.current_range_id < range_id {
-        db_manager.create_new_range_tables(range_id).await?;
+    let current_range_id = stats.read().await.current_range_id;
+    if current_range_id < range_id {
+        match db_manager.create_new_range_tables(range_id).await {
+            Ok(_) => {
+                tracing::info!(target: INDEXER, "Created new range tables for range {}", range_id);
+            }
+            Err(e) => {
+                tracing::error!(target: INDEXER, "Failed to create new range tables for range {}: {}", range_id, e);
+                return Err(e);
+            }
+        };
+        if current_range_id > 0 {
+            // We spawn a task to do this in the background
+            tracing::info!(target: INDEXER, "Migrating and compacting DB for range {}", current_range_id);
+            tokio::spawn(async move { task_migrate_and_compact_db(
+                shard_db_config,
+                current_range_id,
+                range_id,
+                block_height,
+            ).await });
+        }
         stats.write().await.current_range_id = range_id;
     }
 
     let current_epoch_id = streamer_message.block.header.epoch_id;
     let next_epoch_id = streamer_message.block.header.next_epoch_id;
-
+    println!("current_epoch_id {}, next_epoch_id {}", current_epoch_id, next_epoch_id);
     tracing::debug!(target: INDEXER, "Block height {}", block_height,);
 
     stats
