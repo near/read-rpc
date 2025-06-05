@@ -19,7 +19,11 @@ async fn main() -> anyhow::Result<()> {
 
     // Here we have to get the latest ProtocolConfigView to get the up-to-date ShardLayout
     // we use the Referer header to ensure we take it from the native RPC node
-    let near_rpc_url = indexer_config.general.near_archival_rpc_url.clone().unwrap_or(indexer_config.general.near_rpc_url.clone());
+    let near_rpc_url = indexer_config
+        .general
+        .near_archival_rpc_url
+        .clone()
+        .unwrap_or(indexer_config.general.near_rpc_url.clone());
     let mut rpc_client = near_jsonrpc_client::JsonRpcClient::connect(near_rpc_url);
     if let Some(auth_token) = &indexer_config.general.rpc_auth_token {
         rpc_client = rpc_client.header(near_jsonrpc_client::auth::Authorization::bearer(auth_token)?);

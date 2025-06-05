@@ -174,7 +174,10 @@ async fn task_migrate_and_compact_db(
             .arg(current_range_start_block_height.to_string())
             .output();
 
-        println!("Task_migrate_and_compact_db exited with status: {:?}", output);
+        println!(
+            "Task_migrate_and_compact_db exited with status: {:?}",
+            output
+        );
     }
 }
 
@@ -212,19 +215,25 @@ pub async fn handle_streamer_message(
         if current_range_id > 0 {
             // We spawn a task to do this in the background
             tracing::info!(target: INDEXER, "Migrating and compacting DB for range {}", current_range_id);
-            tokio::spawn(async move { task_migrate_and_compact_db(
-                shard_db_config,
-                current_range_id,
-                range_id,
-                block_height,
-            ).await });
+            tokio::spawn(async move {
+                task_migrate_and_compact_db(
+                    shard_db_config,
+                    current_range_id,
+                    range_id,
+                    block_height,
+                )
+                .await
+            });
         }
         stats.write().await.current_range_id = range_id;
     }
 
     let current_epoch_id = streamer_message.block.header.epoch_id;
     let next_epoch_id = streamer_message.block.header.next_epoch_id;
-    println!("current_epoch_id {}, next_epoch_id {}", current_epoch_id, next_epoch_id);
+    println!(
+        "current_epoch_id {}, next_epoch_id {}",
+        current_epoch_id, next_epoch_id
+    );
     tracing::debug!(target: INDEXER, "Block height {}", block_height,);
 
     stats
