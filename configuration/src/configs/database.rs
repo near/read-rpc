@@ -5,7 +5,7 @@ use crate::configs::{deserialize_data_or_env, deserialize_optional_data_or_env};
 
 // Database connection URL
 // Example: "postgres://user:password@localhost:5432/dbname"
-type DatabaseConnectUrl = String;
+pub type DatabaseConnectUrl = String;
 
 #[derive(Validate, serde_derive::Deserialize, Debug, Clone, Default)]
 pub struct ShardDatabaseConfig {

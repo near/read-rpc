@@ -1,5 +1,3 @@
-version: '3.7'
-
 services:
   metadata:
     image: postgres:15.5
@@ -10,6 +8,11 @@ services:
       POSTGRES_PASSWORD: password
     ports:
       - "5422:5432"
+    command: ["postgres", "-c", "max_connections=4000"]
+    ulimits:
+      nofile:
+        soft: 1048576
+        hard: 1048576
 
   shard_0:
     image: postgres:15.5
@@ -20,6 +23,11 @@ services:
       POSTGRES_PASSWORD: password
     ports:
       - "5430:5432"
+    command: ["postgres", "-c", "max_connections=4000"]
+    ulimits:
+      nofile:
+        soft: 1048576
+        hard: 1048576
 
   shard_1:
     image: postgres:15.5
@@ -30,6 +38,11 @@ services:
       POSTGRES_PASSWORD: password
     ports:
       - "5431:5432"
+    command: ["postgres", "-c", "max_connections=4000"]
+    ulimits:
+      nofile:
+        soft: 1048576
+        hard: 1048576
 
   shard_2:
     image: postgres:15.5
@@ -40,6 +53,7 @@ services:
       POSTGRES_PASSWORD: password
     ports:
       - "5432:5432"
+    command: ["postgres", "-c", "max_connections=4000"]
 
   shard_3:
     image: postgres:15.5
@@ -50,6 +64,11 @@ services:
       POSTGRES_PASSWORD: password
     ports:
       - "5433:5432"
+    command: ["postgres", "-c", "max_connections=4000"]
+    ulimits:
+      nofile:
+        soft: 1048576
+        hard: 1048576
 
   shard_4:
     image: postgres:15.5
@@ -60,6 +79,11 @@ services:
       POSTGRES_PASSWORD: password
     ports:
       - "5434:5432"
+    command: ["postgres", "-c", "max_connections=4000"]
+    ulimits:
+      nofile:
+        soft: 1048576
+        hard: 1048576
 
   shard_5:
     image: postgres:15.5
@@ -70,3 +94,8 @@ services:
       POSTGRES_PASSWORD: password
     ports:
       - "5435:5432"
+    command: ["postgres", "-c", "max_connections=4000"]
+    ulimits:
+      nofile:
+        soft: 1048576
+        hard: 1048576

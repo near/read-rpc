@@ -29,8 +29,27 @@ impl PageState {
     }
 }
 
+/// This struct is used to manage the connection to a specific shard database.
+/// It contains the shard_id, data_range_id, and a reference to the database pool.
+/// `shard_id` is used to identify the shard database.
+/// `data_range_id` is used to identify the range of data in the shard database.
+/// `pool` is a reference to the database pool that is used to connect to the shard database.
+///
+/// `data_range_id` is calculated based on the block height.
+/// Since we split the database into ranges of 500,000 blocks,
+/// we can use the block height to determine the range.
+/// For database, we store ranges in different tables and use `data_range_id` as the suffix.
+/// `state_changes_data_{data_range_id}`
+///
+/// Example:
+/// block_height 73_908_345, the `data_range_id` will be 735 -> `state_changes_data_735`
+/// block_height 130_501_000, the `data_range_id` will be 1305 -> `state_changes_data_1305`
+///
+/// How to get `data_range_id` from block_height
+/// see more details in the function `configuration::utils::get_data_range_id`.
 pub struct ShardIdPool<'a> {
     shard_id: near_primitives::types::ShardId,
+    data_range_id: u64,
     pool: &'a sqlx::Pool<sqlx::Postgres>,
 }
 
@@ -76,10 +95,12 @@ impl PostgresDBManager {
     async fn get_shard_connection(
         &self,
         account_id: &near_primitives::types::AccountId,
+        block_height: &near_primitives::types::BlockHeight,
     ) -> anyhow::Result<ShardIdPool> {
         let shard_id = self.shard_layout.account_id_to_shard_id(account_id);
         Ok(ShardIdPool {
             shard_id,
+            data_range_id: configuration::utils::get_data_range_id(block_height).await?,
             pool: self.shards_pool.get(&shard_id).ok_or(anyhow::anyhow!(
                 "Database connection for Shard_{} not found",
                 shard_id
@@ -93,6 +114,7 @@ impl PostgresDBManager {
     ) -> anyhow::Result<ShardIdPool> {
         Ok(ShardIdPool {
             shard_id: *shard_id,
+            data_range_id: 0, // Table number is not used in this case
             pool: self.shards_pool.get(shard_id).ok_or(anyhow::anyhow!(
                 "Database connection for shard_{} not found",
                 shard_id
