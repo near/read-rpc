@@ -230,10 +230,7 @@ pub async fn handle_streamer_message(
 
     let current_epoch_id = streamer_message.block.header.epoch_id;
     let next_epoch_id = streamer_message.block.header.next_epoch_id;
-    println!(
-        "current_epoch_id {}, next_epoch_id {}",
-        current_epoch_id, next_epoch_id
-    );
+
     tracing::debug!(target: INDEXER, "Block height {}", block_height,);
 
     stats
