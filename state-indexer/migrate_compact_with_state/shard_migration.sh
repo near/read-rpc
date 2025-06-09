@@ -6,10 +6,16 @@
 # Here we use a simple approach to limit the number of parallel jobs.
 export MAX_PARALLEL_JOBS=100 # Maximum number of parallel jobs
 
+# Set log file
+export LOG_FILE="migration_$5.log"
+# Remove old log file if it exists
+rm -f "$LOG_FILE"
+touch "$LOG_FILE"
+
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-echo "Starting snapshot state for $2 and compact for $3 at $(date)"
+echo "Starting snapshot state for $2 and compact for $3 at $(date)" | tee -a "$LOG_FILE"
 
 # wait -n is only supported in Bash version 4.3 and above — but on macOS use older Bash version (e.g., 3.2).
 # You can also install a newer Bash with Homebrew:
@@ -32,4 +38,4 @@ fi
 
 wait
 
-echo "Snapshot state for $2 and compact for $3 completed at $(date)"
+echo "Snapshot state for $2 and compact for $3 completed at $(date)" | tee -a "$LOG_FILE"

@@ -166,15 +166,17 @@ async fn task_migrate_and_compact_db(
     current_range_id: u64,
     current_range_start_block_height: u64,
 ) {
-    for (_, shard_database_url) in shard_db_config {
+    for (shard_id, shard_database_url) in shard_db_config {
         let output = std::process::Command::new("migrate_compact_with_state/shard_migration.sh")
             .arg(shard_database_url)
             .arg(previous_range_id.to_string())
             .arg(current_range_id.to_string())
             .arg(current_range_start_block_height.to_string())
+            .arg(shard_id.to_string())
             .output();
 
-        println!(
+        tracing::info!(
+            target: INDEXER,
             "Task_migrate_and_compact_db exited with status: {:?}",
             output
         );

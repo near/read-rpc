@@ -10,6 +10,10 @@ MAX_PARALLEL=${MAX_PARALLEL_JOBS}
 migrate_partition() {
     local partition=$1
 
+    # shellcheck disable=SC2155
+    local start_time=$(date +"%T")
+    echo "[INFO] Starting partition state_changes_contract_$partition at $start_time" >> "$LOG_FILE"
+        
     psql "$DATABASE_URL" -c "
         WITH ordered_data AS (
             SELECT
@@ -44,7 +48,11 @@ migrate_partition() {
           AND block_height_from <= ${CURRENT_RANGE_BLOCK_HEIGHT_START}
           AND (block_height_to IS NULL OR block_height_to > ${CURRENT_RANGE_BLOCK_HEIGHT_START})
         ON CONFLICT (account_id, block_height) DO NOTHING;
-    "
+    " 2>&1 | tee -a "$LOG_FILE"
+    
+    # shellcheck disable=SC2155
+    local end_time=$(date +"%T")
+    echo "[INFO] Finished partition state_changes_contract_$partition at $end_time" >> "$LOG_FILE"
 }
 
 # Run migrations in parallel for partitions 0 to 99
