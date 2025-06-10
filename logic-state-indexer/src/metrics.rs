@@ -65,6 +65,7 @@ pub struct Stats {
     pub last_processed_block_height: u64,
     pub current_epoch_id: Option<near_indexer_primitives::CryptoHash>,
     pub current_epoch_height: u64,
+    pub current_range_id: u64,
 }
 
 pub async fn state_logger(

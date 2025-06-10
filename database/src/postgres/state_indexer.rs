@@ -216,7 +216,6 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
         shard_id: near_primitives::types::ShardId,
         state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
         block_height: u64,
-        block_hash: near_primitives::hash::CryptoHash,
     ) -> anyhow::Result<()> {
         crate::metrics::SHARD_DATABASE_WRITE_QUERIES
             .with_label_values(&[
@@ -225,8 +224,9 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                 "state_changes_data",
             ])
             .inc();
+        let range_id = configuration::utils::get_data_range_id(&block_height).await?;
         let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
-            "INSERT INTO state_changes_data (account_id, block_height, block_hash, data_key, data_value) ",
+            format!("INSERT INTO state_changes_data_{range_id} (account_id, block_height, data_key, data_value) "),
         );
         query_builder.push_values(state_changes.iter(), |mut values, state_change| {
             match &state_change.value {
@@ -240,7 +240,6 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                     values
                         .push_bind(account_id.to_string())
                         .push_bind(bigdecimal::BigDecimal::from(block_height))
-                        .push_bind(block_hash.to_string())
                         .push_bind(hex::encode(data_key).to_string())
                         .push_bind(data_value);
                 }
@@ -250,7 +249,6 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                     values
                         .push_bind(account_id.to_string())
                         .push_bind(bigdecimal::BigDecimal::from(block_height))
-                        .push_bind(block_hash.to_string())
                         .push_bind(hex::encode(data_key).to_string())
                         .push_bind(data_value);
                 }
@@ -273,7 +271,6 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
         shard_id: near_primitives::types::ShardId,
         state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
         block_height: u64,
-        block_hash: near_primitives::hash::CryptoHash,
     ) -> anyhow::Result<()> {
         crate::metrics::SHARD_DATABASE_WRITE_QUERIES
             .with_label_values(&[
@@ -282,8 +279,9 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                 "state_changes_access_key",
             ])
             .inc();
+        let range_id = configuration::utils::get_data_range_id(&block_height).await?;
         let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
-            "INSERT INTO state_changes_access_key (account_id, block_height, block_hash, data_key, data_value) ",
+            format!("INSERT INTO state_changes_access_key_{range_id} (account_id, block_height, data_key, data_value) "),
         );
         query_builder.push_values(state_changes.iter(), |mut values, state_change| {
             match &state_change.value {
@@ -299,7 +297,6 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                     values
                         .push_bind(account_id.to_string())
                         .push_bind(bigdecimal::BigDecimal::from(block_height))
-                        .push_bind(block_hash.to_string())
                         .push_bind(hex::encode(data_key).to_string())
                         .push_bind(data_value);
                 }
@@ -313,7 +310,6 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                     values
                         .push_bind(account_id.to_string())
                         .push_bind(bigdecimal::BigDecimal::from(block_height))
-                        .push_bind(block_hash.to_string())
                         .push_bind(hex::encode(data_key).to_string())
                         .push_bind(data_value);
                 }
@@ -336,7 +332,6 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
         shard_id: near_primitives::types::ShardId,
         state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
         block_height: u64,
-        block_hash: near_primitives::hash::CryptoHash,
     ) -> anyhow::Result<()> {
         crate::metrics::SHARD_DATABASE_WRITE_QUERIES
             .with_label_values(&[
@@ -345,8 +340,9 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                 "state_changes_contract",
             ])
             .inc();
+        let range_id = configuration::utils::get_data_range_id(&block_height).await?;
         let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
-            "INSERT INTO state_changes_contract (account_id, block_height, block_hash, data_value) ",
+            format!("INSERT INTO state_changes_contract_{range_id} (account_id, block_height, data_value) "),
         );
         query_builder.push_values(state_changes.iter(), |mut values, state_change| {
             match &state_change.value {
@@ -358,7 +354,6 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                     values
                         .push_bind(account_id.to_string())
                         .push_bind(bigdecimal::BigDecimal::from(block_height))
-                        .push_bind(block_hash.to_string())
                         .push_bind(data_value);
                 }
                 near_primitives::views::StateChangeValueView::ContractCodeDeletion {
@@ -368,7 +363,6 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                     values
                         .push_bind(account_id.to_string())
                         .push_bind(bigdecimal::BigDecimal::from(block_height))
-                        .push_bind(block_hash.to_string())
                         .push_bind(data_value);
                 }
                 _ => {}
@@ -390,7 +384,6 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
         shard_id: near_primitives::types::ShardId,
         state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
         block_height: u64,
-        block_hash: near_primitives::hash::CryptoHash,
     ) -> anyhow::Result<()> {
         crate::metrics::SHARD_DATABASE_WRITE_QUERIES
             .with_label_values(&[
@@ -399,8 +392,9 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                 "state_changes_account",
             ])
             .inc();
+        let range_id = configuration::utils::get_data_range_id(&block_height).await?;
         let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
-            "INSERT INTO state_changes_account (account_id, block_height, block_hash, data_value) ",
+            format!("INSERT INTO state_changes_account_{range_id} (account_id, block_height, data_value) "),
         );
         query_builder.push_values(state_changes.iter(), |mut values, state_change| {
             match &state_change.value {
@@ -414,7 +408,6 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                     values
                         .push_bind(account_id.to_string())
                         .push_bind(bigdecimal::BigDecimal::from(block_height))
-                        .push_bind(block_hash.to_string())
                         .push_bind(data_value);
                 }
                 near_primitives::views::StateChangeValueView::AccountDeletion { account_id } => {
@@ -422,7 +415,6 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                     values
                         .push_bind(account_id.to_string())
                         .push_bind(bigdecimal::BigDecimal::from(block_height))
-                        .push_bind(block_hash.to_string())
                         .push_bind(data_value);
                 }
                 _ => {}
@@ -436,6 +428,16 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                 shard_id
             ))?)
             .await?;
+        Ok(())
+    }
+
+    async fn create_new_range_tables(&self, range_id: u64) -> anyhow::Result<()> {
+        for (_, pool) in self.shards_pool.iter() {
+            sqlx::query("CALL create_new_range_tables($1);")
+                .bind(range_id as i64)
+                .execute(pool)
+                .await?;
+        }
         Ok(())
     }
 }

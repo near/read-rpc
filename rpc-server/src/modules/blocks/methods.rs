@@ -408,6 +408,23 @@ pub async fn fetch_block(
             Ok(data.genesis_info.genesis_block.header.height)
         }
     }?;
+    configuration::utils::check_block_height_availability(
+        &block_height,
+        &data
+            .blocks_info_by_finality
+            .optimistic_block_view()
+            .await
+            .header
+            .height,
+        data.keep_data_ranges_number,
+        data.archival_mode,
+    )
+    .await
+    .map_err(
+        |err| near_jsonrpc::primitives::types::blocks::RpcBlockError::UnknownBlock {
+            error_message: err.to_string(),
+        },
+    )?;
     let block_view = if block_height
         == data
             .blocks_info_by_finality
@@ -513,6 +530,24 @@ pub async fn fetch_chunk(
             )
             .map(|block_height_shard_id| (block_height_shard_id.0, block_height_shard_id.1))?,
     };
+
+    configuration::utils::check_block_height_availability(
+        &block_height,
+        &data
+            .blocks_info_by_finality
+            .optimistic_block_view()
+            .await
+            .header
+            .height,
+        data.keep_data_ranges_number,
+        data.archival_mode,
+    )
+    .await
+    .map_err(
+        |err| near_jsonrpc::primitives::types::chunks::RpcChunkError::UnknownBlock {
+            error_message: err.to_string(),
+        },
+    )?;
 
     let chunks_info = if block_height
         == data

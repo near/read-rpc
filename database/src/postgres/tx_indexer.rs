@@ -31,7 +31,7 @@ impl crate::base::tx_indexer::TxIndexerDbManager for crate::postgres::PostgresDB
         data: Vec<u8>,
         block_height: u64,
     ) -> Result<()> {
-        let shard_conn = self.get_shard_connection(sender_id).await?;
+        let shard_conn = self.get_shard_connection(sender_id, &0).await?;
         sqlx::query(
             "
             INSERT INTO transactions (transaction_hash, sender_account_id, block_height, transaction_details)

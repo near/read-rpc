@@ -19,7 +19,12 @@ async fn main() -> anyhow::Result<()> {
 
     // Here we have to get the latest ProtocolConfigView to get the up-to-date ShardLayout
     // we use the Referer header to ensure we take it from the native RPC node
-    let mut rpc_client = near_jsonrpc_client::JsonRpcClient::connect(&indexer_config.general.near_rpc_url);
+    let near_rpc_url = indexer_config
+        .general
+        .near_archival_rpc_url
+        .clone()
+        .unwrap_or(indexer_config.general.near_rpc_url.clone());
+    let mut rpc_client = near_jsonrpc_client::JsonRpcClient::connect(near_rpc_url);
     if let Some(auth_token) = &indexer_config.general.rpc_auth_token {
         rpc_client = rpc_client.header(near_jsonrpc_client::auth::Authorization::bearer(auth_token)?);
     }
@@ -30,7 +35,7 @@ async fn main() -> anyhow::Result<()> {
         .clone()
         .expect("Shard Layout is missing in the config.");
     let near_client = logic_state_indexer::NearJsonRpc::new(rpc_client);
-
+    let shard_db_config = indexer_config.database.shards_config.clone();
     let db_manager = database::prepare_db_manager::<database::PostgresDBManager>(&indexer_config.database).await?;
     let start_block_height = configs::get_start_block_height(
         &near_client,
@@ -59,6 +64,7 @@ async fn main() -> anyhow::Result<()> {
             handle_streamer_message(
                 streamer_message,
                 &db_manager,
+                shard_db_config.clone(),
                 &near_client,
                 indexer_config.clone(),
                 std::sync::Arc::clone(&stats),

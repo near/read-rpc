@@ -50,7 +50,6 @@ impl StateChangesToStore {
         &self,
         db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
         block_height: u64,
-        block_hash: CryptoHash,
     ) -> anyhow::Result<()> {
         if !self.data.is_empty() {
             let futures = self.data.iter().map(|(shard_id, state_changes)| {
@@ -58,7 +57,6 @@ impl StateChangesToStore {
                     *shard_id,
                     state_changes.values().cloned().collect(),
                     block_height,
-                    block_hash,
                 )
             });
             futures::future::join_all(futures)
@@ -75,7 +73,6 @@ impl StateChangesToStore {
         &self,
         db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
         block_height: u64,
-        block_hash: CryptoHash,
     ) -> anyhow::Result<()> {
         if !self.access_key.is_empty() {
             let futures = self.access_key.iter().map(|(shard_id, state_changes)| {
@@ -83,7 +80,6 @@ impl StateChangesToStore {
                     *shard_id,
                     state_changes.values().cloned().collect(),
                     block_height,
-                    block_hash,
                 )
             });
             futures::future::join_all(futures)
@@ -100,7 +96,6 @@ impl StateChangesToStore {
         &self,
         db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
         block_height: u64,
-        block_hash: CryptoHash,
     ) -> anyhow::Result<()> {
         if !self.contract.is_empty() {
             let futures = self.contract.iter().map(|(shard_id, state_changes)| {
@@ -108,7 +103,6 @@ impl StateChangesToStore {
                     *shard_id,
                     state_changes.values().cloned().collect(),
                     block_height,
-                    block_hash,
                 )
             });
             futures::future::join_all(futures)
@@ -125,7 +119,6 @@ impl StateChangesToStore {
         &self,
         db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
         block_height: u64,
-        block_hash: CryptoHash,
     ) -> anyhow::Result<()> {
         if !self.account.is_empty() {
             let futures = self.account.iter().map(|(shard_id, state_changes)| {
@@ -133,7 +126,6 @@ impl StateChangesToStore {
                     *shard_id,
                     state_changes.values().cloned().collect(),
                     block_height,
-                    block_hash,
                 )
             });
             futures::future::join_all(futures)
@@ -148,12 +140,11 @@ impl StateChangesToStore {
         &self,
         db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
         block_height: u64,
-        block_hash: CryptoHash,
     ) -> anyhow::Result<()> {
-        let save_data_future = self.save_data(db_manager, block_height, block_hash);
-        let save_access_key_future = self.save_access_key(db_manager, block_height, block_hash);
-        let save_contract_future = self.save_contract(db_manager, block_height, block_hash);
-        let save_account_future = self.save_account(db_manager, block_height, block_hash);
+        let save_data_future = self.save_data(db_manager, block_height);
+        let save_access_key_future = self.save_access_key(db_manager, block_height);
+        let save_contract_future = self.save_contract(db_manager, block_height);
+        let save_account_future = self.save_account(db_manager, block_height);
 
         futures::future::join_all([
             save_data_future.boxed(),
@@ -169,6 +160,29 @@ impl StateChangesToStore {
     }
 }
 
+async fn task_migrate_and_compact_db(
+    shard_db_config: HashMap<ShardId, configuration::DatabaseConnectUrl>,
+    previous_range_id: u64,
+    current_range_id: u64,
+    current_range_start_block_height: u64,
+) {
+    for (shard_id, shard_database_url) in shard_db_config {
+        let output = std::process::Command::new("migrate_compact_with_state/shard_migration.sh")
+            .arg(shard_database_url)
+            .arg(previous_range_id.to_string())
+            .arg(current_range_id.to_string())
+            .arg(current_range_start_block_height.to_string())
+            .arg(shard_id.to_string())
+            .output();
+
+        tracing::info!(
+            target: INDEXER,
+            "Task_migrate_and_compact_db exited with status: {:?}",
+            output
+        );
+    }
+}
+
 #[cfg_attr(
     feature = "tracing-instrumentation",
     tracing::instrument(skip(streamer_message, db_manager))
@@ -176,6 +190,7 @@ impl StateChangesToStore {
 pub async fn handle_streamer_message(
     streamer_message: near_indexer_primitives::StreamerMessage,
     db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
+    shard_db_config: HashMap<ShardId, configuration::DatabaseConnectUrl>,
     near_client: &(impl NearClient + std::fmt::Debug + Sync),
     indexer_config: impl configuration::RightsizingConfig
         + configuration::IndexerConfig
@@ -186,6 +201,34 @@ pub async fn handle_streamer_message(
 ) -> anyhow::Result<()> {
     let block_height = streamer_message.block.header.height;
     let block_hash = streamer_message.block.header.hash;
+
+    let range_id = configuration::utils::get_data_range_id(&block_height).await?;
+    let current_range_id = stats.read().await.current_range_id;
+    if current_range_id < range_id {
+        match db_manager.create_new_range_tables(range_id).await {
+            Ok(_) => {
+                tracing::info!(target: INDEXER, "Created new range tables for range {}", range_id);
+            }
+            Err(e) => {
+                tracing::error!(target: INDEXER, "Failed to create new range tables for range {}: {}", range_id, e);
+                return Err(e);
+            }
+        };
+        if current_range_id > 0 {
+            // We spawn a task to do this in the background
+            tracing::info!(target: INDEXER, "Migrating and compacting DB for range {}", current_range_id);
+            tokio::spawn(async move {
+                task_migrate_and_compact_db(
+                    shard_db_config,
+                    current_range_id,
+                    range_id,
+                    block_height,
+                )
+                .await
+            });
+        }
+        stats.write().await.current_range_id = range_id;
+    }
 
     let current_epoch_id = streamer_message.block.header.epoch_id;
     let next_epoch_id = streamer_message.block.header.next_epoch_id;
@@ -244,7 +287,6 @@ pub async fn handle_streamer_message(
             &streamer_message,
             db_manager,
             block_height,
-            block_hash,
             &indexer_config,
             shard_layout,
         )
@@ -339,7 +381,6 @@ async fn handle_state_changes(
     streamer_message: &near_indexer_primitives::StreamerMessage,
     db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
     block_height: u64,
-    block_hash: CryptoHash,
     indexer_config: &(impl configuration::RightsizingConfig + std::fmt::Debug),
     shard_layout: &near_primitives::shard_layout::ShardLayout,
 ) -> anyhow::Result<()> {
@@ -432,6 +473,6 @@ async fn handle_state_changes(
     }
 
     state_changes_to_store
-        .save_state_changes(db_manager, block_height, block_hash)
+        .save_state_changes(db_manager, block_height)
         .await
 }

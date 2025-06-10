@@ -128,6 +128,23 @@ pub async fn fetch_block_from_cache_or_get(
                         }
                     })?,
             };
+            configuration::utils::check_block_height_availability(
+                &block_height,
+                &data
+                    .blocks_info_by_finality
+                    .optimistic_block_view()
+                    .await
+                    .header
+                    .height,
+                data.keep_data_ranges_number,
+                data.archival_mode,
+            )
+            .await
+            .map_err(|err| {
+                near_jsonrpc::primitives::types::blocks::RpcBlockError::UnknownBlock {
+                    error_message: err.to_string(),
+                }
+            })?;
             data.blocks_cache.get(&block_height).await
         }
         near_primitives::types::BlockReference::Finality(finality) => {

@@ -59,7 +59,6 @@ pub trait StateIndexerDbManager {
         shard_id: near_primitives::types::ShardId,
         state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
         block_height: u64,
-        block_hash: near_primitives::hash::CryptoHash,
     ) -> anyhow::Result<()>;
 
     async fn save_state_changes_access_key(
@@ -67,7 +66,6 @@ pub trait StateIndexerDbManager {
         shard_id: near_primitives::types::ShardId,
         state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
         block_height: u64,
-        block_hash: near_primitives::hash::CryptoHash,
     ) -> anyhow::Result<()>;
 
     async fn save_state_changes_contract(
@@ -75,7 +73,6 @@ pub trait StateIndexerDbManager {
         shard_id: near_primitives::types::ShardId,
         state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
         block_height: u64,
-        block_hash: near_primitives::hash::CryptoHash,
     ) -> anyhow::Result<()>;
 
     async fn save_state_changes_account(
@@ -83,6 +80,7 @@ pub trait StateIndexerDbManager {
         shard_id: near_primitives::types::ShardId,
         state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
         block_height: u64,
-        block_hash: near_primitives::hash::CryptoHash,
     ) -> anyhow::Result<()>;
+
+    async fn create_new_range_tables(&self, range_id: u64) -> anyhow::Result<()>;
 }

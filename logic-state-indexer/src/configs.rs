@@ -20,6 +20,7 @@ pub enum StartOptions {
         height: Option<u64>,
     },
     FromLatest,
+    FromGenesis,
 }
 
 pub async fn get_start_block_height(
@@ -28,7 +29,9 @@ pub async fn get_start_block_height(
     start_options: &StartOptions,
     indexer_id: &str,
 ) -> anyhow::Result<u64> {
+    let genesis_config = configuration::read_genesis_config_from_root()?;
     let start_block_height = match start_options {
+        StartOptions::FromGenesis => return Ok(genesis_config.genesis_height),
         StartOptions::FromBlock { height } => *height,
         StartOptions::FromInterruption { height } => {
             if let Ok(block_height) = db_manager.get_last_processed_block_height(indexer_id).await {
@@ -41,7 +44,11 @@ pub async fn get_start_block_height(
         }
         StartOptions::FromLatest => final_block_height(near_client).await?,
     };
-    Ok(start_block_height - 100) // Start just a bit earlier to overlap indexed blocks to ensure we don't miss anything in-between
+    if start_block_height - 100 < genesis_config.genesis_height {
+        Ok(genesis_config.genesis_height)
+    } else {
+        Ok(start_block_height - 100) // Start just a bit earlier to overlap indexed blocks to ensure we don't miss anything in-between
+    }
 }
 
 pub(crate) async fn final_block_height(
