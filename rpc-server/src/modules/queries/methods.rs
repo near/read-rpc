@@ -418,8 +418,7 @@ async fn function_call(
     near_jsonrpc::primitives::types::query::RpcQueryError,
 > {
     let call_results =
-        process_function_call(data, block, account_id, method_name, args, is_optimistic)
-            .await?;
+        process_function_call(data, block, account_id, method_name, args, is_optimistic).await?;
 
     if let Some(err) = call_results.result.aborted {
         let message = format!("wasm execution failed with error: {:?}", err);
