@@ -78,6 +78,13 @@ async fn rpc_handler(
             })
             .await
         }
+
+        "emulate_tx" => {
+            process_method_call(request, |params| {
+                modules::transactions::methods::emulate_tx(data, params)
+            })
+            .await
+        }
         // request methods
         "query" => {
             process_method_call(request, |params| {

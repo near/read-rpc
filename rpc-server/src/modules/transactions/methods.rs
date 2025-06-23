@@ -210,3 +210,44 @@ async fn tx_status_common(
         )
     }
 }
+
+pub async fn emulate_tx(
+    data: Data<ServerContext>,
+    request_data: near_jsonrpc::primitives::types::transactions::RpcSendTransactionRequest,
+) -> Result<
+    Vec<crate::modules::transactions::EmulateTransactionResponse>,
+    near_jsonrpc::primitives::errors::RpcError,
+> {
+    let account_id = request_data.signed_transaction.transaction.signer_id();
+    let mut results = vec![];
+    for action in request_data.signed_transaction.transaction.actions() {
+        match action {
+            near_primitives::transaction::Action::FunctionCall(action) => {
+                let method_name = action.method_name.clone();
+                let args = action.args.clone();
+                let block = data.blocks_info_by_finality.final_block_view().await;
+                let call_results = crate::modules::queries::methods::process_function_call(
+                    &data,
+                    &block,
+                    account_id,
+                    &method_name,
+                    &args.into(),
+                    false,
+                )
+                .await?;
+                results.push(
+                    crate::modules::transactions::EmulateTransactionResponse::FunctionCall(
+                        call_results.into(),
+                    ),
+                );
+            }
+            _ => {
+                tracing::debug!(
+                    "Emulating transaction with action: {:?} is not supported.",
+                    action
+                );
+            }
+        }
+    }
+    Ok(results)
+}

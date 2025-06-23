@@ -354,8 +354,7 @@ async fn database_view_code(
         .data)
 }
 
-#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
-async fn function_call(
+pub async fn process_function_call(
     data: &Data<ServerContext>,
     block: &near_primitives::views::BlockView,
     account_id: &near_primitives::types::AccountId,
@@ -363,7 +362,7 @@ async fn function_call(
     args: &near_primitives::types::FunctionArgs,
     is_optimistic: bool,
 ) -> Result<
-    near_jsonrpc::primitives::types::query::RpcQueryResponse,
+    contract_runner::RunContractResponse,
     near_jsonrpc::primitives::types::query::RpcQueryError,
 > {
     tracing::debug!(
@@ -399,17 +398,53 @@ async fn function_call(
         data.prefetch_state_size_limit,
     )
     .await?;
-
-    Ok(near_jsonrpc::primitives::types::query::RpcQueryResponse {
-        kind: near_jsonrpc::primitives::types::query::QueryResponseKind::CallResult(
-            near_primitives::views::CallResult {
-                result: call_results.result,
-                logs: call_results.logs,
-            },
-        ),
+    Ok(contract_runner::RunContractResponse {
+        result: call_results,
         block_height: block.header.height,
         block_hash: block.header.hash,
     })
+}
+
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
+async fn function_call(
+    data: &Data<ServerContext>,
+    block: &near_primitives::views::BlockView,
+    account_id: &near_primitives::types::AccountId,
+    method_name: &str,
+    args: &near_primitives::types::FunctionArgs,
+    is_optimistic: bool,
+) -> Result<
+    near_jsonrpc::primitives::types::query::RpcQueryResponse,
+    near_jsonrpc::primitives::types::query::RpcQueryError,
+> {
+    let call_results =
+        process_function_call(data, block, account_id, method_name, args, is_optimistic)
+            .await?;
+
+    if let Some(err) = call_results.result.aborted {
+        let message = format!("wasm execution failed with error: {:?}", err);
+        Err(
+            near_jsonrpc::primitives::types::query::RpcQueryError::ContractExecutionError {
+                vm_error: message,
+                block_height: call_results.block_height,
+                block_hash: call_results.block_hash,
+            },
+        )
+    } else {
+        let logs = call_results.result.logs;
+        let result = match call_results.result.return_data {
+            near_vm_runner::logic::ReturnData::Value(buf) => buf,
+            near_vm_runner::logic::ReturnData::ReceiptIndex(_)
+            | near_vm_runner::logic::ReturnData::None => vec![],
+        };
+        Ok(near_jsonrpc::primitives::types::query::RpcQueryResponse {
+            kind: near_jsonrpc::primitives::types::query::QueryResponseKind::CallResult(
+                near_primitives::views::CallResult { result, logs },
+            ),
+            block_height: call_results.block_height,
+            block_hash: call_results.block_hash,
+        })
+    }
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]

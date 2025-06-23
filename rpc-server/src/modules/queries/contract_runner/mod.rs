@@ -37,8 +37,9 @@ impl near_vm_runner::Contract for Contract {
 }
 
 pub struct RunContractResponse {
-    pub result: Vec<u8>,
-    pub logs: Vec<String>,
+    pub result: near_vm_runner::logic::VMOutcome,
+    pub block_height: near_primitives::types::BlockHeight,
+    pub block_hash: near_primitives::hash::CryptoHash,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -63,7 +64,8 @@ pub async fn run_contract(
         Option<readnode_primitives::StateValue>,
     >,
     prefetch_state_size_limit: u64,
-) -> Result<RunContractResponse, near_jsonrpc::primitives::types::query::RpcQueryError> {
+) -> Result<near_vm_runner::logic::VMOutcome, near_jsonrpc::primitives::types::query::RpcQueryError>
+{
     let contract = db_manager
         .get_account(account_id, block.header.height, "query_call_function")
         .await
@@ -175,7 +177,7 @@ pub async fn run_contract(
     .await;
 
     // Execute the contract in the near VM
-    let result = run_code_in_vm_runner(
+    run_code_in_vm_runner(
         contract_code,
         method_name.to_string(),
         context,
@@ -188,26 +190,7 @@ pub async fn run_contract(
         |e| near_jsonrpc::primitives::types::query::RpcQueryError::InternalError {
             error_message: e.to_string(),
         },
-    )?;
-
-    if let Some(err) = result.aborted {
-        let message = format!("wasm execution failed with error: {:?}", err);
-        Err(
-            near_jsonrpc::primitives::types::query::RpcQueryError::ContractExecutionError {
-                vm_error: message,
-                block_height: block.header.height,
-                block_hash: block.header.hash,
-            },
-        )
-    } else {
-        let logs = result.logs;
-        let result = match result.return_data {
-            near_vm_runner::logic::ReturnData::Value(buf) => buf,
-            near_vm_runner::logic::ReturnData::ReceiptIndex(_)
-            | near_vm_runner::logic::ReturnData::None => vec![],
-        };
-        Ok(RunContractResponse { result, logs })
-    }
+    )
 }
 
 async fn epoch_height_and_validators_with_balances(
