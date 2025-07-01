@@ -354,6 +354,7 @@ async fn database_view_code(
         .data)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn process_function_call(
     data: &Data<ServerContext>,
     block: &near_primitives::views::BlockView,
@@ -361,6 +362,8 @@ pub async fn process_function_call(
     method_name: &str,
     args: &near_primitives::types::FunctionArgs,
     is_optimistic: bool,
+    tx_actions_collector: Option<std::sync::Arc<crate::modules::transactions::TxActionsCollector>>,
+    is_tx_emulation: bool,
 ) -> Result<
     contract_runner::RunContractResponse,
     near_jsonrpc::primitives::types::query::RpcQueryError,
@@ -396,6 +399,8 @@ pub async fn process_function_call(
         data.max_gas_burnt,
         maybe_optimistic_data,
         data.prefetch_state_size_limit,
+        tx_actions_collector,
+        is_tx_emulation,
     )
     .await?;
     Ok(contract_runner::RunContractResponse {
@@ -417,8 +422,17 @@ async fn function_call(
     near_jsonrpc::primitives::types::query::RpcQueryResponse,
     near_jsonrpc::primitives::types::query::RpcQueryError,
 > {
-    let call_results =
-        process_function_call(data, block, account_id, method_name, args, is_optimistic).await?;
+    let call_results = process_function_call(
+        data,
+        block,
+        account_id,
+        method_name,
+        args,
+        is_optimistic,
+        None,
+        false,
+    )
+    .await?;
 
     if let Some(err) = call_results.result.aborted {
         let message = format!("wasm execution failed with error: {:?}", err);

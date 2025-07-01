@@ -94,3 +94,34 @@ pub enum EmulateTransactionResponse {
 }
 
 impl near_jsonrpc_client::methods::RpcHandlerResponse for EmulateTransactionResponse {}
+
+/// Collector for transaction actions, providing thread-safe storage and retrieval.
+///
+/// Stores a vector of `MockAction` instances using an async RwLock.
+#[derive(Default)]
+pub struct TxActionsCollector {
+    inner: futures_locks::RwLock<Vec<near_vm_runner::logic::mocks::mock_external::MockAction>>,
+}
+
+impl TxActionsCollector {
+    /// Creates a new, empty `TxActionsCollector`.
+    pub fn new() -> Self {
+        Self {
+            inner: futures_locks::RwLock::new(Vec::new()),
+        }
+    }
+
+    /// Pushes a new `MockAction` into the collector.
+    ///
+    /// This method blocks on acquiring a write lock.
+    pub fn push(&self, action: near_vm_runner::logic::mocks::mock_external::MockAction) {
+        futures::executor::block_on(async { self.inner.write().await.push(action) });
+    }
+
+    /// Asynchronously retrieves a clone of all collected actions.
+    pub async fn get_actions(
+        &self,
+    ) -> Vec<near_vm_runner::logic::mocks::mock_external::MockAction> {
+        self.inner.read().await.clone()
+    }
+}

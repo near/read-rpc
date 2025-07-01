@@ -211,6 +211,23 @@ async fn tx_status_common(
     }
 }
 
+/// Emulates the execution of a transaction by processing its actions and collecting the results.
+///
+/// This function takes a signed transaction request, iterates over its actions, and processes
+/// each supported action (currently only `FunctionCall` actions are supported). It collects
+/// the results of these actions into a vector of `EmulateTransactionResponse`. Additionally,
+/// it processes any cross-contract actions collected during the emulation and appends their
+/// results as well.
+///
+/// # Arguments
+///
+/// * `data` - Shared server context containing dependencies and state.
+/// * `request_data` - The transaction request containing the signed transaction to emulate.
+///
+/// # Returns
+///
+/// Returns a `Result` containing a vector of `EmulateTransactionResponse` on success,
+/// or an `RpcError` if an error occurs during emulation.
 pub async fn emulate_tx(
     data: Data<ServerContext>,
     request_data: near_jsonrpc::primitives::types::transactions::RpcSendTransactionRequest,
@@ -218,11 +235,18 @@ pub async fn emulate_tx(
     Vec<crate::modules::transactions::EmulateTransactionResponse>,
     near_jsonrpc::primitives::errors::RpcError,
 > {
+    // Extracts the signer account ID from the signed transaction, prepares a results vector,
+    // and initializes a transaction actions collector. Iterates over each action in the transaction,
+    // processing only `FunctionCall` actions by invoking the function call processor and collecting
+    // the results. Unsupported actions are logged for debugging purposes.
     let account_id = request_data.signed_transaction.transaction.signer_id();
     let mut results = vec![];
+    let tx_actions_collector =
+        std::sync::Arc::new(crate::modules::transactions::TxActionsCollector::new());
     for action in request_data.signed_transaction.transaction.actions() {
         match action {
             near_primitives::transaction::Action::FunctionCall(action) => {
+                // Process supported FunctionCall actions
                 let method_name = action.method_name.clone();
                 let args = action.args.clone();
                 let block = data.blocks_info_by_finality.final_block_view().await;
@@ -233,6 +257,55 @@ pub async fn emulate_tx(
                     &method_name,
                     &args.into(),
                     false,
+                    Some(tx_actions_collector.clone()),
+                    true,
+                )
+                .await?;
+                results.push(
+                    crate::modules::transactions::EmulateTransactionResponse::FunctionCall(
+                        call_results.into(),
+                    ),
+                );
+            }
+            _ => {
+                // Log unsupported actions
+                tracing::debug!(
+                    "Emulating transaction with action: {:?} is not supported.",
+                    action
+                );
+            }
+        }
+    }
+
+    // Processes cross-contract actions collected during transaction emulation.
+    //
+    // Iterates over each cross-contract action in the `tx_actions_collector`, currently supporting only
+    // `FunctionCallWeight` actions. For each supported action, it converts the method name from bytes to a string,
+    // retrieves the latest block view, and processes the function call, collecting the results. Unsupported actions
+    // are logged for debugging purposes.
+    for cross_action in tx_actions_collector.get_actions().await {
+        match cross_action {
+            near_vm_runner::logic::mocks::mock_external::MockAction::FunctionCallWeight {
+                method_name,
+                args,
+                ..
+            } => {
+                let method_name = String::from_utf8(method_name).map_err(|_| {
+                    near_jsonrpc::primitives::errors::RpcError::new_internal_error(
+                        None,
+                        "Failed to convert method name from bytes to string".to_string(),
+                    )
+                })?;
+                let block = data.blocks_info_by_finality.final_block_view().await;
+                let call_results = crate::modules::queries::methods::process_function_call(
+                    &data,
+                    &block,
+                    account_id,
+                    &method_name,
+                    &args.into(),
+                    false,
+                    Some(tx_actions_collector.clone()),
+                    true,
                 )
                 .await?;
                 results.push(
@@ -244,7 +317,7 @@ pub async fn emulate_tx(
             _ => {
                 tracing::debug!(
                     "Emulating transaction with action: {:?} is not supported.",
-                    action
+                    cross_action
                 );
             }
         }

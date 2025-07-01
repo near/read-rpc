@@ -45,7 +45,12 @@ pub struct RunContractResponse {
 #[allow(clippy::too_many_arguments)]
 #[cfg_attr(
     feature = "tracing-instrumentation",
-    tracing::instrument(skip(db_manager, compiled_contract_code_cache, contract_code_cache))
+    tracing::instrument(skip(
+        db_manager,
+        compiled_contract_code_cache,
+        contract_code_cache,
+        tx_actions_collector
+    ))
 )]
 pub async fn run_contract(
     account_id: &near_primitives::types::AccountId,
@@ -64,6 +69,8 @@ pub async fn run_contract(
         Option<readnode_primitives::StateValue>,
     >,
     prefetch_state_size_limit: u64,
+    tx_actions_collector: Option<std::sync::Arc<crate::modules::transactions::TxActionsCollector>>,
+    is_tx_emulation: bool,
 ) -> Result<near_vm_runner::logic::VMOutcome, near_jsonrpc::primitives::types::query::RpcQueryError>
 {
     let contract = db_manager
@@ -173,6 +180,8 @@ pub async fn run_contract(
         validators,
         optimistic_data,
         state_size <= prefetch_state_size_limit,
+        tx_actions_collector,
+        is_tx_emulation,
     )
     .await;
 
