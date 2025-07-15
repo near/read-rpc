@@ -276,14 +276,30 @@ pub async fn emulate_tx(
             }
         }
     }
+    let cross_call_results =
+        cross_action_call(&data, account_id, tx_actions_collector.get_actions().await).await?;
+    results.extend(cross_call_results);
+    Ok(results)
+}
 
-    // Processes cross-contract actions collected during transaction emulation.
-    //
-    // Iterates over each cross-contract action in the `tx_actions_collector`, currently supporting only
-    // `FunctionCallWeight` actions. For each supported action, it converts the method name from bytes to a string,
-    // retrieves the latest block view, and processes the function call, collecting the results. Unsupported actions
-    // are logged for debugging purposes.
-    for cross_action in tx_actions_collector.get_actions().await {
+/// Processes cross-contract actions collected during transaction emulation.
+///
+/// Iterates over each cross-contract action in the `tx_actions_collector`, currently supporting only
+/// `FunctionCallWeight` actions. For each supported action, it converts the method name from bytes to a string,
+/// retrieves the latest block view, and processes the function call, collecting the results. Unsupported actions
+/// are logged for debugging purposes.
+pub async fn cross_action_call(
+    data: &Data<ServerContext>,
+    account_id: &near_primitives::types::AccountId,
+    tx_actions: Vec<near_vm_runner::logic::mocks::mock_external::MockAction>,
+) -> Result<
+    Vec<crate::modules::transactions::EmulateTransactionResponse>,
+    near_jsonrpc::primitives::errors::RpcError,
+> {
+    let tx_actions_collector =
+        std::sync::Arc::new(crate::modules::transactions::TxActionsCollector::new());
+    let mut results = vec![];
+    for cross_action in tx_actions {
         match cross_action {
             near_vm_runner::logic::mocks::mock_external::MockAction::FunctionCallWeight {
                 method_name,
@@ -313,6 +329,13 @@ pub async fn emulate_tx(
                         call_results.into(),
                     ),
                 );
+                let cross_results = Box::pin(cross_action_call(
+                    data,
+                    account_id,
+                    tx_actions_collector.get_actions().await,
+                ))
+                .await?;
+                results.extend(cross_results);
             }
             _ => {
                 tracing::debug!(
