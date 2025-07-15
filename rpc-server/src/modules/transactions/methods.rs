@@ -314,7 +314,7 @@ pub async fn cross_action_call(
                 })?;
                 let block = data.blocks_info_by_finality.final_block_view().await;
                 let call_results = crate::modules::queries::methods::process_function_call(
-                    &data,
+                    data,
                     &block,
                     account_id,
                     &method_name,
