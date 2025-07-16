@@ -270,12 +270,22 @@ pub async fn emulate_tx(
     })
 }
 
-/// Processes cross-contract actions collected during transaction emulation.
+/// Processes a list of transaction actions, emulating their execution and collecting results.
 ///
-/// Iterates over each cross-contract action in the `tx_actions_collector`, currently supporting only
-/// `FunctionCallWeight` actions. For each supported action, it converts the method name from bytes to a string,
-/// retrieves the latest block view, and processes the function call, collecting the results. Unsupported actions
-/// are logged for debugging purposes.
+/// For each action in `tx_actions`, if it is a `FunctionCall`, this function processes the call,
+/// collects the outcome and fee, and recursively processes any cross-contract actions collected
+/// during the emulation. For other action types, it computes the fee and collects the result.
+///
+/// # Arguments
+/// * `data` - Shared server context.
+/// * `account_id` - The signer account ID.
+/// * `receiver_id` - The receiver account ID.
+/// * `tx_actions` - The list of actions to emulate.
+/// * `runtime_config` - The runtime configuration for fee calculation.
+///
+/// # Returns
+/// A `Result` containing a vector of `EmulateTransactionActionResult` on success,
+/// or an `RpcError` if an error occurs.
 pub async fn actions_call(
     data: &Data<ServerContext>,
     account_id: &near_primitives::types::AccountId,
