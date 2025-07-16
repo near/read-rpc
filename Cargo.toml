@@ -57,6 +57,7 @@ near-chain-configs = { git = "https://github.com/kobayurii/nearcore", branch = "
 near-crypto = { git = "https://github.com/kobayurii/nearcore", branch = "fork/2.6.5" }
 near-jsonrpc = { git = "https://github.com/kobayurii/nearcore", branch = "fork/2.6.5" }
 near-parameters = { git = "https://github.com/kobayurii/nearcore", branch = "fork/2.6.5" }
+node-runtime =  { git = "https://github.com/kobayurii/nearcore", branch = "fork/2.6.5" }
 near-vm-runner = { git = "https://github.com/kobayurii/nearcore", branch = "fork/2.6.5" , features = [
     "wasmer0_vm",
     "wasmer2_vm",

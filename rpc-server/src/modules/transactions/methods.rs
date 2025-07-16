@@ -232,7 +232,7 @@ pub async fn emulate_tx(
     data: Data<ServerContext>,
     request_data: near_jsonrpc::primitives::types::transactions::RpcSendTransactionRequest,
 ) -> Result<
-    Vec<crate::modules::transactions::EmulateTransactionResponse>,
+    crate::modules::transactions::EmulateTransactionResponse,
     near_jsonrpc::primitives::errors::RpcError,
 > {
     // Extracts the signer account ID from the signed transaction, prepares a results vector,
@@ -240,46 +240,34 @@ pub async fn emulate_tx(
     // processing only `FunctionCall` actions by invoking the function call processor and collecting
     // the results. Unsupported actions are logged for debugging purposes.
     let account_id = request_data.signed_transaction.transaction.signer_id();
-    let mut results = vec![];
-    let tx_actions_collector =
-        std::sync::Arc::new(crate::modules::transactions::TxActionsCollector::new());
-    for action in request_data.signed_transaction.transaction.actions() {
-        match action {
-            near_primitives::transaction::Action::FunctionCall(action) => {
-                // Process supported FunctionCall actions
-                let method_name = action.method_name.clone();
-                let args = action.args.clone();
-                let block = data.blocks_info_by_finality.final_block_view().await;
-                let call_results = crate::modules::queries::methods::process_function_call(
-                    &data,
-                    &block,
-                    account_id,
-                    &method_name,
-                    &args.into(),
-                    false,
-                    Some(tx_actions_collector.clone()),
-                    true,
-                )
-                .await?;
-                results.push(
-                    crate::modules::transactions::EmulateTransactionResponse::FunctionCall(
-                        call_results.into(),
-                    ),
-                );
-            }
-            _ => {
-                // Log unsupported actions
-                tracing::debug!(
-                    "Emulating transaction with action: {:?} is not supported.",
-                    action
-                );
-            }
-        }
-    }
-    let cross_call_results =
-        cross_action_call(&data, account_id, tx_actions_collector.get_actions().await).await?;
-    results.extend(cross_call_results);
-    Ok(results)
+    let receiver_id = request_data.signed_transaction.transaction.receiver_id();
+    let block = data.blocks_info_by_finality.final_block_view().await;
+    let store = near_parameters::RuntimeConfigStore::for_chain_id(
+        &data.genesis_info.genesis_config.chain_id,
+    );
+    let protocol_version = data
+        .blocks_info_by_finality
+        .current_protocol_version()
+        .await;
+    let runtime_config = store.get_config(protocol_version);
+    let results = actions_call(
+        &data,
+        account_id,
+        receiver_id,
+        &request_data
+            .signed_transaction
+            .transaction
+            .actions()
+            .to_vec(),
+        runtime_config,
+    )
+    .await?;
+
+    Ok(crate::modules::transactions::EmulateTransactionResponse {
+        results,
+        block_height: block.header.height,
+        gas_price: block.header.gas_price,
+    })
 }
 
 /// Processes cross-contract actions collected during transaction emulation.
@@ -288,30 +276,24 @@ pub async fn emulate_tx(
 /// `FunctionCallWeight` actions. For each supported action, it converts the method name from bytes to a string,
 /// retrieves the latest block view, and processes the function call, collecting the results. Unsupported actions
 /// are logged for debugging purposes.
-pub async fn cross_action_call(
+pub async fn actions_call(
     data: &Data<ServerContext>,
     account_id: &near_primitives::types::AccountId,
-    tx_actions: Vec<near_vm_runner::logic::mocks::mock_external::MockAction>,
+    receiver_id: &near_primitives::types::AccountId,
+    tx_actions: &Vec<near_primitives::transaction::Action>,
+    runtime_config: &near_parameters::RuntimeConfig,
 ) -> Result<
-    Vec<crate::modules::transactions::EmulateTransactionResponse>,
+    Vec<crate::modules::transactions::EmulateTransactionActionResult>,
     near_jsonrpc::primitives::errors::RpcError,
 > {
     let tx_actions_collector =
         std::sync::Arc::new(crate::modules::transactions::TxActionsCollector::new());
     let mut results = vec![];
-    for cross_action in tx_actions {
-        match cross_action {
-            near_vm_runner::logic::mocks::mock_external::MockAction::FunctionCallWeight {
-                method_name,
-                args,
-                ..
-            } => {
-                let method_name = String::from_utf8(method_name).map_err(|_| {
-                    near_jsonrpc::primitives::errors::RpcError::new_internal_error(
-                        None,
-                        "Failed to convert method name from bytes to string".to_string(),
-                    )
-                })?;
+    for tx_action in tx_actions {
+        match tx_action {
+            near_primitives::transaction::Action::FunctionCall(action) => {
+                let method_name = action.method_name.clone();
+                let args = action.args.clone();
                 let block = data.blocks_info_by_finality.final_block_view().await;
                 let call_results = crate::modules::queries::methods::process_function_call(
                     data,
@@ -324,23 +306,30 @@ pub async fn cross_action_call(
                     true,
                 )
                 .await?;
+
+                let fee = node_runtime::config::exec_fee(runtime_config, tx_action, receiver_id);
                 results.push(
-                    crate::modules::transactions::EmulateTransactionResponse::FunctionCall(
-                        call_results.into(),
-                    ),
+                    crate::modules::transactions::EmulateTransactionActionResult::FunctionCall {
+                        outcome: Box::new(call_results.into()),
+                        fee,
+                    },
                 );
-                let cross_results = Box::pin(cross_action_call(
+                let cross_results = Box::pin(actions_call(
                     data,
                     account_id,
-                    tx_actions_collector.get_actions().await,
+                    receiver_id,
+                    &tx_actions_collector.get_actions().await,
+                    runtime_config,
                 ))
                 .await?;
                 results.extend(cross_results);
             }
             _ => {
-                tracing::debug!(
-                    "Emulating transaction with action: {:?} is not supported.",
-                    cross_action
+                let fee = node_runtime::config::exec_fee(runtime_config, tx_action, receiver_id);
+                results.push(
+                    crate::modules::transactions::EmulateTransactionActionResult::from_tx_action(
+                        tx_action, fee,
+                    ),
                 );
             }
         }

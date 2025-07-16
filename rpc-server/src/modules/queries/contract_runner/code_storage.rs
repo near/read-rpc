@@ -72,12 +72,6 @@ impl CodeStorage {
             HashMap::new()
         };
 
-        let tx_actions = if let Some(tx_actions_collector) = &tx_actions_collector {
-            tx_actions_collector.get_actions().await
-        } else {
-            vec![]
-        };
-
         Self {
             db_manager,
             account_id,
@@ -89,7 +83,7 @@ impl CodeStorage {
             is_prefetch_state: !prefetch_state_data.is_empty(),
             prefetch_state_data,
             tx_actions_collector,
-            tx_actions,
+            tx_actions: vec![],
             tx_storage: Default::default(),
             is_tx_emulator,
         }
@@ -97,7 +91,7 @@ impl CodeStorage {
 
     fn push_action(&mut self, action: near_vm_runner::logic::mocks::mock_external::MockAction) {
         if let Some(collector) = &self.tx_actions_collector {
-            collector.push(action.clone());
+            collector.push_mock_action(action.clone());
         }
         self.tx_actions.push(action);
     }
