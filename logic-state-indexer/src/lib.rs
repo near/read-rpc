@@ -235,7 +235,6 @@ pub async fn handle_streamer_message(
             &streamer_message,
             db_manager,
             block_height,
-            block_hash,
             &indexer_config,
             shard_layout,
         )
@@ -330,7 +329,6 @@ async fn handle_state_changes(
     streamer_message: &near_indexer_primitives::StreamerMessage,
     db_manager: &(impl database::StateIndexerDbManager + Sync + Send + 'static),
     block_height: u64,
-    block_hash: CryptoHash,
     indexer_config: &(impl configuration::RightsizingConfig + std::fmt::Debug),
     shard_layout: &near_primitives::shard_layout::ShardLayout,
 ) -> anyhow::Result<()> {
