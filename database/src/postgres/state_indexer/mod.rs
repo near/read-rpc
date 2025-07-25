@@ -429,7 +429,14 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
         // - No need for block_height comparison per row (all updates are from same block)
         let pool = self.get_shard_pool(shard_id)?;
         let account_ids: Vec<String> = updates.iter().map(|(id, _)| id.clone()).collect();
-        let partition_map = self.partition_map(&pool, &account_ids).await?;
+        crate::metrics::AFFECTED_ACCOUNTS_COUNT
+            .with_label_values(&[
+                &shard_id.to_string(),
+                "update_state_changes_access_key",
+                &account_ids.len().to_string(),
+            ])
+            .inc();
+        let partition_map = self.partition_map(&shard_id, &pool, &account_ids).await?;
 
         // Group updates by partition but keep them as simple (account_id, data_key) pairs
         let mut updates_per_partition: HashMap<i32, Vec<(String, String)>> = HashMap::new();
@@ -441,6 +448,13 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                     .push((account_id, data_key));
             }
         }
+        crate::metrics::PARTITIONS_TOUCHED_COUNT
+            .with_label_values(&[
+                &shard_id.to_string(),
+                "update_state_changes_access_key",
+                &updates_per_partition.len().to_string(),
+            ])
+            .inc();
 
         // Parallel update execution per partition using the UNNEST pattern
         let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(MAX_CONCURRENT_QUERIES));
@@ -482,6 +496,13 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                     .execute(&pool)
                     .await?;
 
+                crate::metrics::SHARD_DATABASE_WRITE_ELAPSED_TIME
+                    .with_label_values(&[
+                        &shard_id.to_string(),
+                        "update_state_changes_access_key",
+                        &start.elapsed().as_millis().to_string(),
+                    ])
+                    .inc();
                 tracing::debug!(
                     target: "database::postgres::state_indexer",
                     "Update done partition={} elapsed={:?} rows={}",
@@ -588,6 +609,13 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                 _ => None,
             })
             .collect();
+        crate::metrics::AFFECTED_ACCOUNTS_COUNT
+            .with_label_values(&[
+                &shard_id.to_string(),
+                "update_state_changes_contract",
+                &accounts.len().to_string(),
+            ])
+            .inc();
 
         // Use the account-only update helper
         self.execute_partitioned_account_update(
@@ -691,6 +719,13 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                 _ => None,
             })
             .collect();
+        crate::metrics::AFFECTED_ACCOUNTS_COUNT
+            .with_label_values(&[
+                &shard_id.to_string(),
+                "update_state_changes_account",
+                &accounts.len().to_string(),
+            ])
+            .inc();
 
         // Use the account-only update helper
         self.execute_partitioned_account_update(

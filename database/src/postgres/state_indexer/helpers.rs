@@ -66,7 +66,7 @@ impl crate::PostgresDBManager {
 
         // Compute partition assignments for all account_ids using PostgreSQL's hashtext() function
         // This ensures consistent partition distribution matching the table partitioning scheme
-        let partition_map = self.partition_map(&pool, &account_ids).await?;
+        let partition_map = self.partition_map(&shard_id, &pool, &account_ids).await?;
 
         // Group account_ids by their target partition for batch processing
         // This reduces the number of database queries by updating entire partitions at once
@@ -81,6 +81,13 @@ impl crate::PostgresDBManager {
                 tracing::warn!("Partition not found for account_id: {}", account_id);
             }
         }
+        crate::metrics::PARTITIONS_TOUCHED_COUNT
+            .with_label_values(&[
+                &shard_id.to_string(),
+                &operation_name,
+                &accounts_per_partition.len().to_string(),
+            ])
+            .inc();
 
         // Execute updates in parallel across partitions with concurrency control
         // Each partition can be updated independently, improving throughput
@@ -120,6 +127,13 @@ impl crate::PostgresDBManager {
                     .execute(&pool)
                     .await?;
 
+                crate::metrics::SHARD_DATABASE_WRITE_ELAPSED_TIME
+                    .with_label_values(&[
+                        &shard_id.to_string(),
+                        &operation_name,
+                        &start.elapsed().as_millis().to_string(),
+                    ])
+                    .inc();
                 tracing::debug!(
                     target: "database::postgres::state_indexer",
                     "Update done operation={} partition={} elapsed={:?} rows={}",
@@ -177,7 +191,14 @@ impl crate::PostgresDBManager {
         let pool = self.get_shard_pool(shard_id)?;
         // Extract account_ids for partition mapping (data_key distribution is handled by account_id partitioning)
         let account_ids: Vec<String> = updates.iter().map(|(id, _, _)| id.clone()).collect();
-        let partition_map = self.partition_map(&pool, &account_ids).await?;
+        crate::metrics::AFFECTED_ACCOUNTS_COUNT
+            .with_label_values(&[
+                &shard_id.to_string(),
+                &operation_name,
+                &account_ids.len().to_string(),
+            ])
+            .inc();
+        let partition_map = self.partition_map(&shard_id, &pool, &account_ids).await?;
 
         // Group updates by partition, preserving the complete tuple for CTE processing
         let mut updates_per_partition: HashMap<i32, Vec<(String, String, bigdecimal::BigDecimal)>> =
@@ -193,6 +214,13 @@ impl crate::PostgresDBManager {
                 tracing::warn!("Partition not found for account_id: {}", account_id);
             }
         }
+        crate::metrics::PARTITIONS_TOUCHED_COUNT
+            .with_label_values(&[
+                &shard_id.to_string(),
+                &operation_name,
+                &updates_per_partition.len().to_string(),
+            ])
+            .inc();
 
         let semaphore =
             std::sync::Arc::new(tokio::sync::Semaphore::new(super::MAX_CONCURRENT_QUERIES));
@@ -242,7 +270,13 @@ impl crate::PostgresDBManager {
                 ));
 
                 let result = qb.build().execute(&pool).await.map_err(anyhow::Error::from);
-
+                crate::metrics::SHARD_DATABASE_WRITE_ELAPSED_TIME
+                    .with_label_values(&[
+                        &shard_id.to_string(),
+                        &operation_name,
+                        &start.elapsed().as_millis().to_string(),
+                    ])
+                    .inc();
                 tracing::debug!(
                     target: "database::postgres::state_indexer",
                     "Update done operation={} partition={} elapsed={:?} rows={}",
@@ -288,7 +322,15 @@ impl crate::PostgresDBManager {
 
         let pool = self.get_shard_pool(shard_id)?;
         let account_ids: Vec<String> = inserts.iter().map(|(id, _, _, _)| id.clone()).collect();
-        let partition_map = self.partition_map(&pool, &account_ids).await?;
+        crate::metrics::AFFECTED_ACCOUNTS_COUNT
+            .with_label_values(&[
+                &shard_id.to_string(),
+                &operation_name,
+                &account_ids.len().to_string(),
+            ])
+            .inc();
+
+        let partition_map = self.partition_map(&shard_id, &pool, &account_ids).await?;
 
         // Group inserts by partition for efficient batch processing
         let mut inserts_per_partition: HashMap<
@@ -307,6 +349,13 @@ impl crate::PostgresDBManager {
                 tracing::warn!("Partition not found for account_id: {}", account_id);
             }
         }
+        crate::metrics::PARTITIONS_TOUCHED_COUNT
+            .with_label_values(&[
+                &shard_id.to_string(),
+                &operation_name,
+                &inserts_per_partition.len().to_string(),
+            ])
+            .inc();
 
         let semaphore =
             std::sync::Arc::new(tokio::sync::Semaphore::new(super::MAX_CONCURRENT_QUERIES));
@@ -345,6 +394,13 @@ impl crate::PostgresDBManager {
 
                 let result = qb.build().execute(&pool).await.map_err(anyhow::Error::from);
 
+                crate::metrics::SHARD_DATABASE_WRITE_ELAPSED_TIME
+                    .with_label_values(&[
+                        &shard_id.to_string(),
+                        &operation_name,
+                        &start.elapsed().as_millis().to_string(),
+                    ])
+                    .inc();
                 tracing::debug!(
                     target: "database::postgres::state_indexer",
                     "Insert done operation={} partition={} elapsed={:?} rows={}",
@@ -393,7 +449,14 @@ impl crate::PostgresDBManager {
 
         let pool = self.get_shard_pool(shard_id)?;
         let account_ids: Vec<String> = inserts.iter().map(|(id, _, _)| id.clone()).collect();
-        let partition_map = self.partition_map(&pool, &account_ids).await?;
+        crate::metrics::AFFECTED_ACCOUNTS_COUNT
+            .with_label_values(&[
+                &shard_id.to_string(),
+                &operation_name,
+                &account_ids.len().to_string(),
+            ])
+            .inc();
+        let partition_map = self.partition_map(&shard_id, &pool, &account_ids).await?;
 
         // Group inserts per partition
         let mut inserts_per_partition: HashMap<
@@ -411,6 +474,13 @@ impl crate::PostgresDBManager {
                 tracing::warn!("Partition not found for account_id: {}", account_id);
             }
         }
+        crate::metrics::PARTITIONS_TOUCHED_COUNT
+            .with_label_values(&[
+                &shard_id.to_string(),
+                &operation_name,
+                &inserts_per_partition.len().to_string(),
+            ])
+            .inc();
 
         let semaphore =
             std::sync::Arc::new(tokio::sync::Semaphore::new(super::MAX_CONCURRENT_QUERIES));
@@ -445,6 +515,13 @@ impl crate::PostgresDBManager {
 
                 let result = qb.build().execute(&pool).await.map_err(anyhow::Error::from);
 
+                crate::metrics::SHARD_DATABASE_WRITE_ELAPSED_TIME
+                    .with_label_values(&[
+                        &shard_id.to_string(),
+                        &operation_name,
+                        &start.elapsed().as_millis().to_string(),
+                    ])
+                    .inc();
                 tracing::debug!(
                     target: "database::postgres::state_indexer",
                     "Insert done operation={} partition={} elapsed={:?} rows={}",
@@ -503,6 +580,7 @@ impl crate::PostgresDBManager {
     /// hash results regardless of client-side hash implementations or endianness differences.
     pub(crate) async fn partition_map(
         &self,
+        shard_id: &near_primitives::types::ShardId,
         pool: &sqlx::PgPool,
         account_ids: &Vec<String>,
     ) -> anyhow::Result<HashMap<String, i32>> {
@@ -527,6 +605,12 @@ impl crate::PostgresDBManager {
                 (account_id, partition)
             })
             .collect();
+        crate::metrics::PARTITION_MAP_TIME_ELAPSED
+            .with_label_values(&[
+                &shard_id.to_string(),
+                &now.elapsed().as_millis().to_string(),
+            ])
+            .inc();
         tracing::debug!(
             target: "database::postgres::state_indexer",
             "Partition map computed in {:?} for {} accounts",
