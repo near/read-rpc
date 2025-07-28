@@ -365,44 +365,22 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
         Ok(())
     }
 
-    /// Update access key state changes - SPECIAL CASE: In-place implementation
-    ///
-    /// This method is NOT using execute_partitioned_key_update helper, and here's why:
-    ///
-    /// TECHNICAL REASONING:
-    /// 1. **Different SQL Pattern**: Access key updates use UNNEST with separate arrays
-    ///    instead of CTE (Common Table Expression) used by data updates
-    /// 2. **Uniform Block Height**: All updates in a batch share the same block_height,
-    ///    unlike data updates where each row might have different block heights
-    /// 3. **Simpler Matching**: Only needs (account_id, data_key) pairs for matching,
-    ///    doesn't need the complex 4-condition WHERE clause of data updates
-    ///
-    /// SQL PATTERN COMPARISON:
-    /// - Data updates (CTE):  WITH new_data(...) UPDATE table SET... FROM new_data WHERE...
-    /// - Access key updates:  UPDATE table SET... FROM (SELECT unnest(...)) WHERE...
-    ///
-    /// PERFORMANCE CONSIDERATIONS:
-    /// - UNNEST with arrays is more efficient for simple key-pair matching
-    /// - CTE is better for complex multi-column operations with varying data
-    /// - The uniform block_height allows using a single parameter ($3) instead of per-row values
-    ///
-    /// This is a legitimate architectural decision, not an oversight in refactoring.
+    // TODO: provide docstring
     async fn update_state_changes_access_key(
         &self,
         shard_id: near_primitives::types::ShardId,
         state_changes: Vec<near_primitives::views::StateChangeWithCauseView>,
         block_height: u64,
     ) -> anyhow::Result<()> {
-        let overall_start = Instant::now();
         self.record_shard_write_metric(
             shard_id,
             "save_state_changes_access_key",
             "state_changes_access_key",
         );
 
-        // Collect updates: (account_id, data_key) pairs for access key modifications
-        // Note: We only need the key pairs since all updates share the same block_height
-        let updates: Vec<(String, String)> = state_changes
+        // Collect updates as triples (account_id, data_key, block_height)
+        let block_height_bd = bigdecimal::BigDecimal::from(block_height);
+        let updates: Vec<(String, String, bigdecimal::BigDecimal)> = state_changes
             .iter()
             .filter_map(|c| match &c.value {
                 near_primitives::views::StateChangeValueView::AccessKeyUpdate {
@@ -413,7 +391,11 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                 | near_primitives::views::StateChangeValueView::AccessKeyDeletion {
                     account_id,
                     public_key,
-                } => Some((account_id.to_string(), hex::encode(public_key.key_data()))),
+                } => Some((
+                    account_id.to_string(),
+                    hex::encode(public_key.key_data()),
+                    block_height_bd.clone(), // same height for all rows
+                )),
                 _ => None,
             })
             .collect();
@@ -422,111 +404,14 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
             return Ok(());
         }
 
-        // IMPLEMENTATION NOTE: Custom partitioning logic (not using execute_partitioned_key_update)
-        // This is intentional because access key updates have different requirements:
-        // - Uniform block_height for all updates (allows single parameter binding)
-        // - Simple (account_id, data_key) matching (UNNEST more efficient than CTE)
-        // - No need for block_height comparison per row (all updates are from same block)
-        let pool = self.get_shard_pool(shard_id)?;
-        let account_ids: Vec<String> = updates.iter().map(|(id, _)| id.clone()).collect();
-        crate::metrics::AFFECTED_ACCOUNTS_COUNT
-            .with_label_values(&[
-                &shard_id.to_string(),
-                "update_state_changes_access_key",
-                &account_ids.len().to_string(),
-            ])
-            .inc();
-        let partition_map = self.partition_map(&shard_id, &pool, &account_ids).await?;
-
-        // Group updates by partition but keep them as simple (account_id, data_key) pairs
-        let mut updates_per_partition: HashMap<i32, Vec<(String, String)>> = HashMap::new();
-        for (account_id, data_key) in updates {
-            if let Some(&partition) = partition_map.get(&account_id) {
-                updates_per_partition
-                    .entry(partition)
-                    .or_default()
-                    .push((account_id, data_key));
-            }
-        }
-        crate::metrics::PARTITIONS_TOUCHED_COUNT
-            .with_label_values(&[
-                &shard_id.to_string(),
-                "update_state_changes_access_key",
-                &updates_per_partition.len().to_string(),
-            ])
-            .inc();
-
-        // Parallel update execution per partition using the UNNEST pattern
-        let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(MAX_CONCURRENT_QUERIES));
-        let mut tasks = Vec::new();
-        for (partition_id, rows) in updates_per_partition {
-            let pool = pool.clone();
-            let semaphore = semaphore.clone();
-            let block_height_bd = bigdecimal::BigDecimal::from(block_height);
-
-            let task = tokio::spawn(async move {
-                let _permit = semaphore.acquire_owned().await.unwrap();
-                let start = Instant::now();
-
-                // Separate account_ids and data_keys into parallel arrays for UNNEST
-                // This is the key difference from CTE approach used in data updates
-                let (account_ids, data_keys): (Vec<_>, Vec<_>) = rows.into_iter().unzip();
-
-                // UNNEST PATTERN: Convert arrays to rows and JOIN for batch updates
-                // This is more efficient than CTE when all updates share the same block_height
-                // and only need simple key-pair matching without per-row data variations
-                let query = format!(
-                    r#"
-                UPDATE state_changes_access_key_compact_{partition_id} AS t
-                SET block_height_to = $3
-                FROM (
-                    SELECT unnest($1::text[]) AS account_id, unnest($2::text[]) AS data_key
-                ) AS u
-                WHERE t.account_id = u.account_id
-                  AND t.data_key = u.data_key
-                  AND t.block_height_to IS NULL;
-                "#,
-                    partition_id = partition_id
-                );
-
-                sqlx::query(&query)
-                    .bind(&account_ids)
-                    .bind(&data_keys)
-                    .bind(&block_height_bd)
-                    .execute(&pool)
-                    .await?;
-
-                crate::metrics::SHARD_DATABASE_WRITE_ELAPSED_TIME
-                    .with_label_values(&[
-                        &shard_id.to_string(),
-                        "update_state_changes_access_key",
-                        &start.elapsed().as_millis().to_string(),
-                    ])
-                    .inc();
-                tracing::debug!(
-                    target: "database::postgres::state_indexer",
-                    "Update done partition={} elapsed={:?} rows={}",
-                    partition_id,
-                    start.elapsed(),
-                    account_ids.len()
-                );
-
-                Ok::<(), anyhow::Error>(())
-            });
-
-            tasks.push(task);
-        }
-
-        try_join_all(tasks).await?;
-
-        tracing::debug!(
-            target: "database::postgres::state_indexer",
-            "Total update_state_changes_access_key duration shard={} elapsed={:?}",
+        // Delegate to the same partitioned update helper
+        self.execute_partitioned_key_update(
             shard_id,
-            overall_start.elapsed()
-        );
-
-        Ok(())
+            "state_changes_access_key_compact".to_string(),
+            "update_state_changes_access_key".to_string(),
+            updates,
+        )
+        .await
     }
 
     async fn insert_state_changes_contract(

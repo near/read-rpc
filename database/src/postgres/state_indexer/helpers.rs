@@ -155,28 +155,11 @@ impl crate::PostgresDBManager {
 
     /// Helper function for partitioned updates with composite key (account_id + data_key)
     ///
-    /// This helper is used for tables that have composite primary keys with both account_id
-    /// and data_key components (like state_changes_data table), where we need precise
-    /// row-level updates based on both key components.
+    /// This helper now uses `UNNEST()` instead of CTE for performance:
+    /// - `UNNEST()` is much faster for large batches compared to VALUES in CTE.
+    /// - Allows PostgreSQL to stream and avoid heavy planning overhead.
     ///
-    /// SQL Pattern: Uses CTE (Common Table Expression) with VALUES for structured data
-    /// ```sql
-    /// WITH new_data (account_id, data_key, block_height) AS (
-    ///   VALUES ('acc1', 'key1', 100), ('acc2', 'key2', 100), ...
-    /// )
-    /// UPDATE table AS old
-    /// SET block_height_to = new_data.block_height
-    /// FROM new_data
-    /// WHERE old.account_id = new_data.account_id
-    ///   AND old.data_key = new_data.data_key
-    ///   AND old.block_height_from < new_data.block_height
-    ///   AND old.block_height_to IS NULL;
-    /// ```
-    ///
-    /// The CTE approach is necessary here because we need to match on multiple columns
-    /// with different block_height values per row, which UNNEST cannot handle efficiently.
-    ///
-    /// Used by: update_state_changes_data
+    /// Uses: `update_state_changes_data`
     pub(crate) async fn execute_partitioned_key_update(
         &self,
         shard_id: near_primitives::types::ShardId,
@@ -189,8 +172,9 @@ impl crate::PostgresDBManager {
         }
 
         let pool = self.get_shard_pool(shard_id)?;
-        // Extract account_ids for partition mapping (data_key distribution is handled by account_id partitioning)
         let account_ids: Vec<String> = updates.iter().map(|(id, _, _)| id.clone()).collect();
+
+        // Metrics for accounts affected
         crate::metrics::AFFECTED_ACCOUNTS_COUNT
             .with_label_values(&[
                 &shard_id.to_string(),
@@ -198,9 +182,10 @@ impl crate::PostgresDBManager {
                 &account_ids.len().to_string(),
             ])
             .inc();
+
         let partition_map = self.partition_map(&shard_id, &pool, &account_ids).await?;
 
-        // Group updates by partition, preserving the complete tuple for CTE processing
+        // Group updates per partition
         let mut updates_per_partition: HashMap<i32, Vec<(String, String, bigdecimal::BigDecimal)>> =
             HashMap::new();
         for (account_id, data_key, block_height) in updates {
@@ -210,10 +195,10 @@ impl crate::PostgresDBManager {
                     data_key,
                     block_height,
                 ));
-            } else {
-                tracing::warn!("Partition not found for account_id: {}", account_id);
             }
         }
+
+        // Track partitions touched
         crate::metrics::PARTITIONS_TOUCHED_COUNT
             .with_label_values(&[
                 &shard_id.to_string(),
@@ -236,40 +221,34 @@ impl crate::PostgresDBManager {
                 let _permit = semaphore.acquire_owned().await.unwrap();
                 let start = Instant::now();
 
-                // Build CTE-based UPDATE query using sqlx QueryBuilder for type safety
-                // CTE allows us to provide structured data (account_id, data_key, block_height)
-                // and join it efficiently with the target table for precise updates
-                let mut qb = sqlx::QueryBuilder::new(
-                    "WITH new_data (account_id, data_key, block_height) AS (",
+                // Use unzip_n_vec to split tuples into separate Vecs for UNNEST
+                let (account_ids, data_keys, block_heights): (Vec<_>, Vec<_>, Vec<_>) =
+                    unzip_n_vec(rows);
+
+                let query = format!(
+                    r#"
+                UPDATE {table_name} AS old
+                SET block_height_to = new_data.block_height
+                FROM (
+                    SELECT UNNEST($1::text[]) AS account_id,
+                           UNNEST($2::text[]) AS data_key,
+                           UNNEST($3::numeric[]) AS block_height
+                ) AS new_data
+                WHERE old.account_id = new_data.account_id
+                  AND old.data_key = new_data.data_key
+                  AND old.block_height_from < new_data.block_height
+                  AND old.block_height_to IS NULL;
+                "#,
                 );
 
-                qb.push_values(
-                    rows.iter(),
-                    |mut row, (account_id, data_key, block_height)| {
-                        row.push_bind(account_id)
-                            .push_bind(data_key)
-                            .push_bind(block_height);
-                    },
-                );
+                let result = sqlx::query(&query)
+                    .bind(&account_ids)
+                    .bind(&data_keys)
+                    .bind(&block_heights)
+                    .execute(&pool)
+                    .await
+                    .map_err(anyhow::Error::from);
 
-                // Complete the CTE and add the UPDATE clause with all necessary conditions
-                // The four AND conditions ensure data integrity and proper versioning:
-                // 1. account_id match - partition-level key
-                // 2. data_key match - row-level key
-                // 3. block_height comparison - prevents updating newer data with older data
-                // 4. NULL check - only update active records (not already closed)
-                qb.push(format!(
-                    ") UPDATE {} AS old \
-               SET block_height_to = new_data.block_height \
-               FROM new_data \
-               WHERE old.account_id = new_data.account_id \
-               AND old.data_key = new_data.data_key \
-               AND old.block_height_from < new_data.block_height \
-               AND old.block_height_to IS NULL;",
-                    table_name,
-                ));
-
-                let result = qb.build().execute(&pool).await.map_err(anyhow::Error::from);
                 crate::metrics::SHARD_DATABASE_WRITE_ELAPSED_TIME
                     .with_label_values(&[
                         &shard_id.to_string(),
@@ -277,13 +256,14 @@ impl crate::PostgresDBManager {
                         &start.elapsed().as_millis().to_string(),
                     ])
                     .inc();
+
                 tracing::debug!(
                     target: "database::postgres::state_indexer",
                     "Update done operation={} partition={} elapsed={:?} rows={}",
                     operation_name,
                     partition_id,
                     start.elapsed(),
-                    rows.len()
+                    account_ids.len()
                 );
 
                 result
@@ -589,8 +569,8 @@ impl crate::PostgresDBManager {
         // Execute partition calculation in PostgreSQL to ensure consistency
         // This MUST use the same hash function and modulo as the partitioned table definitions
         let partition_rows = sqlx::query(
-            "SELECT account_id, mod(hashtext(account_id), $2)::int AS partition
-             FROM unnest($1::text[]) AS account_id",
+            "SELECT account_id, get_text_partition(account_id, $2) AS partition
+            FROM unnest($1::text[]) AS account_id",
         )
         .bind(account_ids)
         .bind(super::PARTITIONS)
@@ -619,4 +599,17 @@ impl crate::PostgresDBManager {
         );
         Ok(partition_map)
     }
+}
+
+/// Utility to unzip Vec of 3-tuples into 3 separate Vecs
+fn unzip_n_vec<T1, T2, T3>(input: Vec<(T1, T2, T3)>) -> (Vec<T1>, Vec<T2>, Vec<T3>) {
+    let mut v1 = Vec::with_capacity(input.len());
+    let mut v2 = Vec::with_capacity(input.len());
+    let mut v3 = Vec::with_capacity(input.len());
+    for (a, b, c) in input {
+        v1.push(a);
+        v2.push(b);
+        v3.push(c);
+    }
+    (v1, v2, v3)
 }
