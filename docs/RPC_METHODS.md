@@ -1,7 +1,8 @@
 | **Method**                        | **status**    | **Note**                                                                    |
 |-----------------------------------|---------------|-----------------------------------------------------------------------------|
 | view_state_paginated              | Included      | Custom method. See details [here](../docs/CUSTOM_RPC_METHODS.md)            |
-| view_receipt_record               | Included      | Custom method. See details [here](../docs/CUSTOM_RPC_METHODS.md)            |
+| view_state_paginated              | Included      | Custom method. See details [here](../docs/CUSTOM_RPC_METHODS.md)            |
+| emulate_tx               | Included      | Custom method. See details [here](../docs/CUSTOM_RPC_METHODS.md)            |
 | query.view_account                | Included      |                                                                             |
 | query.view_code                   | Included      |                                                                             |
 | query.view_state                  | Included      |                                                                             |
