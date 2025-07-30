@@ -229,7 +229,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
         self.record_shard_write_metric(shard_id, "save_state_changes_data", "state_changes_data");
 
         // Extract relevant data
-        let inserts: Vec<(String, String, Vec<u8>, bigdecimal::BigDecimal)> = state_changes
+        let inserts: Vec<(String, String, Vec<u8>, i64)> = state_changes
             .iter()
             .filter_map(|change| {
                 if let near_primitives::views::StateChangeValueView::DataUpdate {
@@ -243,7 +243,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                         account_id.to_string(),
                         data_key,
                         value.clone().to_vec(),
-                        bigdecimal::BigDecimal::from(block_height),
+                        block_height as i64, // Convert to i64 for database compatibility
                     ))
                 } else {
                     None
@@ -269,7 +269,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
     ) -> anyhow::Result<()> {
         self.record_shard_write_metric(shard_id, "save_state_changes_data", "state_changes_data");
 
-        let updates: Vec<(String, String, bigdecimal::BigDecimal)> =
+        let updates: Vec<(String, String, i64)> =
             state_changes
                 .iter()
                 .filter_map(|change| match &change.value {
@@ -287,7 +287,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                         Some((
                             account_id.to_string(),
                             data_key,
-                            bigdecimal::BigDecimal::from(block_height),
+                            block_height as i64, // Convert to i64 for database compatibility
                         ))
                     }
                     _ => None,
@@ -320,7 +320,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
         );
 
         // Extract relevant updates
-        let inserts: Vec<(String, String, Vec<u8>, bigdecimal::BigDecimal)> = state_changes
+        let inserts: Vec<(String, String, Vec<u8>, i64)> = state_changes
             .iter()
             .filter_map(|change| {
                 if let near_primitives::views::StateChangeValueView::AccessKeyUpdate {
@@ -338,7 +338,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                         account_id.to_string(),
                         data_key,
                         data_value,
-                        bigdecimal::BigDecimal::from(block_height),
+                        block_height as i64, // Convert to i64 for database compatibility
                     ))
                 } else {
                     None
@@ -379,8 +379,8 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
         );
 
         // Collect updates as triples (account_id, data_key, block_height)
-        let block_height_bd = bigdecimal::BigDecimal::from(block_height);
-        let updates: Vec<(String, String, bigdecimal::BigDecimal)> = state_changes
+        let block_height_bd = block_height as i64; // Convert to i64 for database compatibility
+        let updates: Vec<(String, String, i64)> = state_changes
             .iter()
             .filter_map(|c| match &c.value {
                 near_primitives::views::StateChangeValueView::AccessKeyUpdate {
@@ -394,7 +394,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                 } => Some((
                     account_id.to_string(),
                     hex::encode(public_key.key_data()),
-                    block_height_bd.clone(), // same height for all rows
+                    block_height_bd, // same height for all rows
                 )),
                 _ => None,
             })
@@ -428,7 +428,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
         );
 
         // Extract only ContractCodeUpdate
-        let inserts: Vec<(String, Vec<u8>, bigdecimal::BigDecimal)> = state_changes
+        let inserts: Vec<(String, Vec<u8>, i64)> = state_changes
             .into_iter()
             .filter_map(|change| {
                 if let near_primitives::views::StateChangeValueView::ContractCodeUpdate {
@@ -436,11 +436,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                     code,
                 } = change.value
                 {
-                    Some((
-                        account_id.to_string(),
-                        code.to_vec(),
-                        bigdecimal::BigDecimal::from(block_height),
-                    ))
+                    Some((account_id.to_string(), code.to_vec(), block_height as i64))
                 } else {
                     None
                 }
@@ -536,7 +532,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
         );
 
         // Extract account updates
-        let inserts: Vec<(String, Vec<u8>, bigdecimal::BigDecimal)> = state_changes
+        let inserts: Vec<(String, Vec<u8>, i64)> = state_changes
             .into_iter()
             .filter_map(|change| {
                 if let near_primitives::views::StateChangeValueView::AccountUpdate {
@@ -550,7 +546,7 @@ impl crate::StateIndexerDbManager for crate::PostgresDBManager {
                     Some((
                         account_id.to_string(),
                         data_value,
-                        bigdecimal::BigDecimal::from(block_height),
+                        block_height as i64, // Convert to i64 for database compatibility
                     ))
                 } else {
                     None

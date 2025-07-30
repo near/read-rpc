@@ -165,7 +165,7 @@ impl crate::PostgresDBManager {
         shard_id: near_primitives::types::ShardId,
         table_prefix: String,
         operation_name: String,
-        updates: Vec<(String, String, bigdecimal::BigDecimal)>, // (account_id, data_key, block_height)
+        updates: Vec<(String, String, i64)>, // (account_id, data_key, block_height)
     ) -> anyhow::Result<()> {
         if updates.is_empty() {
             return Ok(());
@@ -186,8 +186,7 @@ impl crate::PostgresDBManager {
         let partition_map = self.partition_map(&shard_id, &pool, &account_ids).await?;
 
         // Group updates per partition
-        let mut updates_per_partition: HashMap<i32, Vec<(String, String, bigdecimal::BigDecimal)>> =
-            HashMap::new();
+        let mut updates_per_partition: HashMap<i32, Vec<(String, String, i64)>> = HashMap::new();
         for (account_id, data_key, block_height) in updates {
             if let Some(&partition) = partition_map.get(&account_id) {
                 updates_per_partition.entry(partition).or_default().push((
@@ -294,7 +293,7 @@ impl crate::PostgresDBManager {
         shard_id: near_primitives::types::ShardId,
         table_prefix: String,
         operation_name: String,
-        inserts: Vec<(String, String, Vec<u8>, bigdecimal::BigDecimal)>, // (account_id, data_key, data_value, block_height)
+        inserts: Vec<(String, String, Vec<u8>, i64)>, // (account_id, data_key, data_value, block_height)
     ) -> anyhow::Result<()> {
         if inserts.is_empty() {
             return Ok(());
@@ -313,10 +312,8 @@ impl crate::PostgresDBManager {
         let partition_map = self.partition_map(&shard_id, &pool, &account_ids).await?;
 
         // Group inserts by partition for efficient batch processing
-        let mut inserts_per_partition: HashMap<
-            i32,
-            Vec<(String, String, Vec<u8>, bigdecimal::BigDecimal)>,
-        > = HashMap::new();
+        let mut inserts_per_partition: HashMap<i32, Vec<(String, String, Vec<u8>, i64)>> =
+            HashMap::new();
         for (account_id, data_key, data_value, block_height) in inserts {
             if let Some(&partition) = partition_map.get(&account_id) {
                 inserts_per_partition.entry(partition).or_default().push((
@@ -421,7 +418,7 @@ impl crate::PostgresDBManager {
         shard_id: near_primitives::types::ShardId,
         table_prefix: String,
         operation_name: String,
-        inserts: Vec<(String, Vec<u8>, bigdecimal::BigDecimal)>, // (account_id, data_value, block_height)
+        inserts: Vec<(String, Vec<u8>, i64)>, // (account_id, data_value, block_height)
     ) -> anyhow::Result<()> {
         if inserts.is_empty() {
             return Ok(());
@@ -439,10 +436,7 @@ impl crate::PostgresDBManager {
         let partition_map = self.partition_map(&shard_id, &pool, &account_ids).await?;
 
         // Group inserts per partition
-        let mut inserts_per_partition: HashMap<
-            i32,
-            Vec<(String, Vec<u8>, bigdecimal::BigDecimal)>,
-        > = HashMap::new();
+        let mut inserts_per_partition: HashMap<i32, Vec<(String, Vec<u8>, i64)>> = HashMap::new();
         for (account_id, data_value, block_height) in inserts {
             if let Some(&partition) = partition_map.get(&account_id) {
                 inserts_per_partition.entry(partition).or_default().push((
