@@ -2,8 +2,8 @@ CREATE TABLE IF NOT EXISTS state_changes_data_compact (
     account_id text NOT NULL,
     data_key text NOT NULL,
     data_value bytea NOT NULL,
-    block_height_from numeric(20,0) NOT NULL,
-    block_height_to numeric(20,0) NULL,
+    block_height_from bigint NOT NULL,
+    block_height_to bigint NULL,
     PRIMARY KEY (account_id, data_key, block_height_from)
 ) PARTITION BY HASH (account_id);
 
@@ -22,8 +22,8 @@ CREATE TABLE IF NOT EXISTS state_changes_access_key_compact (
     account_id text NOT NULL,
     data_key text NOT NULL,
     data_value bytea NOT NULL,
-    block_height_from numeric(20,0) NOT NULL,
-    block_height_to numeric(20,0) NULL,
+    block_height_from bigint NOT NULL,
+    block_height_to bigint NULL,
     PRIMARY KEY (account_id, data_key, block_height_from)
 ) PARTITION BY HASH (account_id);
 
@@ -41,8 +41,8 @@ END $$;
 CREATE TABLE IF NOT EXISTS state_changes_contract_compact (
     account_id text NOT NULL,
     data_value bytea NOT NULL,
-    block_height_from numeric(20,0) NOT NULL,
-    block_height_to numeric(20,0) NULL,
+    block_height_from bigint NOT NULL,
+    block_height_to bigint NULL,
     PRIMARY KEY (account_id, block_height_from)
 ) PARTITION BY HASH (account_id);
 
@@ -59,8 +59,8 @@ END $$;
 CREATE TABLE IF NOT EXISTS state_changes_account_compact (
     account_id text NOT NULL,
     data_value bytea NULL,
-    block_height_from numeric(20,0) NOT NULL,
-    block_height_to numeric(20,0) NULL,
+    block_height_from bigint NOT NULL,
+    block_height_to bigint NULL,
     PRIMARY KEY (account_id, block_height_from)
 ) PARTITION BY HASH (account_id);
 
