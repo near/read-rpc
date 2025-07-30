@@ -14,6 +14,8 @@ DECLARE
 BEGIN
     FOR i IN 0..99 LOOP
         EXECUTE format('CREATE TABLE IF NOT EXISTS state_changes_data_compact_%s PARTITION OF state_changes_data_compact FOR VALUES WITH (MODULUS 100, REMAINDER %s)', i, i);
+        -- Indexes for state_changes_data_compact partitions
+        EXECUTE format('CREATE INDEX IF NOT EXISTS idx_data_%s_keys ON state_changes_data_compact_%s (account_id, data_key) WHERE block_height_to IS NULL;', i, i);
     END LOOP;
 END $$;
 
@@ -34,6 +36,8 @@ DECLARE
 BEGIN
     FOR i IN 0..99 LOOP
         EXECUTE format('CREATE TABLE IF NOT EXISTS state_changes_access_key_compact_%s PARTITION OF state_changes_access_key_compact FOR VALUES WITH (MODULUS 100, REMAINDER %s)', i, i);
+        -- Indexes for state_changes_access_key_compact partitions
+        EXECUTE format('CREATE INDEX IF NOT EXISTS idx_access_key_%s_keys ON state_changes_access_key_compact_%s (account_id, data_key) WHERE block_height_to IS NULL;', i, i);
     END LOOP;
 END $$;
 
@@ -53,6 +57,8 @@ DECLARE
 BEGIN
     FOR i IN 0..99 LOOP
         EXECUTE format('CREATE TABLE IF NOT EXISTS state_changes_contract_compact_%s PARTITION OF state_changes_contract_compact FOR VALUES WITH (MODULUS 100, REMAINDER %s)', i, i);
+        -- Indexes for state_changes_contract_compact partitions
+        EXECUTE format('CREATE INDEX IF NOT EXISTS idx_contract_%s_acc ON state_changes_contract_compact_%s (account_id) WHERE block_height_to IS NULL;', i, i);
     END LOOP;
 END $$;
 
@@ -71,5 +77,7 @@ DECLARE
 BEGIN
     FOR i IN 0..99 LOOP
         EXECUTE format('CREATE TABLE IF NOT EXISTS state_changes_account_compact_%s PARTITION OF state_changes_account_compact FOR VALUES WITH (MODULUS 100, REMAINDER %s)', i, i);
+        -- Indexes for state_changes_account_compact partitions
+        EXECUTE format('CREATE INDEX IF NOT EXISTS idx_account_%s_acc ON state_changes_account_compact_%s (account_id) WHERE block_height_to IS NULL;', i, i);
     END LOOP;
 END $$;

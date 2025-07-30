@@ -18,7 +18,7 @@ migrate_partition() {
                 LAG(block_height) OVER (PARTITION BY account_id ORDER BY block_height DESC) AS block_height_to
             FROM state_changes_contract_$partition
         )
-        INSERT INTO state_changes_contract_compact$partition (account_id, data_value, block_height_from, block_height_to)
+        INSERT INTO state_changes_contract_compact_$partition (account_id, data_value, block_height_from, block_height_to)
         SELECT
             account_id,
             data_value,
