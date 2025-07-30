@@ -299,19 +299,16 @@ where
     }
 }
 
-impl<T, B> TryFrom<(Vec<u8>, B)> for QueryData<T>
+impl<T> TryFrom<(Vec<u8>, i64)> for QueryData<T>
 where
     T: borsh::BorshDeserialize,
-    B: ToPrimitive,
 {
     type Error = anyhow::Error;
 
-    fn try_from(value: (Vec<u8>, B)) -> Result<Self, Self::Error> {
+    fn try_from(value: (Vec<u8>, i64)) -> Result<Self, Self::Error> {
         let data = T::try_from_slice(&value.0)?;
-        let block_height = value
-            .1
-            .to_u64()
-            .ok_or_else(|| anyhow::anyhow!("Failed to parse `block_height` to u64"))?;
+        let block_height = u64::try_from(value.1)
+            .map_err(|_| anyhow::anyhow!("Failed to cast `block_height` from i64 to u64"))?;
         Ok(Self { data, block_height })
     }
 }

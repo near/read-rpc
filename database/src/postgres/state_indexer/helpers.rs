@@ -4,6 +4,13 @@ use std::time::Instant;
 use futures::future::try_join_all;
 use sqlx::Row;
 
+type StateChangeKeyDataAtBlockHeight = (
+    String,  // account_id
+    String,  // data_key
+    Vec<u8>, // data_value
+    i64,     // block_height_from
+);
+
 /// PostgreSQL State Indexer Implementation
 ///
 /// ARCHITECTURAL OVERVIEW:
@@ -66,7 +73,7 @@ impl crate::PostgresDBManager {
 
         // Compute partition assignments for all account_ids using PostgreSQL's hashtext() function
         // This ensures consistent partition distribution matching the table partitioning scheme
-        let partition_map = self.partition_map(&shard_id, &pool, &account_ids).await?;
+        let partition_map = self.partition_map(&shard_id, pool, &account_ids).await?;
 
         // Group account_ids by their target partition for batch processing
         // This reduces the number of database queries by updating entire partitions at once
@@ -183,7 +190,7 @@ impl crate::PostgresDBManager {
             ])
             .inc();
 
-        let partition_map = self.partition_map(&shard_id, &pool, &account_ids).await?;
+        let partition_map = self.partition_map(&shard_id, pool, &account_ids).await?;
 
         // Group updates per partition
         let mut updates_per_partition: HashMap<i32, Vec<(String, String, i64)>> = HashMap::new();
@@ -309,10 +316,10 @@ impl crate::PostgresDBManager {
             ])
             .inc();
 
-        let partition_map = self.partition_map(&shard_id, &pool, &account_ids).await?;
+        let partition_map = self.partition_map(&shard_id, pool, &account_ids).await?;
 
         // Group inserts by partition for efficient batch processing
-        let mut inserts_per_partition: HashMap<i32, Vec<(String, String, Vec<u8>, i64)>> =
+        let mut inserts_per_partition: HashMap<i32, Vec<StateChangeKeyDataAtBlockHeight>> =
             HashMap::new();
         for (account_id, data_key, data_value, block_height) in inserts {
             if let Some(&partition) = partition_map.get(&account_id) {
@@ -433,7 +440,7 @@ impl crate::PostgresDBManager {
                 &account_ids.len().to_string(),
             ])
             .inc();
-        let partition_map = self.partition_map(&shard_id, &pool, &account_ids).await?;
+        let partition_map = self.partition_map(&shard_id, pool, &account_ids).await?;
 
         // Group inserts per partition
         let mut inserts_per_partition: HashMap<i32, Vec<(String, Vec<u8>, i64)>> = HashMap::new();

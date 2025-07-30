@@ -88,7 +88,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 ",
         )
         .bind(account_id.to_string())
-        .bind(bigdecimal::BigDecimal::from(block_height))
+        .bind(block_height as i64) // Convert to i64 for database compatibility
         .bind(page_state.last_data_key.clone())
         .bind(page_state.page_size)
         .fetch(shard_id_pool.pool);
@@ -141,7 +141,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         )
         .bind(account_id.to_string())
         .bind(format!("{}%", hex::encode(prefix)))
-        .bind(bigdecimal::BigDecimal::from(block_height))
+        .bind(block_height as i64) // Convert to i64 for database compatibility
         .fetch(shard_id_pool.pool);
         while let Some(row) = stream.next().await {
             let (key, value): (String, Vec<u8>) = row?;
@@ -177,7 +177,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 ",
         )
         .bind(account_id.to_string())
-        .bind(bigdecimal::BigDecimal::from(block_height))
+        .bind(block_height as i64) // Convert to i64 for database compatibility
         .fetch(shard_id_pool.pool);
         while let Some(row) = stream.next().await {
             let (key, value): (String, Vec<u8>) = row?;
@@ -218,7 +218,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         )
         .bind(account_id.to_string())
         .bind(hex::encode(&key_data).to_string())
-        .bind(bigdecimal::BigDecimal::from(block_height))
+        .bind(block_height as i64) // Convert to i64 for database compatibility
         .fetch_one(shard_id_pool.pool)
         .await?;
         Ok((key_data, data_value))
@@ -244,7 +244,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 "state_changes_account",
             ])
             .inc();
-        let result: (Vec<u8>, bigdecimal::BigDecimal) = sqlx::query_as(
+        let result: (Vec<u8>, i64) = sqlx::query_as(
             "
                 SELECT data_value, block_height_from
                 FROM state_changes_account_compact
@@ -256,7 +256,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 ",
         )
         .bind(account_id.to_string())
-        .bind(bigdecimal::BigDecimal::from(request_block_height))
+        .bind(request_block_height as i64) // Convert to i64 for database compatibility
         .fetch_one(shard_id_pool.pool)
         .await?;
         tracing::debug!(
@@ -282,7 +282,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 "state_changes_contract",
             ])
             .inc();
-        let result: (Vec<u8>, bigdecimal::BigDecimal) = sqlx::query_as(
+        let result: (Vec<u8>, i64) = sqlx::query_as(
             "
                 SELECT data_value, block_height_from
                 FROM state_changes_contract_compact
@@ -294,7 +294,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 ",
         )
         .bind(account_id.to_string())
-        .bind(bigdecimal::BigDecimal::from(request_block_height))
+        .bind(request_block_height as i64) // Convert to i64 for database compatibility
         .fetch_one(shard_id_pool.pool)
         .await?;
 
@@ -317,7 +317,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
             ])
             .inc();
         let key_data = borsh::to_vec(&public_key)?;
-        let result: (Vec<u8>, bigdecimal::BigDecimal) = sqlx::query_as(
+        let result: (Vec<u8>, i64) = sqlx::query_as(
             "
                 SELECT data_value, block_height_from
                 FROM state_changes_access_key_compact
@@ -331,7 +331,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         )
         .bind(account_id.to_string())
         .bind(hex::encode(&key_data).to_string())
-        .bind(bigdecimal::BigDecimal::from(request_block_height))
+        .bind(request_block_height as i64) // Convert to i64 for database compatibility
         .fetch_one(shard_id_pool.pool)
         .await?;
         readnode_primitives::QueryData::<near_primitives::account::AccessKey>::try_from(result)
@@ -362,7 +362,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                 ",
         )
         .bind(account_id.to_string())
-        .bind(bigdecimal::BigDecimal::from(block_height))
+        .bind(block_height as i64) // Convert to i64 for database compatibility
         .fetch(shard_id_pool.pool);
         while let Some(row) = stream.next().await {
             let (public_key_hex, access_key): (String, Vec<u8>) = row?;

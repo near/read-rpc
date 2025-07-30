@@ -1,8 +1,7 @@
-use std::collections::HashMap;
 use std::time::Instant;
 
 use bigdecimal::ToPrimitive;
-use futures::{future::try_join_all, FutureExt};
+use futures::FutureExt;
 
 mod helpers;
 
