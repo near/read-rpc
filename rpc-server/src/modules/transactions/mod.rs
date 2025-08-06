@@ -152,12 +152,30 @@ impl EmulateTransactionActionResult {
             }
         }
     }
+
+    pub fn fee(&self) -> near_primitives::types::Gas {
+        match self {
+            EmulateTransactionActionResult::CreateAccount { fee }
+            | EmulateTransactionActionResult::DeployContract { fee }
+            | EmulateTransactionActionResult::Transfer { fee }
+            | EmulateTransactionActionResult::Stake { fee }
+            | EmulateTransactionActionResult::AddKey { fee }
+            | EmulateTransactionActionResult::DeleteKey { fee }
+            | EmulateTransactionActionResult::DeleteAccount { fee }
+            | EmulateTransactionActionResult::Delegate { fee }
+            | EmulateTransactionActionResult::DeployGlobalContract { fee }
+            | EmulateTransactionActionResult::UseGlobalContract { fee }
+            | EmulateTransactionActionResult::FunctionCall { fee, .. } => *fee,
+        }
+    }
 }
+
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct EmulateTransactionResponse {
     pub results: Vec<EmulateTransactionActionResult>,
     pub block_height: near_primitives::types::BlockHeight,
     pub gas_price: near_primitives::types::Balance,
+    pub total_fee: near_primitives::types::Gas,
 }
 
 impl near_jsonrpc_client::methods::RpcHandlerResponse for EmulateTransactionResponse {}

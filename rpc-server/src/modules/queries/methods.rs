@@ -145,7 +145,17 @@ async fn query_call(
             account_id,
             method_name,
             args,
-        } => function_call(data, &block, account_id, method_name, args, is_optimistic).await,
+        } => {
+            let run_contract_context =
+                crate::modules::queries::contract_runner::RunContractContext {
+                    block: block.clone(),
+                    account_id: account_id.clone(),
+                    method_name: method_name.clone(),
+                    args: args.clone(),
+                    is_optimistic,
+                };
+            function_call(data, run_contract_context).await
+        }
         near_primitives::views::QueryRequest::ViewAccessKeyList { account_id } => {
             view_access_keys_list(data, &block, account_id).await
         }
@@ -354,48 +364,35 @@ async fn database_view_code(
         .data)
 }
 
-#[allow(clippy::too_many_arguments)]
 pub async fn process_function_call(
     data: &Data<ServerContext>,
-    block: &near_primitives::views::BlockView,
-    account_id: &near_primitives::types::AccountId,
-    method_name: &str,
-    args: &near_primitives::types::FunctionArgs,
-    is_optimistic: bool,
+    run_contract_context: crate::modules::queries::contract_runner::RunContractContext,
     tx_actions_collector: Option<std::sync::Arc<crate::modules::transactions::TxActionsCollector>>,
     is_tx_emulation: bool,
 ) -> Result<
     contract_runner::RunContractResponse,
     near_jsonrpc::primitives::types::query::RpcQueryError,
 > {
-    tracing::debug!(
-        "`function_call` call. AccountID {}, block {}, method_name {}, args {:?}, optimistic {}",
-        account_id,
-        block.header.height,
-        method_name,
-        args,
-        is_optimistic,
-    );
+    tracing::debug!("`function_call` call. Context: {:?}", run_contract_context);
 
     // Depending on the optimistic flag we need to run the contract with the optimistic
     // state changes or not.
-    let maybe_optimistic_data = if is_optimistic {
+    let maybe_optimistic_data = if run_contract_context.is_optimistic {
         data.blocks_info_by_finality
-            .optimistic_state_changes_in_block(account_id, &[])
+            .optimistic_state_changes_in_block(&run_contract_context.account_id, &[])
             .await
     } else {
         Default::default()
     };
 
+    let block_clone = run_contract_context.block.clone();
+
     let call_results = contract_runner::run_contract(
-        account_id,
-        method_name,
-        args,
+        run_contract_context,
         &data.db_manager,
         &data.compiled_contract_code_cache,
         &data.contract_code_cache,
         &data.blocks_info_by_finality,
-        block,
         data.max_gas_burnt,
         maybe_optimistic_data,
         data.prefetch_state_size_limit,
@@ -405,34 +402,20 @@ pub async fn process_function_call(
     .await?;
     Ok(contract_runner::RunContractResponse {
         result: call_results,
-        block_height: block.header.height,
-        block_hash: block.header.hash,
+        block_height: block_clone.header.height,
+        block_hash: block_clone.header.hash,
     })
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
 async fn function_call(
     data: &Data<ServerContext>,
-    block: &near_primitives::views::BlockView,
-    account_id: &near_primitives::types::AccountId,
-    method_name: &str,
-    args: &near_primitives::types::FunctionArgs,
-    is_optimistic: bool,
+    run_contract_context: crate::modules::queries::contract_runner::RunContractContext,
 ) -> Result<
     near_jsonrpc::primitives::types::query::RpcQueryResponse,
     near_jsonrpc::primitives::types::query::RpcQueryError,
 > {
-    let call_results = process_function_call(
-        data,
-        block,
-        account_id,
-        method_name,
-        args,
-        is_optimistic,
-        None,
-        false,
-    )
-    .await?;
+    let call_results = process_function_call(data, run_contract_context, None, false).await?;
 
     if let Some(err) = call_results.result.aborted {
         let message = format!("wasm execution failed with error: {:?}", err);

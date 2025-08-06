@@ -262,11 +262,12 @@ pub async fn emulate_tx(
         runtime_config,
     )
     .await?;
-
+    let total_fee = results.iter().map(|r| r.fee()).sum();
     Ok(crate::modules::transactions::EmulateTransactionResponse {
         results,
         block_height: block.header.height,
         gas_price: block.header.gas_price,
+        total_fee,
     })
 }
 
@@ -286,7 +287,7 @@ pub async fn emulate_tx(
 /// # Returns
 /// A `Result` containing a vector of `EmulateTransactionActionResult` on success,
 /// or an `RpcError` if an error occurs.
-pub async fn actions_call(
+async fn actions_call(
     data: &Data<ServerContext>,
     account_id: &near_primitives::types::AccountId,
     receiver_id: &near_primitives::types::AccountId,
@@ -302,16 +303,20 @@ pub async fn actions_call(
     for tx_action in tx_actions {
         match tx_action {
             near_primitives::transaction::Action::FunctionCall(action) => {
-                let method_name = action.method_name.clone();
-                let args = action.args.clone();
-                let block = data.blocks_info_by_finality.final_block_view().await;
+                // let method_name = action.method_name.clone();
+                // let args = action.args.clone();
+                // let block = data.blocks_info_by_finality.final_block_view().await;
+                let run_contract_context =
+                    crate::modules::queries::contract_runner::RunContractContext {
+                        block: data.blocks_info_by_finality.final_block_view().await,
+                        account_id: account_id.clone(),
+                        method_name: action.method_name.clone(),
+                        args: action.args.clone().into(),
+                        is_optimistic: false,
+                    };
                 let call_results = crate::modules::queries::methods::process_function_call(
                     data,
-                    &block,
-                    account_id,
-                    &method_name,
-                    &args.into(),
-                    false,
+                    run_contract_context,
                     Some(tx_actions_collector.clone()),
                     true,
                 )
