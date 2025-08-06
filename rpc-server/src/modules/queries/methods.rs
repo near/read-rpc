@@ -145,7 +145,17 @@ async fn query_call(
             account_id,
             method_name,
             args,
-        } => function_call(data, &block, account_id, method_name, args, is_optimistic).await,
+        } => {
+            let run_contract_context =
+                crate::modules::queries::contract_runner::RunContractContext {
+                    block: block.clone(),
+                    account_id: account_id.clone(),
+                    method_name: method_name.clone(),
+                    args: args.clone(),
+                    is_optimistic,
+                };
+            function_call(data, run_contract_context).await
+        }
         near_primitives::views::QueryRequest::ViewAccessKeyList { account_id } => {
             view_access_keys_list(data, &block, account_id).await
         }
@@ -354,62 +364,83 @@ async fn database_view_code(
         .data)
 }
 
-#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
-async fn function_call(
+pub async fn process_function_call(
     data: &Data<ServerContext>,
-    block: &near_primitives::views::BlockView,
-    account_id: &near_primitives::types::AccountId,
-    method_name: &str,
-    args: &near_primitives::types::FunctionArgs,
-    is_optimistic: bool,
+    run_contract_context: crate::modules::queries::contract_runner::RunContractContext,
+    tx_actions_collector: Option<std::sync::Arc<crate::modules::transactions::TxActionsCollector>>,
+    is_tx_emulation: bool,
 ) -> Result<
-    near_jsonrpc::primitives::types::query::RpcQueryResponse,
+    contract_runner::RunContractResponse,
     near_jsonrpc::primitives::types::query::RpcQueryError,
 > {
-    tracing::debug!(
-        "`function_call` call. AccountID {}, block {}, method_name {}, args {:?}, optimistic {}",
-        account_id,
-        block.header.height,
-        method_name,
-        args,
-        is_optimistic,
-    );
+    tracing::debug!("`function_call` call. Context: {:?}", run_contract_context);
 
     // Depending on the optimistic flag we need to run the contract with the optimistic
     // state changes or not.
-    let maybe_optimistic_data = if is_optimistic {
+    let maybe_optimistic_data = if run_contract_context.is_optimistic {
         data.blocks_info_by_finality
-            .optimistic_state_changes_in_block(account_id, &[])
+            .optimistic_state_changes_in_block(&run_contract_context.account_id, &[])
             .await
     } else {
         Default::default()
     };
 
+    let block_clone = run_contract_context.block.clone();
+
     let call_results = contract_runner::run_contract(
-        account_id,
-        method_name,
-        args,
+        run_contract_context,
         &data.db_manager,
         &data.compiled_contract_code_cache,
         &data.contract_code_cache,
         &data.blocks_info_by_finality,
-        block,
         data.max_gas_burnt,
         maybe_optimistic_data,
         data.prefetch_state_size_limit,
+        tx_actions_collector,
+        is_tx_emulation,
     )
     .await?;
-
-    Ok(near_jsonrpc::primitives::types::query::RpcQueryResponse {
-        kind: near_jsonrpc::primitives::types::query::QueryResponseKind::CallResult(
-            near_primitives::views::CallResult {
-                result: call_results.result,
-                logs: call_results.logs,
-            },
-        ),
-        block_height: block.header.height,
-        block_hash: block.header.hash,
+    Ok(contract_runner::RunContractResponse {
+        result: call_results,
+        block_height: block_clone.header.height,
+        block_hash: block_clone.header.hash,
     })
+}
+
+#[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
+async fn function_call(
+    data: &Data<ServerContext>,
+    run_contract_context: crate::modules::queries::contract_runner::RunContractContext,
+) -> Result<
+    near_jsonrpc::primitives::types::query::RpcQueryResponse,
+    near_jsonrpc::primitives::types::query::RpcQueryError,
+> {
+    let call_results = process_function_call(data, run_contract_context, None, false).await?;
+
+    if let Some(err) = call_results.result.aborted {
+        let message = format!("wasm execution failed with error: {:?}", err);
+        Err(
+            near_jsonrpc::primitives::types::query::RpcQueryError::ContractExecutionError {
+                vm_error: message,
+                block_height: call_results.block_height,
+                block_hash: call_results.block_hash,
+            },
+        )
+    } else {
+        let logs = call_results.result.logs;
+        let result = match call_results.result.return_data {
+            near_vm_runner::logic::ReturnData::Value(buf) => buf,
+            near_vm_runner::logic::ReturnData::ReceiptIndex(_)
+            | near_vm_runner::logic::ReturnData::None => vec![],
+        };
+        Ok(near_jsonrpc::primitives::types::query::RpcQueryResponse {
+            kind: near_jsonrpc::primitives::types::query::QueryResponseKind::CallResult(
+                near_primitives::views::CallResult { result, logs },
+            ),
+            block_height: call_results.block_height,
+            block_hash: call_results.block_hash,
+        })
+    }
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]

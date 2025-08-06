@@ -116,3 +116,51 @@ Response:
   }
 }
 ```
+
+# emulate_tx
+
+The `emulate_tx` method is a custom method that allows you to estimate transaction costs and simulate its execution without actually sending it to the network. For now simulation supports only `FunctionCall` action, for other actions it will return only estimate fee.
+
+## How to use it
+### Example
+
+Request:
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "dontcare",
+  "method": "emulate_tx",
+  "params": {
+    "signed_tx_base64": "DgAAAHNlbmRlci50ZXN0bmV0AOrmAai64SZOv9e/naX4W15pJx0GAap35wTT1T/DwcbbDwAAAAAAAAAQAAAAcmVjZWl2ZXIudGVzdG5ldNMnL7URB1cxPOu3G8jTqlEwlcasagIbKlAJlF5ywVFLAQAAAAMAAACh7czOG8LTAAAAAAAAAGQcOG03xVSFQFjoagOb4NBBqWhERnnz45LY4+52JgZhm1iQKz7qAdPByrGFDQhQ2Mfga8RlbysuQ8D8LlA6bQE=",
+    "wait_until": "INCLUDED_FINAL"
+  }
+}
+```
+or
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "dontcare",
+  "method": "emulate_tx",
+  "params": [ "DgAAAHNlbmRlci50ZXN0bmV0AOrmAai64SZOv9e/naX4W15pJx0GAap35wTT1T/DwcbbDwAAAAAAAAAQAAAAcmVjZWl2ZXIudGVzdG5ldNMnL7URB1cxPOu3G8jTqlEwlcasagIbKlAJlF5ywVFLAQAAAAMAAACh7czOG8LTAAAAAAAAAGQcOG03xVSFQFjoagOb4NBBqWhERnnz45LY4+52JgZhm1iQKz7qAdPByrGFDQhQ2Mfga8RlbysuQ8D8LlA6bQE="
+  ]
+}
+```
+Response:
+```json
+{
+    "jsonrpc": "2.0",
+    "result": {
+        "block_height": 156743532,
+        "gas_price": 100000000,
+        "results": [
+            {
+                "Transfer": {
+                    "fee": 115123062500
+                }
+            }
+        ]
+    },
+    "id": "dontcare"
+}
+```

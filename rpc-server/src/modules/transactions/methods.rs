@@ -210,3 +210,144 @@ async fn tx_status_common(
         )
     }
 }
+
+/// Emulates the execution of a transaction by processing its actions and collecting the results.
+///
+/// This function takes a signed transaction request, iterates over its actions, and processes
+/// each supported action (currently only `FunctionCall` actions are supported). It collects
+/// the results of these actions into a vector of `EmulateTransactionResponse`. Additionally,
+/// it processes any cross-contract actions collected during the emulation and appends their
+/// results as well.
+///
+/// # Arguments
+///
+/// * `data` - Shared server context containing dependencies and state.
+/// * `request_data` - The transaction request containing the signed transaction to emulate.
+///
+/// # Returns
+///
+/// Returns a `Result` containing a vector of `EmulateTransactionResponse` on success,
+/// or an `RpcError` if an error occurs during emulation.
+pub async fn emulate_tx(
+    data: Data<ServerContext>,
+    request_data: near_jsonrpc::primitives::types::transactions::RpcSendTransactionRequest,
+) -> Result<
+    crate::modules::transactions::EmulateTransactionResponse,
+    near_jsonrpc::primitives::errors::RpcError,
+> {
+    // Extracts the signer account ID from the signed transaction, prepares a results vector,
+    // and initializes a transaction actions collector. Iterates over each action in the transaction,
+    // processing only `FunctionCall` actions by invoking the function call processor and collecting
+    // the results. Unsupported actions are logged for debugging purposes.
+    let account_id = request_data.signed_transaction.transaction.signer_id();
+    let receiver_id = request_data.signed_transaction.transaction.receiver_id();
+    let block = data.blocks_info_by_finality.final_block_view().await;
+    let store = near_parameters::RuntimeConfigStore::for_chain_id(
+        &data.genesis_info.genesis_config.chain_id,
+    );
+    let protocol_version = data
+        .blocks_info_by_finality
+        .current_protocol_version()
+        .await;
+    let runtime_config = store.get_config(protocol_version);
+    let results = actions_call(
+        &data,
+        account_id,
+        receiver_id,
+        &request_data
+            .signed_transaction
+            .transaction
+            .actions()
+            .to_vec(),
+        runtime_config,
+    )
+    .await?;
+    let total_fee = results.iter().map(|r| r.fee()).sum();
+    Ok(crate::modules::transactions::EmulateTransactionResponse {
+        results,
+        block_height: block.header.height,
+        gas_price: block.header.gas_price,
+        total_fee,
+    })
+}
+
+/// Processes a list of transaction actions, emulating their execution and collecting results.
+///
+/// For each action in `tx_actions`, if it is a `FunctionCall`, this function processes the call,
+/// collects the outcome and fee, and recursively processes any cross-contract actions collected
+/// during the emulation. For other action types, it computes the fee and collects the result.
+///
+/// # Arguments
+/// * `data` - Shared server context.
+/// * `account_id` - The signer account ID.
+/// * `receiver_id` - The receiver account ID.
+/// * `tx_actions` - The list of actions to emulate.
+/// * `runtime_config` - The runtime configuration for fee calculation.
+///
+/// # Returns
+/// A `Result` containing a vector of `EmulateTransactionActionResult` on success,
+/// or an `RpcError` if an error occurs.
+async fn actions_call(
+    data: &Data<ServerContext>,
+    account_id: &near_primitives::types::AccountId,
+    receiver_id: &near_primitives::types::AccountId,
+    tx_actions: &Vec<near_primitives::transaction::Action>,
+    runtime_config: &near_parameters::RuntimeConfig,
+) -> Result<
+    Vec<crate::modules::transactions::EmulateTransactionActionResult>,
+    near_jsonrpc::primitives::errors::RpcError,
+> {
+    let tx_actions_collector =
+        std::sync::Arc::new(crate::modules::transactions::TxActionsCollector::new());
+    let mut results = vec![];
+    for tx_action in tx_actions {
+        match tx_action {
+            near_primitives::transaction::Action::FunctionCall(action) => {
+                // let method_name = action.method_name.clone();
+                // let args = action.args.clone();
+                // let block = data.blocks_info_by_finality.final_block_view().await;
+                let run_contract_context =
+                    crate::modules::queries::contract_runner::RunContractContext {
+                        block: data.blocks_info_by_finality.final_block_view().await,
+                        account_id: account_id.clone(),
+                        method_name: action.method_name.clone(),
+                        args: action.args.clone().into(),
+                        is_optimistic: false,
+                    };
+                let call_results = crate::modules::queries::methods::process_function_call(
+                    data,
+                    run_contract_context,
+                    Some(tx_actions_collector.clone()),
+                    true,
+                )
+                .await?;
+
+                let fee = node_runtime::config::exec_fee(runtime_config, tx_action, receiver_id);
+                results.push(
+                    crate::modules::transactions::EmulateTransactionActionResult::FunctionCall {
+                        outcome: Box::new(call_results.into()),
+                        fee,
+                    },
+                );
+                let cross_results = Box::pin(actions_call(
+                    data,
+                    account_id,
+                    receiver_id,
+                    &tx_actions_collector.get_actions().await,
+                    runtime_config,
+                ))
+                .await?;
+                results.extend(cross_results);
+            }
+            _ => {
+                let fee = node_runtime::config::exec_fee(runtime_config, tx_action, receiver_id);
+                results.push(
+                    crate::modules::transactions::EmulateTransactionActionResult::from_tx_action(
+                        tx_action, fee,
+                    ),
+                );
+            }
+        }
+    }
+    Ok(results)
+}

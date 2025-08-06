@@ -6693,6 +6693,7 @@ dependencies = [
  "near-parameters 2.6.5",
  "near-primitives 2.6.5",
  "near-vm-runner 2.6.5",
+ "node-runtime",
  "prometheus",
  "readnode-primitives",
  "rustc_version 0.4.1",

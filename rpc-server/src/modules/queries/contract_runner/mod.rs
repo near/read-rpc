@@ -6,6 +6,15 @@ use near_vm_runner::ContractRuntimeCache;
 
 mod code_storage;
 
+#[derive(Debug)]
+pub struct RunContractContext {
+    pub block: near_primitives::views::BlockView,
+    pub account_id: near_primitives::types::AccountId,
+    pub method_name: String,
+    pub args: near_primitives::types::FunctionArgs,
+    pub is_optimistic: bool,
+}
+
 pub struct Contract {
     pub contract_code: Option<std::sync::Arc<near_vm_runner::ContractCode>>,
     pub hash: near_primitives::hash::CryptoHash,
@@ -37,64 +46,77 @@ impl near_vm_runner::Contract for Contract {
 }
 
 pub struct RunContractResponse {
-    pub result: Vec<u8>,
-    pub logs: Vec<String>,
+    pub result: near_vm_runner::logic::VMOutcome,
+    pub block_height: near_primitives::types::BlockHeight,
+    pub block_hash: near_primitives::hash::CryptoHash,
 }
 
 #[allow(clippy::too_many_arguments)]
 #[cfg_attr(
     feature = "tracing-instrumentation",
-    tracing::instrument(skip(db_manager, compiled_contract_code_cache, contract_code_cache))
+    tracing::instrument(skip(
+        db_manager,
+        compiled_contract_code_cache,
+        contract_code_cache,
+        tx_actions_collector
+    ))
 )]
 pub async fn run_contract(
-    account_id: &near_primitives::types::AccountId,
-    method_name: &str,
-    args: &near_primitives::types::FunctionArgs,
+    run_contract_context: crate::modules::queries::contract_runner::RunContractContext,
     db_manager: &std::sync::Arc<Box<dyn database::ReaderDbManager + Sync + Send + 'static>>,
     compiled_contract_code_cache: &std::sync::Arc<crate::config::CompiledCodeCache>,
     contract_code_cache: &std::sync::Arc<
         crate::cache::RwLockLruMemoryCache<near_primitives::hash::CryptoHash, Vec<u8>>,
     >,
     blocks_info_by_finality: &std::sync::Arc<BlocksInfoByFinality>,
-    block: &near_primitives::views::BlockView,
     max_gas_burnt: near_primitives::types::Gas,
     optimistic_data: HashMap<
         readnode_primitives::StateKey,
         Option<readnode_primitives::StateValue>,
     >,
     prefetch_state_size_limit: u64,
-) -> Result<RunContractResponse, near_jsonrpc::primitives::types::query::RpcQueryError> {
+    tx_actions_collector: Option<std::sync::Arc<crate::modules::transactions::TxActionsCollector>>,
+    is_tx_emulation: bool,
+) -> Result<near_vm_runner::logic::VMOutcome, near_jsonrpc::primitives::types::query::RpcQueryError>
+{
     let contract = db_manager
-        .get_account(account_id, block.header.height, "query_call_function")
+        .get_account(
+            &run_contract_context.account_id,
+            run_contract_context.block.header.height,
+            "query_call_function",
+        )
         .await
         .map_err(
             |_| near_jsonrpc::primitives::types::query::RpcQueryError::UnknownAccount {
-                requested_account_id: account_id.clone(),
-                block_height: block.header.height,
-                block_hash: block.header.hash,
+                requested_account_id: run_contract_context.account_id.clone(),
+                block_height: run_contract_context.block.header.height,
+                block_hash: run_contract_context.block.header.hash,
             },
         )?;
 
-    let (epoch_height, validators) =
-        epoch_height_and_validators_with_balances(db_manager, blocks_info_by_finality, block)
-            .await?;
+    let (epoch_height, validators) = epoch_height_and_validators_with_balances(
+        db_manager,
+        blocks_info_by_finality,
+        &run_contract_context.block,
+    )
+    .await?;
 
     // Prepare context for the VM run contract
     let public_key = near_crypto::PublicKey::empty(near_crypto::KeyType::ED25519);
     let random_seed = near_primitives::utils::create_random_seed(
-        block.header.latest_protocol_version,
+        run_contract_context.block.header.latest_protocol_version,
         near_primitives::hash::CryptoHash::default(),
-        block.header.prev_state_root,
+        run_contract_context.block.header.prev_state_root,
     );
     let context = near_vm_runner::logic::VMContext {
-        current_account_id: account_id.clone(),
-        signer_account_id: account_id.clone(),
+        current_account_id: run_contract_context.account_id.clone(),
+        signer_account_id: run_contract_context.account_id.clone(),
         signer_account_pk: borsh::to_vec(&public_key).expect("Failed to serialize"),
-        predecessor_account_id: account_id.clone(),
-        input: args.to_vec(),
+        predecessor_account_id: run_contract_context.account_id.clone(),
+        input: run_contract_context.args.to_vec(),
         promise_results: Vec::new().into(),
-        block_height: block.header.height,
-        block_timestamp: block.header.timestamp,
+        block_height: run_contract_context.block.header.height,
+        block_timestamp: run_contract_context.block.header.timestamp,
         epoch_height,
         account_balance: contract.data.amount(),
         account_locked_balance: contract.data.locked(),
@@ -109,7 +131,7 @@ pub async fn run_contract(
     // Init runtime config for each protocol version
     let store = near_parameters::RuntimeConfigStore::free();
     let config = store
-        .get_config(block.header.latest_protocol_version)
+        .get_config(run_contract_context.block.header.latest_protocol_version)
         .wasm_config
         .clone();
     let vm_config = near_parameters::vm::Config {
@@ -130,13 +152,17 @@ pub async fn run_contract(
             Some(code) => Contract::new(Some(code), code_hash),
             None => {
                 let code = db_manager
-                    .get_contract_code(account_id, block.header.height, "query_call_function")
+                    .get_contract_code(
+                        &run_contract_context.account_id,
+                        run_contract_context.block.header.height,
+                        "query_call_function",
+                    )
                     .await
                     .map_err(|_| {
                         near_jsonrpc::primitives::types::query::RpcQueryError::InvalidAccount {
-                            requested_account_id: account_id.clone(),
-                            block_height: block.header.height,
-                            block_hash: block.header.hash,
+                            requested_account_id: run_contract_context.account_id.clone(),
+                            block_height: run_contract_context.block.header.height,
+                            block_hash: run_contract_context.block.header.hash,
                         }
                     })?;
                 contract_code_cache.put(code_hash, code.data.clone()).await;
@@ -154,7 +180,11 @@ pub async fn run_contract(
         code.len()
     } else {
         db_manager
-            .get_contract_code(account_id, block.header.height, "query_call_function")
+            .get_contract_code(
+                &run_contract_context.account_id,
+                run_contract_context.block.header.height,
+                "query_call_function",
+            )
             .await
             .map(|code| code.data.len())
             .unwrap_or_default()
@@ -166,18 +196,20 @@ pub async fn run_contract(
     // Init an external database interface for the Runtime logic
     let code_storage = CodeStorage::init(
         db_manager.clone(),
-        account_id.clone(),
-        block.header.height,
+        run_contract_context.account_id.clone(),
+        run_contract_context.block.header.height,
         validators,
         optimistic_data,
         state_size <= prefetch_state_size_limit,
+        tx_actions_collector,
+        is_tx_emulation,
     )
     .await;
 
     // Execute the contract in the near VM
-    let result = run_code_in_vm_runner(
+    run_code_in_vm_runner(
         contract_code,
-        method_name.to_string(),
+        run_contract_context.method_name.to_string(),
         context,
         code_storage,
         vm_config,
@@ -188,26 +220,7 @@ pub async fn run_contract(
         |e| near_jsonrpc::primitives::types::query::RpcQueryError::InternalError {
             error_message: e.to_string(),
         },
-    )?;
-
-    if let Some(err) = result.aborted {
-        let message = format!("wasm execution failed with error: {:?}", err);
-        Err(
-            near_jsonrpc::primitives::types::query::RpcQueryError::ContractExecutionError {
-                vm_error: message,
-                block_height: block.header.height,
-                block_hash: block.header.hash,
-            },
-        )
-    } else {
-        let logs = result.logs;
-        let result = match result.return_data {
-            near_vm_runner::logic::ReturnData::Value(buf) => buf,
-            near_vm_runner::logic::ReturnData::ReceiptIndex(_)
-            | near_vm_runner::logic::ReturnData::None => vec![],
-        };
-        Ok(RunContractResponse { result, logs })
-    }
+    )
 }
 
 async fn epoch_height_and_validators_with_balances(
@@ -250,7 +263,6 @@ async fn epoch_height_and_validators_with_balances(
     ))
 }
 
-#[allow(clippy::too_many_arguments)]
 #[cfg_attr(
     feature = "tracing-instrumentation",
     tracing::instrument(skip(context, code_storage, contract, compiled_contract_code_cache))

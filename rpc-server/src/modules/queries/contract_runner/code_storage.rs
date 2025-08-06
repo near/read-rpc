@@ -21,6 +21,11 @@ pub struct CodeStorage {
 
     is_prefetch_state: bool,
     prefetch_state_data: HashMap<readnode_primitives::StateKey, readnode_primitives::StateValue>,
+
+    tx_actions_collector: Option<std::sync::Arc<crate::modules::transactions::TxActionsCollector>>,
+    tx_actions: Vec<near_vm_runner::logic::mocks::mock_external::MockAction>,
+    tx_storage: HashMap<readnode_primitives::StateKey, Option<readnode_primitives::StateValue>>,
+    is_tx_emulator: bool,
 }
 
 pub struct StorageValuePtr {
@@ -38,6 +43,7 @@ impl near_vm_runner::logic::ValuePtr for StorageValuePtr {
 }
 
 impl CodeStorage {
+    #[allow(clippy::too_many_arguments)]
     pub async fn init(
         db_manager: std::sync::Arc<Box<dyn ReaderDbManager + Sync + Send + 'static>>,
         account_id: near_primitives::types::AccountId,
@@ -48,6 +54,10 @@ impl CodeStorage {
             Option<readnode_primitives::StateValue>,
         >,
         prefetch_state: bool,
+        tx_actions_collector: Option<
+            std::sync::Arc<crate::modules::transactions::TxActionsCollector>,
+        >,
+        is_tx_emulator: bool,
     ) -> Self {
         let prefetch_state_data = if prefetch_state {
             utils::get_state_from_db(
@@ -72,7 +82,18 @@ impl CodeStorage {
             optimistic_data,
             is_prefetch_state: !prefetch_state_data.is_empty(),
             prefetch_state_data,
+            tx_actions_collector,
+            tx_actions: vec![],
+            tx_storage: Default::default(),
+            is_tx_emulator,
         }
+    }
+
+    fn push_action(&mut self, action: near_vm_runner::logic::mocks::mock_external::MockAction) {
+        if let Some(collector) = &self.tx_actions_collector {
+            collector.push_mock_action(action.clone());
+        }
+        self.tx_actions.push(action);
     }
 
     fn get_state_key_data(&self, key: &[u8]) -> readnode_primitives::StateValue {
@@ -142,14 +163,31 @@ impl near_vm_runner::logic::External for CodeStorage {
     fn storage_set(
         &mut self,
         _access_tracker: &mut dyn StorageAccessTracker,
-        _key: &[u8],
-        _value: &[u8],
+        key: &[u8],
+        value: &[u8],
     ) -> Result<Option<Vec<u8>>> {
-        Err(near_vm_runner::logic::VMLogicError::HostError(
-            near_vm_runner::logic::HostError::ProhibitedInView {
-                method_name: String::from("storage_set"),
-            },
-        ))
+        if !self.is_tx_emulator {
+            return Err(near_vm_runner::logic::VMLogicError::HostError(
+                near_vm_runner::logic::HostError::ProhibitedInView {
+                    method_name: String::from("storage_set"),
+                },
+            ));
+        };
+        let tx_value = self.tx_storage.insert(key.to_vec(), Some(value.to_vec()));
+        // Returns the previous value for the given key if it exists in the transaction storage,
+        // otherwise fetches the value from the database. If the database value is not empty,
+        // returns it as Some; otherwise, returns None.
+        let result = if let Some(tx_value) = tx_value {
+            tx_value
+        } else {
+            let db_value = self.get_state_key_data(key);
+            if !db_value.is_empty() {
+                Some(db_value)
+            } else {
+                None
+            }
+        };
+        Ok(result)
     }
 
     #[cfg_attr(
@@ -161,6 +199,18 @@ impl near_vm_runner::logic::External for CodeStorage {
         _access_tracker: &mut dyn StorageAccessTracker,
         key: &[u8],
     ) -> Result<Option<Box<dyn near_vm_runner::logic::ValuePtr>>> {
+        // If we are in transaction emulator mode, we should return the value from the transaction storage
+        if self.is_tx_emulator {
+            let val = self.tx_storage.get(key);
+            if let Some(Some(value)) = val {
+                return Ok(Some(Box::new(StorageValuePtr {
+                    value: value.clone(),
+                }) as Box<_>));
+            } else if let Some(None) = val {
+                return Ok(None);
+            }
+        }
+        // If the key is not in the transaction storage, we should return the value from the database
         if self.is_optimistic {
             self.optimistic_storage_get(key)
         } else {
@@ -175,13 +225,31 @@ impl near_vm_runner::logic::External for CodeStorage {
     fn storage_remove(
         &mut self,
         _access_tracker: &mut dyn StorageAccessTracker,
-        _key: &[u8],
+        key: &[u8],
     ) -> Result<Option<Vec<u8>>> {
-        Err(near_vm_runner::logic::VMLogicError::HostError(
-            near_vm_runner::logic::HostError::ProhibitedInView {
-                method_name: String::from("storage_remove"),
-            },
-        ))
+        if !self.is_tx_emulator {
+            return Err(near_vm_runner::logic::VMLogicError::HostError(
+                near_vm_runner::logic::HostError::ProhibitedInView {
+                    method_name: String::from("storage_remove"),
+                },
+            ));
+        }
+        // We set the value to None to emulate the removal of the key
+        let value = self.tx_storage.insert(key.to_vec(), None);
+        // Returns the previous value for the given key, if it exists.
+        // If the key was already present in the transaction storage, return its value (which may be Some or None).
+        // Otherwise, fetch the value from the database. If the database value is not empty, return it as Some; otherwise, return None.
+        let result = if let Some(value) = value {
+            value
+        } else {
+            let db_val = self.get_state_key_data(key);
+            if !db_val.is_empty() {
+                Some(db_val)
+            } else {
+                None
+            }
+        };
+        Ok(result)
     }
 
     #[cfg_attr(
@@ -193,6 +261,15 @@ impl near_vm_runner::logic::External for CodeStorage {
         _access_tracker: &mut dyn StorageAccessTracker,
         key: &[u8],
     ) -> Result<bool> {
+        // If we are in transaction emulator mode, we should check the transaction storage
+        if self.is_tx_emulator {
+            let val = self.tx_storage.get(key);
+            if let Some(Some(_)) = val {
+                return Ok(true);
+            } else if let Some(None) = val {
+                return Ok(false);
+            }
+        }
         if self.is_optimistic {
             self.optimistic_storage_has_key(key)
         } else {
@@ -229,112 +306,235 @@ impl near_vm_runner::logic::External for CodeStorage {
 
     fn create_action_receipt(
         &mut self,
-        _receipt_indices: Vec<near_vm_runner::logic::types::ReceiptIndex>,
-        _receiver_id: near_primitives::types::AccountId,
+        receipt_indices: Vec<near_vm_runner::logic::types::ReceiptIndex>,
+        receiver_id: near_primitives::types::AccountId,
     ) -> Result<near_vm_runner::logic::types::ReceiptIndex> {
-        panic!("Prohibited in view. `create_action_receipt`");
+        if !self.is_tx_emulator {
+            return Err(near_vm_runner::logic::VMLogicError::HostError(
+                near_vm_runner::logic::HostError::ProhibitedInView {
+                    method_name: String::from("create_action_receipt"),
+                },
+            ));
+        }
+        let index = self.tx_actions.len();
+        self.push_action(
+            near_vm_runner::logic::mocks::mock_external::MockAction::CreateReceipt {
+                receipt_indices,
+                receiver_id,
+            },
+        );
+        Ok(index as u64)
     }
 
     fn create_promise_yield_receipt(
         &mut self,
-        _receiver_id: near_primitives::types::AccountId,
+        receiver_id: near_primitives::types::AccountId,
     ) -> Result<(
         near_vm_runner::logic::types::ReceiptIndex,
         near_indexer_primitives::CryptoHash,
     )> {
-        panic!("Prohibited in view. `create_promise_yield_receipt`");
+        if !self.is_tx_emulator {
+            return Err(near_vm_runner::logic::VMLogicError::HostError(
+                near_vm_runner::logic::HostError::ProhibitedInView {
+                    method_name: String::from("create_promise_yield_receipt"),
+                },
+            ));
+        }
+        let index = self.tx_actions.len();
+        let data_id = self.generate_data_id();
+        self.push_action(
+            near_vm_runner::logic::mocks::mock_external::MockAction::YieldCreate {
+                data_id,
+                receiver_id,
+            },
+        );
+        Ok((index as u64, data_id))
     }
 
     fn submit_promise_resume_data(
         &mut self,
-        _data_id: near_indexer_primitives::CryptoHash,
-        _data: Vec<u8>,
+        data_id: near_indexer_primitives::CryptoHash,
+        data: Vec<u8>,
     ) -> Result<bool> {
-        panic!("Prohibited in view. `submit_promise_resume_data`");
+        if !self.is_tx_emulator {
+            return Err(near_vm_runner::logic::VMLogicError::HostError(
+                near_vm_runner::logic::HostError::ProhibitedInView {
+                    method_name: String::from("submit_promise_resume_data"),
+                },
+            ));
+        }
+        self.push_action(
+            near_vm_runner::logic::mocks::mock_external::MockAction::YieldResume { data_id, data },
+        );
+        for action in &self.tx_actions {
+            let near_vm_runner::logic::mocks::mock_external::MockAction::YieldCreate {
+                data_id: done,
+                receiver_id,
+            } = action
+            else {
+                continue;
+            };
+            if data_id == *done && self.account_id == *receiver_id {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     fn append_action_create_account(
         &mut self,
-        _receipt_index: near_vm_runner::logic::types::ReceiptIndex,
+        receipt_index: near_vm_runner::logic::types::ReceiptIndex,
     ) -> Result<()> {
+        self.push_action(
+            near_vm_runner::logic::mocks::mock_external::MockAction::CreateAccount {
+                receipt_index,
+            },
+        );
         Ok(())
     }
 
     fn append_action_deploy_contract(
         &mut self,
-        _receipt_index: near_vm_runner::logic::types::ReceiptIndex,
-        _code: Vec<u8>,
+        receipt_index: near_vm_runner::logic::types::ReceiptIndex,
+        code: Vec<u8>,
     ) -> Result<()> {
+        self.push_action(
+            near_vm_runner::logic::mocks::mock_external::MockAction::DeployContract {
+                receipt_index,
+                code,
+            },
+        );
         Ok(())
     }
 
     fn append_action_function_call_weight(
         &mut self,
-        _receipt_index: near_vm_runner::logic::types::ReceiptIndex,
-        _method_name: Vec<u8>,
-        _args: Vec<u8>,
-        _attached_deposit: near_primitives::types::Balance,
-        _prepaid_gas: near_primitives::types::Gas,
-        _gas_weight: near_primitives::types::GasWeight,
+        receipt_index: near_vm_runner::logic::types::ReceiptIndex,
+        method_name: Vec<u8>,
+        args: Vec<u8>,
+        attached_deposit: near_primitives::types::Balance,
+        prepaid_gas: near_primitives::types::Gas,
+        gas_weight: near_primitives::types::GasWeight,
     ) -> Result<()> {
+        self.push_action(
+            near_vm_runner::logic::mocks::mock_external::MockAction::FunctionCallWeight {
+                receipt_index,
+                method_name,
+                args,
+                attached_deposit,
+                prepaid_gas,
+                gas_weight,
+            },
+        );
         Ok(())
     }
 
     fn append_action_transfer(
         &mut self,
-        _receipt_index: near_vm_runner::logic::types::ReceiptIndex,
-        _deposit: near_primitives::types::Balance,
+        receipt_index: near_vm_runner::logic::types::ReceiptIndex,
+        deposit: near_primitives::types::Balance,
     ) -> Result<()> {
+        self.push_action(
+            near_vm_runner::logic::mocks::mock_external::MockAction::Transfer {
+                receipt_index,
+                deposit,
+            },
+        );
         Ok(())
     }
 
     fn append_action_stake(
         &mut self,
-        _receipt_index: near_vm_runner::logic::types::ReceiptIndex,
-        _stake: near_primitives::types::Balance,
-        _public_key: near_crypto::PublicKey,
+        receipt_index: near_vm_runner::logic::types::ReceiptIndex,
+        stake: near_primitives::types::Balance,
+        public_key: near_crypto::PublicKey,
     ) {
+        self.push_action(
+            near_vm_runner::logic::mocks::mock_external::MockAction::Stake {
+                receipt_index,
+                stake,
+                public_key,
+            },
+        );
     }
 
     fn append_action_add_key_with_full_access(
         &mut self,
-        _receipt_index: near_vm_runner::logic::types::ReceiptIndex,
-        _public_key: near_crypto::PublicKey,
-        _nonce: near_primitives::types::Nonce,
+        receipt_index: near_vm_runner::logic::types::ReceiptIndex,
+        public_key: near_crypto::PublicKey,
+        nonce: near_primitives::types::Nonce,
     ) {
+        self.push_action(
+            near_vm_runner::logic::mocks::mock_external::MockAction::AddKeyWithFullAccess {
+                receipt_index,
+                public_key,
+                nonce,
+            },
+        );
     }
 
     fn append_action_add_key_with_function_call(
         &mut self,
-        _receipt_index: near_vm_runner::logic::types::ReceiptIndex,
-        _public_key: near_crypto::PublicKey,
-        _nonce: near_primitives::types::Nonce,
-        _allowance: Option<near_primitives::types::Balance>,
-        _receiver_id: near_primitives::types::AccountId,
-        _method_names: Vec<Vec<u8>>,
+        receipt_index: near_vm_runner::logic::types::ReceiptIndex,
+        public_key: near_crypto::PublicKey,
+        nonce: near_primitives::types::Nonce,
+        allowance: Option<near_primitives::types::Balance>,
+        receiver_id: near_primitives::types::AccountId,
+        method_names: Vec<Vec<u8>>,
     ) -> Result<()> {
+        self.push_action(
+            near_vm_runner::logic::mocks::mock_external::MockAction::AddKeyWithFunctionCall {
+                receipt_index,
+                public_key,
+                nonce,
+                allowance,
+                receiver_id,
+                method_names,
+            },
+        );
         Ok(())
     }
 
     fn append_action_delete_key(
         &mut self,
-        _receipt_index: near_vm_runner::logic::types::ReceiptIndex,
-        _public_key: near_crypto::PublicKey,
+        receipt_index: near_vm_runner::logic::types::ReceiptIndex,
+        public_key: near_crypto::PublicKey,
     ) {
+        self.push_action(
+            near_vm_runner::logic::mocks::mock_external::MockAction::DeleteKey {
+                receipt_index,
+                public_key,
+            },
+        );
     }
 
     fn append_action_delete_account(
         &mut self,
-        _receipt_index: near_vm_runner::logic::types::ReceiptIndex,
-        _beneficiary_id: near_primitives::types::AccountId,
+        receipt_index: near_vm_runner::logic::types::ReceiptIndex,
+        beneficiary_id: near_primitives::types::AccountId,
     ) -> Result<()> {
+        self.push_action(
+            near_vm_runner::logic::mocks::mock_external::MockAction::DeleteAccount {
+                receipt_index,
+                beneficiary_id,
+            },
+        );
         Ok(())
     }
 
     fn get_receipt_receiver(
         &self,
-        _receipt_index: near_vm_runner::logic::types::ReceiptIndex,
+        receipt_index: near_vm_runner::logic::types::ReceiptIndex,
     ) -> &near_primitives::types::AccountId {
-        panic!("Prohibited in view. `get_receipt_receiver`");
+        if !self.is_tx_emulator {
+            panic!("Prohibited in view. `get_receipt_receiver`");
+        }
+        match &self.tx_actions[receipt_index as usize] {
+            near_vm_runner::logic::mocks::mock_external::MockAction::CreateReceipt {
+                receiver_id,
+                ..
+            } => receiver_id,
+            _ => panic!("not a valid receipt index!"),
+        }
     }
 }
