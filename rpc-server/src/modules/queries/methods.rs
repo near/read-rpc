@@ -566,7 +566,7 @@ async fn optimistic_view_state(
 }
 
 #[cfg_attr(feature = "tracing-instrumentation", tracing::instrument(skip(data)))]
-async fn database_view_state(
+pub async fn database_view_state(
     data: &Data<ServerContext>,
     block: &near_primitives::views::BlockView,
     account_id: &near_primitives::types::AccountId,
