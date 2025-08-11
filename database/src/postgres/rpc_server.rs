@@ -103,7 +103,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
                   AND (block_height_to IS NULL OR block_height_to > $2)
                 ORDER BY
                     data_key ASC
-                LIMIT $4;
+                LIMIT $3;
                 ",
             )
             .bind(account_id.to_string())
