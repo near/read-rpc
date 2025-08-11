@@ -17,7 +17,7 @@ pub async fn get_state_from_db_paginated(
 
     let account = data
         .db_manager
-        .get_account(account_id, block.header.height, "query_view_state")
+        .get_account(account_id, block.header.height, "view_state_paginated")
         .await
         .map_err(
             |_err| near_jsonrpc::primitives::types::query::RpcQueryError::UnknownAccount {
@@ -32,7 +32,7 @@ pub async fn get_state_from_db_paginated(
     // more details: nearcore/runtime/runtime/src/state_viewer/mod.rs:150
     let code_len = data
         .db_manager
-        .get_contract_code(account_id, block.header.height, "query_view_state")
+        .get_contract_code(account_id, block.header.height, "view_state_paginated")
         .await
         .map(|code| code.data.len() as u64)
         .unwrap_or_default();
