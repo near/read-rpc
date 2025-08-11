@@ -49,7 +49,7 @@ pub async fn get_state_from_db_paginated(
             .get_state_by_page(
                 account_id,
                 block.header.height,
-                database::PageToken::default(),
+                page_token,
                 "view_state_paginated",
             )
             .await
