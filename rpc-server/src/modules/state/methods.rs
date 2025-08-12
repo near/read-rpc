@@ -18,9 +18,9 @@ pub async fn view_state_paginated(
         fetch_block_from_cache_or_get(&data, &block_reference, "view_state_paginated").await?;
 
     let state_values = get_state_from_db_paginated(
-        &data.db_manager,
+        &data,
         &request_data.account_id,
-        block.header.height,
+        &block,
         request_data.next_page_token,
     )
     .await?;
