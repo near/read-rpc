@@ -27,6 +27,46 @@ The indexer built on top of Lake Framework that watches the network and stores t
 
 The configuration module is responsible for managing the configuration settings of the NEAR ReadRPC project.
 
+### [database](database/README.md)
+
+The database module provides database abstractions and implementations for storing and retrieving data.
+
+### [cache-storage](cache-storage/README.md)
+
+The cache storage module provides caching functionality for improved performance.
+
+### [tx-details-storage](tx-details-storage/README.md)
+
+The transaction details storage module handles storage of detailed transaction information.
+
+### [logic-state-indexer](logic-state-indexer/README.md)
+
+The logic state indexer module provides state indexing functionality.
+
+### [readnode-primitives](readnode-primitives/README.md)
+
+The readnode primitives module contains common data structures and utilities.
+
+### [perf-testing](perf-testing/README.md)
+
+The performance testing module provides tools for testing and benchmarking.
+
+## Documentation
+
+### Project Documentation
+- [CHANGELOG.md](CHANGELOG.md) - Project changelog and version history
+- [Examples](examples/README.md) - Usage examples and sample configurations
+
+### Technical Documentation
+- [RPC Methods](docs/RPC_METHODS.md) - Available RPC methods and their specifications
+- [Custom RPC Methods](docs/CUSTOM_RPC_METHODS.md) - Custom RPC methods specific to Read RPC
+- [Database Migrations](docs/DATABASE_MIGRATIONS.md) - Database migration procedures and guidelines
+- [Tracing](docs/TRACING.md) - Distributed tracing setup and configuration
+
+### Database Documentation
+- [PostgreSQL Setup](database/src/postgres/README.md) - PostgreSQL-specific configuration and setup
+- [Database Migrations](docs/DATABASE_MIGRATIONS.md) - Database migration procedures and guidelines
+
 ## Docker compose
 
 **Note!** The docker compose is not fully ready yet. It's still in progress. However, you can run the entire project to play around with it. It is still not convenient for development or debugging purposes. We are working on improving it.
