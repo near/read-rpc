@@ -4,23 +4,11 @@ use bigdecimal::num_traits::ToPrimitive;
 use bigdecimal::BigDecimal;
 use sqlx::QueryBuilder;
 
-static META_RECEIPTS_AND_OUTCOMES_MIGRATOR: sqlx::migrate::Migrator =
-    sqlx::migrate!("src/postgres/migrations/tx_details/receipts_and_outcomes");
-static SHARDS_TRANSACTIONS_MIGRATOR: sqlx::migrate::Migrator =
-    sqlx::migrate!("src/postgres/migrations/tx_details/transactions");
-
 #[async_trait]
 impl crate::base::tx_indexer::TxIndexerDbManager for crate::postgres::PostgresDBManager {
     async fn create_tx_tables(&self) -> Result<()> {
-        // Transactions table and partitions on each shard
-        for pool in self.shards_pool.values() {
-            SHARDS_TRANSACTIONS_MIGRATOR.run(pool).await?;
-        }
-
-        // Receipts and outcomes tables and partitions in meta_db_pool only
-        META_RECEIPTS_AND_OUTCOMES_MIGRATOR
-            .run(&self.meta_db_pool)
-            .await?;
+        // For POstgres please read the `README.md` in the `database/src/postgres` directory.
+        // The tables are created by the migrations, so this method is not needed.
         Ok(())
     }
 
