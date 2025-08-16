@@ -8,8 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased](https://github.com/near/read-rpc/compare/main...develop)
 
 ### Supported Nearcore Version
-- nearcore v2.6.5
-- rust v1.85.0
+- nearcore v2.7.0
+- rust v1.86.0
 
 ## [0.3.4](https://github.com/near/read-rpc/releases/tag/v0.3.4)
 

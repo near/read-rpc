@@ -46,11 +46,7 @@ impl TxDetailsStorageConfig {
             .load_balancing_policy(load_balancing_policy_builder.build())
             .build()
             .into_handle();
-        let ssl_context = if let Ok(ssl_context) = self.create_ssl_context().await {
-            Some(ssl_context)
-        } else {
-            None
-        };
+        let ssl_context = (self.create_ssl_context().await).ok();
 
         let mut session: scylla::SessionBuilder = scylla::SessionBuilder::new()
             .known_node(scylla_url.clone())

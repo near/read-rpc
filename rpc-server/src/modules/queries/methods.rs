@@ -29,6 +29,12 @@ pub async fn query(
         near_primitives::views::QueryRequest::ViewAccessKey { .. } => "query_view_access_key",
         near_primitives::views::QueryRequest::ViewState { .. } => "query_view_state",
         near_primitives::views::QueryRequest::CallFunction { .. } => "query_call_function",
+        near_primitives::views::QueryRequest::ViewGlobalContractCode { .. } => {
+            "query_view_global_contract_code"
+        }
+        near_primitives::views::QueryRequest::ViewGlobalContractCodeByAccountId { .. } => {
+            "query_view_global_contract_code_by_account_id"
+        }
         near_primitives::views::QueryRequest::ViewAccessKeyList { .. } => {
             "query_view_access_key_list"
         }
@@ -159,6 +165,19 @@ async fn query_call(
         near_primitives::views::QueryRequest::ViewAccessKeyList { account_id } => {
             view_access_keys_list(data, &block, account_id).await
         }
+        near_primitives::views::QueryRequest::ViewGlobalContractCode { .. } => Err(
+            near_jsonrpc::primitives::types::query::RpcQueryError::InternalError {
+                error_message: "ViewGlobalContractCode is not implemented in read-rpc yet."
+                    .to_string(),
+            },
+        ),
+        near_primitives::views::QueryRequest::ViewGlobalContractCodeByAccountId { .. } => Err(
+            near_jsonrpc::primitives::types::query::RpcQueryError::InternalError {
+                error_message:
+                    "ViewGlobalContractCodeByAccountId is not implemented in read-rpc yet."
+                        .to_string(),
+            },
+        ),
     };
 
     #[cfg(feature = "shadow-data-consistency")]
