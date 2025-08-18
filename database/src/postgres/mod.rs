@@ -2,11 +2,6 @@ mod rpc_server;
 mod state_indexer;
 mod tx_indexer;
 
-static META_DB_MIGRATOR: sqlx::migrate::Migrator =
-    sqlx::migrate!("src/postgres/migrations/meta_db");
-static SHARD_DB_MIGRATOR: sqlx::migrate::Migrator =
-    sqlx::migrate!("src/postgres/migrations/shard_db");
-
 #[derive(borsh::BorshSerialize, borsh::BorshDeserialize, Clone, Debug)]
 struct PageState {
     pub last_data_key: Option<String>,
@@ -45,31 +40,23 @@ pub struct PostgresDBManager {
 impl PostgresDBManager {
     async fn create_meta_db_pool(
         database_url: &str,
-        read_only: bool,
         max_connections: u32,
     ) -> anyhow::Result<sqlx::Pool<sqlx::Postgres>> {
         let pool = sqlx::postgres::PgPoolOptions::new()
             .max_connections(max_connections)
             .connect(database_url)
             .await?;
-        if !read_only {
-            Self::run_migrations(&META_DB_MIGRATOR, &pool).await?;
-        }
         Ok(pool)
     }
 
     async fn create_shard_db_pool(
         database_url: &str,
-        read_only: bool,
         max_connections: u32,
     ) -> anyhow::Result<sqlx::Pool<sqlx::Postgres>> {
         let pool = sqlx::postgres::PgPoolOptions::new()
             .max_connections(max_connections)
             .connect(database_url)
             .await?;
-        if !read_only {
-            Self::run_migrations(&SHARD_DB_MIGRATOR, &pool).await?;
-        }
         Ok(pool)
     }
 
@@ -99,25 +86,13 @@ impl PostgresDBManager {
             ))?,
         })
     }
-
-    async fn run_migrations(
-        migrator: &sqlx::migrate::Migrator,
-        pool: &sqlx::Pool<sqlx::Postgres>,
-    ) -> anyhow::Result<()> {
-        migrator.run(pool).await?;
-        Ok(())
-    }
 }
 
 #[async_trait::async_trait]
 impl crate::BaseDbManager for PostgresDBManager {
     async fn new(config: &configuration::DatabaseConfig) -> anyhow::Result<Box<Self>> {
-        let meta_db_pool = Self::create_meta_db_pool(
-            &config.database_url,
-            config.read_only,
-            config.max_connections,
-        )
-        .await?;
+        let meta_db_pool =
+            Self::create_meta_db_pool(&config.database_url, config.max_connections).await?;
         let mut shards_pool = std::collections::HashMap::new();
         let shard_layout = config
             .shard_layout
@@ -128,9 +103,7 @@ impl crate::BaseDbManager for PostgresDBManager {
                 .shards_config
                 .get(&shard_id)
                 .unwrap_or_else(|| panic!("Shard_{shard_id} - database config not found"));
-            let pool =
-                Self::create_shard_db_pool(database_url, config.read_only, config.max_connections)
-                    .await?;
+            let pool = Self::create_shard_db_pool(database_url, config.max_connections).await?;
             shards_pool.insert(shard_id, pool);
         }
         Ok(Box::new(Self {
