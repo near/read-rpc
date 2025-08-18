@@ -30,6 +30,11 @@ rpc_auth_token = "${RPC_AUTH_TOKEN}"
 ## Default value is redis://127.0.0.1/
 redis_url = "${REDIS_URL}"
 
+## Transaction details storage provider
+## Options: "scylladb", "postgres"
+## Default value is "postgres"
+tx_details_storage_provider = "${TX_DETAILS_STORAGE_PROVIDER}"
+
 ### Rpc server general configuration
 [general.rpc_server]
 
@@ -77,11 +82,6 @@ indexer_id = "${TX_INDEXER_ID}"
 ## Port for metrics server
 ## By default it 8080 for tx-indexer and 8081 for state-indexer
 metrics_server_port = "${TX_SERVER_PORT}"
-
-## Transaction details storage provider
-## Options: "scylla", "postgres"
-## Default value is "postgres"
-#tx_details_storage_provider = "${TX_DETAILS_STORAGE_PROVIDER}"
 
 ### State indexer general configuration
 [general.state_indexer]

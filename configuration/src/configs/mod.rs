@@ -120,13 +120,11 @@ pub struct RpcServerConfig {
     pub lake_config: lake::LakeConfig,
     pub database: database::DatabaseConfig,
     pub tx_details_storage: tx_details_storage::TxDetailsStorageConfig,
-    pub tx_details_storage_provider: general::StorageProvider,
 }
 
 impl Config for RpcServerConfig {
     fn from_common_config(common_config: CommonConfig) -> Self {
         Self {
-            tx_details_storage_provider: common_config.general.tx_details_storage_provider.clone(),
             general: common_config.general.into(),
             lake_config: common_config.lake_config.into(),
             database: database::DatabaseConfig::from(common_config.database).to_read_only(),
@@ -144,7 +142,6 @@ pub struct TxIndexerConfig {
     pub lake_config: lake::LakeConfig,
     pub database: database::DatabaseConfig,
     pub tx_details_storage: tx_details_storage::TxDetailsStorageConfig,
-    pub tx_details_storage_provider: general::StorageProvider,
 }
 
 impl TxIndexerConfig {
@@ -159,7 +156,6 @@ impl TxIndexerConfig {
 impl Config for TxIndexerConfig {
     fn from_common_config(common_config: CommonConfig) -> Self {
         Self {
-            tx_details_storage_provider: common_config.general.tx_details_storage_provider.clone(),
             general: common_config.general.into(),
             rightsizing: common_config.rightsizing.into(),
             lake_config: common_config.lake_config.into(),

@@ -30,9 +30,9 @@ async fn main() -> anyhow::Result<()> {
         .lake_client(indexer_config.general.chain_id.clone())
         .await?;
 
-    tracing::info!(target: INDEXER, "Instantiating the tx_details storage client with {:?} provider...", &indexer_config.tx_details_storage_provider);
+    tracing::info!(target: INDEXER, "Instantiating the tx_details storage client with {:?} provider...", &indexer_config.general.tx_details_storage_provider);
     let tx_details_storage: std::sync::Arc<dyn tx_details_storage::Storage + Send + Sync> =
-        match indexer_config.tx_details_storage_provider {
+        match indexer_config.general.tx_details_storage_provider {
             configuration::StorageProvider::ScyllaDb => {
                 let scylla_session = indexer_config
                     .tx_details_storage
