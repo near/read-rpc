@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased](https://github.com/near/read-rpc/compare/main...develop)
 
+## [0.4.0](https://github.com/near/read-rpc/releases/tag/v0.4.0)
+
+### What's Changed
+* Added postgres as a storage for `tx_details_storage`
+* Changed database schema for state changes to improve performance
+* Added new custom RPC method `emulate_tx`
+* Fix lake authorization for fastnear data
+
 ### Supported Nearcore Version
 - nearcore v2.7.0
 - rust v1.86.0
