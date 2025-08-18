@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased](https://github.com/near/read-rpc/compare/main...develop)
 
+## [0.4.1](https://github.com/near/read-rpc/releases/tag/v0.4.1)
+
+### What's Changed
+ * Update  nearcore vesions in the cargo config
+ * Hotfix for contract execution
+ * Hotfix to parse config.toml file
+
+### Supported Nearcore Version
+- nearcore v2.7.0
+- rust v1.86.0
+
 ## [0.4.0](https://github.com/near/read-rpc/releases/tag/v0.4.0)
 
 ### What's Changed

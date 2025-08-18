@@ -1437,7 +1437,7 @@ dependencies = [
 
 [[package]]
 name = "cache-storage"
-version = "0.3.4"
+version = "0.4.1"
 dependencies = [
  "anyhow",
  "futures",
@@ -1610,7 +1610,7 @@ dependencies = [
 
 [[package]]
 name = "configuration"
-version = "0.3.4"
+version = "0.4.1"
 dependencies = [
  "anyhow",
  "dotenv",
@@ -2103,7 +2103,7 @@ dependencies = [
 
 [[package]]
 name = "database"
-version = "0.3.4"
+version = "0.4.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3740,7 +3740,7 @@ checksum = "13dc2df351e3202783a1fe0d44375f7295ffb4049267b0f3018346dc122a1d94"
 
 [[package]]
 name = "logic-state-indexer"
-version = "0.3.4"
+version = "0.4.1"
 dependencies = [
  "actix-web",
  "anyhow",
@@ -5766,7 +5766,7 @@ checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 
 [[package]]
 name = "perf-testing"
-version = "0.3.4"
+version = "0.4.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -6444,7 +6444,7 @@ dependencies = [
 
 [[package]]
 name = "read-rpc-server"
-version = "0.3.4"
+version = "0.4.1"
 dependencies = [
  "actix-cors 0.7.1",
  "actix-web",
@@ -6487,7 +6487,7 @@ dependencies = [
 
 [[package]]
 name = "readnode-primitives"
-version = "0.3.4"
+version = "0.4.1"
 dependencies = [
  "anyhow",
  "borsh",
@@ -7858,7 +7858,7 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "state-indexer"
-version = "0.3.4"
+version = "0.4.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -8731,7 +8731,7 @@ checksum = "8b907da542cbced5261bd3256de1b3a1bf340a3d37f93425a07362a1d687de56"
 
 [[package]]
 name = "tx-details-storage"
-version = "0.3.4"
+version = "0.4.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8747,7 +8747,7 @@ dependencies = [
 
 [[package]]
 name = "tx-indexer"
-version = "0.3.4"
+version = "0.4.1"
 dependencies = [
  "actix-web",
  "anyhow",

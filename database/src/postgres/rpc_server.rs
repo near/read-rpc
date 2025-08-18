@@ -225,7 +225,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
             .inc();
         let (data_value,): (Vec<u8>,) = sqlx::query_as(
             "
-                SELECT data_key, data_value
+                SELECT data_value
                 FROM state_changes_data_compact
                 WHERE account_id = $1
                   AND data_key = $2
@@ -317,7 +317,10 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         .fetch_one(shard_id_pool.pool)
         .await?;
 
-        readnode_primitives::QueryData::<Vec<u8>>::try_from(result)
+        Ok(readnode_primitives::QueryData {
+            data: result.0,
+            block_height: result.1 as u64,
+        })
     }
 
     async fn get_access_key(
