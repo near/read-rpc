@@ -141,7 +141,7 @@ impl ServerContext {
         .await?;
 
         let tx_details_storage: std::sync::Arc<dyn tx_details_storage::Storage + Send + Sync> =
-            match rpc_server_config.tx_details_storage_provider {
+            match rpc_server_config.general.tx_details_storage_provider {
                 configuration::StorageProvider::ScyllaDb => {
                     let scylla_session = rpc_server_config
                         .tx_details_storage
