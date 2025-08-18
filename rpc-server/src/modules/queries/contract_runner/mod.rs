@@ -104,9 +104,10 @@ pub async fn run_contract(
     // Prepare context for the VM run contract
     let public_key = near_crypto::PublicKey::empty(near_crypto::KeyType::ED25519);
     let random_seed = near_primitives::utils::create_random_seed(
-        run_contract_context.block.header.latest_protocol_version,
+        // It is not needed to generate unique action hashes for our contract calls,
+        // so we can use block hash
+        run_contract_context.block.header.hash,
         near_primitives::hash::CryptoHash::default(),
-        run_contract_context.block.header.prev_state_root,
     );
     let context = near_vm_runner::logic::VMContext {
         current_account_id: run_contract_context.account_id.clone(),

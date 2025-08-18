@@ -2,6 +2,40 @@
 
 This workspace holds the collection of components for the Read RPC.
 
+## Branch Information
+
+- **main** - Latest released version, stable and production-ready
+- **develop** - Development branch containing the latest changes and features under development
+
+## NEAR Dependencies
+
+This project relies heavily on NEAR ecosystem crates and uses dependencies directly from Git repositories rather than published crates from crates.io. This approach is necessary because:
+
+1. **Unpublished Crates**: NEAR doesn't publish all the necessary crates required for Read RPC functionality to public registries
+2. **Version Compatibility**: We need specific versions or features that may not be available in published releases
+3. **Custom Modifications**: Some dependencies require modifications to work optimally with Read RPC
+
+### Forked Dependencies
+
+- **`near-jsonrpc-client`** - Provides JSON RPC client functionality for communicating with NEAR nodes
+- **`near-lake-framework`** - Essential for indexing blockchain data from NEAR Lake (AWS S3 data buckets)
+
+### Fork Maintenance
+
+These dependencies are maintained as forks to:
+- Ensure compatibility with Read RPC's specific requirements
+- Include necessary modifications and patches
+- Control the update cycle and maintain stability
+- Add features or fixes that haven't been merged upstream yet
+
+### Dependency Management
+
+When updating NEAR dependencies:
+1. Check for upstream changes in the original repositories
+2. Test compatibility with existing Read RPC functionality
+3. Update fork references in `Cargo.toml` files
+4. Ensure all components still build and function correctly
+
 ## Current content
 
 ### [rpc-server](rpc-server/README.md)

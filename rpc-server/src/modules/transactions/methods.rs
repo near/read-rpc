@@ -160,9 +160,12 @@ async fn tx_status_common(
 > {
     tracing::debug!("`tx_status_common` call.");
     let (tx_hash, sender_id) = match &transaction_info {
-        near_jsonrpc::primitives::types::transactions::TransactionInfo::Transaction(
-            near_jsonrpc::primitives::types::transactions::SignedTransaction::SignedTransaction(tx),
-        ) => (tx.get_hash(), tx.transaction.signer_id().clone()),
+        near_jsonrpc::primitives::types::transactions::TransactionInfo::Transaction {
+            signed_tx,
+        } => (
+            signed_tx.get_hash(),
+            signed_tx.transaction.signer_id().clone(),
+        ),
         near_jsonrpc::primitives::types::transactions::TransactionInfo::TransactionId {
             tx_hash,
             sender_account_id,

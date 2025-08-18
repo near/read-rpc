@@ -537,4 +537,34 @@ impl near_vm_runner::logic::External for CodeStorage {
             _ => panic!("not a valid receipt index!"),
         }
     }
+
+    fn append_action_deploy_global_contract(
+        &mut self,
+        receipt_index: near_vm_runner::logic::types::ReceiptIndex,
+        code: Vec<u8>,
+        mode: near_vm_runner::logic::types::GlobalContractDeployMode,
+    ) -> Result<()> {
+        self.push_action(
+            near_vm_runner::logic::mocks::mock_external::MockAction::DeployGlobalContract {
+                receipt_index,
+                code,
+                mode,
+            },
+        );
+        Ok(())
+    }
+
+    fn append_action_use_global_contract(
+        &mut self,
+        receipt_index: near_vm_runner::logic::types::ReceiptIndex,
+        contract_id: near_vm_runner::logic::types::GlobalContractIdentifier,
+    ) -> Result<()> {
+        self.push_action(
+            near_vm_runner::logic::mocks::mock_external::MockAction::UseGlobalContract {
+                receipt_index,
+                contract_id,
+            },
+        );
+        Ok(())
+    }
 }
