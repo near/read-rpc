@@ -10,6 +10,7 @@ mod default_env_configs;
 
 pub use crate::configs::database::DatabaseConfig;
 pub use crate::configs::general::ChainId;
+pub use crate::configs::general::StorageProvider;
 pub use crate::configs::{
     IndexerConfig, RightsizingConfig, RpcServerConfig, StateIndexerConfig, TxIndexerConfig,
 };
@@ -168,12 +169,15 @@ fn find_configs_root() -> anyhow::Result<PathBuf> {
 // Helper function to get shard layout for the `SHARD_LAYOUT_PROTOCOL_VERSION` protocol version
 pub fn shard_layout() -> anyhow::Result<near_primitives::shard_layout::ShardLayout> {
     let genesis_config = read_genesis_config_from_root()?;
-    let default_epoch_config = near_primitives::epoch_manager::EpochConfig::from(&genesis_config);
-    let all_epoch_config = near_primitives::epoch_manager::AllEpochConfig::new(
-        true,
-        genesis_config.protocol_version,
-        default_epoch_config,
+    let epoch_config_store = near_primitives::epoch_manager::EpochConfigStore::for_chain_id(
         &genesis_config.chain_id,
+        None,
+    )
+    .expect("Failed to create epoch config store");
+    let all_epoch_config = near_primitives::epoch_manager::AllEpochConfig::from_epoch_config_store(
+        &genesis_config.chain_id,
+        genesis_config.epoch_length,
+        epoch_config_store,
     );
     let epoch_config = all_epoch_config.for_protocol_version(SHARD_LAYOUT_PROTOCOL_VERSION);
     Ok(epoch_config.shard_layout)

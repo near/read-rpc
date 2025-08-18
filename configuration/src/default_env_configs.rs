@@ -78,6 +78,11 @@ indexer_id = "${TX_INDEXER_ID}"
 ## By default it 8080 for tx-indexer and 8081 for state-indexer
 metrics_server_port = "${TX_SERVER_PORT}"
 
+## Transaction details storage provider
+## Options: "scylla", "postgres"
+## Default value is "postgres"
+#tx_details_storage_provider = "${TX_DETAILS_STORAGE_PROVIDER}"
+
 ### State indexer general configuration
 [general.state_indexer]
 

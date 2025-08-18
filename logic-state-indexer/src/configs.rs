@@ -41,7 +41,7 @@ pub async fn get_start_block_height(
         }
         StartOptions::FromLatest => final_block_height(near_client).await?,
     };
-    Ok(start_block_height - 100) // Start just a bit earlier to overlap indexed blocks to ensure we don't miss anything in-between
+    Ok(start_block_height)
 }
 
 pub(crate) async fn final_block_height(

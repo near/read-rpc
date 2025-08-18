@@ -129,8 +129,8 @@ pub async fn get_current_protocol_version(
     near_rpc_client: &JsonRpcClient,
 ) -> anyhow::Result<near_primitives::version::ProtocolVersion> {
     let params = near_jsonrpc_client::methods::status::RpcStatusRequest;
-    let protocol_version = near_rpc_client.call(params, None).await?.protocol_version;
-    Ok(protocol_version)
+    let protocol_version = near_rpc_client.call(params, None).await?;
+    Ok(protocol_version.protocol_version)
 }
 
 async fn handle_streamer_message(

@@ -1,5 +1,4 @@
 use actix_web::web::Data;
-use near_primitives::epoch_manager::{AllEpochConfig, EpochConfig};
 
 use crate::config::ServerContext;
 use crate::modules::blocks::utils::fetch_block_from_cache_or_get;
@@ -45,7 +44,6 @@ pub async fn status(
         .iter()
         .map(|validator| near_primitives::views::ValidatorInfo {
             account_id: validator.account_id.clone(),
-            is_slashed: validator.is_slashed,
         })
         .collect();
 
@@ -400,15 +398,18 @@ pub async fn protocol_config_call(
     let runtime_config = store.get_config(protocol_version);
 
     // get default epoch config for genesis config
-    let default_epoch_config = EpochConfig::from(&data.genesis_info.genesis_config);
+    let epoch_config_store = near_primitives::epoch_manager::EpochConfigStore::for_chain_id(
+        &data.genesis_info.genesis_config.chain_id,
+        None,
+    )
+    .expect("Failed to create epoch config store");
     // AllEpochConfig manages protocol configs that might be changing throughout epochs (hence EpochConfig).
     // The main function in AllEpochConfig is ::for_protocol_version which takes a protocol version
     // and returns the EpochConfig that should be used for this protocol version.
-    let all_epoch_config = AllEpochConfig::new(
-        true,
-        data.genesis_info.genesis_config.protocol_version,
-        default_epoch_config,
+    let all_epoch_config = near_primitives::epoch_manager::AllEpochConfig::from_epoch_config_store(
         &data.genesis_info.genesis_config.chain_id,
+        data.genesis_info.genesis_config.epoch_length,
+        epoch_config_store,
     );
     let epoch_config = all_epoch_config.for_protocol_version(protocol_version);
 

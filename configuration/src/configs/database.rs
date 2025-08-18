@@ -22,9 +22,6 @@ pub struct DatabaseConfig {
     pub shards_config:
         std::collections::HashMap<near_primitives::types::ShardId, DatabaseConnectUrl>,
     pub max_connections: u32,
-    // Migrations cannot be applied to read-only replicas
-    // We should run rpc-server only on read-only replicas
-    pub read_only: bool,
     pub shard_layout: Option<near_primitives::shard_layout::ShardLayout>,
 }
 
@@ -34,7 +31,6 @@ impl DatabaseConfig {
             database_url: self.database_url.clone(),
             shards_config: self.shards_config.clone(),
             max_connections: self.max_connections,
-            read_only: true,
             shard_layout: self.shard_layout.clone(),
         }
     }
@@ -77,7 +73,6 @@ impl From<CommonDatabaseConfig> for DatabaseConfig {
             max_connections: database_config
                 .max_connections
                 .unwrap_or_else(CommonDatabaseConfig::default_max_connections),
-            read_only: false,
             shard_layout: crate::shard_layout().ok(),
         }
     }
