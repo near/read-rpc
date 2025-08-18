@@ -317,7 +317,10 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
         .fetch_one(shard_id_pool.pool)
         .await?;
 
-        readnode_primitives::QueryData::<Vec<u8>>::try_from(result)
+        Ok(readnode_primitives::QueryData {
+            data: result.0,
+            block_height: result.1 as u64,
+        })
     }
 
     async fn get_access_key(
