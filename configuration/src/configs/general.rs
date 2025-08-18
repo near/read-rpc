@@ -21,6 +21,7 @@ pub struct GeneralRpcServerConfig {
     pub block_cache_size: f64,
     pub shadow_data_consistency_rate: f64,
     pub prefetch_state_size_limit: u64,
+    pub tx_details_storage_provider: StorageProvider,
 }
 
 #[derive(Debug, Clone)]
@@ -68,7 +69,7 @@ pub struct CommonGeneralConfig {
     pub tx_indexer: CommonGeneralTxIndexerConfig,
     #[serde(default)]
     pub state_indexer: CommonGeneralStateIndexerConfig,
-    #[serde(default)]
+    #[serde(deserialize_with = "deserialize_data_or_env")]
     pub tx_details_storage_provider: StorageProvider,
 }
 
@@ -194,8 +195,6 @@ pub struct CommonGeneralTxIndexerConfig {
     pub indexer_id: Option<String>,
     #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
     pub metrics_server_port: Option<u16>,
-    #[serde(deserialize_with = "deserialize_optional_data_or_env", default)]
-    pub tx_details_storage_provider: Option<StorageProvider>,
 }
 
 impl CommonGeneralTxIndexerConfig {
@@ -213,7 +212,6 @@ impl Default for CommonGeneralTxIndexerConfig {
         Self {
             indexer_id: Some(Self::default_indexer_id()),
             metrics_server_port: Some(Self::default_metrics_server_port()),
-            tx_details_storage_provider: Some(StorageProvider::Postgres),
         }
     }
 }
@@ -292,6 +290,7 @@ impl From<CommonGeneralConfig> for GeneralRpcServerConfig {
                 .rpc_server
                 .prefetch_state_size_limit
                 .unwrap_or_else(CommonGeneralRpcServerConfig::default_prefetch_state_size_limit),
+            tx_details_storage_provider: common_config.tx_details_storage_provider,
         }
     }
 }
