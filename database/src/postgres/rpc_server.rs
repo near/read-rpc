@@ -225,7 +225,7 @@ impl crate::ReaderDbManager for crate::PostgresDBManager {
             .inc();
         let (data_value,): (Vec<u8>,) = sqlx::query_as(
             "
-                SELECT data_key, data_value
+                SELECT data_value
                 FROM state_changes_data_compact
                 WHERE account_id = $1
                   AND data_key = $2
